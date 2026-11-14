@@ -25,6 +25,7 @@ from amoeba.operations.members import (
 from amoeba.store.models import Member, MemberSettings
 from amoeba.store.programs import remove_member, upsert_member, upsert_program
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import RulesFrom
 
 NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
 DIRECTORY = Path("/work/checkout")
@@ -48,6 +49,7 @@ def _register(store: Store, project_id: str) -> None:
                 rules_paths=("CLAUDE.md",),
                 authorize_allow=(),
                 authorize_deny=(),
+                rules_from=RulesFrom.NAMED,
             ),
             now=NOW,
         )

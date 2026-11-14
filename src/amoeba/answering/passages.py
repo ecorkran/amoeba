@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Final
 
+from amoeba.answering.rule_dedup import RuleDeduper
 from amoeba.answering.values import GLOB_WILDCARD
 
 _FRONT_MATTER_MARK: Final = "---"
@@ -160,7 +161,7 @@ def cut_passages(text: str) -> tuple[str, ...]:
     lines = _LINES.findall(text)
     front_matter_end = _front_matter_end(lines)
     for number, line in enumerate(lines):
-        fence = _fence_after(line, fence)
+        fence = fence_after(line, fence)
         in_front_matter = number <= front_matter_end
         if (
             not in_front_matter
@@ -178,6 +179,18 @@ def cut_passages(text: str) -> tuple[str, ...]:
     return tuple(passages)
 
 
+def file_pieces(deduper: RuleDeduper, source: SourceFile) -> tuple[str, ...]:
+    """The passages one file contributes, after the duplicates earlier files hold.
+
+    The single definition of "what a file adds": the size check in ``source_reads``
+    and the numbering in ``_committed_passages`` both call it, files in the same
+    order, so the characters counted against the cap are the characters rendered.
+    """
+    return deduper.new_pieces(
+        is_rule=source.kind is PassageKind.RULE, pieces=cut_passages(source.text)
+    )
+
+
 def _front_matter_end(lines: list[str]) -> int:
     """The index of the line closing a leading ``---`` block, or ``-1`` for none.
 
@@ -192,7 +205,7 @@ def _front_matter_end(lines: list[str]) -> int:
     return -1
 
 
-def _fence_after(line: str, fence: str | None) -> str | None:
+def fence_after(line: str, fence: str | None) -> str | None:
     """The open fence marker once ``line`` is read; ``None`` outside a fence.
 
     A fence opens on three or more backticks or tildes and closes on a line holding at
@@ -312,8 +325,9 @@ def _pm_passage(answer: PmAnswer, number: int) -> Passage:
 
 def _committed_passages(committed: Sequence[SourceFile]) -> list[Passage]:
     found: list[Passage] = []
+    deduper = RuleDeduper()
     for source in committed:
-        for piece in cut_passages(source.text):
+        for piece in file_pieces(deduper, source):
             found.append(
                 Passage(
                     id=f"P{len(found) + 1}",

@@ -23,7 +23,7 @@ from amoeba.store.programs import (
     upsert_program,
 )
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import ConsumedMode
+from amoeba.store.vocabulary import ConsumedMode, RulesFrom
 from store.seed import insert_member, insert_pair, insert_program
 
 FIRST = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
@@ -43,6 +43,7 @@ def _settings(project_id: str = "a", **changes: tuple[str, ...]) -> MemberSettin
         rules_paths=("CLAUDE.md",),
         authorize_allow=(),
         authorize_deny=(),
+        rules_from=RulesFrom.NAMED,
     )
     return replace(base, **changes)
 

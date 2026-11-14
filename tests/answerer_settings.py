@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from amoeba.answering.settings import AnswererSettings
+from amoeba.answering.settings import AnswererSettings, RulesChoice
 
 ANSWER_MODEL = "answer-alias"
 CHECK_MODEL = "check-alias"
@@ -14,6 +14,7 @@ def answerer_settings(
     answer_limit: int = 3,
     reserved_terms: tuple[str, ...] = (),
     rules_paths: tuple[str, ...] = (),
+    rules_optional: bool = False,
     passages_max_chars: int = 1000,
     answer_model: str = ANSWER_MODEL,
     check_model: str = CHECK_MODEL,
@@ -23,7 +24,7 @@ def answerer_settings(
     return AnswererSettings(
         answer_limit=answer_limit,
         reserved_terms=reserved_terms,
-        rules_paths=rules_paths,
+        rules=RulesChoice(entries=rules_paths, optional=rules_optional),
         passages_max_chars=passages_max_chars,
         answer_model=answer_model,
         check_model=check_model,

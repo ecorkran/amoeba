@@ -9,7 +9,14 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from amoeba.operations.set_up_models import SetUpProblem, SetUpProblemCode
+from amoeba.operations.set_up_models import (
+    Change,
+    ChangeSubject,
+    ChangeVerb,
+    OpenQuestion,
+    SetUpProblem,
+    SetUpProblemCode,
+)
 from amoeba.operations.set_up_remove_resolve import (
     Reference,
     RemovedMember,
@@ -65,10 +72,14 @@ def _removed_member_problems(
         return []
     keys = ", ".join(f"{row.key.run_id} at {row.key.paused_at}" for row in open_rows)
     return [
-        _problem(
-            SetUpProblemCode.MEMBER_HAS_OPEN_QUESTIONS,
-            f"{path}: {item.reference.text!r} has open questions ({keys}); "
+        SetUpProblem(
+            code=SetUpProblemCode.MEMBER_HAS_OPEN_QUESTIONS,
+            detail=f"{path}: {item.reference.text!r} has open questions ({keys}); "
             "`dismiss` or `answer` them first",
+            open_questions=tuple(
+                OpenQuestion(run_id=row.key.run_id, paused_at=row.key.paused_at)
+                for row in open_rows
+            ),
         )
     ]
 
@@ -127,14 +138,26 @@ def check_removal(
 
 def apply_removal(
     transaction: Transaction, removal: ResolvedRemoval, now: datetime
-) -> list[str]:
-    """Remove what is still there; one change line per removal made."""
-    changes: list[str] = []
+) -> list[Change]:
+    """Remove what is still there; one change record per removal made."""
+    changes: list[Change] = []
     for pair in removal.pairs:
         provider, consumer = pair.provider.project_id, pair.consumer.project_id
         if remove_pair(transaction, provider, consumer):
-            changes.append(f"removed pair {provider} -> {consumer}")
+            changes.append(
+                Change(
+                    verb=ChangeVerb.REMOVED,
+                    subject=ChangeSubject.PAIR,
+                    detail=f"{provider} -> {consumer}",
+                )
+            )
     for item in removal.members:
         if remove_member(transaction, item.reference.project_id, now):
-            changes.append(f"removed member {item.reference.project_id}")
+            changes.append(
+                Change(
+                    verb=ChangeVerb.REMOVED,
+                    subject=ChangeSubject.MEMBER,
+                    detail=item.reference.project_id,
+                )
+            )
     return changes

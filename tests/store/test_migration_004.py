@@ -58,10 +58,9 @@ def test_a_version_three_store_gets_the_column_with_every_row_kept(
     before = connection.execute(ANSWERS_BEFORE).fetchall()
     assert read_schema_version(connection) == 3
 
-    assert migrate(connection) == 4
+    assert migrate(connection) == EXPECTED_SCHEMA_VERSION
 
-    assert EXPECTED_SCHEMA_VERSION == 4
-    assert read_schema_version(connection) == 4
+    assert read_schema_version(connection) == EXPECTED_SCHEMA_VERSION
     assert connection.execute(ANSWERS_BEFORE).fetchall() == before
     assert connection.execute("SELECT via FROM answers").fetchall() == [
         (None,),
@@ -76,7 +75,7 @@ def test_a_repeat_run_of_the_runner_changes_nothing(
     migrate(connection)
     snapshot = connection.execute("SELECT * FROM answers ORDER BY seq").fetchall()
 
-    assert migrate(connection) == 4
+    assert migrate(connection) == EXPECTED_SCHEMA_VERSION
 
     assert connection.execute("SELECT * FROM answers ORDER BY seq").fetchall() == (
         snapshot

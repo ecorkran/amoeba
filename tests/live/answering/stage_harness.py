@@ -1,7 +1,7 @@
 """The real ``handle_pause`` over the real ``sq`` and real models (slice 223, task 9.3).
 
 Restored from the slice 144 stage harness and rewritten: the production code is the
-``amoeba handle_pause`` command, run as a subprocess in a throwaway member whose
+``amoeba handle-pause`` command, run as a subprocess in a throwaway member whose
 checkout is the frozen sources fixture (rules and plan for slice 132), registered with
 its own Context Forge data directory and ``AMOEBA_HOME``. Each case makes one real
 pause whose question the pipeline's model is told to reply with, calls
@@ -33,6 +33,7 @@ from amoeba.upstream.squadron.run_outcome import RunOutcome, RunOutcomeDocument
 from live.pause.harness import (
     PauseWorld,
     build_world,
+    inert_hook,
     question_pipeline,
     result_of,
     run_amoeba,
@@ -96,7 +97,7 @@ class LivePause:
 
     def settle(self) -> Settled:
         """Call ``handle_pause`` on the pause and read what it recorded."""
-        completed = run_amoeba(self.world, "handle_pause", self.run_id)
+        completed = run_amoeba(self.world, "handle-pause", self.run_id)
         assert completed.returncode == 0, completed.stderr
         result = result_of(completed)
         (row,) = store_rows(
@@ -133,12 +134,14 @@ def build_live_pause(
 ) -> LivePause:
     """The fixture member, registered, with its run paused on ``question``."""
     repo = _fixture_member(tmp_path)
-    world = build_world(
-        tmp_path,
-        amoeba_home,
-        live,
-        repo=repo,
-        passages_max_chars=PASSAGES_MAX_CHARS,
+    world = inert_hook(
+        build_world(
+            tmp_path,
+            amoeba_home,
+            live,
+            repo=repo,
+            passages_max_chars=PASSAGES_MAX_CHARS,
+        )
     )
     pipeline = question_pipeline(tmp_path, "pause", question, sliced=True)
     run_id = mint_run_id(datetime.now(UTC))

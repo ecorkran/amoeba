@@ -13,7 +13,7 @@ from process_containment import contained_popen
 from amoeba.answering.decide import Declined
 from amoeba.answering.inputs import NO_ITEM_BARRED_TEXT, QuestionInput
 from amoeba.answering.pipeline_file import answering_pipeline_path
-from amoeba.answering.settings import AnswererSettings
+from amoeba.answering.settings import AnswererSettings, RulesChoice
 from amoeba.answering.values import DeclineReason
 from amoeba.operations.answering_run import (
     PAUSE_COMMAND_OPT_OUT_FLAG,
@@ -41,7 +41,7 @@ QUESTION = QuestionInput("none", "What is the file length limit?")
 SETTINGS = AnswererSettings(
     answer_limit=3,
     reserved_terms=(),
-    rules_paths=("CLAUDE.md",),
+    rules=RulesChoice(entries=("CLAUDE.md",), optional=False),
     passages_max_chars=1000,
     answer_model="answer-alias",
     check_model="check-alias",

@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: Installing and registering amoeba-mcp, the MCP server that gives an agent session the amoeba commands, and what its tools, timeouts and start-up checks do.
 dateCreated: 20261112
-dateUpdated: 20261112
+dateUpdated: 20261114
 status: complete
 ---
 
@@ -23,11 +23,14 @@ uv tool install --force <path to this repo>
 ```
 
 This installs `amoeba` and `amoeba-mcp` into one environment. The server starts the
-`amoeba` script next to its own interpreter for `handle_pause`, so the two must stay
+`amoeba` script next to its own interpreter for `handle-pause`, so the two must stay
 together; `amoeba-mcp` refuses to start if that script is missing.
 
 **Restart the client session after every reinstall.** A running server keeps the old
-code until its session ends.
+code until its session ends: an open session still has the tool names it started with
+(after slice 229, `set_up` instead of `add`, `rm` and `list`), and its detached
+`handle_pause` now fails with the CLI's invalid-choice error until it is restarted. A
+fresh session lists the current tools.
 
 ## Register
 
@@ -66,14 +69,17 @@ For Codex, delete the `[mcp_servers.amoeba]` table.
 
 ## The tools
 
-One tool per operation, named as the CLI names it, each taking the CLI's request as
+One tool per operation, named by the operation's name (snake_case; the CLI spells
+`handle_pause` and `mark_read` with a dash), each taking the CLI's request as
 JSON arguments and returning its result as `structuredContent` (and the same JSON as
 text). A request the operation refuses is a normal result with `outcome: rejected`, as
 on the CLI; it is not an error.
 
 | Tool | Notes |
 |---|---|
-| `set_up` | Also takes `directory`: the caller's checkout, an absolute path. |
+| `add` | Registers a repo in a program. Takes `directory` (the caller's checkout, an absolute path) and the single-member fields (`program`, `project`, `rules_paths`, `rules_default`, `authorize_allow`, `authorize_deny`, `depends_on`, `concept`) or `bulk`, a whole multi-member request, never both. |
+| `rm` | Removes members, pairs (`PROVIDER:CONSUMER`) or the concept (`concept: true`). Also takes `directory`; with nothing named it removes that repo. |
+| `list` | What needs the PM: with no `subject`, the same document as `status` (and `all` adds `settled`); `programs`, `members` and `dependencies` show what is registered. Also takes `directory`. |
 | `status` | Also takes `directory`. Its listing gives each run's `run_id` and `directory` for `handle_pause`, and the question key for `answer`. |
 | `decisions` | `read_through` goes to `mark_read`. Each record shows `via`, the door that carried a PM answer (`cli` or `mcp`). |
 | `mark_read` | |
@@ -87,7 +93,8 @@ on the CLI; it is not an error.
 ### `handle_pause` returns a receipt
 
 Answering can run for minutes, longer than a client waits for a tool. The tool starts
-the CLI's own `handle_pause` in a session of its own, so it outlives the server and a
+the CLI's own `handle-pause` (with `--json`, so the log stays machine-readable) in a
+session of its own, so it outlives the server and a
 client that disconnects, and returns:
 
 `operation`, `pid`, `cwd`, `started_at`, `stdout_log`, `stderr_log`.
@@ -107,9 +114,10 @@ A failure is an error result whose text starts with its kind:
   (`SquadronError`, `ContextForgeError`, `ConfigError`, `StoreError` and its kinds).
 - `TimedOut: <tool> did not finish within 180 s; ...`: the call outlived the server's
   deadline, `MCP_CALL_DEADLINE_SECONDS` (180 s). What to do depends on the tool:
-  - `status`, `decisions`: it may still finish. Run `amoeba status` or `amoeba
-    decisions` in a shell, which has no deadline. Do not call the tool again.
-  - `set_up`, `answer`, `mark_read`, `dismiss`, `retract`: the work may still
+  - `status`, `decisions`, `list`: it may still finish. Run `amoeba status`, `amoeba
+    decisions` or `amoeba list` in a shell, which has no deadline. Do not call the
+    tool again.
+  - `add`, `rm`, `answer`, `mark_read`, `dismiss`, `retract`: the work may still
     complete. Check `status` or `decisions` before repeating it.
 - `internal error: ...`: a bug; it is logged on stderr and the server keeps serving.
 

@@ -30,10 +30,12 @@ Later slices add keys; each is required too, so an old file fails naming the new
 | `check_model` | string, no `,` | Squadron model alias for the check step |
 | `max_cost_usd` | number > 0 | Cost cap of one answering run, in US dollars |
 | `answer_limit` | integer >= 1 | Most automatic answers one run may take |
-| `passages_max_chars` | integer >= 1 | Most characters of passages an answering run is sent |
+| `passages_max_chars` | integer >= 1 | Most characters of passages an answering run is sent. Rules and plan passages are never trimmed, so it must cover all of them: the rules (after duplicates are dropped), the slice's plan files, the program concept, and room for precedent. The example, 250000, suits a repo whose slice plan files run to about 150 KB; see `rules.md` |
 | `answering_wait_seconds` | number > 0 | Longest one answering run may take before it is stopped; also the age at which an unfinished claim counts as dead |
 | `resume_wait_seconds` | number > 0 | Longest a resumed run may take to start running before the resume is judged refused |
 | `prune_after_days` | integer >= 1 | Age in days after which settled answering scratch, logs and calls-log days are deleted; anything tied to an open question is kept |
+| `default_rules_paths` | list of repo-relative paths, not empty | The rules files a member that names none reads. Each entry that matches no file at the pinned commit is skipped; when none is found the question waits (`rules.md`). A `*` is allowed in the last segment. Read when a question is answered, so an edit changes every default member |
+| `default_consumed` | `from_source` or `from_release` | Which of a provider's reports a `--depends-on` without `:MODE` consumes |
 | `authorize_items` | list, may be empty | Everything answers may be barred from authorizing |
 
 Each `authorize_items` entry has all four fields, and no others:
@@ -56,10 +58,12 @@ answer_model: replace-with-answer-alias
 check_model: replace-with-check-alias
 max_cost_usd: 0.5
 answer_limit: 3
-passages_max_chars: 60000
+passages_max_chars: 250000
 answering_wait_seconds: 600
 resume_wait_seconds: 60
 prune_after_days: 30
+default_rules_paths: [CLAUDE.md, AGENTS.md]
+default_consumed: from_source
 authorize_items:
   - key: push
     description: Pushing commits to a remote.

@@ -62,13 +62,15 @@ async def _list_and_call(
     return listed.tools, decided
 
 
-def test_the_client_lists_the_eight_tools_and_calls_decisions(tmp_path: Path) -> None:
+def test_the_client_lists_every_tool_and_calls_decisions(tmp_path: Path) -> None:
     parameters = _parameters(tmp_path)
 
     tools, decided = anyio.run(_list_and_call, parameters)
 
     assert {tool.name for tool in tools} == {name.value for name in OperationName}
-    assert len(tools) == 8
+    assert len(tools) == len(OperationName)
+    assert {"add", "rm", "list"} <= {tool.name for tool in tools}
+    assert "set_up" not in {tool.name for tool in tools}
     for tool in tools:
         assert tool.input_schema["type"] == "object", tool.name
     assert decided.is_error is False

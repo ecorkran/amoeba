@@ -215,7 +215,7 @@ def _read_committed(
         checkout,
         target,
         slice_context.ref,
-        settings.rules_paths,
+        settings.rules,
         settings.passages_max_chars,
         run,
         READ_TIMEOUT_SECONDS,
@@ -231,14 +231,13 @@ def _assemble(  # noqa: PLR0913 - the pieces gather has already read
     settings: AnswererSettings,
     run: CfRun,
 ) -> PauseContext | SourcesProblem:
-    own_text = sum(len(file.text) for file in committed.files)
     program_sources = read_program_sources(
         stored.program,
         stored.members,
         ProgramRead(
             asker=member,
             asker_reads=AskerReads(checkout, committed.commit, committed.files),
-            max_chars=settings.passages_max_chars - own_text,
+            max_chars=settings.passages_max_chars - committed.chars,
             run=run,
             timeout_seconds=READ_TIMEOUT_SECONDS,
         ),

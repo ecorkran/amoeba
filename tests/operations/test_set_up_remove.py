@@ -21,6 +21,7 @@ from amoeba.store.models import QuestionKey
 from amoeba.store.programs import get_member_any, get_pair, get_program
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import RulesFrom
 from operations.set_up_support import run_set_up
 
 PROJECTS = [
@@ -133,21 +134,22 @@ def test_removing_an_absent_pair_between_members_changes_nothing(store: Store) -
     assert result.outcome is SetUpOutcome.UNCHANGED
 
 
-def test_naming_a_removed_member_re_adds_it_and_needs_rules_paths(
+def test_naming_a_removed_member_re_adds_it_on_the_default_rules(
     store: Store,
 ) -> None:
     _set_up(store, REMOVE_CONSUMER)
 
-    without_rules = _set_up(
-        store, {"program": "demo", "members": [{"project": "consumer"}]}
-    )
-    with_rules = _set_up(
-        store, {"program": "demo", "members": [{"project": "consumer", **RULES}]}
-    )
+    re_added = _set_up(store, {"program": "demo", "members": [{"project": "consumer"}]})
 
-    assert _codes(without_rules) == [SetUpProblemCode.RULES_PATHS_REQUIRED]
-    assert with_rules.changes == ("added member consumer-id",)
+    assert re_added.changes == ("added member consumer-id",)
     assert _removed_at(store, "consumer-id") is None
+    with store.read() as transaction:
+        member = get_member_any(transaction, "consumer-id")
+    assert member is not None
+    # Stored as ``named`` with ``["CLAUDE.md"]`` before it was removed; a fresh
+    # registration with no rules field is the default, whatever it had.
+    assert member.settings.rules_from is RulesFrom.CONFIG_DEFAULT
+    assert member.settings.rules_paths == ()
 
 
 def test_a_removed_member_can_join_another_program(store: Store) -> None:

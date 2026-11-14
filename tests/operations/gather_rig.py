@@ -13,11 +13,12 @@ from cf_plan_run import plan_cf_run
 from git_repo import head_of
 
 from amoeba.answering.passages import SourcesProblem
-from amoeba.answering.settings import AnswererSettings
+from amoeba.answering.settings import AnswererSettings, RulesChoice
 from amoeba.operations.pause_context import PauseContext, gather
 from amoeba.store.models import Member, MemberSettings
 from amoeba.store.programs import get_member, upsert_member, upsert_program
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import RulesFrom
 from amoeba.upstream.squadron.run_file import ExecutionMode, RunFacts
 from operations.program_rig import (
     ASKING_MEMBER,
@@ -41,7 +42,7 @@ def settings(*, max_chars: int = 1_000_000) -> AnswererSettings:
     return AnswererSettings(
         answer_limit=3,
         reserved_terms=(),
-        rules_paths=("CLAUDE.md", f"{RULES_DIR}/*.md"),
+        rules=RulesChoice(entries=("CLAUDE.md", f"{RULES_DIR}/*.md"), optional=False),
         passages_max_chars=max_chars,
         answer_model="m",
         check_model="m",
@@ -101,6 +102,7 @@ def gather_rig(tmp_path: Path, *, with_concept: bool = True) -> Generator[Gather
                         rules_paths=("CLAUDE.md",),
                         authorize_allow=(),
                         authorize_deny=(),
+                        rules_from=RulesFrom.NAMED,
                     ),
                     now=NOW,
                 )

@@ -36,7 +36,12 @@ OTHER_MEMBER_STATEMENTS = frozenset(
 )
 #: The one named exception: the decisions join keeps removed members (D8).
 DECISIONS_JOIN = frozenset(
-    {"_SELECT_DECISIONS", "SELECT_DECISIONS_AFTER_SEQ", "SELECT_DECISIONS_SINCE"}
+    {
+        "_SELECT_DECISIONS",
+        "SELECT_DECISIONS_AFTER_SEQ",
+        "SELECT_DECISIONS_SINCE",
+        "SELECT_SETTLED_SINCE",  # 229: settled questions keep removed members too
+    }
 )
 #: Pair-read helper that holds the sub-select over active members.
 PAIR_HELPER = frozenset({"_PAIR_ENDS_ACTIVE"})
