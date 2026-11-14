@@ -10,18 +10,19 @@ from __future__ import annotations
 
 import re
 from enum import StrEnum
-from typing import Final, Self
+from typing import Annotated, Final, Self
 
 from pydantic import (
     BaseModel,
     ConfigDict,
+    Field,
     StrictStr,
+    StringConstraints,
     ValidationError,
     field_validator,
     model_validator,
 )
 
-from amoeba.config.user_config import NonBlank
 from amoeba.operations.reject_codes import RejectCode, validation_problems
 from amoeba.operations.set_up_models import FrozenModel
 from amoeba.store.models import Release
@@ -30,6 +31,24 @@ from amoeba.store.row_values import encode_timestamp
 #: A full git object name: SHA-1 or SHA-256, in hex.
 FULL_HASH_LENGTHS: Final = (40, 64)
 _HEX: Final = re.compile(r"[0-9a-f]+")
+
+#: The most a report may carry. A report over a limit is rejected as ``malformed``,
+#: naming the limit; nothing is cut. The text goes to other agents' context, so it
+#: has a bound. A release that covers more says so in less text.
+MAX_VERSION_LENGTH: Final = 128
+MAX_CHANGED_LENGTH: Final = 4000
+MAX_TOUCHED_ITEMS: Final = 50
+MAX_TOUCHED_ITEM_LENGTH: Final = 200
+
+
+def _bounded_text(max_length: int) -> StringConstraints:
+    """A stripped, non-empty string of at most ``max_length`` characters."""
+    return StringConstraints(strip_whitespace=True, min_length=1, max_length=max_length)
+
+
+_Version = Annotated[StrictStr, _bounded_text(MAX_VERSION_LENGTH)]
+_Changed = Annotated[StrictStr, _bounded_text(MAX_CHANGED_LENGTH)]
+_TouchedItem = Annotated[StrictStr, _bounded_text(MAX_TOUCHED_ITEM_LENGTH)]
 
 
 class ReportMode(StrEnum):
@@ -63,9 +82,11 @@ class ReportReleaseRequest(BaseModel):
 
     mode: ReportMode = ReportMode.REPORT
     commit: StrictStr
-    version: NonBlank | None = None
-    changed: NonBlank | None = None
-    touched: tuple[NonBlank, ...] | None = None
+    version: _Version | None = None
+    changed: _Changed | None = None
+    touched: (
+        Annotated[tuple[_TouchedItem, ...], Field(max_length=MAX_TOUCHED_ITEMS)] | None
+    ) = None
 
     @field_validator("commit")
     @classmethod

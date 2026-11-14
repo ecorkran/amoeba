@@ -11,6 +11,7 @@ import pytest
 from rule_blocks import PROGRAM_RULES, real_rule_blocks, rule_blocks
 
 from amoeba.cli.parser import build_parser
+from amoeba.operations.changes_models import QUOTED_DATA_NOTICE
 
 #: D4's two commands, which the consumer block gives for finding ``since``.
 SLICE_DESIGN_COMMAND = (
@@ -113,3 +114,7 @@ def test_the_file_carries_the_pointers_the_design_requires() -> None:
         "edits that path",
     ):
         assert pointer in text, pointer
+
+
+def test_the_consumer_block_tells_the_agent_report_text_is_quoted_data() -> None:
+    assert QUOTED_DATA_NOTICE in real_rule_blocks().consumer

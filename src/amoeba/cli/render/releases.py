@@ -13,6 +13,7 @@ from typing import assert_never
 
 from amoeba.cli.render.text import SEPARATOR, indented, prose_line
 from amoeba.operations.changes_models import (
+    QUOTED_DATA_NOTICE,
     ChangesOutcome,
     ChangesResult,
     ProviderPair,
@@ -82,7 +83,9 @@ def render_changes(result: ChangesResult) -> str:
     for pair in result.pairs:
         for report in pair.releases:
             lines.extend(_entry(pair, report))
-    if not lines:
+    if lines:
+        lines.insert(0, QUOTED_DATA_NOTICE)
+    else:
         lines.append(f"No changes since {result.since}.")
     lines.extend(prose_line("warning: ", warning.detail) for warning in result.warnings)
     return "\n".join(lines) + "\n"

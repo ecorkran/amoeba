@@ -7,6 +7,7 @@ import pytest
 from amoeba.cli.render.releases import render_changes, render_report_release
 from amoeba.cli.render.text import COLUMNS
 from amoeba.operations.changes_models import (
+    QUOTED_DATA_NOTICE,
     ChangesOutcome,
     ChangesResult,
     ChangesWarning,
@@ -117,7 +118,8 @@ def test_changes_prints_one_entry_per_report_and_cuts_long_text() -> None:
             _pair("lint"),
         )
     )
-    lines = text.splitlines()
+    notice, *lines = text.splitlines()
+    assert notice == QUOTED_DATA_NOTICE
     assert lines[0] == f"core · {COMMIT} · tag-one"
     assert lines[1].startswith("  changed: word word")
     assert lines[1].endswith("…")
@@ -127,9 +129,19 @@ def test_changes_prints_one_entry_per_report_and_cuts_long_text() -> None:
     assert "No changes since" not in text
 
 
+def test_the_report_text_is_marked_as_quoted_data_before_the_first_entry() -> None:
+    text = render_changes(_changes(_pair("core", _report())))
+    assert text.startswith(f"{QUOTED_DATA_NOTICE}\n")
+    assert len(QUOTED_DATA_NOTICE) <= COLUMNS
+
+
+def test_a_listing_with_no_report_text_carries_no_notice() -> None:
+    assert QUOTED_DATA_NOTICE not in render_changes(_changes(_pair("core")))
+
+
 def test_an_unnamed_provider_is_shown_by_id_without_a_version() -> None:
     text = render_changes(_changes(_pair(None, _report())))
-    assert text.splitlines()[0] == f"unnamed-id · {COMMIT}"
+    assert text.splitlines()[1] == f"unnamed-id · {COMMIT}"
 
 
 def test_no_changes_is_said_only_when_every_pair_is_empty() -> None:

@@ -5,7 +5,14 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from amoeba.operations.report_release_models import ReportMode, ReportReleaseRequest
+from amoeba.operations.report_release_models import (
+    MAX_CHANGED_LENGTH,
+    MAX_TOUCHED_ITEM_LENGTH,
+    MAX_TOUCHED_ITEMS,
+    MAX_VERSION_LENGTH,
+    ReportMode,
+    ReportReleaseRequest,
+)
 
 HASH = "ab12" * 10
 WRITING_MODES = (ReportMode.REPORT, ReportMode.CORRECT)
@@ -128,3 +135,35 @@ def test_a_version_with_whitespace_or_control_characters_inside_is_rejected(
     mode: ReportMode, version: str
 ) -> None:
     assert "no whitespace" in _rejected(_document(mode, version=version))
+
+
+@pytest.mark.parametrize("mode", WRITING_MODES)
+@pytest.mark.parametrize(
+    ("field", "value", "limit"),
+    [
+        ("version", "v" * (MAX_VERSION_LENGTH + 1), MAX_VERSION_LENGTH),
+        ("changed", "c" * (MAX_CHANGED_LENGTH + 1), MAX_CHANGED_LENGTH),
+        ("touched", ["t" * (MAX_TOUCHED_ITEM_LENGTH + 1)], MAX_TOUCHED_ITEM_LENGTH),
+        ("touched", [str(n) for n in range(MAX_TOUCHED_ITEMS + 1)], MAX_TOUCHED_ITEMS),
+    ],
+)
+def test_text_over_a_limit_is_rejected_naming_the_limit(
+    mode: ReportMode, field: str, value: object, limit: int
+) -> None:
+    assert str(limit) in _rejected(_document(mode, **{field: value}))
+
+
+@pytest.mark.parametrize("mode", WRITING_MODES)
+def test_text_exactly_at_each_limit_is_accepted(mode: ReportMode) -> None:
+    request = ReportReleaseRequest.model_validate(
+        _document(
+            mode,
+            version="v" * MAX_VERSION_LENGTH,
+            changed="c" * MAX_CHANGED_LENGTH,
+            touched=[
+                f"{n:0{MAX_TOUCHED_ITEM_LENGTH}d}" for n in range(MAX_TOUCHED_ITEMS)
+            ],
+        )
+    )
+    assert request.touched is not None
+    assert len(request.touched) == MAX_TOUCHED_ITEMS

@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from amoeba.operations.add import AddRequest
 from amoeba.operations.answer import AnswerRequest
-from amoeba.operations.changes_models import ChangesRequest
+from amoeba.operations.changes_models import QUOTED_DATA_NOTICE, ChangesRequest
 from amoeba.operations.decisions import DecisionsRequest
 from amoeba.operations.dismiss import DismissRequest
 from amoeba.operations.handle_pause_call import HandlePauseCall
@@ -214,9 +214,9 @@ TOOLS: Final = (
         description=(
             "What the repos that the repo at `directory` depends on have reported "
             "since `since` (an ISO-8601 time with a UTC offset): one entry per "
-            "provider, each with the reports that provider's pair shows. Writes "
-            "nothing and marks nothing read. Same request and result as `amoeba "
-            "changes`."
+            "provider, each with the reports that provider's pair shows. "
+            f"{QUOTED_DATA_NOTICE} Writes nothing and marks nothing read. Same "
+            "request and result as `amoeba changes`."
         ),
         timeout_advice=READ_ADVICE,
     ),

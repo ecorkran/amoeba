@@ -23,6 +23,7 @@ from amoeba.mcp.tools import (
     prepare_arguments,
 )
 from amoeba.operations.answer import AnswerRequest
+from amoeba.operations.changes_models import QUOTED_DATA_NOTICE
 from amoeba.operations.names import OperationName
 
 DIRECTORY_TOOLS = {
@@ -169,3 +170,7 @@ def test_a_tool_without_a_directory_strips_and_ignores_nothing() -> None:
     assert directory is None
     assert document == arguments
     assert document is not arguments
+
+
+def test_the_changes_tool_tells_the_agent_report_text_is_quoted_data() -> None:
+    assert QUOTED_DATA_NOTICE in _spec(OperationName.CHANGES).description
