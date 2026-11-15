@@ -163,14 +163,11 @@ CLAUDE.md step 5 says to switch to the branch if it already exists. 0.2 runs onl
 
 ## Resolution
 
-- F001 (pass, every success criterion maps to a task): no change needed.
-- F002 (pass, helpers and prerequisite tests present or planned): no change needed.
-- F003 (pass, load-test CI gating): no change needed.
-- F004 (pass, sequencing): no change needed.
-- F005 (program-note path not load-tested): fixed. Task 5.6 now has a second load case in 240's `tests/load/test_messages_load.py`: a program with `CONSUMERS` + 1 members, several processes sending program notes, with the delivery, `seq`, wait-bound and no-`cf`-under-lock assertions. The file is added to 0.2's helper list.
-- F006 (a store read only through `inbox` never prunes): fixed without the `inbox` sweep. Letting `inbox` sweep would break 240's "inbox writes nothing" contract and change its timing bound. The exit already exists, since anyone running `amoeba list` or `status` prunes the notes (the due check). Task 0.1 now adds that to the design's Operator Walkthrough "Nobody reads a note" bullet, so the dead end is recorded, not missed.
-- F007 (design disagrees with the tasks until group 9): fixed. The 243 design edits (242 in frontmatter and Prerequisites, `depth` 1 in State Management, and the F006 walkthrough sentence) moved from 9.2 to 0.1, on the target with their own commit marker, before 0.2 cuts the branch. 9.2 keeps only the 240 and architecture edits.
-- F008 (D5 table tested three times, 5.2 overweight): fixed. 5.4 now tests the write path only (row shape, `release:` id, one `sent` delivery, nothing written for `unchanged` and rejections, withdrawal before the delete, no consumers). 5.2 keeps only the recipient cases outside the table (pair added later, removed consumer, no consumers). 5.5's matrix owns the table. 0.2's helper list is cut to the paths later tasks use.
-- F009 (too many commit markers in the back half): fixed. The markers after 6.2 and 6.3 are removed, so 6.1 to 6.4 commit once as `feat: send notes from the CLI and MCP and add the note rule`. The 7.1 marker is removed and the push test commits with the live tier. This reverses the earlier round's split of group 6, as this review asked.
-- F010 (a sender's `release:` id not tested): fixed. Task 3.3 now asserts that a sender's id beginning `release:` is `malformed`.
-- F011 (branch creation ignores an existing branch): fixed. Task 0.2 now says to `git checkout` the branch if it already exists.
+- F001 to F004 (pass): no change needed.
+- F005 (program-note path not load-tested): fixed. 5.6 has a program-note `send` case in 240's `tests/load/test_messages_load.py` (fixed `CONSUMERS` + 1 members, 5.6's bounds).
+- F006 (an `inbox`-only store never prunes notes): fixed by PM decision. Every write that adds a note also sweeps: `report-release` runs the due-checked `sweep_messages` in its door wiring, before the report's transaction; `inbox` stays write-free. Design D6, Technical Scope, Data Flow, write-lock paragraph, Success Criteria and the walkthrough's sweep list and dead-end line updated; new 5.3 item and 5.4 test (`tests/test_report_release_sweep.py`).
+- F007 (design disagrees with the tasks): fixed directly in the design on main: 242 in frontmatter and Prerequisites, the 242 amendment row describes D4's last row, `depth` 1 in State Management, plan entry 4's Dependencies text names 242. The design-edit item and its commit marker are removed from 0.1; 9.2 keeps the 240-plan and architecture edits.
+- F008 (D5 table tested three times): dropped by the PM.
+- F009 (commit-marker regrouping): dropped by the PM.
+- F010 (sender `release:` id untested): fixed. 3.3 asserts a sender's id beginning `release:` is `malformed`.
+- F011 (existing branch): fixed. 0.2 runs `git checkout` when the branch already exists.
