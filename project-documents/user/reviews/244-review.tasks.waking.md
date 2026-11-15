@@ -169,3 +169,14 @@ Checked against the Amoeba Design Rules. No task defers in-scope behaviour. None
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 12
 - Finding-shaped matches — surviving validation: 12
+
+## Resolution
+
+- F001 (fixed): the fixture's gate, sleep and parent-pid controls are flags on its wake command (`--gate-file`, `--sleep-seconds`, `--parent-pid-file`) in 9.1 and design D12; 9.2 states only `WAKE_ENV_NAMES` reach the command.
+- F002 (fixed): `claim_wake` takes `wake_id` and `log_stem` from the caller (6.3 builds them from `uuid4().hex` and `deps.logs_dir`), so the store reads no layout; `can_wake`'s signature is written in full.
+- F003 (fixed): 5.3 names the seam `run_wake(..., popen: WaitablePopen = subprocess.Popen)`, reusing the existing type in `operations/processes.py`; 5.6 and 5.8 use it.
+- F004 (fixed): 6.8's timing-test edit is added to the named edits in the Context Summary, 10.1 and the design's Integration Requirements.
+- F005 (dropped by PM): bare `uv run pytest` already collects `tests/load`.
+- F006 (fixed): 8.2 amends the plan's line 114 and checks it with a grep.
+- F007 (fixed): the design's walkthrough adds the null-`command_pid` sub-case; the exit is the command's own cap, no new dead end.
+- F008 (dropped by PM): trims not taken.
