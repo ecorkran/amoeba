@@ -62,3 +62,38 @@ class ResumeOutcome(StrEnum):
     RESUMED = "resumed"
     REFUSED = "refused"
     NOT_DELIVERED = "not_delivered"
+
+
+class MessageKind(StrEnum):
+    """What a ``messages`` row is (240 D1). Only requests are written in 240."""
+
+    REQUEST = "request"
+    #: A one-way message with no state; 243 adds the writer.
+    NOTE = "note"
+
+
+class RequestState(StrEnum):
+    """Where a request stands (240 D4)."""
+
+    OPEN = "open"
+    ACCEPTED = "accepted"
+    DONE = "done"
+    DECLINED = "declined"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+
+    @classmethod
+    def terminal(cls) -> frozenset[RequestState]:
+        """The states a request never leaves; the sweep prunes only these."""
+        return frozenset({cls.DONE, cls.DECLINED, cls.CANCELLED, cls.EXPIRED})
+
+
+class DeliveryEvent(StrEnum):
+    """What a delivery tells its member: a send, or the state a request reached."""
+
+    SENT = "sent"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    DONE = "done"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"

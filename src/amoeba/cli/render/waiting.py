@@ -3,8 +3,10 @@
 Sections, in this order, each left out when empty: **Waiting on you**, **Paused, not
 handled**, **Unplaced runs**, **Problems**. With nothing in any of them it prints
 ``Nothing needs you.``. What this call closed comes next (the status document carries
-it once). With ``settled`` given (``list --all``) every other run follows under its
-member, then **Settled**. ``status`` uses this same renderer without ``settled``.
+it once), then **Requests** and **Rejected calls** (``cli/render/messages``), which are
+not things that need the PM. With ``settled`` given (``list --all``) every other run
+follows under its member, then **Settled**. ``status`` uses this same renderer without
+``settled``.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from amoeba.cli.render.commands import (
     handle_pause_command,
     list_command,
 )
+from amoeba.cli.render.messages import message_sections
 from amoeba.cli.render.text import (
     SEPARATOR,
     command_line,
@@ -105,6 +108,7 @@ def render_waiting(
     if not sections:
         sections.append([NOTHING_NEEDS_YOU])
     sections.extend(section for section in [_closed_now(result)] if section)
+    sections.extend(message_sections(members, now))
     if settled is not None:
         sections.extend(
             section for section in (_other_runs(members), _settled(settled)) if section

@@ -7,7 +7,6 @@ import pytest
 from amoeba.cli.render.releases import render_changes, render_report_release
 from amoeba.cli.render.text import COLUMNS
 from amoeba.operations.changes_models import (
-    QUOTED_DATA_NOTICE,
     ChangesOutcome,
     ChangesResult,
     ChangesWarning,
@@ -15,6 +14,7 @@ from amoeba.operations.changes_models import (
     MemberRef,
     ProviderPair,
 )
+from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.report_release_models import (
     ReleaseProblem,

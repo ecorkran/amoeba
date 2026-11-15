@@ -10,14 +10,13 @@ be removed.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
 from pydantic import ValidationError, field_validator
 
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.member_reference import Anchor, anchor
 from amoeba.operations.project_lookup import project_or_rejection
 from amoeba.operations.set_up import malformed_result, set_up
 from amoeba.operations.set_up_models import (
@@ -30,7 +29,7 @@ from amoeba.operations.set_up_models import (
 )
 from amoeba.store.programs import get_member_any, get_program
 from amoeba.store.store import Store
-from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
+from amoeba.upstream.context_forge.cli_call import CfRun
 from amoeba.upstream.context_forge.project_of import CFProject, project_of
 
 PAIR_SEPARATOR: Final = ":"
@@ -61,14 +60,6 @@ class RmRequest(FrozenModel):
         return pairs
 
 
-@dataclass(frozen=True)
-class _Anchor:
-    """A named member (or pair end): as written, and its stored id."""
-
-    text: str
-    project_id: str
-
-
 def split_pair(pair: str) -> tuple[str, str]:
     provider, _, consumer = pair.partition(PAIR_SEPARATOR)
     return provider.strip(), consumer.strip()
@@ -93,13 +84,13 @@ def rm(
     except ValidationError as error:
         return malformed_result(error)
     members = request.members
-    anchors = [_anchor(text, run) for text in (*members, *_pair_ends(request))]
+    anchors = [anchor(text, run) for text in (*members, *_pair_ends(request))]
     if not anchors and (not request.concept or request.program is None):
         # Nothing named: the working directory's project is what is meant.
         found = _working_directory_project(directory, run)
         if isinstance(found, SetUpResult):
             return found
-        anchors = [_Anchor(found.name, found.id)]
+        anchors = [Anchor(found.name, found.id)]
         members = () if request.concept else (found.id,)
     program = _program_of(store, request, anchors)
     if isinstance(program, SetUpResult):
@@ -123,16 +114,8 @@ def _working_directory_project(directory: Path, run: CfRun) -> CFProject | SetUp
     )
 
 
-def _anchor(text: str, run: CfRun) -> _Anchor:
-    """A reference as its Context Forge id; one cf does not know is read as an id."""
-    found = project_of(reference=text, run=run)
-    if isinstance(found, CfCallFailed):
-        raise ContextForgeError(found.detail)
-    return _Anchor(text, found.id if isinstance(found, CFProject) else text)
-
-
 def _program_of(
-    store: Store, request: RmRequest, anchors: list[_Anchor]
+    store: Store, request: RmRequest, anchors: list[Anchor]
 ) -> str | SetUpResult:
     """The one program the request is about, or the rejection saying why not."""
     problems: list[SetUpProblem] = []
@@ -181,7 +164,7 @@ def _problem(code: SetUpProblemCode, detail: str) -> SetUpProblem:
     return SetUpProblem(code=code, detail=detail)
 
 
-def _not_a_member(anchor: _Anchor) -> SetUpProblem:
+def _not_a_member(anchor: Anchor) -> SetUpProblem:
     return _problem(
         SetUpProblemCode.NOT_A_MEMBER,
         f"{anchor.text!r} ({anchor.project_id}) is not and was never a member of "

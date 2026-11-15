@@ -8,10 +8,8 @@ at the moment it is called.
 
 from __future__ import annotations
 
-import sqlite3
 import subprocess
 from collections.abc import Sequence
-from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -26,17 +24,7 @@ from store.release_support import FULL_HASH, seed_members
 from amoeba.operations.report_release import report_release
 from amoeba.operations.report_release_models import ReportOutcome
 from amoeba.store.store import Store
-
-
-def write_lock_is_held(database: Path) -> bool:
-    """True when another connection cannot take the write lock right now."""
-    with closing(sqlite3.connect(database, timeout=0, isolation_level=None)) as probe:
-        try:
-            probe.execute("BEGIN IMMEDIATE")
-        except sqlite3.OperationalError:
-            return True
-        probe.execute("ROLLBACK")
-        return False
+from load.lock_probe import write_lock_is_held
 
 
 @dataclass

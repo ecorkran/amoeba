@@ -70,7 +70,7 @@ file, pid file or read-only mode, and a missing store is created.
 ## Migrations
 
 - Numbered files in `src/amoeba/store/schema/` (`001_baseline.sql`, `002_pause_handling.sql`,
-  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (5).
+  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (6).
 - Opening applies the missing files in order inside one write transaction and stamps
   `schema_meta.version`. A store stamped higher than the code expects is refused
   (`StoreSchemaError`) and left untouched.
@@ -215,6 +215,65 @@ Append-only, so an automatic answer and a later PM answer are both kept.
 | `resume_started_at` | Migration `003`. UTC time just before a resume was spawned, retries included, so the sweep never marks an answer `not_delivered` under a resume in flight. Written by the shared resume. |
 | `via` | Migration `004`. `cli` or `mcp` (`Door`, a `CHECK`): the door that carried a PM answer. Null for an answer from before `004` and for the answerer's automatic answers, which no door carries; read as "no door", never a guessed one. Written with the `pm` row by `answer`. |
 
+### `messages` (migration `006`, slice 240)
+
+One row per request. `note` rows and `to_program` are in the table for slice 243 and are
+never written by 240 (SQLite cannot widen a `CHECK` in place, and 243 has no migration).
+
+| Column | Meaning |
+|---|---|
+| `message_id` | Key; the id the sender chose (1 to 64 characters, `[A-Za-z0-9][A-Za-z0-9._-]*`). |
+| `kind` | `request` or `note` (`MessageKind`, a `CHECK`). |
+| `from_member` | The sender's project id; references `members`. |
+| `to_member` | The addressee's project id; references `members`. Set for a request. |
+| `to_program` | References `programs`; null for a request. |
+| `parent_id` | The request this one serves, as given; not a foreign key, because a terminal parent can be pruned while a child is open. |
+| `depth` | At least 1: the parent's depth plus one, or 1 for a root. Stored at send so pruning never changes it. |
+| `subject`, `body` | The sender's text. |
+| `state` | `open`, `accepted`, `done`, `declined`, `cancelled` or `expired` (`RequestState`, a `CHECK`); null for a note. Read through `effective_state`, which shows an `open` request past `expires_at` as `expired` before the sweep records it. |
+| `result`, `result_commit`, `result_version` | The `done` reply's text, commit and version. |
+| `reason` | The decline text, or the cancel reason (`member_removed` when a member's removal cancelled it). |
+| `accepted_at` | UTC time of the accept. |
+| `created_at`, `state_changed_at` | UTC times; `state_changed_at` moves with every state change (an expiry records the sweep's own time). |
+| `expires_at` | `created_at` plus `request_open_ttl_hours`, fixed at send, so a config change never moves it; null for a note. |
+
+Table `CHECK`s: a request has `to_member`, a state and `expires_at` and no `to_program`;
+a note has exactly one of `to_member` and `to_program`, and no state or `expires_at`.
+`depth` is at least 1. Indexes: `(to_member, state)`, `(from_member, state)`,
+`(parent_id)` and `(state, expires_at)`.
+
+### `deliveries` (migration `006`)
+
+| Column | Meaning |
+|---|---|
+| `seq` | Key; autoincrement, so `sqlite_sequence` holds the highest number ever assigned even after rows are pruned. `inbox` returns it as `as_of_seq`. |
+| `member_id` | The member the delivery is for; references `members`. |
+| `message_id` | The request it concerns; references `messages`. |
+| `event` | `sent`, `accepted`, `declined`, `done`, `cancelled` or `expired` (`DeliveryEvent`, a `CHECK`). |
+| `created_at` | UTC time. |
+
+Indexes: `(member_id, seq)`, and `(message_id)` for the prune's delete of a request's
+deliveries and the foreign-key check.
+
+### `message_rejections` (migration `006`)
+
+A `send`, `reply` or `cancel` rejected once its caller was known leaves one row, so a
+call that cannot be applied does not vanish. `list` and `status` show a member's rows
+under it.
+
+| Column | Meaning |
+|---|---|
+| `id` | Key. |
+| `member_id` | The caller; references `members`. |
+| `operation` | `send`, `reply` or `cancel` (an `OperationName` value; no `CHECK`). |
+| `to_ref` | The recipient as given; `send` only. |
+| `message_id`, `parent_id` | The request id and parent as given; null when the document gave none. |
+| `code` | A `RejectCode` value; no `CHECK`, so a new code is not a migration. |
+| `detail` | The reason text. |
+| `created_at` | UTC time. |
+
+Index: `(created_at)`.
+
 ### `pm_marker` (moved by slice 224)
 
 | Column | Meaning |
@@ -225,7 +284,7 @@ Append-only, so an automatic answer and a later PM answer are both kept.
 ## Why each column exists
 
 The schema holds no state that Context Forge or Squadron already says; every column is
-one of four things. `tests/store/test_schema_holds_no_mirrored_state.py` pins the same
+one of five things. `tests/store/test_schema_holds_no_mirrored_state.py` pins the same
 columns under the same reasons, so a new column fails it until it is listed in both
 places and its reason is stated.
 
@@ -234,6 +293,8 @@ places and its reason is stated.
 - **membership**: who is in a program, the PM's registration and the one thing only Amoeba knows. Columns: `dependency_pairs.consumer_id`, `dependency_pairs.program_id`, `dependency_pairs.provider_id`, `dependency_pairs.registered_at`, `dependency_pairs.updated_at`, `members.program_id`, `members.project_id`, `members.registered_at`, `members.removed_at`, `members.updated_at`, `programs.program_id`, `programs.registered_at`, `programs.updated_at`.
 
 - **settings**: what the PM chose for a program or member, and the store's own schema version. Columns: `dependency_pairs.consumed`, `members.authorize_allow`, `members.authorize_deny`, `members.rules_from`, `members.rules_paths`, `programs.concept_member`, `programs.concept_path`, `schema_meta.id`, `schema_meta.version`.
+
+- **messages**: what agents said to each other and where each request stands. Amoeba is the only place this exists, and a request's state is Amoeba's own, never read from Context Forge or Squadron. Columns: `deliveries.created_at`, `deliveries.event`, `deliveries.member_id`, `deliveries.message_id`, `deliveries.seq`, `message_rejections.code`, `message_rejections.created_at`, `message_rejections.detail`, `message_rejections.id`, `message_rejections.member_id`, `message_rejections.message_id`, `message_rejections.operation`, `message_rejections.parent_id`, `message_rejections.to_ref`, `messages.accepted_at`, `messages.body`, `messages.created_at`, `messages.depth`, `messages.expires_at`, `messages.from_member`, `messages.kind`, `messages.message_id`, `messages.parent_id`, `messages.reason`, `messages.result`, `messages.result_commit`, `messages.result_version`, `messages.state`, `messages.state_changed_at`, `messages.subject`, `messages.to_member`, `messages.to_program`.
 
 - **marker**: how far the PM has read the decisions. Columns: `pm_marker.id`, `pm_marker.last_seen_seq`.
 
@@ -289,6 +350,72 @@ cut and are not written.
 An answer with `resume_outcome` null or `refused` is "answered, not resumed": the next
 `handle_pause` for that question resumes with the latest answer and starts no answering
 run. `resumed` and `not_delivered` are never overwritten.
+
+## Request lifecycle and who writes it (slice 240)
+
+A request is `open` when `send` stores it. `reply accept` makes it `accepted`; `done`,
+`decline` and `cancel` end it. Expiry and the removal of a member end it too. Nothing
+else changes a request's `state`, and every change goes through one writer that also
+writes the deliveries, in the same transaction.
+
+| Operation | Writes |
+|---|---|
+| `send` | one `messages` row (`open`, `depth` the parent's plus one, `expires_at` fixed from the config) and one `sent` delivery for the addressee; a resend of the same content changes nothing |
+| `reply accept` | `accepted` and `accepted_at`, from `open`; a `accepted` delivery for the sender |
+| `reply decline` | `declined` and `reason`, from `open` or `accepted`; a `declined` delivery for the sender |
+| `reply done` | `done` with `result`, `result_commit` and `result_version`, from `accepted` only; a `done` delivery for the sender |
+| `cancel` | `cancelled` and `reason`, from `open` or `accepted`; a `cancelled` delivery for the other party, or for both when the caller is neither or unknown |
+| the sweep | `expired` for every `open` request at or past `expires_at`, with an `expired` delivery for each party; then the prune |
+| `rm`, and `add`'s remove path | `cancelled` with `reason` `member_removed` for every `open` or `accepted` request the member sent or received, with a delivery for the party that is still a member |
+
+A rejected `send`, `reply` or `cancel` writes one `message_rejections` row for its
+caller, in the transaction that found the problem; two cases write none, because there
+is no member to show it under: `not_a_member`, and a `cancel` by a caller that is
+unknown.
+
+**Effective state.** Every read goes through `effective_state`: an `open` request whose
+`expires_at` has passed reads `expired`, whether or not the sweep has recorded it yet.
+`inbox`, `list`, `status` and the checks of `reply` and `cancel` all use it, so nobody
+sees a stale `open`. An `accepted` request never expires: the work can take days, and it
+leaves by `done`, `decline` or `cancel`.
+
+**Who is told.** A state change writes one delivery for each party except the actor, and
+skips a party that is no longer an active member. So `accept`, `decline` and `done`
+reach the sender, a sender's `cancel` reaches the addressee, and a `cancel` from a
+session that is neither party, expiry and the removal cascade reach both (less a removed
+member). `send` writes one delivery, for the addressee.
+
+**The delivery sequence.** `deliveries.seq` is autoincrement. The highest number ever
+assigned is read from `sqlite_sequence`, so it does not fall when the prune deletes
+rows; `inbox` returns it as `as_of_seq`, read in the same transaction as the rows. A
+caller keeps it and passes it as `since`; a `since` above it was never assigned and is
+rejected `beyond_last_record`. Nothing is marked read: two readers with different
+`since` values each see every delivery after their own.
+
+**The sweep.** `send`, `reply` and `cancel` run it at the start of their own write
+transaction. `status`, `list` and `handle-pause` run it through a wrapper that reads
+first and takes the write lock only when something is due, so a quiet store is never
+write-locked by a poll; a store that stays locked for the busy timeout is reported as a
+problem in `status` and `list` (`sweep_problem`) and as a note in `handle-pause`'s
+`detail`, and the call still returns.
+
+**Caps.** Retention is also by count. `send` keeps a sender within 200 requests: before
+storing a new one it deletes the sender's oldest terminal requests (deliveries first)
+to make room, and is rejected `too_many_open` when all of them are `open` or `accepted`,
+dropping nothing in that case. Each rejection row written trims its member to the newest
+100 rows, and cuts the text the caller gave to 500 characters (`…` marks a cut). So the
+rows `inbox`, `status` and `list` read are bounded by these caps times the members.
+
+**Retention.** The prune deletes terminal requests (`done`, `declined`, `cancelled`,
+`expired`) whose `state_changed_at` is older than `prune_after_days`, their deliveries
+first, and `message_rejections` rows older than that. `open` and `accepted` requests are
+never pruned: each has an exit. A pruned request's id sent again is a new request. A
+member that is registered again keeps its retained history and starts with no live
+request.
+
+Text from other repos is data: `subject`, `body`, `result` and `reason` are written by
+other repos' agents and stored as given, with the limits of the CLI contract. Amoeba
+never acts on a request's text.
 
 ## Derivations the schema deliberately has no column for
 

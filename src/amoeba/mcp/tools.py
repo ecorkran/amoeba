@@ -11,22 +11,21 @@ reads its own working directory.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
-from pydantic import BaseModel
-
+from amoeba.mcp.message_tools import MESSAGE_TOOLS
+from amoeba.mcp.tool_spec import READ_ADVICE, WRITE_ADVICE, RunMode, ToolSpec
 from amoeba.operations.add import AddRequest
 from amoeba.operations.answer import AnswerRequest
-from amoeba.operations.changes_models import QUOTED_DATA_NOTICE, ChangesRequest
+from amoeba.operations.changes_models import ChangesRequest
 from amoeba.operations.decisions import DecisionsRequest
 from amoeba.operations.dismiss import DismissRequest
 from amoeba.operations.handle_pause_call import HandlePauseCall
 from amoeba.operations.list_view import ListRequest
 from amoeba.operations.mark_read import MarkReadRequest
 from amoeba.operations.names import OperationName
+from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.report_release_models import ReportReleaseRequest
 from amoeba.operations.retract import RetractRequest
 from amoeba.operations.rm import RmRequest
@@ -39,41 +38,9 @@ DIRECTORY_DESCRIPTION: Final = (
     "belongs to). Never relative."
 )
 
-#: What an agent does when ``status`` or ``decisions`` timed out (D12): the CLI has no
-#: deadline, so it is the way through; never the tool that just timed out.
-READ_ADVICE: Final = (
-    "it was abandoned and may still finish; run the `amoeba` command of the same "
-    "name in a shell, which has no deadline, instead of calling this tool again"
-)
-#: What an agent does when a write tool timed out (D12): the work may have happened.
-WRITE_ADVICE: Final = (
-    "it may still complete; check `status` or `decisions` before repeating it"
-)
-
-
-class RunMode(StrEnum):
-    """How a tool runs: in a worker thread of the server, or as a detached child."""
-
-    IN_PROCESS = "in_process"
-    DETACHED = "detached"
-
 
 class RequestError(Exception):
     """The call cannot form an operation request; the message names the field."""
-
-
-@dataclass(frozen=True)
-class ToolSpec:
-    """One tool: its operation, input, run mode, description and timeout advice."""
-
-    name: OperationName
-    request_model: type[BaseModel]
-    takes_directory: bool
-    mode: RunMode
-    description: str
-    #: What the agent does when the call times out; ``None`` for a detached tool,
-    #: which returns a receipt at once and has no deadline to hit.
-    timeout_advice: str | None
 
 
 TOOLS: Final = (
@@ -117,8 +84,9 @@ TOOLS: Final = (
         description=(
             "With no `subject`, what needs the PM: the same result as `status`, and "
             "with `all` also what settled recently. `programs`, `members` or "
-            "`dependencies` show what is registered. Same request and result as "
-            "`amoeba list -j`."
+            "`dependencies` show what is registered. Requests and rejected calls "
+            f"appear under each member. {QUOTED_DATA_NOTICE} Same request and result "
+            "as `amoeba list -j`."
         ),
         timeout_advice=READ_ADVICE,
     ),
@@ -130,7 +98,8 @@ TOOLS: Final = (
         description=(
             "Runs, pauses and questions waiting on the PM, per program and member. "
             "Its listing gives the `run_id` and `directory` for `handle_pause` and "
-            "the question key for `answer`."
+            "the question key for `answer`. Requests and rejected calls appear under "
+            f"each member. {QUOTED_DATA_NOTICE}"
         ),
         timeout_advice=READ_ADVICE,
     ),
@@ -233,6 +202,7 @@ TOOLS: Final = (
         ),
         timeout_advice=None,
     ),
+    *MESSAGE_TOOLS,
 )
 
 

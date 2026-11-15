@@ -1,4 +1,4 @@
-"""Read the two pasted rule blocks out of ``docs/program-rules.md`` (slice 227, D6).
+"""Read the four pasted rule blocks out of ``docs/program-rules.md`` (slices 227, 240).
 
 Parsed leniently: a block is the first fenced code block under the heading whose title
 names it, at any heading depth, with any fence length or marker and any whitespace.
@@ -20,10 +20,13 @@ _FENCE_OPEN: Final = re.compile(r"^[ \t]*(?P<fence>`{3,}|~{3,})[^`\n]*$")
 
 @dataclass(frozen=True)
 class RuleBlocks:
-    """The text each repo pastes: a consumer's and a provider's."""
+    """The text each repo pastes: a consumer's, a provider's, and the two request
+    blocks (``requesting`` for a repo that asks, ``handling`` for every member)."""
 
     consumer: str
     provider: str
+    requesting: str
+    handling: str
 
 
 def _section_lines(lines: list[str], keyword: str) -> list[str]:
@@ -72,19 +75,24 @@ def _fenced_text(section: list[str], keyword: str) -> str:
 
 
 def rule_blocks(text: str) -> RuleBlocks:
-    """The consumer and provider blocks of ``text``.
+    """The four blocks of ``text``.
 
     Raises:
         ValueError: A block's heading or its fenced text is missing.
     """
     lines = text.splitlines()
     found: dict[str, str] = {}
-    for keyword in ("consumer", "provider"):
+    for keyword in ("consumer", "provider", "requesting", "handling"):
         section = _section_lines(lines, keyword)
         if not section:
             raise ValueError(f"no heading names the {keyword!r} block")
         found[keyword] = _fenced_text(section, keyword)
-    return RuleBlocks(consumer=found["consumer"], provider=found["provider"])
+    return RuleBlocks(
+        consumer=found["consumer"],
+        provider=found["provider"],
+        requesting=found["requesting"],
+        handling=found["handling"],
+    )
 
 
 def real_rule_blocks() -> RuleBlocks:

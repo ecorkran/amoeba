@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,7 @@ from cf_fixtures import (
     write_fake_cf,
     write_fake_cf_with_projects,
 )
+from cf_routing import RoutedProject, write_routing_cf
 from fake_sq import (
     RUN_FILE,
     SQUADRON_FIXTURES,
@@ -64,12 +66,21 @@ def run_amoeba(  # noqa: PLR0913 - the fakes a subprocess run can be given
     projects: bool = True,
     listing: FakeListing | None = None,
     as_json: bool = False,
+    cwd: Path | None = None,
+    routing: Sequence[RoutedProject] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run ``amoeba``; ``as_json`` adds ``-j`` after the command name."""
+    """Run ``amoeba``; ``as_json`` adds ``-j`` after the command name.
+
+    ``cwd`` is the working directory (default ``tmp_path``). ``routing`` replaces the
+    recorded ``cf`` with one that knows those projects, for a test that needs several
+    members.
+    """
     if as_json and arguments and not arguments[0].startswith("-"):
         arguments = (arguments[0], "-j", *arguments[1:])
     bin_dir = tmp_path / "bin"
-    if projects and cf_fixture is not None:
+    if routing is not None:
+        write_routing_cf(bin_dir, routing)
+    elif projects and cf_fixture is not None:
         write_fake_cf_with_projects(bin_dir, cf_fixture)
     else:
         write_fake_cf(bin_dir, cf_fixture)
@@ -95,7 +106,7 @@ def run_amoeba(  # noqa: PLR0913 - the fakes a subprocess run can be given
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        cwd=tmp_path,
+        cwd=tmp_path if cwd is None else cwd,
         env=environment,
     )
     stdout, stderr = child.communicate(stdin, timeout=RUN_TIMEOUT_SECONDS)

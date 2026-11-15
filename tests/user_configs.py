@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 from amoeba.config.user_config import NotAuthorizedItem, UserConfig
 from amoeba.store.vocabulary import ConsumedMode
@@ -17,6 +20,14 @@ def example_config_text() -> str:
     match = re.search(r"```yaml\n(.*?)```", example, re.DOTALL)
     assert match is not None, "no yaml block under ## Example"
     return match.group(1)
+
+
+def _example_integer(key: str) -> int:
+    """One integer key of the contract's example, so its value lives only there."""
+    document: dict[str, Any] = yaml.safe_load(example_config_text())
+    value = document[key]
+    assert isinstance(value, int), f"the example's {key} is not an integer"
+    return value
 
 
 MERGE_TO_MAIN = NotAuthorizedItem(
@@ -52,6 +63,8 @@ def user_config(
         answering_wait_seconds=600,
         resume_wait_seconds=60,
         prune_after_days=30,
+        request_open_ttl_hours=_example_integer("request_open_ttl_hours"),
+        max_chain_depth=_example_integer("max_chain_depth"),
         default_rules_paths=("CLAUDE.md", "AGENTS.md"),
         default_consumed=ConsumedMode.FROM_SOURCE,
         authorize_items=authorize_items,

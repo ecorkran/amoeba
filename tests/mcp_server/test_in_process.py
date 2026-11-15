@@ -23,9 +23,7 @@ from amoeba.config.home import config_path
 from amoeba.mcp import in_process
 from amoeba.mcp.in_process import CallTimedOut, run_in_process
 from amoeba.mcp.tools import (
-    READ_ADVICE,
     TOOLS,
-    WRITE_ADVICE,
     RunMode,
     ToolSpec,
     prepare_arguments,
@@ -305,17 +303,8 @@ def test_the_timed_out_text_carries_that_tools_advice(
         return None
 
     monkeypatch.setattr(wiring, "check_deadline", no_check)
-    advice = (
-        READ_ADVICE
-        if tool.name
-        in {
-            OperationName.STATUS,
-            OperationName.DECISIONS,
-            OperationName.LIST,
-            OperationName.CHANGES,
-        }
-        else WRITE_ADVICE
-    )
+    advice = tool.timeout_advice
+    assert advice is not None
 
     async def scenario() -> None:
         await run_in_process(tool, {"block": True}, Path("/tmp"))

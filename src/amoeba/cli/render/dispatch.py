@@ -9,6 +9,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 
+from amoeba.cli.render.messages import (
+    render_cancel,
+    render_inbox,
+    render_reply,
+    render_send,
+)
 from amoeba.cli.render.registration import render_registration
 from amoeba.cli.render.registry import (
     render_dependencies,
@@ -35,6 +41,12 @@ from amoeba.operations.list_registry import (
 )
 from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadResult
+from amoeba.operations.message_results import (
+    CancelResult,
+    InboxResult,
+    ReplyResult,
+    SendResult,
+)
 from amoeba.operations.report_release_models import ReportReleaseResult
 from amoeba.operations.retract import RetractResult
 from amoeba.operations.set_up_models import SetUpResult
@@ -85,3 +97,11 @@ def render_result(
             return render_report_release(result)
         case ChangesResult():
             return render_changes(result)
+        case SendResult():
+            return render_send(result, now=now)
+        case InboxResult():
+            return render_inbox(result, now=now)
+        case ReplyResult():
+            return render_reply(result, now=now)
+        case CancelResult():
+            return render_cancel(result, now=now)

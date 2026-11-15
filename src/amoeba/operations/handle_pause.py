@@ -15,6 +15,7 @@ from pathlib import Path
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.deps import Deps
+from amoeba.operations.message_sweep import sweep_messages
 from amoeba.operations.pause_claim import start_new_claim
 from amoeba.operations.pause_class import PauseClass, classify_pause
 from amoeba.operations.pause_eligibility import Skip, check_eligibility
@@ -70,7 +71,11 @@ def handle_pause(
     # Last, after any resume, so pruning never delays one (228 D9).
     notes = [
         note
-        for note in (sweep_note(swept), _prune_note(store, config, deps))
+        for note in (
+            sweep_note(swept),
+            _prune_note(store, config, deps),
+            _message_sweep_note(store, config, deps),
+        )
         if note is not None
     ]
     if not notes:
@@ -89,6 +94,17 @@ def _prune_note(store: Store, config: UserConfig, deps: Deps) -> str | None:
         logger.exception("prune failed after handling the pause")
         return f"prune: {error}"
     return pruned.note()
+
+
+def _message_sweep_note(store: Store, config: UserConfig, deps: Deps) -> str | None:
+    """What the message sweep could not do, as a note, for the reason the prune's is
+    one: the result is already decided. A busy store is already a problem text; any
+    other store failure is logged and noted here."""
+    try:
+        return sweep_messages(store, config, deps.clock())
+    except StoreError as error:
+        logger.exception("the message sweep failed after handling the pause")
+        return f"message sweep: {error}"
 
 
 def _handle_polled(  # noqa: PLR0913 - the pieces of one call

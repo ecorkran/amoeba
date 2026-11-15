@@ -1,7 +1,8 @@
 """Each ``CHECK`` list in the schema equals its enum's values.
 
-A column whose list a later migration rebuilt (``questions.state`` in ``003``) is
-checked against its newest definition.
+Lists are keyed by ``table.column`` (``questions.state`` and ``messages.state`` are
+different columns). A column whose list a later migration rebuilt (``questions.state``
+in ``003``) is checked against its newest definition.
 """
 
 from __future__ import annotations
@@ -17,8 +18,11 @@ from amoeba.answering.values import AnsweredBy
 from amoeba.store.vocabulary import (
     ClosedReason,
     ConsumedMode,
+    DeliveryEvent,
     Door,
+    MessageKind,
     QuestionState,
+    RequestState,
     ResumeOutcome,
     RulesFrom,
 )
@@ -30,14 +34,25 @@ SCHEMA_FILES = sorted(
 CHECK_LIST = re.compile(
     r"CHECK\s*\(\s*(?:\w+\s+IS\s+NULL\s+OR\s+)?(\w+)\s+IN\s*\(([^)]*)\)", re.IGNORECASE
 )
+#: ``ALTER TABLE old RENAME TO new``: the lists of ``old`` now belong to ``new``.
+RENAME_STATEMENT = re.compile(
+    r"ALTER\s+TABLE\s+(\w+)\s+RENAME\s+TO\s+(\w+)", re.IGNORECASE
+)
+#: The table a statement creates or alters; the ``CHECK`` lists after it are its.
+TABLE_STATEMENT = re.compile(
+    r"^\s*(?:CREATE\s+TABLE|ALTER\s+TABLE)\s+(\w+)", re.IGNORECASE | re.MULTILINE
+)
 ENUM_FOR_COLUMN: dict[str, type[StrEnum]] = {
-    "consumed": ConsumedMode,
-    "state": QuestionState,
-    "answered_by": AnsweredBy,
-    "resume_outcome": ResumeOutcome,
-    "closed_reason": ClosedReason,
-    "via": Door,
-    "rules_from": RulesFrom,
+    "dependency_pairs.consumed": ConsumedMode,
+    "questions.state": QuestionState,
+    "answers.answered_by": AnsweredBy,
+    "answers.resume_outcome": ResumeOutcome,
+    "questions.closed_reason": ClosedReason,
+    "answers.via": Door,
+    "members.rules_from": RulesFrom,
+    "messages.kind": MessageKind,
+    "messages.state": RequestState,
+    "deliveries.event": DeliveryEvent,
 }
 
 
@@ -45,8 +60,23 @@ def _check_lists(files: list[Traversable]) -> dict[str, set[str]]:
     """Each column's newest ``CHECK`` list: a later file's definition replaces."""
     lists: dict[str, set[str]] = {}
     for file in files:
-        for column, body in CHECK_LIST.findall(file.read_text(encoding="utf-8")):
-            lists[column] = set(re.findall(r"'([^']*)'", body))
+        for statement in re.split(
+            r";\s*$", file.read_text(encoding="utf-8"), flags=re.M
+        ):
+            renamed = RENAME_STATEMENT.search(statement)
+            if renamed is not None:
+                old, new = renamed.groups()
+                lists = {
+                    (f"{new}{key[len(old) :]}" if key.startswith(f"{old}.") else key): v
+                    for key, v in lists.items()
+                }
+                continue
+            table = TABLE_STATEMENT.search(statement)
+            for column, body in CHECK_LIST.findall(statement):
+                assert table is not None, f"a CHECK list outside a table: {column}"
+                lists[f"{table.group(1)}.{column}"] = set(
+                    re.findall(r"'([^']*)'", body)
+                )
     return lists
 
 

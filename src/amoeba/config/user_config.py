@@ -30,6 +30,8 @@ from amoeba.answering.settings import ModelAlias, RulesPath
 from amoeba.store.vocabulary import ConsumedMode
 
 CONTRACT_DOC: Final = "docs/config-contract.md"
+#: The longest a request may stay open: ten years, in hours. Stated in the contract.
+MAX_REQUEST_OPEN_TTL_HOURS: Final = 24 * 365 * 10
 
 #: A stripped, non-empty string.
 NonBlank = Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -75,6 +77,15 @@ class UserConfig(BaseModel):
     #: Age in days after which settled scratch, logs and calls-log days are removed
     #: (slice 228, D9).
     prune_after_days: Annotated[StrictInt, Field(ge=1)]
+    #: Hours an open request waits for an answer before it expires; fixed into each
+    #: request at send (slice 240, D12). Bounded so ``created_at`` plus the TTL is
+    #: always a time the store can hold.
+    request_open_ttl_hours: Annotated[
+        StrictInt, Field(ge=1, le=MAX_REQUEST_OPEN_TTL_HOURS)
+    ]
+    #: Deepest a chain of requests may go; a send whose parent is this deep is
+    #: rejected (slice 240, D8, D12).
+    max_chain_depth: Annotated[StrictInt, Field(ge=1)]
     #: Rules files a member that names none reads, each skipped when absent
     #: (slice 229, D7, D8). Not empty: a default of no rules is ``--no-rules``.
     default_rules_paths: Annotated[tuple[RulesPath, ...], Field(min_length=1)]

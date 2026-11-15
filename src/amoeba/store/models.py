@@ -17,8 +17,11 @@ from amoeba.answering.values import (
 from amoeba.store.vocabulary import (
     ClosedReason,
     ConsumedMode,
+    DeliveryEvent,
     Door,
+    MessageKind,
     QuestionState,
+    RequestState,
     ResumeOutcome,
     RulesFrom,
 )
@@ -162,3 +165,61 @@ class PmPrecedent:
     answer_seq: int
     answer: str
     recorded_at: datetime
+
+
+@dataclass(frozen=True)
+class Message:
+    """One ``messages`` row: a request (240) or, from 243, a note."""
+
+    message_id: str
+    kind: MessageKind
+    #: Project id of the sender.
+    from_member: str
+    #: Project id of the addressee; set for a request.
+    to_member: str | None
+    to_program: str | None
+    #: The request this one serves, as given; the row may have been pruned.
+    parent_id: str | None
+    depth: int
+    subject: str
+    body: str
+    #: The stored state, ``None`` for a note. Read ``effective_state``, not this.
+    state: RequestState | None
+    result: str | None
+    result_commit: str | None
+    result_version: str | None
+    reason: str | None
+    accepted_at: datetime | None
+    created_at: datetime
+    state_changed_at: datetime
+    expires_at: datetime | None
+
+
+@dataclass(frozen=True)
+class Delivery:
+    """One ``deliveries`` row: something a member should learn about a request."""
+
+    seq: int
+    member_id: str
+    message_id: str
+    event: DeliveryEvent
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class MessageRejection:
+    """One ``message_rejections`` row: a call that was refused (240 D9)."""
+
+    id: int
+    #: The caller's project id.
+    member_id: str
+    #: An ``OperationName`` value.
+    operation: str
+    #: The recipient as the caller gave it; ``send`` only.
+    to_ref: str | None
+    message_id: str | None
+    parent_id: str | None
+    #: A ``RejectCode`` value.
+    code: str
+    detail: str
+    created_at: datetime

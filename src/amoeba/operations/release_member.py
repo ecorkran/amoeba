@@ -21,6 +21,15 @@ from amoeba.store.store import Store
 from amoeba.upstream.context_forge.cli_call import CfRun
 
 
+def not_a_member_detail(resolved: NotInProgram | NotAProject) -> str:
+    """Which way a directory is no member: in no program, or in no project."""
+    match resolved:
+        case NotInProgram():
+            return "this Context Forge project is in no program"
+        case NotAProject(message=message):
+            return f"this directory is in no Context Forge project: {message}"
+
+
 def resolve_release_member(
     store: Store, directory: Path, cf_run: CfRun
 ) -> Member | ReleaseProblem:
@@ -30,11 +39,8 @@ def resolve_release_member(
         ContextForgeError: ``cf`` failed to give a usable answer.
     """
     resolved = resolve_member(store, directory, cf_run)
-    match resolved:
-        case NotInProgram():
-            detail = "this Context Forge project is in no program"
-        case NotAProject(message=message):
-            detail = f"this directory is in no Context Forge project: {message}"
-        case _:
-            return resolved
-    return ReleaseProblem(code=RejectCode.NOT_A_MEMBER, detail=detail)
+    if isinstance(resolved, NotInProgram | NotAProject):
+        return ReleaseProblem(
+            code=RejectCode.NOT_A_MEMBER, detail=not_a_member_detail(resolved)
+        )
+    return resolved

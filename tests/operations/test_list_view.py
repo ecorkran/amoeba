@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from store.decision_support import CORE, LINT, TOOLS, TRADING, seed_programs
+from store.message_support import send_request
 from store.question_support import NOW, claimed_question
 from user_configs import user_config
 
@@ -26,6 +27,7 @@ from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.status import status
 from amoeba.operations.status_models import StatusOutcome
 from amoeba.store.answers import add_pm_answer, record_resume
+from amoeba.store.message_rejections import record_rejection
 from amoeba.store.models import QuestionKey
 from amoeba.store.question_closing import close_question
 from amoeba.store.questions import get_question, insert_question
@@ -95,6 +97,35 @@ def test_no_subject_gives_the_status_result_unchanged(
     assert result.settled is None
     assert result.document() == expected.model_dump(mode="json")
     assert "settled" not in result.document()
+
+
+def test_the_document_equals_status_with_requests_and_rejected_calls_present(
+    store: Store, tmp_path: Path
+) -> None:
+    with store.write() as transaction:
+        send_request(transaction, "ask", from_member=CORE, to_member=LINT)
+        record_rejection(
+            transaction,
+            CORE,
+            "send",
+            "nobody",
+            "again",
+            None,
+            "unknown_recipient",
+            "d",
+            NOW,
+        )
+
+    result = _list(store, tmp_path)
+
+    expected = status(store, CONFIG, {}, directory=ELSEWHERE, deps=_deps(tmp_path))
+    assert isinstance(result, ListResult)
+    assert result.document() == expected.model_dump(mode="json")
+    assert expected.notice is not None
+    assert result.document()["notice"] == expected.notice
+    members = [member for program in expected.programs for member in program.members]
+    assert any(member.requests for member in members)
+    assert any(member.rejected_calls for member in members)
 
 
 def test_a_program_filter_reaches_status(store: Store, tmp_path: Path) -> None:

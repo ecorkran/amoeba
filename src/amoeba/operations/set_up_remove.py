@@ -23,6 +23,7 @@ from amoeba.operations.set_up_remove_resolve import (
     RemovedPair,
     ResolvedRemoval,
 )
+from amoeba.store.message_transitions import cancel_member_requests
 from amoeba.store.models import Member
 from amoeba.store.programs import (
     get_member_any,
@@ -153,6 +154,10 @@ def apply_removal(
             )
     for item in removal.members:
         if remove_member(transaction, item.reference.project_id, now):
+            # After the member is inactive, so the cancelled requests tell only the
+            # surviving party (240 D10); inside this transaction, so it rolls back
+            # with the removal.
+            cancel_member_requests(transaction, item.reference.project_id, now)
             changes.append(
                 Change(
                     verb=ChangeVerb.REMOVED,
