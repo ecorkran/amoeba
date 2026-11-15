@@ -5,7 +5,6 @@ project: amoeba
 lld: user/slices/240-slice.requests.md
 dependencies:
 - 220-slice.code-audit
-- 229-slice.human-cli
 projectState: Slices 220 to 229 are merged on main. Store schema version 5 (migrations
   001 to 005), the CLI prints text by default and JSON with -j, operations run through
   wiring.invoke on the CLI and the MCP server, state is in ~/.local/state/amoeba.
@@ -36,6 +35,7 @@ usageByModel:
 
 - Working on slice 240 (design: `user/slices/240-slice.requests.md`; decisions D1 to D12 are cited by number). Effort 5/5, the largest slice of the 240 group.
 - Delivers: migration 006 (`messages`, `deliveries`, `message_rejections`); `send`, `inbox`, `reply`, `cancel` on the CLI and MCP; the request state machine with `effective_state`, the sweep, chains, recorded rejections; the `rm` cascade; request and rejected-call lines in `list`/`status`; `QUOTED_DATA_NOTICE` moved and reworded; two required config keys; docs and rules blocks; scenario D end to end; the live-store migration.
+- Paths: a path without a prefix is under `src/amoeba/`; `tests/`, `docs/` and `project-documents/` paths are from the repo root, and `user/` means `project-documents/user/`.
 - Module layout is the design's Component Structure. Where the design lists a module that does not exist, create it. Two additions the design leaves open, decided here: `store/message_transitions.py` (the one state-change writer that applies D5's delivery rule, used by `reply`, `cancel`, expiry and the `rm` cascade) and `store/message_rejections.py` (the D9 row writer). `store/sql.py` (484 lines), `wiring.py` (342) and `mcp/tools.py` (292) are at or past the ~300-line guide: new SQL goes in `store/sql_messages.py`, and those files gain only call sites and constants.
 - Closed vocabularies (`MessageKind`, `RequestState`, `DeliveryEvent`, outcome enums, `RejectCode` members) are each a `StrEnum` defined once. No silent fallbacks; a swallowed exception needs a comment saying why. Member checks in new SQL use `sql.ACTIVE_MEMBER`, never a copy. The store imports nothing from `operations`.
 - Checks, from the repo root: `uv run ruff format --check .`, `uv run ruff check .`, `uv run pyright`, `uv run pytest -q`. "Checks pass" means all four. The live tier is `uv run pytest tests/live/<dir>` (never part of a bare run; LLM spend is pre-authorized).
@@ -47,7 +47,7 @@ usageByModel:
 ## 0. Setup
 
 - [ ] **0.1 Branch, inputs and baseline**
-  - [ ] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty. With a clean tree on the target: `git checkout -b 240-slice.requests {target}`
+  - [ ] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty. The planning documents (design, this file) are committed on the target; with no uncommitted change to any other file: `git checkout -b 240-slice.requests {target}`
   - [ ] Confirm the prerequisites exist: `store/schema/` holds `001` to `005` only, `EXPECTED_SCHEMA_VERSION` is 5, `operations/members.py` has `resolve_member`, `upstream/context_forge/project_of.py` has `project_of` and `CF_GET_TIMEOUT_SECONDS`, `operations/set_up_remove.py` has `apply_removal`, `store/sql.py` has `ACTIVE_MEMBER`. If any is missing write `BLOCKED: <what>` under this task and stop
   - [ ] Find the helpers to reuse and note their paths: `tests/user_configs.py`, `tests/cf_fixtures.py`, `tests/cf_stub.py`, `tests/store/seed.py`, `tests/store/test_migration_005.py` (model for the migration test), `tests/store/test_vocabulary_pinning.py`, `tests/operations/{set_up_worker,set_up_support,status_support,program_rig}.py`, `tests/cli/cli_support.py`, `tests/mcp_server/`, `tests/live/mcp/`, `tests/rule_blocks.py`
   - [ ] Run the checks once and note the baseline. Failures present before this slice are written down, not fixed
@@ -57,10 +57,10 @@ usageByModel:
 
 - [ ] **1.1 Enums and `006_messages.sql`**
   - [ ] Add `MessageKind` (`request`, `note`), `RequestState` (`open`, `accepted`, `done`, `declined`, `cancelled`, `expired`) and `DeliveryEvent` (`sent`, `accepted`, `declined`, `done`, `cancelled`, `expired`) as `StrEnum`s in `store/vocabulary.py`. `RequestState` also exposes its terminal subset once (used by the sweep, `inbox`, `list`, the cascade)
-  - [ ] `store/schema/006_messages.sql`: the three `CREATE TABLE`s and their six indexes (four on `messages`, one each on `deliveries` and `message_rejections`) exactly as D1 states, including the table `CHECK`s that tie a request and a note to their shape, and no `CHECK` on `message_rejections.code` or `.operation`. `EXPECTED_SCHEMA_VERSION` becomes 6
+  - [ ] `store/schema/006_messages.sql`: the three `CREATE TABLE`s and their indexes exactly as D1 states, plus one index D1 omits, `deliveries(message_id)`, which the prune's delete of a request's deliveries and the foreign-key check need (13.3 amends D1), including the table `CHECK`s that tie a request and a note to their shape, and no `CHECK` on `message_rejections.code` or `.operation`. `EXPECTED_SCHEMA_VERSION` becomes 6
   - [ ] Success: pyright clean; existing tests pass except stale-version assertions (fixed in 1.2)
 - [ ] **1.2 Migration tests and store-contract doc**
-  - [ ] `tests/store/test_migration_006.py` (model on `test_migration_005.py`): a version-5 database holding members migrates to 6 with rows untouched and `foreign_key_check` empty; the three tables exist with the D1 columns; each table `CHECK` refuses a malformed row (a request with `to_program`, a note with neither or both recipients, a request without a state, a `depth` of 0, a bad `kind` or `event`)
+  - [ ] `tests/store/test_migration_006.py` (model on `test_migration_005.py`): a version-5 database holding members migrates to 6 with rows untouched and `foreign_key_check` empty; the three tables exist with the D1 columns; each table `CHECK` refuses a malformed row (a request with `to_program`, a note with neither or both recipients, a request without a state, a `depth` of 0, a bad `kind` or `event`); the `deliveries(message_id)` index exists
   - [ ] Add the three enums to `tests/store/test_vocabulary_pinning.py` (each `CHECK` list equals its enum); update the schema pin in `test_schema_holds_no_mirrored_state.py` and stale-version assertions in `test_migrations.py`
   - [ ] `docs/store-contract.md`: the three tables, their columns, indexes, the vocabularies, version 6; `tests/test_contract_docs.py` passes
   - [ ] Success: checks pass
@@ -74,7 +74,7 @@ usageByModel:
   - [ ] `store/messages.py`: row mapping, `get_message(transaction, message_id)` (the one by-id read), `effective_state(message, now)` (an `open` request past `expires_at` reads `expired`; a note has no state), `insert_request(transaction, ...)` computing `depth` and `expires_at` from its arguments (the caller passes the parent's depth and the TTL; the store holds no config)
   - [ ] Success: pyright clean
 - [ ] **2.2 Tests for 2.1**
-  - [ ] `tests/store/test_messages.py`: insert then `get_message` round-trips every column; unknown id returns `None`; `effective_state` for open before and at `expires_at`, accepted never expiring, terminal states unchanged; the `ACTIVE_MEMBER` reference is by import (a grep-style assertion in the existing `test_members_queried_in_one_place.py` still passes)
+  - [ ] `tests/store/test_messages.py`: insert then `get_message` round-trips every column; unknown id returns `None`; `effective_state` for open before and at `expires_at`, accepted never expiring, terminal states unchanged; the existing `test_members_queried_in_one_place.py` still passes
   - [ ] Success: checks pass
 - [ ] **2.3 Deliveries, `highest_assigned_seq` and the state-change writer**
   - [ ] `store/deliveries.py`: `write_delivery` (next `seq` from the autoincrement), `deliveries_since(transaction, member_id, since)` ordered by `seq`, `highest_assigned_seq(transaction)` read from `sqlite_sequence` (so it does not fall after pruning; 0 when none was ever assigned)
@@ -87,12 +87,12 @@ usageByModel:
 **Commit**: `feat: add message and delivery store modules with the state-change writer`
 
 - [ ] **2.5 Sweep, rejection rows and the member cascade**
-  - [ ] `store/message_sweep.py`: `sweep(transaction, now, prune_after_days)` per D6 in order: expire every `open` request with `expires_at <= now` through `change_state` (reason none, `state_changed_at` is `now`), then prune terminal requests older than the cutoff by `state_changed_at`, notes by `created_at`, their deliveries first, and `message_rejections` by `created_at`. `sweep_due(transaction, now, prune_after_days)` is the read-only check that answers "is anything due", counting an old note as due. Both return nothing useful beyond the due flag
+  - [ ] `store/message_sweep.py`: `sweep(transaction, now, prune_after_days)` per D6 in order: expire every `open` request with `expires_at <= now` through `change_state` (reason none, `state_changed_at` is `now`), then prune terminal requests older than the cutoff by `state_changed_at` (their deliveries first) and `message_rejections` by `created_at`. Notes are not pruned here: 243 adds the note statement and the aged-note due check (243 D6), and the request statement keys on terminal request states so it leaves `kind = 'note'` rows alone. `sweep_due(transaction, now, prune_after_days)` is the read-only check that answers "is anything due". Neither returns anything beyond the due flag
   - [ ] `store/message_rejections.py`: `record_rejection(transaction, member_id, operation, to_ref, message_id, parent_id, code, detail, now)`
   - [ ] `cancel_member_requests(transaction, member_id, now)` (D10): every non-terminal request sent or received by the member becomes `cancelled`, reason `member_removed`, through `change_state` with actor `None`. Put it in `store/message_transitions.py`
   - [ ] Success: pyright clean; every function takes `now` as an argument (no clock reads in the store)
 - [ ] **2.6 Tests for 2.5**
-  - [ ] `tests/store/test_message_sweep.py`: expiry writes the state and the deliveries once and a second sweep writes nothing; open and accepted requests are never pruned; terminal requests, notes (inserted directly as rows, since 243 writes none) and rejection rows older than the cutoff are pruned with their deliveries and younger ones kept, one test per table; `sweep_due` is false on a quiet store and true for each due kind
+  - [ ] `tests/store/test_message_sweep.py`: expiry writes the state and the deliveries once and a second sweep writes nothing; open and accepted requests are never pruned; terminal requests with their deliveries, and rejection rows, older than the cutoff are pruned and younger ones kept, one test per table; a note row inserted directly is left alone and is not due; `sweep_due` is false on a quiet store and true for each due kind
   - [ ] `tests/store/test_message_cascade.py`: sender removed and addressee removed each cancel open and accepted requests with `member_removed`, tell only the surviving party, and leave terminal requests alone; a re-registered member keeps its retained history
   - [ ] Success: checks pass
 
@@ -115,16 +115,22 @@ usageByModel:
   - [ ] Move `_anchor` and its helpers (a reference is a Context Forge name or id, and one `cf` does not know is read as an id) from `operations/rm.py` into `operations/member_reference.py`; `rm` imports it. Behavior unchanged
   - [ ] Success: `tests/operations/test_rm.py` and `test_set_up_remove*.py` pass unchanged; checks pass
 
-**Commit**: `refactor: add request config keys and move shared notice, validators and reference rule`
+**Commit**: `feat: require request config keys and reword the quoted-data notice, moving shared helpers`
 
 ## 4. Operation models and codes (D2, D7, D11, D12)
 
-- [ ] **4.1 `RejectCode`s and message models**
+- [ ] **4.1 Codes, limits and enums**
   - [ ] `operations/reject_codes.py`: add `unknown_recipient`, `member_mismatch`, `id_reused`, `request_ended`, `unknown_request`, `not_addressee`, `already_accepted`, `not_applicable`, `parent_unknown`, `chain_too_deep` with one-line comments as the existing codes have
-  - [ ] `operations/message_models.py`: the four request models (`extra="forbid"`, frozen) with the D2 id pattern and D12 limits as named constants (`id` 64, `subject` 200, `body` 4000, `result` and decline `text` 4000, `reason` 1000, over-limit is `malformed` naming the limit and never cut); `ReplyAction` (`accept`, `decline`, `done`); `SendOutcome`, `InboxOutcome`, `ReplyOutcome`, `CancelOutcome`; the four results (each with `outcome`, `notice`, `rejection`, `problems`; `inbox` adds `member`, `since`, `as_of_seq`, `requests`, `deliveries`); `RequestView` and `DeliveryView` with `from_message` / `from_delivery` building from the store dataclasses (`direction` is passed in). `reply` validates that `decline` and `done` carry `text` and that `commit` and `version` appear only on `done`, reusing 3.3's validators. No operation logic here
+  - [ ] `operations/message_models.py`: the D12 text limits as named constants (`id` 64, `subject` 200, `body` 4000, `result` and decline `text` 4000, `reason` 1000), `ReplyAction` (`accept`, `decline`, `done`) and `SendOutcome`, `InboxOutcome`, `ReplyOutcome`, `CancelOutcome`
+  - [ ] Success: pyright clean
+- [ ] **4.2 The four request models**
+  - [ ] In `message_models.py`: `SendRequest`, `InboxRequest`, `ReplyRequest`, `CancelRequest` (`extra="forbid"`, frozen) with the D2 id pattern; an over-limit field is refused naming its limit and is never cut (mapped to `malformed` by the operations). `ReplyRequest` requires `text` for `decline` and `done` and allows `commit` and `version` only on `done`, reusing 3.3's validators
+  - [ ] Success: pyright clean
+- [ ] **4.3 Views and results**
+  - [ ] `RequestView` and `DeliveryView` with `from_message` / `from_delivery` building from the store dataclasses (`direction` passed in); the four results, each with `outcome`, `notice`, `rejection`, `problems`, and `inbox` adding `member`, `since`, `as_of_seq`, `requests`, `deliveries`. No operation logic here. If `message_models.py` passes ~300 lines, put views and results in `message_results.py`
   - [ ] Document each new code, result field and view field in `docs/cli-contract.md` (the prose is task 13), so `tests/test_contract_docs.py` passes
   - [ ] Success: pyright clean
-- [ ] **4.2 Model tests**
+- [ ] **4.4 Model tests**
   - [ ] `tests/operations/test_message_models.py`: id pattern accepts and refuses the D2 edges (64 and 65 characters, leading `.`); each limit accepts N and refuses N+1 naming the limit; `decline`/`done` without `text`, `commit` on `accept`, abbreviated hash and bad version each refuse; unknown field refused; `RequestView.from_message` carries every D7 field and the effective state
   - [ ] Success: checks pass
 
@@ -143,10 +149,13 @@ usageByModel:
 
 ## 6. `send` (D2, D3, D8, D9)
 
-- [ ] **6.1 `operations/send.py`**
-  - [ ] Flow per Data Flow: resolve sender, validate the document (a malformed one is a rejection recorded for the sender), resolve recipient, all before any store lock; then one write transaction: sweep, check recipient, parent (`parent_unknown`) and chain depth (a parent with `depth >= max_chain_depth` is `chain_too_deep`), check the id (equal content and not ended: `unchanged`, no second delivery; equal and ended: `request_ended` naming the state; different content: `id_reused`), insert, write one `sent` delivery to the recipient. Every rejection after the sender is resolved writes one `message_rejections` row (D9) and commits it before returning `rejected`; `not_a_member` writes none. Result carries the `RequestView`, `QUOTED_DATA_NOTICE` and, for a rejection, `problems`
-  - [ ] Success: pyright clean; `send.py` near 300 lines or less (split a helper module if not)
-- [ ] **6.2 `send` tests**
+- [ ] **6.1 `operations/send_write.py`: the write transaction**
+  - [ ] Given the resolved sender, resolved recipient, validated request, `now` and config, one write transaction: sweep, check parent (`parent_unknown`) and chain depth (a parent with `depth >= max_chain_depth` is `chain_too_deep`), check the id (equal content and not ended: `unchanged`, no second delivery; equal and ended: `request_ended` naming the state; different content: `id_reused`), insert, write one `sent` delivery to the recipient. A rejection found here writes its `message_rejections` row in the same transaction and commits it
+  - [ ] Success: pyright clean
+- [ ] **6.2 `operations/send.py`: resolve, validate, orchestrate**
+  - [ ] Resolve the sender (5.1), validate the document, resolve the recipient, all before any store lock; a malformed or over-limit document, or an unknown recipient, writes its rejection row in its own short transaction and returns `rejected`; `not_a_member` writes none. Then call 6.1. Result carries the `RequestView`, `QUOTED_DATA_NOTICE` and, for a rejection, `problems`
+  - [ ] Success: pyright clean; each file near 300 lines or less
+- [ ] **6.3 `send` tests**
   - [ ] `tests/operations/test_send.py`: a request stores with `depth` 1, `expires_at = created_at + TTL` and one `sent` delivery; with a parent the depth is parent plus one; with `max_chain_depth` 3 a root, child and grandchild are allowed and the fourth is `chain_too_deep` with a rejection row; `parent_unknown`; `unknown_recipient`; resend identical is `unchanged` with no second delivery; resend after done, declined, cancelled and expired is `request_ended` naming the state; different content under the same id is `id_reused`, also from another sender; over-limit text and a missing id are `malformed` with one rejection row and no message; `not_a_member` writes no row; a config change does not move an existing `expires_at`
   - [ ] Success: checks pass
 
@@ -162,7 +171,7 @@ usageByModel:
   - [ ] Success: checks pass
 - [ ] **7.3 Two-process accept**
   - [ ] `tests/operations/reply_worker.py` (model on `set_up_worker.py`: gate file, one JSON line) and `tests/operations/test_reply_concurrent.py`: two processes accept one request at once; exactly one is `applied`, the other `already_accepted` naming the time; one `accepted` delivery exists
-  - [ ] Success: the test passes ten runs in a row (a shell loop over `uv run pytest tests/operations/test_reply_concurrent.py`); checks pass
+  - [ ] Success: checks pass
 
 **Commit**: `feat: add the reply operation with first-accept-wins`
 
@@ -185,6 +194,9 @@ usageByModel:
 - [ ] **9.2 `inbox` tests**
   - [ ] `tests/operations/test_inbox.py`: no-`since` listing includes held terminal requests and excludes pruned ones; `since` returns only later deliveries; a request changed twice appears once in `requests` and twice in `deliveries`; an unswept expired request shows `expired` and its delivery arrives after a sweep; `as_of_seq` is stable after pruning; `since` beyond it is `beyond_last_record`; two readers with different `since` each see every delivery after their own point (the two-worktree case); `inbox` never writes (row counts and `PRAGMA data_version` unchanged); `direction` is right for sender and addressee
   - [ ] Success: checks pass
+- [ ] **9.3 Load test of the concurrent message paths**
+  - [ ] `tests/load/test_messages_load.py` (model on `tests/load/test_report_release_load.py`, with a worker module as in 7.3): many processes released together on one store, each doing `send` to a shared recipient, `accept` of its own request, and `inbox`; plus several processes accepting one shared request. Assert: no call ends `busy`, every `send` is stored, exactly one shared accept wins, delivery `seq` values are unique and `highest_assigned_seq` equals the delivery count, and every `inbox` reader sees a consistent `as_of_seq`. `cf` is the stub, as in the existing load tests
+  - [ ] Success: checks pass
 
 **Commit**: `feat: add the inbox operation`
 
@@ -196,23 +208,32 @@ usageByModel:
 - [ ] **10.2 Sweep wrapper tests**
   - [ ] `tests/operations/test_message_sweep_wrapper.py`: a quiet store is not write-locked (a second connection holding a write lock does not block it); due work is swept; a held store returns the problem text and the call returns
   - [ ] Success: checks pass
+
+**Commit**: `feat: add sweep_messages for read-side callers`
+
 - [ ] **10.3 `status` and `list` data**
   - [ ] `operations/status_models.py`: `MemberStatus` gains `requests` (open and accepted, sent and received, each with `direction`, the other member, `subject`, effective `state`, `created_at`, `state_changed_at`, `parent_id`, `child_ids` = non-terminal requests whose `parent_id` is this one) and `rejected_calls`; `StatusResult` gains `notice`, set when any member shows a request or a rejected call and null otherwise. `operations/status.py` calls `sweep_messages` before its reads; its problem joins the question sweep's text in `sweep_problem`. Requests do not count as "waiting on you", so `Nothing needs you.` is unchanged. Put the new reads in a new module (`operations/status_requests.py`); `status.py` is 243 lines and `list_view.py` shares the document, so `list -j` equals `status`
   - [ ] Document the new fields in `docs/cli-contract.md` so the docs test passes
   - [ ] Success: pyright clean
 - [ ] **10.4 `status`/`list` data tests**
-  - [ ] `tests/operations/test_status_requests.py` (and the existing `test_list_view.py`): requests with direction, age fields and `child_ids` for a two-link chain; rejected calls shown under the caller; `notice` set only when something shows; a held store gives `sweep_problem` and the call still returns; an unswept expired request shows `expired`; existing status and list JSON gains only `notice` and the two member fields (a snapshot test of keys)
+  - [ ] `tests/operations/test_status_requests.py` (and the existing `test_list_view.py`): requests with direction, age fields and `child_ids` for a two-link chain; rejected calls shown under the caller; `notice` set only when something shows; a held store gives `sweep_problem` and the call still returns; an unswept expired request shows `expired`; existing status and list JSON gains only `notice` and the two member fields (a snapshot test of keys); the document `list_view` builds for `list -j` equals `status`'s for the same store
   - [ ] Success: checks pass
+
+**Commit**: `feat: add requests and rejected calls to the status and list documents`
+
 - [ ] **10.5 Text rendering**
   - [ ] `cli/render/`: a **Requests** section per member (age, state, "waiting on <child id>") and a **Rejected calls** section with the newest 5 and "and N more (see -j)"; the notice is the first line wherever such text follows. Put it in a new `cli/render/messages.py` called from the status/list renderer; the line length stays within `COLUMNS` as the existing notice test checks
   - [ ] `tests/cli/render/test_status_requests.py`: sections appear only when present, the 5-line cap and its "and N more" line, "waiting on", the notice position
   - [ ] Success: checks pass
+
+**Commit**: `feat: render requests and rejected calls in text`
+
 - [ ] **10.6 `handle_pause` sweep and `rm` cascade wiring**
   - [ ] `operations/handle_pause.py`: call `sweep_messages` last, beside the existing prune; a `StoreError` becomes a note in `detail`, logged with `logger.exception` as the prune's is. `operations/set_up_remove.py`: `apply_removal` calls `cancel_member_requests` right after `remove_member` succeeds, inside `set_up`'s write transaction, so `rm` and `add`'s remove path both cascade
   - [ ] Tests: `tests/operations/test_handle_pause_sweep.py` (expired request recorded; a failing sweep leaves a `detail` note and the pause result unchanged) and `tests/operations/test_rm_cascade.py` (`rm` and `add`'s remove path cancel a sent and a received open request with `member_removed`, the survivor gets the delivery, the whole removal rolls back if the cascade fails)
   - [ ] Success: checks pass
 
-**Commit**: `feat: show requests in status and list, sweep on reads, cancel on member removal`
+**Commit**: `feat: sweep messages on handle-pause and cancel requests on member removal`
 
 ## 11. Doors: wiring, MCP and CLI (D3, D11, API Contracts)
 
@@ -228,10 +249,11 @@ usageByModel:
   - [ ] `docs/cli-contract.md`: each command's synopsis and exits, enough for the docs test (prose in 13.1)
   - [ ] Success: pyright clean; the parser imports and each `--help` runs
 - [ ] **11.4 CLI and parity tests**
-  - [ ] Update `tests/cli/test_parser_names.py` (every `OperationName` has one command by `cli_name` and a tool row by its value); `tests/cli/test_send_cli.py`, `test_inbox_cli.py`, `test_reply_cli.py`, `test_cancel_cli.py`: text and `-j`, each exit code, `--body-file -` from stdin, body conflict exit 2, `cf` failing is exit 3 with nothing written
+  - [ ] Update `tests/cli/test_parser_names.py` (every `OperationName` has one command by `cli_name` and a tool row by its value); `tests/cli/test_send_cli.py`, `test_inbox_cli.py`, `test_reply_cli.py`, `test_cancel_cli.py`: text and `-j`, each exit code, `--body-file -` from stdin, body conflict exit 2, `cf` failing is exit 3 with nothing written; `amoeba list -j` and `amoeba status -j` print the same document
   - [ ] Success: checks pass (whole suite)
 - [ ] **11.5 Timing bound test**
-  - [ ] `tests/test_message_timing.py`: compute each operation's worst case from `CF_GET_TIMEOUT_SECONDS` and `BUSY_TIMEOUT_SECONDS` and the lookup counts in `wiring_messages.py` (`send` 3 lookups, the others 2, plus three store waits); assert each is below `MCP_CALL_DEADLINE_SECONDS`. Slice 242 adds its `START_BOUND_SECONDS` term to `send`, `reply` and `cancel` in its own tasks; this test names no 242 symbol
+  - [ ] `wiring_messages.py` holds one table of the extra wait each operation adds beyond its `cf` lookups and store waits, `EXTRA_WAIT_SECONDS`, an explicit value per operation (0.0 for all four now). Slice 242's design assigns itself the edit that sets `send`, `reply` and `cancel` to `START_BOUND_SECONDS`; no 242 symbol is named here
+  - [ ] `tests/test_message_timing.py`: for each of the four operations, run it against the stub `cf` and count the `cf` invocations the stub recorded; assert the count is at most the operation's lookup count used in the bound (`send` 3 with an explicit `member`, the others 2). Then compute the worst case as lookups × `CF_GET_TIMEOUT_SECONDS` + three × `BUSY_TIMEOUT_SECONDS` + `EXTRA_WAIT_SECONDS` and assert it is below `MCP_CALL_DEADLINE_SECONDS`. A second test passes an extra wait large enough to reach the deadline and asserts the check fails
   - [ ] Success: checks pass
 
 **Commit**: `feat: add send, inbox, reply and cancel to the CLI and MCP server`
@@ -244,10 +266,6 @@ usageByModel:
 - [ ] **12.2 Scenario D through MCP and every state's exit**
   - [ ] `tests/mcp_server/test_requests_scenario.py`: the same chain through the in-process runner; the four results carry the notice. `tests/operations/test_request_state_exits.py` (model on `test_every_state_exits.py`): `done`, `decline`, `cancel` by the sender, `cancel` by id from a session in no member, expiry at the TTL (with `list` recording it and telling both repos), `rm` of the sender and of the addressee: every state reaches a terminal state with no file edit
   - [ ] Success: checks pass
-- [ ] **12.3 Retention end to end**
-  - [ ] A test that ages a store past `prune_after_days` and runs `list`: terminal requests, their deliveries and rejection rows are gone, an accepted and an open request remain, and `inbox` with an old `since` still works
-  - [ ] Success: checks pass
-
 **Commit**: `test: scenario D and every request state exit`
 
 ## 13. Documents (D11, Departures, Rules blocks)
@@ -258,17 +276,21 @@ usageByModel:
 - [ ] **13.2 Requesting and Handling blocks**
   - [ ] `docs/program-rules.md`: the two new blocks as the design's Rules blocks section states, both carrying the notice and using only flags the parser has. Extend `tests/rule_blocks.py` to return them and `tests/test_program_rules_doc.py` to check: each block exists, carries the notice, every `amoeba <command> --flag` in it is a real parser flag, and the Handling block names the four `inbox` moments
   - [ ] Success: checks pass
+
+**Commit**: `docs: document requests and add the Requesting and Handling blocks`
+
 - [ ] **13.3 Parent documents and changelog**
   - [ ] Amend `user/architecture/240-arch.agent-messaging.md` and `user/architecture/240-slices.agent-messaging.md` to match the design's Departures section: `request_open_ttl_hours`; no code defaults (reword the architecture's "Store and config" paragraph and the plan entry 1 criterion to "required, with no default in code; the suggested values are in the config contract's example"); the Requesting and Handling block names; the third table; the accept rejection naming the time; cancel authority; explicit `member`; `inbox --since` also returning `requests`; `request_ended`; `beyond_last_record` for `since`; the reworded notice
+  - [ ] Amend `user/slices/240-slice.requests.md` so the design matches what is built: D1's index list gains `deliveries(message_id)`; D6, the Sweep paragraph and the Technical Requirements retention line drop the note statement and the aged-note due check, which 243 D6 adds
   - [ ] `CHANGELOG.md` `[Unreleased]`: slice 240 entry (four operations, migration 006, the two new required config keys marked **behavior change**, the notice rewording, the restart note)
   - [ ] Success: `grep -n "request_open_ttl" project-documents/user/architecture/240-*.md` finds the new key and not the old; checks pass
 
-**Commit**: `docs: document requests, add the Requesting and Handling blocks, amend the 240 parents`
+**Commit**: `docs: amend the 240 parents and record slice 240 in the changelog`
 
 ## 14. Live tier
 
 - [ ] **14.1 `tests/live/messaging`**
-  - [ ] Model on `tests/live/mcp/` and `tests/live/pause/harness.py`: call `amoeba` by the harness's absolute path, never the bare name. Real `cf` and git fixture repos `sq-s`, `cf-s`, `guide-s` registered with `add` in one program; run Verification Walkthrough steps 3 to 8 through the CLI (`send`, `inbox`, double `accept`, child `send`, both `done`s, `inbox -j --since 0`, `id_reused`, `cancel` from `/tmp`, `rm` cascade) and the scenario D chain again through the MCP tools
+  - [ ] Model on `tests/live/mcp/` and `tests/live/pause/harness.py`: call `amoeba` by the harness's absolute path, never the bare name. Every call runs with `AMOEBA_HOME` set to the test's throwaway directory (as `tests/live/conftest.py` and `tests/live_environment.py` set it up), and a first test asserts the store `amoeba` resolves lies under it and not under `~/.local/state/amoeba`. Real `cf` and git fixture repos `sq-s`, `cf-s`, `guide-s` registered with `add` in one program; run Verification Walkthrough steps 3 to 8 through the CLI (`send`, `inbox`, double `accept`, child `send`, both `done`s, `inbox -j --since 0`, `id_reused`, `cancel` from `/tmp`, `rm` cascade) and the scenario D chain again through the MCP tools
   - [ ] Run `uv run pytest tests/live/messaging`
   - [ ] Success: it passes; the live pause and mcp tiers (`tests/live/pause`, `tests/live/mcp`) still pass; checks pass
 
@@ -278,10 +300,10 @@ usageByModel:
 
 - [ ] **15.1 Backup, config keys and migration**
   - [ ] Confirm the designation: `grep -n "designated by default for migrations" CLAUDE.md` finds the rule. If missing write `BLOCKED: designation rule missing from CLAUDE.md` under this task and stop
-  - [ ] Stop any running `amoeba` or `amoeba-mcp` process (`pgrep -fl amoeba` finds none). Backups: `mkdir -p ~/.local/state/amoeba/backups`; `sqlite3 ~/.local/state/amoeba/amoeba.sqlite3 ".backup ~/.local/state/amoeba/backups/amoeba.sqlite3.pre-006"`; `cp ~/.config/amoeba/config.yaml ~/.local/state/amoeba/backups/config.yaml.pre-240`. Record the member count from the backup (`sqlite3` on the backup file)
+  - [ ] No process is stopped for the backup or the migration: `.backup` is safe beside open connections, and an open session running the older tool simply fails against the version-6 store until restarted (the docs' restart note). Backups: `mkdir -p ~/.local/state/amoeba/backups`; `sqlite3 ~/.local/state/amoeba/amoeba.sqlite3 ".backup ~/.local/state/amoeba/backups/amoeba.sqlite3.pre-006"`; `cp ~/.config/amoeba/config.yaml ~/.local/state/amoeba/backups/config.yaml.pre-240`. Record the member count from the backup (`sqlite3` on the backup file)
   - [ ] Add `request_open_ttl_hours` and `max_chain_depth` to `~/.config/amoeba/config.yaml` using the values in `docs/config-contract.md`'s example, then `uv tool install --force .`, then migrate by running `amoeba list`
   - [ ] Read back: `schema_meta.version` is 6, the active member count equals the backup's, `amoeba list` works, `amoeba send --help` runs, the installed `amoeba-mcp` over the live MCP walkthrough's stdio client lists `send`, `inbox`, `reply`, `cancel`
-  - [ ] Restore, only if a read-back check fails, with every `amoeba` and `amoeba-mcp` process stopped: copy the store backup over the live file, delete its `-wal` and `-shm`, copy the config backup back, reinstall the pre-slice tool from a worktree of the target (`git worktree add <temp dir> {target}`; `uv tool install --force <temp dir>`; `git worktree remove <temp dir>`). Write the failing check under this task and fix its cause in the slice
+  - [ ] Restore, only if a read-back check fails: first `pgrep -fl amoeba`; processes this task started are ended by this task, and if any other `amoeba` or `amoeba-mcp` process remains write `BLOCKED: amoeba processes not started by this task are running: <the pgrep lines>` and stop (replacing the store under an open connection is unsafe). With none running: copy the store backup over the live file, delete its `-wal` and `-shm`, copy the config backup back, reinstall the pre-slice tool from a worktree of the target (`git worktree add <temp dir> {target}`; `uv tool install --force <temp dir>`; `git worktree remove <temp dir>`). Write the failing check under this task and fix its cause in the slice
   - [ ] Success: all four read-back checks pass; a note under this task gives the backup paths, member count, version and the restore steps as run or as available (the slice notes record the restore path)
 - [ ] **15.2 Final verification**
   - [ ] Run Verification Walkthrough step 1 (all four checks), then confirm `tests/test_contract_docs.py`, `tests/test_import_boundaries.py` and `tests/test_read_side_defined_once.py` pass by name
