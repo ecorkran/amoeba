@@ -8,7 +8,7 @@ audience: [human, ai]
 description: Concept for Amoeba, rewritten 20261106. A tool that agents and pipelines call. It knows how a program's repos depend on each other, handles first-level questions by running a Squadron answering pipeline, and keeps the record of what was decided. Squadron does the work, and in normal use a human never types an Amoeba command.
 dependsOn: [000-pre-concept.amoeba.md, notes/005-usage-scenarios.amoeba.md]
 dateCreated: 20260618
-dateUpdated: 20261106
+dateUpdated: 20261114
 status: in_progress
 ---
 
@@ -118,17 +118,18 @@ Amoeba had not been run by anyone as of 20261106. It was built from the bottom u
 
 ### What Amoeba is
 
-A tool that agents and pipelines call. It does three things:
+A tool that agents and pipelines call. It does four things:
 
 - **Knows the program:** the members, what each is doing, what each depends on and what is blocked.
 - **Handles first-level questions:** it routes a question to the answering pipeline with the right context, then returns the answer or passes the question up.
 - **Keeps the record:** who asked what, which model answered, from what, and what the PM overrode.
+- **Carries messages between repos:** requests and notes from an agent in one member to another member or a whole program, for any agent and any UI (scenario D, added 20261114).
 
 ### What Amoeba is not
 
 - **A pipeline engine.** Squadron runs the work, including phases, reviews, thresholds and merges.
 - **A pile of gates.** Squadron has those. A check on an answer belongs in the answering pipeline, as a Squadron step.
-- **A chat system.** Agent-to-agent conversation and the PM's chat live elsewhere.
+- **The PM's chat.** The PM's own conversation with agents lives elsewhere. Messages between agents in different repos are Amoeba's (scenario D, from 20261114).
 - **A graph runner.** The program graph is a dependency graph. Nobody walks it. Amoeba never launches member pipelines in order, because that would make it a workflow engine on top of a workflow engine.
 
 ### On determinism
@@ -142,7 +143,7 @@ Amoeba adds nondeterminism on purpose: it asks a model to answer in the PM's pla
 | Squadron | Runs work inside one repo | Workflow graph: do A, then B, loop on review. Executed. |
 | Amoeba | Knows the program, handles first-level questions, keeps the record | Dependency graph between repos. Consulted, never executed. |
 | The chat agent (separate app) | The human front door: the coordinated agent the PM talks to | None |
-| Agent-to-agent talk (later) | Agents talking to each other | Not Amoeba. Closer to chat or a two-way agent dashboard. |
+| Agent messaging (Amoeba, from 20261114) | Requests and notes between agents in different repos, for any agent and any UI | None. Each request names only its parent. |
 
 ### Users and how they reach it
 
@@ -150,14 +151,14 @@ Amoeba adds nondeterminism on purpose: it asks a model to answer in the PM's pla
 
 - **Agents and pipelines** use one set of operations, exposed over MCP for agent sessions and as a CLI for pipelines and scripts. Same operations, same names.
 - **The PM** reaches Amoeba through an agent: the chat agent, or a Claude or Codex session already open. "Where's trading at?" is a question to an agent, which calls Amoeba.
-- **Notifications go to agents.** Agents can already reach the PM by mobile push, macOS and so on, so Amoeba builds no notification mechanics.
+- **Notifications go to agents.** Agents can already reach the PM by mobile push, macOS and so on, so Amoeba builds no notification mechanics for the PM. From 20261114 its MCP server tells its own agent session when new mail arrives, and nothing else.
 - **Set-up** is the one exception: register a program and its members once, ideally through an agent.
 
 ### How it runs
 
 **Nothing stays running unless a scenario can't work without it.** By default Amoeba is a store, an MCP server started by whatever session uses it, and a CLI. A resident process is justified only by something that must happen when no run is active and nobody asked.
 
-Amoeba works on runs it did not launch. It does not start work. The only run it resumes is the one that asked.
+Amoeba works on runs it did not launch. It does not start work. The only run it resumes is the one that asked. One exception from 240: a member may configure a wake command, which Amoeba starts when a request reaches a repo nobody is working in. The command decides what to do, not Amoeba.
 
 ### What it has to do
 
@@ -166,6 +167,7 @@ Full walkthroughs are in `notes/005-usage-scenarios.amoeba.md`.
 - **A: a question while the PM is away.** A `sq run` pauses on an agent's question. Amoeba gathers context and runs the answering pipeline. The run resumes with the answer, or an agent tells the PM. In the morning, the PM sees the finished run and a short list of what was decided on their behalf.
 - **B: a change in one member affects another.** A member's pipeline tells Amoeba what it released and what that touched. Another member's pipeline asks at the start of a slice whether anything it depends on has changed, then either picks the change up as context or stops with a reason.
 - **C: the PM asks where things stand.** An agent calls Amoeba and gets a short status per member: what's running, what's blocked and why, and what was answered since the PM last looked.
+- **D: one repo needs another to build something.** Added 20261114. An agent in squadron (any agent, any UI, or a pipeline run) sends a request to context-forge. The next agent working there sees it, by push or at its next inbox check, and accepts or declines it. If it needs a guide change, it sends its own request to ai-project-guide, naming squadron's as the parent. Each link is marked done with a result, and the sender hears about it. A run paused on the request resumes with the result once it passes the answering check. Nobody walks the chain: each agent handles only its own repo's requests. Details are in `240-arch.agent-messaging.md`.
 
 ### Programs
 
@@ -199,7 +201,7 @@ These are properties of the step's configuration, not of a model vendor. Claude 
 | Notification bridge (Discord) | Dropped. Amoeba notifies agents. |
 | Run-state store | Stays, reduced to what the scenarios need. |
 | Resident substrate | Justified only by a scenario. |
-| Multi-agent chat | Not Amoeba. |
+| Multi-agent chat | Came back 20261114 as agent messaging (scenario D, initiative 240). |
 
 ### Grounding that still holds
 
