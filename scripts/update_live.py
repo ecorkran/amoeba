@@ -187,7 +187,9 @@ def check_store(expected_members: int) -> list[str]:
 
 
 def install_spec(commit: str) -> str:
-    return f"amoeba @ git+file://{CHECKOUT}@{commit}"
+    # No package name: commits from before and after the PyPI rename (amoeba ->
+    # amoeba-ai) both install, and uv reads the name from the commit itself.
+    return f"git+file://{CHECKOUT}@{commit}"
 
 
 def restore(backup: Path, steps: Steps) -> str:

@@ -22,6 +22,14 @@ The `amoeba` command, backed by one SQLite store. Its commands (`docs/cli-contra
 - `$AMOEBA_HOME`, when set, is both homes. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` are ignored.
 - An install from before slice 228 kept its state in the config home. The first command moves it, once (`docs/store-contract.md`, "Moving a pre-228 install").
 
+## Installing
+
+```
+uv tool install amoeba-ai
+```
+
+The package is `amoeba-ai` on PyPI; it installs the `amoeba` and `amoeba-mcp` commands. Amoeba calls `sq` (Squadron) and `cf` (Context Forge), which are installed separately.
+
 ## Updating the installed amoeba
 
 From the main checkout, after a slice merges:

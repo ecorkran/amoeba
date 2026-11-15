@@ -19,8 +19,11 @@ the CLI's input and returns the CLI's JSON (`cli-contract.md`).
 ## Install
 
 ```
-uv tool install --force <path to this repo>
+uv tool install amoeba-ai
 ```
+
+The package is `amoeba-ai` on PyPI; the commands it installs are `amoeba` and
+`amoeba-mcp`. From a checkout instead: `uv tool install --force <path to this repo>`.
 
 This installs `amoeba` and `amoeba-mcp` into one environment. The server starts the
 `amoeba` script next to its own interpreter for `handle-pause`, so the two must stay
