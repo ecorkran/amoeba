@@ -24,7 +24,6 @@ Architecture-level. 220 left a store, operations with two doors (CLI and MCP) an
 
 - **Polling first, and it is enough on its own.** The first slice carries scenario D end to end with polling only: any agent sends, reads, accepts and finishes requests, and the rules blocks tell agents when to check. Everything after adds to a system that already works.
 - **The riskiest slice comes second.** Push depends on a research-preview Claude Code feature and on restructuring the MCP server's run loop. It goes right after the base it needs, so a surprise there shows up before anything else is built on top.
-- **One migration per slice that adds tables.** The architecture names one schema 6 migration. Here each slice adds only the tables it uses (6 messages and deliveries, 7 sessions, 8 question state, 9 wakes), so every slice ships a store with no unused tables. Each migration backs up the live store first and states the restore path, and each slice migrates the PM's live store as its last step (designated for migrations).
 - **Waking is last.** The PM chose to start without it.
 
 Slice numbers are execution order. The first slice takes the plan's index (240).
@@ -114,12 +113,9 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
 
 - **Dependencies.** Everything builds on 240. 244 needs 241's live-session check. 242 and 243 need only 240.
 - **Risk.** 241 rests on the least certain ground, so it comes right after 240. 242 is next because it resumes real runs.
-- **Parallel work.** 242 and 243 can run beside 241 on their own slice branches. Each adds its own migration, so the migration numbers follow merge order: renumber at merge if a later slice lands first.
 
 ## Notes
 
-- **Migrations split.** The architecture's single schema 6 migration is split one per slice as above. The tables and columns are the architecture's.
-- **Question state check.** The question table has a CHECK on `state` (migrations 001 and 003), so `waiting_on_request` needs a table rebuild in migration 8, not a value added in code.
 - **Concept and initiative plan.** Scenario D was added to the concept 20261114, and the "not Amoeba" lines were replaced.
 - **Dated facts.** Claude Code channel behavior and client support for resource updates were read 20261114. 241 re-checks them before building.
 
