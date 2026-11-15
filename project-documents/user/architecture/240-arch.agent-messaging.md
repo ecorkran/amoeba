@@ -100,7 +100,7 @@ Release reports stay in their own table, and `changes` stays as it is for design
 
 **The member accepts, not the session.** An accepted request is the repo's open item, and it shows in that repo's `inbox` until it is done or declined. So a session that accepts and then dies leaves the item visible to the next agent rather than lost. `accepted` has no timeout because the work can take days. `list` shows each accepted request's age, and its exits are `done` and `decline` from the addressee, and `cancel` from the sender or for the PM. Two agents accepting at once is settled by the store: the first `accept` wins, and the second gets a rejection naming who accepted.
 
-**Retention.** Terminal requests and all notes, read or not, are pruned once older than the existing `prune_after_days`, by the same sweep. A note to a repo nobody works in again is gone after that window, so every row is bounded.
+**Retention.** Terminal requests and all notes, read or not, are pruned once older than the existing `prune_after_days`, by the same sweep and its same callers (`report_release` does not run it). A note to a repo nobody works in again is gone after that window, so every row is bounded.
 
 ### Chains
 
@@ -146,14 +146,14 @@ The event says only that mail arrived, with the new sequence number, kinds and s
 
 **The push slice's main risk is the server structure.** Today `_serve` runs `server.run` alone, and the session is reachable only inside request handlers. Pushing from a background loop means running the watcher in a task group beside `server.run`, capturing the session when the client sends `initialized`, and doing every store read through `anyio.to_thread`. The protocol pin also has to be done through the SDK's version negotiation. The slice proves all of this end to end in a live Claude Code session before anything else depends on it.
 
-**Presence.** Each `amoeba-mcp` serving a member registers a session row (member, client name, start time). It refreshes the row's heartbeat every `session_heartbeat_seconds`, much less often than the push check, and deletes the row on a clean exit. A row whose heartbeat is older than `session_stale_seconds` counts as gone and is pruned by the sweep. Presence feeds `list` (who is working where) and waking. Agents without MCP have no presence and simply poll.
+**Presence.** Each `amoeba-mcp` serving a member registers a session row (member, client name, start time). It refreshes the row's heartbeat every `session_heartbeat_seconds`, much less often than the push check, and deletes the row on a clean exit. A row whose heartbeat is older than `session_stale_seconds` counts as gone and is pruned by any server's next heartbeat. Presence feeds `list` (who is working where) and waking. For waking, only a push-confirmed session counts as live: one whose agent called `inbox` soon after a channel event. A session without push never confirms, so its repo can still be woken. Agents without MCP have no presence and simply poll.
 
 ### Holding a paused run on a request
 
 An agent that can't continue without a request it sent stops its run on a question naming the request id. `handle_pause` (scenario A) recognizes a question naming a request sent from this member, in any state. The exact form of the link is the slice design's job: it must be an exact id match, never a judgment about the text.
 
 - **Request not yet terminal:** the question is recorded as `waiting_on_request`.
-- **Request `done`** (now, or already before the pause): the result becomes the question's candidate answer. It goes through the answering pipeline's independent check step and the answer screen, with 220's list of what answers may not authorize. It also counts toward the per-run limit on automatic answers. If it passes, it is recorded as the question's answer and 220's resume procedure runs. If it fails, the question moves to `waiting_on_pm` with the reason.
+- **Request `done`** (now, or already before the pause): the result is given to the answering pipeline as a passage. Its answer goes through the pipeline's independent check step and the answer screen, with 220's list of what answers may not authorize. It also counts toward the per-run limit on automatic answers. If it passes, it is recorded as the question's answer and 220's resume procedure runs. If it fails, the question moves to `waiting_on_pm` with the reason.
 - **Request `declined`, `cancelled` or `expired`:** the question moves to `waiting_on_pm` with that reason, the same as any question the answering pipeline declines.
 
 When `reply` marks a request done, or the sweep expires it, Amoeba starts `handle_pause` detached for each run whose question waits on that request. That `handle_pause` resumes the squadron run from an agent working in context-forge. This is allowed, because it is the same "resume only the run that asked" that `answer` already does from a session anywhere. Because the result is recorded as the answer, a refused or dead resume is retried exactly as in 220: calling `handle_pause` again resumes with the recorded answer and spends nothing.
@@ -170,6 +170,9 @@ The command runs under a small `amoeba wake-run` wrapper, which holds the member
 - **A daily limit on wakes per member** (`max_wakes_per_day`). Each wake command carries its own cost cap, for example `pipeline.max_cost_usd` in an sq run, and this limit bounds how many such runs a member can start. When the limit is hit, the request is not lost. It waits for the next agent, up to its TTL, and `list` shows that waking stopped and why.
 - **The wake process is never waited on, and its failure changes no message.** Its log path is recorded on the wake row, and a failure to start shows in `list`.
 - **Without `wake_command`,** the request simply waits for the next agent, up to its TTL.
+- **The PM sets it, from the CLI only.** `amoeba add --wake-command`. The MCP `add` tool has no such field.
+- **A clean environment.** The command runs with a fixed list of variables (PATH, HOME and the like), never the sender's environment.
+- **Each wake command carries its own cost or time cap.** If the wrapper is killed with SIGKILL, that cap, or the PM stopping the process (`list` shows it as overdue with its pid and log), is the only bound. A new wake may start once the old row's deadline passes.
 
 The PM chose to start without waking, so it is the last slice.
 
@@ -180,7 +183,7 @@ New tables, in a schema 6 migration (the live store is designated for migrations
 - `messages`: sender-generated id (unique), kind, from member, to member or program, parent id, subject, body, state, result, reason, created, state changed, expires.
 - `deliveries`: sequence number, receiving member, message id, and what happened (new message or state change). Pruned along with its message.
 - `sessions`: id, member, client, started, heartbeat.
-- `wakes`: member, started, wrapper pid, log path, and the day's count.
+- `wakes`: one row per wake: member, started, command pid (shown, never signalled), log path and how it ended. The daily count is counted from rows, and rows leave by retention.
 
 New settings in the user config file, with defaults defined once in the config layer: `request_open_ttl`, `max_chain_depth`, `notify_poll_seconds`, `session_heartbeat_seconds`, `session_stale_seconds`, `wake_timeout_seconds` and `max_wakes_per_day`. Retention reuses `prune_after_days`. All state, the wake logs included, lives under `~/.local/state/amoeba/`.
 

@@ -87,12 +87,12 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
    - The note and the report are written in one transaction. A test fails the note write and finds no report.
    - Notes past `prune_after_days` are pruned with their deliveries.
    - 241's push fires for a note the same as for a request.
-   **Dependencies:** 240. Uses 241's push when present, with no code dependency on it.
+   **Dependencies:** 240, and 241 for the push test. 227 (complete) for `report_release`. Release-note bodies stay within a limit derived from 227's report text limits.
    **Interfaces:** Provides the note kind and release-report notes. Consumes 227's `report_release`.
    **Risk Level:** Low
    **Relative Effort:** 2
 
-5. [ ] **(244) Waking** — A member may set `wake_command` through `add` (229: every member setting is set from the CLI). When `send` delivers a request to a member with a wake command, no live session (241) and no running wake, it starts the command detached under `amoeba wake-run`, in the member's registered directory. Migration 9 adds `wakes`. The wrapper holds the member's wake row while the command runs, records its log path under `~/.local/state/amoeba/`, stops a command past `wake_timeout_seconds`, and clears the row on exit. A row left by a killed wrapper counts as gone after `wake_timeout_seconds`. Wakes per member per day stop at `max_wakes_per_day`, and the request then waits for the next agent up to its TTL. `list` shows waking stopped and why, and a failure to start. A wake's failure changes no message. Wake logs are pruned with the existing logs.
+5. [ ] **(244) Waking** — A member may set `wake_command` through `add` (229: every member setting is set from the CLI). When `send` delivers a request to a member with a wake command, no live session (241) and no running wake, it starts the command detached under `amoeba wake-run`, in the member's registered directory. Migration 9 adds `wakes`. The wrapper holds the member's wake row while the command runs, records its log path under `~/.local/state/amoeba/`, stops a command past `wake_timeout_seconds`, and records how the wake ended. Rows leave by retention. The command runs with a fixed environment, never the sender's. A row left by a killed wrapper counts as gone after `wake_timeout_seconds`. Wakes per member per day stop at `max_wakes_per_day`, and the request then waits for the next agent up to its TTL. `list` shows waking stopped and why, and a failure to start. A wake's failure changes no message. Wake logs are pruned with the existing logs.
    **Value:** User value. A request to a repo nobody has open gets worked without anyone opening it.
    **Success Criteria:**
    - A request to a fixture member with a wake command and no live session starts it once. A second request during the wake starts nothing and is in the woken agent's `inbox`.
@@ -102,7 +102,7 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
    - A command that fails to start shows in `list` and leaves the request `open`.
    - Wake logs are pruned. Every wake row has a cleanup.
    - The live store is backed up and migrated to 9.
-   **Dependencies:** 240, 241.
+   **Dependencies:** 240, 241, 242, 243.
    **Interfaces:** Provides `wake_command`, `amoeba wake-run` and the `wakes` table.
    **Risk Level:** Medium. It starts agents with nobody present. The daily limit and each command's own cost cap bound it.
    **Relative Effort:** 3

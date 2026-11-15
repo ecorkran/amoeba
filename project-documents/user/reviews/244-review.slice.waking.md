@@ -174,3 +174,5 @@ The exclusions are the ones the plan and architecture already make: choosing the
 - [pass] Failure paths for new I/O calls each have a recorded outcome: no change needed.
 - [pass] The send bound is restated with its specific target: no change to the target. The figure is recomputed after the reaper no longer waits (32 s, 167 s total).
 - [pass] No in-scope behavior is deferred: no change needed. No issues were filed.
+
+**Second pass 20261115.** Some entries above were redone in the design during a second resolution pass. Where this section and the design disagree, the design governs.

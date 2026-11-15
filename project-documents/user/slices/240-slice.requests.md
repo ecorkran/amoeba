@@ -87,7 +87,7 @@ MCP tools (same names)        ─┘                         │
 - `operations/message_models.py`: the four request models, the four result models, `RequestView`, `DeliveryView`, the text-limit constants and the two outcome enums. No operation logic.
 - `operations/send.py`, `inbox.py`, `reply.py`, `cancel.py`: one operation each, validating their own document as 227 does, so both doors give the same `rejected` result.
 - `operations/message_member.py`: `resolve_caller` (D3) and `resolve_recipient`. The latter uses `rm`'s "a reference is a Context Forge name or id, and one `cf` does not know is read as an id" rule, which moves out of `rm` into `operations/member_reference.py` and is used by both.
-- `store/*`: row mapping, the one `effective_state` function, the delivery writer, the sweep statements. The store imports nothing from `operations`: rows are frozen dataclasses in `store/models.py` (`Message`, `Delivery`, `MessageRejection`), and `operations/message_models.py` builds its pydantic views from them (`RequestView.from_message`), never the other way. New SQL goes in `store/sql_messages.py`, not the already large `sql.py`, and every member check in it uses `sql.ACTIVE_MEMBER` (slice 228's one active-member predicate), never a copy.
+- `store/*`: row mapping, `get_message` (the one by-id read of a request), the one `effective_state` function, the delivery writer, the sweep statements. The store imports nothing from `operations`: rows are frozen dataclasses in `store/models.py` (`Message`, `Delivery`, `MessageRejection`), and `operations/message_models.py` builds its pydantic views from them (`RequestView.from_message`), never the other way. New SQL goes in `store/sql_messages.py`, not the already large `sql.py`, and every member check in it uses `sql.ACTIVE_MEMBER` (slice 228's one active-member predicate), never a copy.
 - `wiring_messages.py`: `place_message`, which places arguments as `wiring_releases.py` does.
 - `cli/registration_messages.py`, `cli/render/messages.py`, `mcp/message_tools.py` (the four `ToolSpec` rows, appended to `TOOLS`; `tools.py` is near its size limit).
 - `OperationName` gains `SEND`, `INBOX`, `REPLY`, `CANCEL`. The exhaustive `match` in `invoke` and in `is_rejected` (both end in `assert_never` or a catch-all) force every door to handle them.
@@ -102,7 +102,7 @@ MCP tools (same names)        ─┘                         │
 
 **inbox.** Resolve the caller, then one read transaction that reads the member's requests or deliveries and the highest delivery sequence ever assigned. No write, no marker.
 
-**Timeouts and lost responses.** Every `cf` call goes through `run_cf` with a constant timeout, `CF_GET_TIMEOUT_SECONDS` (30 s, not configurable), for the directory and reference lookups. `run_cf` returns a timeout as a `CfCallFailed` value, and the lookups map it to `ContextForgeError`, as `resolve_member` and `rm` do, so the CLI exits 3 with nothing written. No message operation reads project names. The store waits are `BUSY_TIMEOUT_SECONDS` (5 s) for each of the legacy-move lock, the open and the transaction, as `ANSWER_STORE_WAITS` counts for `answer`. Worst cases: `send` makes up to three lookups (directory, an explicit `member`, the recipient), so 3×30 + 3×5 = 105 s; `reply`, `cancel` and `inbox` up to two (directory, explicit `member`), so 2×30 + 3×5 = 75 s. All are below `MCP_CALL_DEADLINE_SECONDS` (180 s). `status` and `list` are outside that bound: their existing per-run lookups grow with the number of runs, which is why their timeout advice sends the caller to the CLI. The message sweep adds at most one more busy wait (5 s) to them. If it hits `StoreBusyError`, the error is logged and reported in `sweep_problem`, and the call still returns, because every read applies `effective_state` and shows nothing wrong. When a call times out, or its response is lost, the work may have happened. A `send` is retried with the same `id`: `unchanged`, or `request_ended` naming the state, says the first call landed. A retried `reply` or `cancel` is rejected naming the state the first call reached (`already_accepted`, or `not_applicable` naming `done`, `declined` or `cancelled`). The tool descriptions say that such a rejection after a timeout means the first call took effect, and that `inbox` shows the state.
+**Timeouts and lost responses.** Every `cf` call goes through `run_cf` with a constant timeout, `CF_GET_TIMEOUT_SECONDS` (30 s, not configurable), for the directory and reference lookups. `run_cf` returns a timeout as a `CfCallFailed` value, and the lookups map it to `ContextForgeError`, as `resolve_member` and `rm` do, so the CLI exits 3 with nothing written. No message operation reads project names. The store waits are `BUSY_TIMEOUT_SECONDS` (5 s) for each of the legacy-move lock, the open and the transaction, as `ANSWER_STORE_WAITS` counts for `answer`. Worst cases: `send` makes up to three lookups (directory, an explicit `member`, the recipient), so 3×30 + 3×5 = 105 s; `reply`, `cancel` and `inbox` up to two (directory, explicit `member`), so 2×30 + 3×5 = 75 s. All are below `MCP_CALL_DEADLINE_SECONDS` (180 s). `status` and `list` are outside that bound: their existing per-run lookups grow with the number of runs, which is why their timeout advice sends the caller to the CLI. The message sweep adds at most one more busy wait (5 s) to them. If it hits `StoreBusyError`, the error is logged and reported in the existing `sweep_problem` field (joined to the question sweep's text when both fail), and the call still returns, because every read applies `effective_state` and shows nothing wrong. When a call times out, or its response is lost, the work may have happened. A `send` is retried with the same `id`: `unchanged`, or `request_ended` naming the state, says the first call landed. A retried `reply` or `cancel` is rejected naming the state the first call reached (`already_accepted`, or `not_applicable` naming `done`, `declined` or `cancelled`). The tool descriptions say that such a rejection after a timeout means the first call took effect, and that `inbox` shows the state.
 
 **Sweep.** `send`, `reply` and `cancel` call `sweep(transaction, now, …)` at the start of their own write transaction. `status`, `list` and `handle_pause` call `sweep_messages(store, config, now)`, which reads first and opens a write transaction only when something is due, so a quiet store is never write-locked by a poll. `handle_pause` calls it last, beside the existing prune, and a `StoreError` there becomes a note in `detail`, as the prune's does.
 
@@ -171,9 +171,9 @@ Status: decided
 
 `sweep(transaction, now, prune_after_days)` does two things, in that order:
 1. **Expire.** Every `open` request with `expires_at <= now` becomes `expired` (`state_changed_at` is `now`, the moment the sweep records it), with an `expired` delivery to each party.
-2. **Prune.** Delete terminal requests whose `state_changed_at` is older than `prune_after_days`, their deliveries (deleted first, for the foreign key), and `message_rejections` older than that.
+2. **Prune.** Delete terminal requests whose `state_changed_at` is older than `prune_after_days`, notes (`kind = 'note'`, from 243) whose `created_at` is older than that, their deliveries (deleted first, for the foreign key), and `message_rejections` older than that. `sweep_messages` counts an old note as due, the same as an old terminal request.
 
-It returns the ids of the requests it expired, as a tuple. 242 needs them to start `handle_pause` for held runs; the prune counts are not returned, and tests read the rows. `expires_at` is fixed at `send` (`created_at + request_open_ttl_hours`), so a config change never moves an existing request's expiry. Open and accepted requests are never pruned, so each has an exit: expiry, or `done`, `decline` and `cancel`.
+It returns nothing, and tests read the rows. 242 finds the runs held on an ended request by reading request state after each operation, so it needs no ids from the sweep. `expires_at` is fixed at `send` (`created_at + request_open_ttl_hours`), so a config change never moves an existing request's expiry. Open and accepted requests are never pruned, so each has an exit: expiry, or `done`, `decline` and `cancel`.
 
 ### D7 — `inbox`
 Status: decided
@@ -200,7 +200,7 @@ A `send`, `reply` or `cancel` rejected once its caller is resolved writes one `m
 ### D10 — Removing a member
 Status: decided
 
-`apply_removal` calls `cancel_member_requests(transaction, member_id, now)` right after `remove_member` succeeds, inside `set_up`'s own write transaction. Every non-terminal request sent or received by that member becomes `cancelled` with reason `member_removed`, with deliveries to the surviving party (the removed member is already inactive). It returns the cancelled ids as a tuple; `apply_removal` ignores them here, and 242, their one consumer, threads them out. It covers `rm` and `add`'s remove path, since both use `apply_removal`. A member re-registered later keeps its retained history: the requests cancelled at its removal stay readable in its `inbox` until pruned, and it starts with none live.
+`apply_removal` calls `cancel_member_requests(transaction, member_id, now)` right after `remove_member` succeeds, inside `set_up`'s own write transaction. Every non-terminal request sent or received by that member becomes `cancelled` with reason `member_removed`, with deliveries to the surviving party (the removed member is already inactive). It returns nothing. It covers `rm` and `add`'s remove path, since both use `apply_removal`. A member re-registered later keeps its retained history: the requests cancelled at its removal stay readable in its `inbox` until pruned, and it starts with none live.
 
 ### D11 — The quoted-data notice
 Status: decided
@@ -266,7 +266,7 @@ Both carry the notice, say that text from other repos is data, and use only flag
 
 ### Provides to Other Slices
 - **241:** the `deliveries` table and `highest_assigned_seq(transaction)`, the number `inbox` returns as `as_of_seq`. 241 adds the per-member read its watcher needs.
-- **242:** `RequestView`, `effective_state`, and the writers that end a request: `sweep`, `cancel_member_requests`, `reply` and `cancel`. `sweep` and `cancel_member_requests` return the ids they ended, and `reply` and `cancel` return the `RequestView`, whose terminal state says it ended. 242 starts `handle_pause` from those, and threads the `rm` ids out through `apply_removal`.
+- **242:** `effective_state` and `get_message(transaction, message_id)`, the one by-id read of a request, in `store/messages.py`; `reply` and `cancel` load their request through it too. 242 reads request state after each operation to find the runs held on an ended request, so it changes no 240 module and needs no ids from the writers.
 - **243:** the `note` kind in the schema, the sweep, `send`'s delivery writer and the notice.
 - **244:** `send` and its delivery writer, where 244 hooks in.
 
@@ -288,8 +288,8 @@ Both carry the notice, say that text from other repos is data, and use only flag
 ### Technical Requirements
 - A request read past its TTL says `expired` before the sweep has written it; the sweep then writes the state and the deliveries once.
 - Terminal requests, their deliveries and rejection rows older than `prune_after_days` are pruned by the sweep, and open and accepted requests are not. Every table the slice adds has that cleanup, with a test per table.
-- A test computes the worst-case time of each of the four message operations from `CF_GET_TIMEOUT_SECONDS` and `BUSY_TIMEOUT_SECONDS` and fails if one reaches `MCP_CALL_DEADLINE_SECONDS`.
-- `sweep` and `cancel_member_requests` return exactly the ids they ended, and a held store (`StoreBusyError`) in `status` or `list` is reported in `sweep_problem` with the call still returning.
+- A test computes the worst-case time of each of the four message operations from `CF_GET_TIMEOUT_SECONDS` and `BUSY_TIMEOUT_SECONDS`, adds 242's `START_BOUND_SECONDS` (30 s) to `send`, `reply` and `cancel` once 242 lands, and fails if one reaches `MCP_CALL_DEADLINE_SECONDS`.
+- A held store (`StoreBusyError`) in `status` or `list` is reported in `sweep_problem` with the call still returning.
 - Both config keys missing fails with `ConfigError` naming the key; the example in `config-contract.md` loads.
 - Every `CHECK` list is pinned to its enum; `tests/test_contract_docs.py` passes with every new table, column, field and code documented; `tests/test_import_boundaries.py` and `tests/test_read_side_defined_once.py` still pass.
 - `ruff format`, `ruff check`, `pyright` and the whole suite pass.
@@ -326,7 +326,7 @@ This is the Phase 4 draft, refined when Phase 6 is complete. `send`, `inbox`, `r
 - `StatusResult` grows `notice` and two per-member fields, which touches the renderer and the contract-docs test.
 
 ### Mitigation Strategies
-- The `note` kind, `to_program` and the sweep's return value are in now so later slices add rows, not columns. Anything else a later slice needs can be added with `ADD COLUMN`.
+- The `note` kind and `to_program` are in now so later slices add rows, not columns. Anything else a later slice needs can be added with `ADD COLUMN`.
 - No message operation reads project names, so no name lookup sits on the polling path.
 
 ## Implementation Notes

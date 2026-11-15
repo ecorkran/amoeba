@@ -42,7 +42,7 @@ User value. A consumer repo learns of a provider's release at its next `inbox` c
 
 **Included**
 - `send` with `kind` `note`: to one member (`to`) or to a program (`to_program`), one delivery per active member of the program, the sender excluded.
-- Retention: the sweep's prune step deletes notes past `prune_after_days` with their deliveries, and `report_release` runs the sweep.
+- Retention: the sweep's prune step deletes notes past `prune_after_days` with their deliveries, and `sweep_messages`' due check counts aged notes.
 - `inbox` returns the notes a member has a delivery for (`notes`).
 - `reply`, `cancel` and `send --parent` refuse a note's id.
 - `report_release` writes a release note per consumer, in its own transaction, for the four outcomes that write: `recorded`, `versioned`, `corrected` and `withdrawn`.
@@ -75,7 +75,7 @@ User value. A consumer repo learns of a provider's release at its next `inbox` c
 send ──kind=request──▶ 240's request path
      └─kind=note────▶ operations/send_note.py ──▶ store/notes.py ──▶ messages, deliveries
 
-report_release ─ one store.write() ─▶ sweep, releases (227)
+report_release ─ one store.write() ─▶ releases (227)
                                    └▶ operations/release_notes.py ──▶ store/notes.py
 ```
 
@@ -89,9 +89,9 @@ report_release ─ one store.write() ─▶ sweep, releases (227)
 
 **Note to a member or program.** `send` resolves the sender and, for a direct note, the recipient through `cf`, before any store lock (240 D3). One write transaction: sweep, resolve the program's recipients, check the id against an existing row, insert the note, write the deliveries. A rejection after the sender is resolved is recorded (240 D9) and returned.
 
-**Release report.** `report_release` resolves the member through `cf` before any lock, as today. Then one write transaction: sweep, the report write, the recipients (D5), and one note and delivery per recipient. For `withdrawn` the recipients are found before the delete. If any step raises, the transaction rolls back and the report is not stored.
+**Release report.** `report_release` resolves the member through `cf` before any lock, as today. Then one write transaction: the report write, the recipients (D5), and one note and delivery per recipient. For `withdrawn` the recipients are found before the delete. If any step raises, the transaction rolls back and the report is not stored.
 
-**Write lock.** The architecture keeps writes short and never holds the write lock across an outside call. Both transactions above keep to it. They make no `cf` call, no process start and no wait inside the lock: the note text is composed in process and the ids come from `uuid4`. Their length is the existing work plus one insert per recipient (a program's member count for a program note, a provider's consumer count for a release), and the waits are the store's `BUSY_TIMEOUT_SECONDS` each for the legacy-move lock, the open and the transaction, as 240 counts them. The inserts and the sweep run inside the transaction already held, so they add local work and no wait. A program note adds no lookup, so 240's worst-case bound for `send` still holds. `report_release` makes one `cf` lookup (the directory), so its worst case is `CF_GET_TIMEOUT_SECONDS` + 3 × `BUSY_TIMEOUT_SECONDS` = 30 + 15 = 45 s, below `MCP_CALL_DEADLINE_SECONDS` (180 s). 240's worst-case test gains `report_release` as a fifth operation.
+**Write lock.** The architecture keeps writes short and never holds the write lock across an outside call. Both transactions above keep to it. They make no `cf` call, no process start and no wait inside the lock: the note text is composed in process and the ids come from `uuid4`. Their length is the existing work plus one insert per recipient (a program's member count for a program note, a provider's consumer count for a release), and the waits are the store's `BUSY_TIMEOUT_SECONDS` each for the legacy-move lock, the open and the transaction, as 240 counts them. The inserts run inside the transaction already held, so they add local work and no wait. A program note adds no lookup, so 240's worst-case bound for `send` still holds, and `report_release` gains no lookup and no wait, so its timing is 227's, unchanged.
 
 **Reading.** `inbox` reads the member's notes through its deliveries. Nothing is marked.
 
@@ -187,7 +187,7 @@ For `withdrawn`, the report must still exist to be read, so recipients are found
 - `subject`: `Release report <outcome>: <version, or the commit when there is none>`.
 - `body` for `recorded`, `versioned` and `corrected`: a first line naming the outcome (the provider is the note's `from_member`), then `Commit`, `Version` (or `none`), `Changed`, and `Touched` (items joined with `; `). A corrected note says it replaces the earlier text. The closing line says `changes` holds the full record.
 - `body` for `withdrawn`: the commit and version, and that the report was withdrawn and is to be disregarded. It carries no `changed` text.
-- **Limit.** The `body` limit of `send` binds text a caller supplies. A release note's body is composed by Amoeba from a report that `report_release` already bounds, through the constants in `report_release_models.py` (`MAX_CHANGED_LENGTH`, `MAX_TOUCHED_ITEMS`, `MAX_TOUCHED_ITEM_LENGTH`, `MAX_VERSION_LENGTH`, `FULL_HASH_LENGTHS`). It has its own constant, `MAX_RELEASE_NOTE_BODY_LENGTH`, defined once in `release_notes.py` as the sum of those bounds (the touched items with their separators) and the template's own fixed text. A test composes the largest possible report, every field at its limit, for each outcome and checks the body is within the constant, so a change to a report constant or to the template that breaks the bound fails a test. The body is never cut, and nothing is rejected: the report's own limits already did that. `cli-contract.md` states the constant's value and what it is derived from, beside the `send` limits.
+- **Limit.** The `body` limit of `send` binds text a caller supplies. A release note's body is composed by Amoeba from a report that `report_release` already bounds, through the constants in `report_release_models.py` (`MAX_CHANGED_LENGTH`, `MAX_TOUCHED_ITEMS`, `MAX_TOUCHED_ITEM_LENGTH`, `MAX_VERSION_LENGTH`, `FULL_HASH_LENGTHS`). It has its own constant, `MAX_RELEASE_NOTE_BODY_LENGTH`, defined once in `release_notes.py` as the sum of those bounds (the touched items with their separators) and the template's own fixed text. A test composes the largest possible report, every field at its limit, for each outcome and checks the body is within the constant, so a change to a report constant or to the template that breaks the bound fails a test. The body is never cut, and nothing is rejected: the report's own limits already did that. `cli-contract.md` states the constant's value and what it is derived from, beside the `send` limits. The subject is within `send`'s subject limit, because its variable part is a version (`MAX_VERSION_LENGTH`) or a commit (`FULL_HASH_LENGTHS`); the same test checks it.
 - **Id.** `release:` followed by `uuid4().hex`, one per row. A colon cannot appear in a sender's id (240 D2's grammar), so a release note's id can never collide with an agent's, and `release:` is the one prefix constant the tests use to find release notes. Nothing parses it, and nothing reads the id to decide behavior.
 - **Delivery event.** `sent`, as for any note. A correction or withdrawal is a new note, not a state change of the earlier one.
 
@@ -200,11 +200,10 @@ Status: decided
 
 The sweep's prune step (240 D6) gains one statement: delete notes whose `created_at` is older than `prune_after_days`, deleting their `deliveries` first (the foreign key), in the same transaction, after the request statements. Read notes are pruned the same as unread: there is no read state.
 
-`report_release` now writes messages, so it joins the sweep's callers, as `send`, `reply` and `cancel` are: it calls `sweep(transaction, now, prune_after_days)` at the start of its write transaction, and gets `prune_after_days` the way 240's `send` does. A store whose only writer is `report_release` therefore prunes its own release notes, and no note's life depends on an unrelated command.
+The sweep's callers are 240's, unchanged: `send`, `reply` and `cancel` in their write transactions, and `list`, `status` and `handle_pause` through `sweep_messages`, which reads first and writes only when something is due. Its due check gains "a note older than the prune cutoff", so a store whose only writer is `report_release` still has its notes pruned by the next `list`, `status` or `handle_pause`, with nobody editing anything.
 
-- **The other callers.** `list`, `status` and `handle_pause` call 240's `sweep_messages`, which reads first and writes only when something is due. Its due check gains "a note older than the prune cutoff", so a quiet store's `list` prunes aged notes as it prunes aged requests.
-- **Held questions.** `report_release` does not join 242's `START_AFTER_OPERATIONS`. 242 starts a held question from the request's `effective_state` after the operations in that set, and an expiry has no timer (242: "whether or not 240's sweep has recorded the expiry"). An expiry that `report_release`'s sweep records is found by the next of those operations, as one recorded by any other sweep is. So 242 is unchanged, and `report_release` starts no process (none inside the lock).
-- **A failing sweep or note write.** The sweep, the report write and the notes share one transaction, so a failing statement fails the call: the report is rolled back and the call exits 3. A prune error is not split off to let the report through: the statements are plain inserts and deletes, a failure in one is a store fault that would fail the report write as well, and `send`, `reply` and `cancel` already stop on the same sweep. A transient failure (a busy store) ends by running the same call again. A persistent one is a store fault that stops every write, and ends when the store is fixed; the error names it (see the Operator Walkthrough).
+- Rejected: `report_release` running the sweep. It would make `report_release` record expiries (a question for 242's start set), read `prune_after_days`, and fail a release report on a prune error, all for notes the read-side callers already prune.
+- **A failing note write.** The notes share the report's transaction, so a failing insert rolls the report back and the call exits 3, as any store fault in 227's write does. Running the same call again is the exit.
 
 ### D7 — No migration, no config
 Status: decided
@@ -219,17 +218,17 @@ The Handling block (240) gains one paragraph: a `note` in `inbox` is information
 ### Amendments to 240 and the parent documents
 
 The decisions above change what 240, the architecture and the plan say. The docs step makes the same changes in each of them, so no two documents disagree:
-- **`240-slice.requests.md`:** its API Contracts table (`send`'s fields and `--to` no longer required, `inbox`'s `notes`), D2's resend comparison (gains `to_program`), D4's `reply` and `cancel` loads, D6's sweep callers (gains `report_release`), prune step (gains notes) and `sweep_messages` due check (gains aged notes), D7's request reads and `notes`, D8's parent check, and "Provides to Other Slices": the 243 line, and the 244 line, which says 244's wake hook sits in `send`'s request branch, not in the delivery writer.
+- **`240-slice.requests.md`:** its API Contracts table (`send`'s fields and `--to` no longer required, `inbox`'s `notes`), D2's resend comparison (gains `to_program`), D4's `reply` and `cancel` loads, D6's prune step (gains notes) and the "Sweep" paragraph's `sweep_messages` due check (gains aged notes), D7's request reads and `notes`, D8's parent check, and "Provides to Other Slices": the 243 line, and the 244 line, which says 244's wake hook sits in `send`'s request branch, not in the delivery writer.
 - **The architecture:**
   - "Operations", `send` row: `parent` applies to a request only, and a note takes none (D1).
   - "Operations", `inbox`: notes are listed by delivery, so a member sees the notes it received.
   - "Message kinds": "the same consumers" for a correction or withdrawal means the consumers that see the report in `changes` (D5).
-  - "Expiry": the sweep's callers gain `report_release`.
+  - "Expiry": the sweep's prune also removes notes past `prune_after_days`.
   - "Delivery"/principles, "The sender picks the id": a release note's id is Amoeba's `release:` id, because no agent sends it (D5).
   - "Operations", the text-limit sentence: a release note's body is bounded by `MAX_RELEASE_NOTE_BODY_LENGTH`, derived from its report's limits, and is composed, not caller text (D5).
-- **242:** no change. D6 gives the reason.
+- **242:** no change. `report_release` runs no sweep and records no expiry (D6).
 - **The plan's entry 4:** the same two statements about limits and "the same consumers", and its Dependencies line reads 222, 227, 240 and, for the push test, 241.
-- **244 (when designed):** the wake hook runs only for a request, in `send`'s request branch, after the request and its delivery are written. The note path (`send_note.py`) never reaches it, so a note starts no wake. 244's tests send a note to a member with a wake command, no live session and no running wake, and check nothing starts.
+- **244:** no change. Its design already places the wake hook in `send`'s request branch after the request's transaction commits, so the note path (`send_note.py`) never reaches it, and it has the test (a note to a member with a wake command starts nothing).
 - **Contract docs:** `cli-contract.md`, `mcp-server.md` and `store-contract.md` follow the code as in 240. `store-contract.md` gains that notes are written by `send` and `report_release`, a release note's id has the `release:` prefix and a sender's cannot, a note has null `state` and `expires_at` and `state_changed_at` equal to `created_at`, and notes are pruned by `created_at`. The tool descriptions for `send` and `inbox` say a note needs no reply and carry no example values, and the `INSTRUCTIONS` text gains one sentence on notes.
 
 ## Implementation Details
@@ -242,7 +241,7 @@ The decisions above change what 240, the architecture and the plan say. The docs
 
 ### Provides to Other Slices
 - 241: nothing to change. A note is a delivery, so the watcher's read sees it. The push criterion is tested through 241's own push check (see Success Criteria).
-- 244: a requirement, not code. Waking is for requests only, so 244's hook is in `send`'s request branch and never in the delivery writer that notes also use (see Amendments).
+- 244: a requirement, not code, which 244's design already meets. Waking is for requests only, so 244's hook is in `send`'s request branch and never in the delivery writer that notes also use.
 
 ### Consumes from Other Slices
 - 240's tables, `send`, `inbox`, sweep, delivery writer, notice and limits. If one is missing, the slice does not start.
@@ -262,10 +261,9 @@ The decisions above change what 240, the architecture and the plan say. The docs
 - **Push.** 241's push check, run for a member after a note arrives, reports it the same as a request: a test sends a direct note, a program note and a release note to a fixture member, runs the check, and finds a channel event whose entries name `note`, `sent` and the sender's member id, with no subject or body, in the form 241 gives a request.
 
 ### Technical Requirements
-- Notes older than `prune_after_days` are pruned with their deliveries, read or not, by the sweep as `report_release` runs it: a test calls `report_release` alone on a store holding an aged note and finds it gone. Younger notes stay. Open and accepted requests are not touched by the note statement.
-- A release note's body, composed from the largest possible report for each outcome, is within `MAX_RELEASE_NOTE_BODY_LENGTH` (D5).
+- Notes older than `prune_after_days` are pruned with their deliveries, read or not, by the sweep. Younger notes stay. Open and accepted requests are not touched by the note statement.
 - `list` on a store holding only an aged note prunes it, through `sweep_messages`' due check (D6).
-- 240's worst-case test includes `report_release` (one lookup and three store waits) and fails if it reaches `MCP_CALL_DEADLINE_SECONDS`.
+- A release note's body, composed from the largest possible report for each outcome, is within `MAX_RELEASE_NOTE_BODY_LENGTH` (D5).
 - An `rm` leaves notes alone. The sweep never expires a note.
 - `list` and `status` do not show notes, and `Nothing needs you.` is unchanged by them.
 - No migration: `EXPECTED_SCHEMA_VERSION` is unchanged, and the contract-docs test passes with the new fields documented.
@@ -307,9 +305,9 @@ This is the Phase 4 draft, refined when Phase 6 is complete. The note flags and 
 
 ### Development Approach
 1. `MessageKind` use in `SendRequest` (D1), `NoteView`, the result fields, and their model tests.
-2. `store/notes.py`, `pairs_provided_by` and the prune statement, with store tests (insert, deliveries, program recipients, prune).
+2. `store/notes.py`, `pairs_provided_by`, the prune statement and the due-check clause, with store tests (insert, deliveries, program recipients, prune).
 3. `send_note.py` and the `send` branch, then the D4 audit with a note row in every 240 test fixture that reads messages.
-4. `release_notes.py`, the sweep call and the `report_release` change, with the outcome table and atomicity tests, then the matrix test against `changes`.
+4. `release_notes.py` and the `report_release` change, with the outcome table and atomicity tests, then the matrix test against `changes`.
 5. CLI flags and renderer lines, MCP fields and descriptions, `INSTRUCTIONS`, the rules text, the docs, and the amendments' wording in the architecture and plan.
 6. The push test (through 241's check) and the live test.
 
@@ -326,7 +324,7 @@ Done as the person running it. Set-up is nothing new: the rules text is pasted o
 - **A wrong manual note.** There is no recall: a note has no state and the reader may already have it. The sender sends a correcting note. It leaves by age.
 - **A wrong release report.** `report-release --correct` or `--withdraw` sends consumers a new note, so they stop relying on it.
 - **A report with no consumers.** The report is stored and no note is written.
-- **A failing note write or sweep.** The report is rolled back and the call exits 3. A transient failure (a busy store) ends by running the same command again. A persistent one is a store fault that stops every Amoeba write, not only this one, and the error names it. The provider's agent does what the Provider block says on a non-zero exit: record the error, and do not retry with different values. The report is made with the same command once the store is fixed, and until then no consumer sees it in `changes` or `inbox`, which is the plan's atomicity rule working as intended. The store's own recovery is outside this slice.
+- **A failing note write.** The report is rolled back and the call exits 3, and the provider's agent does what the Provider block says on a non-zero exit, as for any 227 store error. The same command is run again; until then no consumer sees the report in `changes` or `inbox`, which is the plan's atomicity rule. A store that fails every write is a store fault 227 already has, not a state this slice adds.
 - **A consumer repo is removed, or its mode changes.** It gets nothing further. Its earlier notes stay until pruned.
-- **Nobody reads a note.** It is pruned `prune_after_days` after it was sent, by the next sweep, which any `send`, `reply`, `cancel`, `report-release`, `list`, `status` or `handle-pause` runs. No one edits anything.
-- **Undo and cleanup.** Nothing to undo beyond the correcting note. Notes leave by age. Dead ends found: one, named above (a persistent store fault stops report-release along with every other write until the store is fixed).
+- **Nobody reads a note.** It is pruned `prune_after_days` after it was sent, by the next sweep, which any `send`, `reply`, `cancel`, `list`, `status` or `handle-pause` runs. No one edits anything.
+- **Undo and cleanup.** Nothing to undo beyond the correcting note. Notes leave by age. Dead ends found: none.

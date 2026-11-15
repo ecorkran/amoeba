@@ -31,7 +31,7 @@ usageByModel:
 
 ## Overview
 
-`amoeba-mcp` tells its own client session when new mail arrives, and records that it is serving. The server resolves its member once, from its working directory. A watcher beside the MCP loop reads the member's highest delivery sequence number every `notify_poll_seconds`. When it rises, the server sends a Claude Code channel event, and a resource update on `amoeba://inbox` to a client that subscribed. Neither carries message text. Each serving process also keeps a `sessions` row (migration 7), so `list` shows who is live where. Today `server.run` serves the 2026-07-28 protocol era, which Claude Code will not register a channel on, so this slice replaces it with a handshake-only loop. The slice proves the whole path against a real interactive Claude Code session.
+`amoeba-mcp` tells its own client session when new mail arrives, and records that it is serving. The server resolves its member once, from its working directory. A watcher beside the MCP loop reads the member's highest delivery sequence number every `notify_poll_seconds`. When it rises, the server sends a Claude Code channel event, and a resource update on `amoeba://inbox` to a client that subscribed. Neither carries message text. Each serving process also keeps a `sessions` row (migration 7), so `list` shows who is live where. A session whose agent answers a channel event with an `inbox` call is marked push-confirmed, and only those sessions stop 244 from waking the repo. Today `server.run` serves the 2026-07-28 protocol era, which Claude Code will not register a channel on, so this slice replaces it with a handshake-only loop. The slice proves the whole path against a real interactive Claude Code session.
 
 ## Value
 
@@ -43,7 +43,7 @@ User value. A live Claude Code session acts on a request when it arrives, not at
 - A handshake-only serve loop for `amoeba-mcp`, replacing `server.run` (D1).
 - The watcher: member resolution, the push check, the channel event, the resource update (D2 to D5).
 - The `amoeba://inbox` resource: list, read, subscribe (D5).
-- Migration 7: `sessions`. Registration, heartbeat, clean-exit delete, the stale rule, and its pruning in 240's sweep (D6).
+- Migration 7: `sessions`. Registration, heartbeat, clean-exit delete, the stale rule, pruning in the heartbeat, and push confirmation (D6).
 - Three required config keys: `notify_poll_seconds`, `session_heartbeat_seconds`, `session_stale_seconds` (D7).
 - `list` and `status` show live sessions per member (D8).
 - Docs: the launch flag and shell alias, the registration form, `mcp-server.md`, `config-contract.md`, `store-contract.md`, `cli-contract.md`; the `INSTRUCTIONS` text (D9).
@@ -54,17 +54,17 @@ User value. A live Claude Code session acts on a request when it arrives, not at
 - Message operations, the delivery writer and the sweep's message steps (240). Notes (243). Waking (244).
 - Push for clients other than Claude Code: they get the resource update only if they subscribe, and none did when observed 20261114 (architecture).
 - Push under `claude -p`: Claude Code ignores the development flag there, so pipeline runs poll.
-- Detecting whether the client registered the channel. Claude Code gives the server no signal either way, so a session row means "an `amoeba-mcp` is serving", not "push is on".
+- Asking the client whether it registered the channel. Claude Code gives the server no signal either way, so a session row means "an `amoeba-mcp` is serving". Push confirmation (D6) infers "push is on" from the agent answering an event instead.
 
 ## Dependencies
 
 ### Prerequisites
-- 240 built and integrated: `deliveries` with its `(member_id, seq)` index, the `sweep` and `sweep_messages` functions, `StatusResult`/`MemberStatus` with `requests`, `inbox` and the live store at schema 6.
+- 240 built and integrated: `deliveries` with its `(member_id, seq)` index, `StatusResult`/`MemberStatus` with `requests`, `inbox` and the live store at schema 6. 241 changes no 240 function or signature.
 - Claude Code installed and logged in, for the live test only. Observed 20261115: 2.1.318.
 - `mcp>=2.3,<3`. Observed 20261115: 2.3.0.
 
 ### Interfaces Required
-- From 240: `deliveries(seq, member_id, message_id, event, created_at)`, `messages(from_member, to_member, kind)`, `highest_assigned_seq(transaction)` (the number `inbox` returns as `as_of_seq`), `sweep(...)`, `sweep_messages(store, config, now)`, `MemberStatus`.
+- From 240: `deliveries(seq, member_id, message_id, event, created_at)`, `messages(from_member, to_member, kind)`, `highest_assigned_seq(transaction)` (the number `inbox` returns as `as_of_seq`), `MemberStatus`, and the `inbox` tool name, which `call_tool` watches for push confirmation (D6).
 - From 220: `operations.members.resolve_member` (the directory-to-member rule), `wiring.open_store` (the only way the store is opened; `tests/test_store_opened_only_by_state_move.py`), `wiring.default_deps` for `cf_run`, `Deps.clock`.
 - From the MCP SDK (2.3.0): `Connection.for_loop`, `Connection.notify`, `Connection.initialized`, `serve_connection` and `JSONRPCDispatcher`. These are public modules, not the top-level API; D1 pins their behavior with a contract test.
 
@@ -83,7 +83,7 @@ amoeba-mcp main ──► mcp/pinned_loop.py ──► serve_connection (handsha
 ```
 
 - `mcp/pinned_loop.py`: `serve_pinned(server, streams, init_options, background)`. Builds the dispatcher and `Connection.for_loop`, starts `background(connection)` in a task group, runs `serve_connection`, cancels the background on return. It mirrors the SDK's `serve_loop` (which does not expose its connection) and nothing else.
-- `mcp/presence.py`: `PresenceState` (member id or none, set once, read by the resource handlers), `resolve_presence` (D3) and the heartbeat loop (D6).
+- `mcp/presence.py`: `PresenceState` (member id or none, set once, read by the resource handlers), `resolve_presence` (D3), the heartbeat loop and `note_inbox_called`, which `call_tool` invokes after a successful `inbox` (D6).
 - `mcp/inbox_watcher.py`: the push loop (D2).
 - `mcp/channel_event.py`: a pure function from push rows to the event's params (D4). No I/O, so a test checks every field.
 - `mcp/inbox_resource.py`: the three resource handlers (D5).
@@ -101,7 +101,7 @@ amoeba-mcp main ──► mcp/pinned_loop.py ──► serve_connection (handsha
 
 ### State Management
 
-- In memory: the resolved member, the last-seen sequence number, the session id (`uuid4().hex`, made once at start), the start time. Only the event loop's tasks touch them. `PresenceState` is read by the resource handlers, which run as soon as `initialize` is answered, before the member is known. It has three states: pending, a member, or off with a reason. It carries a `resolved` event that the background task sets in a `finally`, so the pending state always ends, at the latest after the lookup's own bounds (D3).
+- In memory: the resolved member, the last-seen sequence number, the session id (`uuid4().hex`, made once at start), the start time, the time of the last unanswered channel event, and the push-confirmed time (D6). Only the event loop's tasks touch them. `PresenceState` is read by the resource handlers, which run as soon as `initialize` is answered, before the member is known. It has three states: pending, a member, or off with a reason. It carries a `resolved` event that the background task sets in a `finally`, so the pending state always ends, at the latest after the lookup's own bounds (D3).
 - In the store: one `sessions` row per serving process. Nothing else is written. The watcher's reads write nothing and keep no marker, so they never hide mail from another reader (architecture: no shared read marker).
 
 ## Technical Decisions
@@ -160,13 +160,17 @@ Status: decided
 
 Migration `007_sessions.sql`, create-only:
 
-`sessions`: `session_id` (text primary key), `member_id` (references `members`), `client`, `directory`, `started_at`, `heartbeat_at`. Indexes on `(member_id)` and `(heartbeat_at)`. No `CHECK` list, so no enum to pin. `EXPECTED_SCHEMA_VERSION` becomes 7.
+`sessions`: `session_id` (text primary key), `member_id` (references `members`), `client`, `directory`, `started_at`, `heartbeat_at`, `push_confirmed_at` (null until confirmed). Indexes on `(member_id)` and `(heartbeat_at)`. No `CHECK` list, so no enum to pin. `EXPECTED_SCHEMA_VERSION` becomes 7.
 
-- **Register and beat are one statement.** An upsert on `session_id` sets `heartbeat_at` and, on a first insert, the other columns. The first beat runs at `initialized`; then every `session_heartbeat_seconds`. A failed beat (`StoreBusyError`) is retried at the next beat; so is a row the sweep pruned from a process that was suspended past the stale limit, which the upsert re-creates with the original `started_at`.
+- **Register and beat are one statement.** An upsert on `session_id` sets `heartbeat_at` and `push_confirmed_at` (from memory, null until confirmed) and, on a first insert, the other columns. The first beat runs at `initialized`; then every `session_heartbeat_seconds`. A failed beat (`StoreBusyError`) is retried at the next beat; so is a row a heartbeat pruned from a process that was suspended past the stale limit, which the upsert re-creates with the original `started_at`.
 - **`client`** is the client's `clientInfo.name` if it matches `[A-Za-z0-9._ -]{1,64}`; otherwise the placeholder `unrecognized`, and one WARNING. It is displayed by `list`, so it is never free text. `directory` is the process's working directory.
 - **Clean exit** deletes the row, under a shield and a bound of `BUSY_TIMEOUT_SECONDS * 2`. On SIGKILL, a crash or a SIGTERM (not handled; the client closes stdin first) the row stays.
 - **Stale rule.** A row whose `heartbeat_at` is older than `session_stale_seconds` counts as gone. `LIVE_SESSION` is the one predicate, used by `live_sessions`, `live_member_ids` and the prune. A stale row is therefore never shown, whether or not it has been pruned.
-- **Prune.** 240's `sweep` gains a third step and a parameter: `sweep(transaction, now, prune_after_days, session_stale_seconds)` deletes stale rows. This is this slice's change, not 240's, because `sessions` does not exist until migration 7, so 240's sweep cannot hold the step. The plan runs 240 first, so the edit lands on the sweep as built: its three write callers (`send`, `reply`, `cancel`) and `sweep_messages` (for `list`, `status` and `handle_pause`) pass `session_stale_seconds` from the config they already hold, and 240's tests must pass with it. `sweep_messages`'s "is something due" read counts a stale row as due, so a quiet store is still not write-locked by a poll. The same `prune_stale_sessions` also runs in each heartbeat's write transaction, so a server starting clears the dead rows too. The table therefore holds live rows plus the rows of killed servers since the last server start or sweep. Stale rows are never shown (the stale rule), and each is a few dozen bytes.
+- **Prune.** `prune_stale_sessions` runs in each heartbeat's write transaction, before the upsert, so every serving process clears every member's dead rows every `session_heartbeat_seconds`, and a server starting clears them at its first beat. 240's `sweep` is not touched: 241 owns the whole cleanup. The table therefore holds the live rows plus the rows of servers killed since the last beat of any server. With no server running, those rows stay until one starts; they are bounded by the number of kills in that time, each is a few dozen bytes, and the stale rule means none is ever shown.
+- **Push confirmation.** "Live" for waking means a session whose agent acts on push (244 consumes it through `live_member_ids`). When the watcher attempts a channel event and no event is waiting for an answer, it records the attempt time in memory. When `call_tool` completes an `inbox` call without error, it calls `note_inbox_called`: if an attempt is recorded and is at most `PUSH_ANSWER_SECONDS` old (a constant, 300: a queued event waits for the agent's current turn to end), the session becomes push-confirmed; either way the recorded attempt is cleared. Confirmation is in memory and sticky for the process (the launch flag cannot change mid-session), and the next beat's upsert writes `push_confirmed_at`, so no new write path exists. An unanswered attempt older than the limit is cleared by the next event, which records a fresh attempt.
+  - `live_sessions` (for `list`) returns every fresh row with its `push_confirmed_at`. `live_member_ids(transaction, now, stale_seconds)` returns members with a fresh row whose `push_confirmed_at` is set. Both use `LIVE_SESSION`; the second adds `push_confirmed_at IS NOT NULL`, once, in `store/sql_sessions.py`.
+  - The common case works: an idle session without the flag, under `claude -p`, or in an org with channels off never answers an event, so it never confirms and the repo is woken. An idle session with the flag answers its first event within seconds and from then on suppresses waking, which is right because push reaches it.
+  - Two rare misreads, each with a bounded cost and no new mechanism. A push session that has not yet received an event is unconfirmed, so the first request to its repo can also wake an agent; both see the request, and the second to accept gets `already_accepted` (240), with wakes capped by 244's daily limit. An unflagged session whose agent happens to call `inbox` within the limit after an attempted event confirms falsely and suppresses waking like a live session; the request waits for that agent or its TTL, and `list` shows the session as push-confirmed and the request's age, and `amoeba cancel` ends it.
 - Rejected: a pid column (a pid proves nothing after reuse, and the heartbeat already says whether the process lives).
 
 ### D7 — Config keys
@@ -177,7 +181,7 @@ Status: decided
 ### D8 — `list` and `status`
 Status: decided
 
-`MemberStatus` gains `sessions`: each live session's `client`, `directory`, `started_at` and `heartbeat_at`, oldest first. The text renderer adds a **Live sessions** section per member that has any: `<client>  <directory>  up <age>  last beat <age> ago`. A member with none shows no section. Sessions do not count as "waiting on you", so `Nothing needs you.` is unchanged. They are not other repos' text, so they do not set the notice (240 D11). `list -j` still equals the `status` document.
+`MemberStatus` gains `sessions`: each live session's `client`, `directory`, `started_at`, `heartbeat_at` and `push_confirmed_at`, oldest first. The text renderer adds a **Live sessions** section per member that has any: `<client>  <directory>  up <age>  last beat <age> ago  push confirmed|push unconfirmed`, so the PM can see which sessions hold off waking. A member with none shows no section. Sessions do not count as "waiting on you", so `Nothing needs you.` is unchanged. They are not other repos' text, so they do not set the notice (240 D11). `list -j` still equals the `status` document.
 
 ### D9 — Launch, registration and docs
 Status: decided
@@ -196,7 +200,7 @@ Status: decided
 - The model comes from a required live setting (`AMOEBA_LIVE_CHANNEL_MODEL`, as the other live tiers' model settings), and the `inbox` tool is pre-allowed for the session.
 - Evidence is the server's stderr, which gains three INFO lines: the negotiated protocol version and client name at `initialized`; `channel event attempted` with `first_seq`, `last_seq` and `count` (a diagnostic; the test's proof of delivery is the next line); and `tool <name> called` at the start of every tool call (the name only). The test sends a request from the other repo with `amoeba send`, then waits for `tool inbox called` with no prompt typed.
 - The config uses short intervals (`notify_poll_seconds` 1, `session_heartbeat_seconds` 1, `session_stale_seconds` 3) and three sessions run in turn:
-  - In member repo `cf-s` (with the D9 `.mcp.json`): `amoeba list -j` shows a live session under `cf-s` with its directory. The test sends a request from `sq-s` with `amoeba send --to cf-s --id sq-1 --subject "Need X" --body "Please add X"`, and the server log gets `tool inbox called` with no prompt typed. After a clean exit, `amoeba list -j` shows no session.
+  - In member repo `cf-s` (with the D9 `.mcp.json`): `amoeba list -j` shows a live session under `cf-s` with its directory. The test sends a request from `sq-s` with `amoeba send --to cf-s --id sq-1 --subject "Need X" --body "Please add X"`, and the server log gets `tool inbox called` with no prompt typed. Within `session_heartbeat_seconds` plus `STALE_MARGIN_SECONDS`, `amoeba list -j` shows that session with `push_confirmed_at` set. After a clean exit, `amoeba list -j` shows no session.
   - The same session with the server killed by SIGKILL: `list -j` shows no session once the wait above has passed.
   - A directory outside any member: the server log says it is not a member, `list -j` shows no session, and a tool call still answers.
 - Spend is pre-authorized for live tiers.
@@ -209,8 +213,8 @@ The docs step amends the architecture and plan entry so none stays a difference.
 - A non-member server declares the channel and resources capabilities (D3).
 - The event tells the agent to use its own cursor, not "call `inbox` with `since`" (D4).
 - The serve loop is `serve_pinned`, not `server.run`, and the watcher runs beside it, not beside `server.run` as the plan and architecture say. The protocol pin is that loop choice, not "the SDK's version negotiation" (D1).
-- `sweep` gains a parameter (D6).
-- "Live" means an `amoeba-mcp` is serving for the member, not that someone is working there. The architecture's presence paragraph and its walkthrough step 3 are amended to say so. An idle session left open, with or without the flag, counts as live, so a request to that repo is not woken (244) and waits for its agent or its TTL, when it expires and the sender is told. A repo with no session at all, the case waking is for, is woken. Refining the rule would need a signal that the agent reads mail, and Claude Code gives the server none.
+- Stale sessions are pruned by every server's heartbeat, not by the sweep (D6). 240's sweep is unchanged.
+- Presence feeds waking only through push-confirmed sessions (D6): a session suppresses a wake once its agent has answered a channel event, and `list` shows every serving session with whether it is confirmed. The architecture's presence paragraph and its walkthrough step 3 are amended to say so.
 
 ## Implementation Details
 
@@ -235,7 +239,7 @@ No new tool. Protocol surface added to `amoeba-mcp`:
 
 ### Provides to Other Slices
 - **243:** nothing to change. A note is a delivery, so the same check pushes it; the event names the kind. 243's criterion "push fires for a note" is a test over this path.
-- **244:** `live_member_ids(transaction, now, stale_seconds)`, the one liveness rule, and the `sessions` table. "Live" is as the departures define it: serving, not attentive. An idle session, one without the flag, or a `claude -p` run counts, and `list` shows both the session and the request's age.
+- **244:** `live_member_ids(transaction, now, stale_seconds)`, the one liveness rule for waking, and the `sessions` table. A member is live when it has a fresh, push-confirmed session (D6). A session without the flag, under `claude -p`, or not yet sent an event does not count, so its repo is woken.
 
 ### Consumes from Other Slices
 - **240:** the tables and functions under Interfaces Required. If `cf` fails at start, the server serves tools with no push (D3). If the store is held, the watcher skips the tick (D2).
@@ -249,7 +253,8 @@ No new tool. Protocol surface added to `amoeba-mcp`:
 - A server started in a directory outside any member serves the tools, writes no session row, runs no push loop, and returns an empty `resources/list`. A `cf` failure or timeout at start does the same and logs the error.
 - The resource handlers behave as D5 says, tested in each state: a request made while the member is still resolving waits and then gets the resolved answer; a subscribed client gets `notifications/resources/updated` after an event and one that did not gets none; the invalid-params and `StoreError` cases fail only their request.
 - The watcher's failures behave as D2 says: a busy store is retried, after which the next event is sent and the row is current; any other error is logged with its traceback, ends presence and deletes the row, and the server keeps answering tool calls. A send on a closed stream does not raise, which pins `Connection.notify` (D2).
-- A clean exit deletes the row. A server killed with SIGKILL leaves a row that `list` stops showing after `session_stale_seconds`, and the next sweep deletes.
+- A clean exit deletes the row. A server killed with SIGKILL leaves a row that `list` stops showing after `session_stale_seconds`, and the next heartbeat of any server deletes.
+- Push confirmation behaves as D6 says: an `inbox` call within `PUSH_ANSWER_SECONDS` of an attempted event confirms the session and the next beat writes `push_confirmed_at`; an `inbox` call with no attempt recorded, or after the limit, does not; `live_member_ids` returns a member with a fresh confirmed row and not one whose only rows are unconfirmed or stale.
 - A process suspended past the stale limit has its row re-created by the next heartbeat.
 - The watcher never blocks a tool call: with a store opener that blocks in its thread, `ping`, `tools/list` and a tool call answer within a second.
 - `list` and `status` show live sessions per member; `list -j` equals the `status` document; `Nothing needs you.` is unchanged.
@@ -257,13 +262,13 @@ No new tool. Protocol surface added to `amoeba-mcp`:
 ### Technical Requirements
 - The three keys missing fail with `ConfigError` naming the key; a stale limit under twice the heartbeat, or a heartbeat under the poll interval, fails naming both keys; the config contract's example loads.
 - Every table, column, JSON field and config key is documented; `tests/test_contract_docs.py`, `tests/test_import_boundaries.py`, `tests/test_store_opened_only_by_state_move.py` and `tests/test_read_side_defined_once.py` pass.
-- `sessions` has a cleanup, with a test: stale rows pruned by the sweep and by another process's heartbeat, live rows kept.
+- `sessions` has a cleanup, with a test: stale rows pruned by another process's heartbeat, live rows kept.
 - `ruff format`, `ruff check`, `pyright` and the whole suite pass.
 
 ### Integration Requirements
 - 244 can call `live_member_ids` and get the same answer `list` shows.
 - 243's notes push with no change to this slice.
-- 240's behavior is unchanged: its operations and their tests pass with the new `sweep` parameter.
+- 240's behavior is unchanged: 241 edits no 240 function or signature, and 240's tests pass as written.
 
 ### Verification Walkthrough
 
@@ -290,7 +295,7 @@ This is the Phase 4 draft, refined when Phase 6 is complete. `tests/live/channel
 
 ### Development Approach
 1. Re-check the dated facts against the installed Claude Code and SDK (flag, capability, notification shape, and that the D9 `.mcp.json` registration registers the channel); correct D4, D9 and the docs where they differ. Build the pty harness enough to start a session and read its screens.
-2. Config keys; migration 7, `store/sessions.py`, `store/push_reads.py`, the `sweep` parameter, and their tests.
+2. Config keys; migration 7, `store/sessions.py`, `store/push_reads.py`, and their tests.
 3. `pinned_loop.py` and `test_protocol_pin.py`; move `server.py` onto it; the existing MCP tests must pass.
 4. `channel_event.py`, `inbox_watcher.py`, `presence.py`, `inbox_resource.py` with in-process tests (memory streams, SDK client, injected opener and short intervals).
 5. `SessionEntry`, `list`/`status` and the renderer.
@@ -311,10 +316,10 @@ Done as the person running it.
 - **Normal path.** A request arrives, the session shows the `← amoeba` line and calls `inbox`.
 - **No flag, an org with channels off, or `claude -p`.** The server runs and shows in `list`. Events are dropped by the client, and the agent polls at its rules-file moments. Nothing is lost.
 - **A non-member directory, or a repo added after the session started.** No session row. `amoeba add`, then `/mcp` reconnect or a new session.
-- **Session closed.** The row is deleted at once. **Session killed.** The row reads as gone after `session_stale_seconds`, and the next sweep or server start deletes it; nobody edits anything.
+- **Session closed.** The row is deleted at once. **Session killed.** The row reads as gone after `session_stale_seconds`, and the next heartbeat of any server deletes it; nobody edits anything.
 - **Computer asleep.** The heartbeat stops; on wake the next beat re-creates the row.
 - **Store locked.** The tick is skipped and retried. Tools answer meanwhile.
 - **A Claude Code update changes channels.** `uv run pytest tests/live/channels` fails with the screen it saw; polling still works until the docs and code are updated.
 - **A repo that should show a live session does not.** The reason is the server's stderr line (not a member, `cf` failed, or a store error with its traceback). `claude --debug` writes it to `~/.claude/debug/<session-id>.txt` (channels reference, read 20261115). Fix the cause (`cf` on `PATH`, `amoeba add`), then `/mcp` reconnect.
-- **An idle session, or one without push, counts as live.** A request to that repo is not woken (244) and waits for its agent or its TTL. `list` shows the session and the request's age, and `amoeba cancel` ends the request.
-- **Undo.** To stop using push, remove the alias and run `claude mcp remove amoeba --scope project` in the repo. The only state is `sessions` rows: live ones plus killed servers' rows until the next server start or sweep (D6). Before Phase 7, the backups restore the pre-241 store (Special Considerations). After it, the schema is deliberately forward-only: `sessions` is harmless when unused (empty once sessions end), and older code refuses a store stamped 7. Going back to pre-241 code would take, with every `amoeba` and `amoeba-mcp` process stopped, `DROP TABLE sessions` and `schema_meta.version` set to 6 on the live store, which needs the PM's explicit designation under the project rule; it loses only live-session records. Dead ends found: that one, by design.
+- **An idle session in a repo with a wake command.** Without push it never confirms, so a request wakes the repo (244). With push, the event starts a turn and the session confirms; until its first event, a request can both push to it and wake an agent, and the second to accept gets `already_accepted`. `list` shows which sessions are push-confirmed.
+- **Undo.** To stop using push, remove the alias and run `claude mcp remove amoeba --scope project` in the repo. The only state is `sessions` rows: live ones plus killed servers' rows until the next beat of any server (D6). Before Phase 7, the backups restore the pre-241 store (Special Considerations). After it, the schema is deliberately forward-only: `sessions` is harmless when unused (empty once sessions end), and older code refuses a store stamped 7. Going back to pre-241 code would take, with every `amoeba` and `amoeba-mcp` process stopped, `DROP TABLE sessions` and `schema_meta.version` set to 6 on the live store, which needs the PM's explicit designation under the project rule; it loses only live-session records. Dead ends found: that one, by design.

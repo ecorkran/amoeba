@@ -186,3 +186,5 @@ The architecture's "many short-lived writers" and "none holds the write lock acr
 - **F012** (pass: no-block requirement has a target): no change needed.
 
 No finding needed a deferral, so no GitHub issue was filed and the artifact names none.
+
+**Second pass 20261115.** Some entries above were redone in the design during a second resolution pass. Where this section and the design disagree, the design governs.

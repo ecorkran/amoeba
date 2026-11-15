@@ -196,3 +196,5 @@ If a held row's start keeps failing past `prune_after_days`, 240's prune removes
 - **F013** (pruned request reports as `request_unknown`): fixed more simply than the review suggested. The reason stays `request_unknown`, but D4's "No row" paragraph makes the detail say the request existed when the question was held and was pruned after `prune_after_days`, so the PM is not told it never existed. I did not store the request's last state, which would need a write when the row is first seen terminal.
 
 No finding was deferred, so no GitHub issue was filed.
+
+**Second pass 20261115.** Some entries above were redone in the design during a second resolution pass. Where this section and the design disagree, the design governs.
