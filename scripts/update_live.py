@@ -81,7 +81,7 @@ def _git(*args: str) -> str:
 def check_checkout() -> str:
     """The checkout's HEAD commit, once it is on its target and clean."""
     configured = subprocess.run(
-        ["cf", "config", "get", "git.integration_branch"],
+        ["cf", "config", "get", "git.integration_branch", "--value"],
         cwd=CHECKOUT,
         capture_output=True,
         text=True,
