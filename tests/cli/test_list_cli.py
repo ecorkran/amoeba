@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,7 @@ from cli.cli_support import (
 from cli.message_cli_support import send_request
 
 LISTING = recorded_listing(stderr=recorded_warning())
+RECORDED_CHECKOUT = "/Users/manta/source/repos/manta/amoeba"
 
 
 def _registered(tmp_path: Path) -> None:
@@ -85,9 +87,14 @@ def test_list_all_text_adds_the_other_runs_after_the_sections_of_plain_list(
     tmp_path: Path,
 ) -> None:
     _registered(tmp_path)
+    # The recording's runs name the recording machine's checkout; a run whose
+    # directory is missing is never placed, so point them at one that exists here.
+    listing = replace(
+        LISTING, stdout=LISTING.stdout.replace(RECORDED_CHECKOUT, str(tmp_path))
+    )
 
-    plain = run_amoeba(tmp_path, "list", listing=LISTING).stdout
-    everything = run_amoeba(tmp_path, "list", "--all", listing=LISTING).stdout
+    plain = run_amoeba(tmp_path, "list", listing=listing).stdout
+    everything = run_amoeba(tmp_path, "list", "--all", listing=listing).stdout
 
     assert everything.startswith(plain)
     extra = everything.removeprefix(plain)
