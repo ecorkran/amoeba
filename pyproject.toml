@@ -49,7 +49,7 @@ extend-exclude = ["project-documents", "CLAUDE.md", "AGENTS.md"]
 select = ["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"]
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "scripts"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 reportMissingImports = true
