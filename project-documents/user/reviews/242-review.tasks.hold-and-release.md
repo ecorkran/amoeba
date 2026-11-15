@@ -244,17 +244,17 @@ Verified: schema files 001–005 exist, and `store/messages.py` and 240's test f
 
 ## Resolution
 
-- **F001 (live tier can pass without the automatic resume):** fixed. Task 8.1/8.2 now run `handle-pause` by hand once for the held first call only, reply through the CLI, and poll up to `AUTO_RESUME_WAIT_SECONDS`; new non-live test in 6.5 (`test_request_release_child.py`) uses the real `resolve_amoeba_script` and `start_child`. The design's "within a minute" is replaced by a bounded poll in the 0.2 amendment.
-- **F002 (`status`/`list` under the deadline):** fixed. Task 6.5 extends the worst-case test to `status` and `list` (plus `START_BOUND_SECONDS`, under `MCP_CALL_DEADLINE_SECONDS`), with `BLOCKED:` plus the numbers if it reaches it.
-- **F003 (section 1 fails the contract-docs test):** fixed. Task 1.4 adds the `waiting_on_request` pause-class entry to `cli-contract.md`. Task 7.1 states the notice is 240's `StatusResult` field and adds no new top-level field.
-- **F004 (logic added to `passages.py`):** fixed. Task 2.3 puts placement in `answering/request_passage.py` (`add_request_passage`); `assemble` gains one parameter and one call; `render_passages` is unchanged. Task 4.2 states `pause_claim.py` is expected to pass 300 lines and is accepted because the design requires `start_held_claim` there.
-- **F005 (10.2's edited-tests check):** fixed. Context and 10.2 now say no existing test function or assertion changes except the lines named in 1.1, 1.3, 2.5, 6.1 and 6.5, checked by a diff of removed test lines; other tasks only add functions.
-- **F006 (nonexistent 223 `pause_claim` tests):** fixed. Task 4.1 names `tests/operations/test_handle_pause.py` (incl. the answer-limit test) and `tests/operations/test_pause_existing.py` (`restart_dead_claim`).
-- **F007 (no load test or CI gate):** fixed in part. New task 6.6 adds `tests/load/test_start_ended_held_load.py`. No CI task: `ci.yml` runs a bare `uv run pytest` and `pyproject.toml` ignores only `tests/live`, so CI already gates it; 6.6 says to confirm both.
-- **F008 (section 7 bundles too much):** fixed. A commit marker now follows 7.2 (`status` and `list`) and the last one covers `decisions`, `dismiss` and `answer`. 7.4 says it is tests only. The 1.2 test that a store stamped 9 is refused is removed.
-- **F009 (`add` in the start set):** fixed. `add` dropped from `START_AFTER_OPERATIONS` (6.4); the design's D7 and Data Flow are amended in 0.2.
-- **F010 (live tail check feeds no decision):** rejected. Design D1 asks for the check, so it stays in 0.3 as a recorded fact, now labelled so.
-- **F011 (baseline vs "checks pass"):** fixed. Baseline failures are listed by test name in 0.3, and "checks pass" means no failure beyond that list (Context).
-- **F012 (one owner per contract-doc entry):** fixed. Entries are assigned: 1.1 store state, columns, writers, reasons; 1.4 pause class; 2.3 the `based_on` wording (moved from 7.3); 2.6 `held`, `request_id`, reasons; 7.1 and 7.3 their fields; 9.2 only the rest, listed there.
-- **F013 (planning edits on the slice branch):** fixed. The parent and design amendments moved from 9.3 into new task 0.2, committed on the target before the branch is created in 0.3. The walkthrough refinement and recorded target commit stay in 10.2 as Phase 6 notes. The `find_request_link` signature change is in the 0.2 amendment; the PM was not asked, since the design's own Departures rule lets the docs step amend the parents.
-- **F014–F017 (pass findings):** no change needed.
+- **F001:** fixed. 8.1/8.2(a) run `handle-pause` once for the held first call, reply through the CLI, then poll to `AUTO_RESUME_WAIT_SECONDS` with no manual `handle-pause`. New 6.5 test `test_request_release_child.py` runs the real detached child (`resolve_amoeba_script` + `deps.spawn`) against a fixture store. Design step 5's "within a minute" replaced by the bounded poll.
+- **F002:** fixed. 6.5's timing test covers `status` and `list` (worst case plus `START_BOUND_SECONDS` below `MCP_CALL_DEADLINE_SECONDS`); the "outside this deadline test" claim is removed.
+- **F003:** fixed. 1.4 adds the `waiting_on_request` pause-class entry to `docs/cli-contract.md`. The notice part is moot: 240 documents `notice`.
+- **F004:** fixed. 2.3 puts request placement (and any rendering) in `answering/request_passage.py`; `assemble` gains one call. 4.2 states `pause_claim.py` reaches about 320 lines and names the split: the waiting-settle helpers move to `operations/claim_waiting.py`.
+- **F005:** fixed. Context and 10.2: no existing test function or assertion in the 223/228/240/241 suites changes except the edits 1.1, 1.3, 2.5, 6.1 and 6.5 name; the Context lists the existing files new test functions may be added to.
+- **F006:** fixed. 4.1 names `test_handle_pause.py` (`start_new_claim`; its two answer-limit tests cover the shared helper), `test_pause_existing.py` and `test_every_state_exits.py` (`restart_dead_claim`).
+- **F007:** fixed. New 6.6 load test `tests/load/test_start_ended_held_load.py`. No CI task: bare `uv run pytest` collects `tests/load`.
+- **F008:** dropped. Section 7 stays one commit; the store-stamped-9 test stays.
+- **F009:** dropped. `add` stays in the start set: its remove path runs `apply_removal`, which cancels the member's requests (240 D10), so `add` can end requests.
+- **F010:** dropped. The 0.1 live check stays as a recorded fact.
+- **F011:** fixed. 0.1: a pre-existing failure in the touched area is fixed in place as its own `fix:` commit before slice work; one outside it is left and noted. "Checks pass" excludes only those noted failures.
+- **F012:** dropped.
+- **F013:** dropped. Planning edits ride the slice branch (9.3), the established pattern as in 240.
+- **F014–F017:** pass, no change.
