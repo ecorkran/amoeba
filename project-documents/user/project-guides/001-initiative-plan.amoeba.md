@@ -4,7 +4,7 @@ layer: project
 project: amoeba
 source: user/project-guides/000-concept.amoeba.md
 dateCreated: 20260620
-dateUpdated: 20261106
+dateUpdated: 20261114
 status: in_progress
 ---
 
@@ -24,14 +24,16 @@ Initiatives 100 to 140 were built from the bottom up, and 160 to 200 were planne
 
 Splitting it again (say, questions in one initiative and programs in another) would give two architecture documents that have to agree on the same operations, the same store and the same answer to "does anything stay running?". Split later only if the work itself shows a reason to.
 
+240 is that later split. Messaging between agents is a new layer on top of 220's operations and store, with its own scenario (D), and it does not change what 220 built.
+
 ## Initiatives
 
 1. [x] **(100) Substrate & Run-State Store** — Built: the SQLite store, resident process, inbox of submission files, network API and related contracts. The concept keeps the store, reduced to what the scenarios need; the rest has to be justified by a scenario. 220's audit decides what stays. Dependencies: None. Status: complete
 2. [x] **(120) Runner** — Built: launches and watches Squadron runs, resumes runs that stopped for a transient reason, hands paused runs to 140 and keeps the blocked list. The concept says Amoeba starts no work, so launching at least is in question. 220's audit decides what stays. Dependencies: [100]. Status: complete
 3. [x] **(140) Question Answerer** — Built: the question record, source passages and the two-step answering pipeline, plus a gate around the answer. The record and the pipeline are the core of the new concept. Checks on an answer belong in the pipeline as Squadron steps, so the gate is in question. 220's audit decides what stays. Dependencies: [100, 120]. Status: complete
 4. [ ] **(160) Translator & Notification** — Retired 20261106. The Translator is now the PM's separate chat agent app. The Discord bridge is dropped, because Amoeba notifies agents and agents already reach the PM. Status: deprecated
-5. [ ] **(180) Program Coordination** — Retired 20261106. Slices 180 (slice-writing pipeline) and 181 (program record) are merged. Slice 182 (program concept as a source) is parked on its branch, unmerged, and slices 183 to 186 are paused. Edges with hold and release, requests between members, and ordering are not in any scenario, and some of them walk the dependency graph, which the concept rules out. What programs still need moves to 220. Status: deprecated
-6. [ ] **(200) Multi-Agent Chat** — Retired 20261106. Not Amoeba: the PM's chat and agent-to-agent talk live elsewhere. Status: deprecated
+5. [ ] **(180) Program Coordination** — Retired 20261106. Slices 180 (slice-writing pipeline) and 181 (program record) are merged. Slice 182 (program concept as a source) is parked on its branch, unmerged, and slices 183 to 186 are paused. Edges with hold and release, requests between members, and ordering are not in any scenario, and some of them walk the dependency graph, which the concept rules out. What programs still need moves to 220. Requests and hold-and-release come back in 240, rebuilt without a resident process. Status: deprecated
+6. [ ] **(200) Multi-Agent Chat** — Retired 20261106. Not Amoeba: the PM's chat and agent-to-agent talk live elsewhere. Brought back 20261114 as part of 240: agent-to-agent messages are Amoeba's, and a message to a program reaches every member. Status: deprecated
 7. [x] **(220) Program Tool** — Everything the concept asks for, built by cutting down what exists before adding to it. Scope:
    - **Scenarios A, B and C** from the concept: a question while the PM is away, a change in one member reaching another, and the PM asking where things stand. Scenario A, end to end on a real run the PM started, is the first proof.
    - **One set of operations**, over MCP for agent sessions and a CLI for pipelines and scripts. No MCP server exists today.
@@ -44,17 +46,28 @@ Splitting it again (say, questions in one initiative and programs in another) wo
    - **Scenario A switched on 2026-11-12** (hook live at user level, `trading` program registered, sanity pass clean). The counted trial and verdict were dropped as needing PM-driven work; evidence comes from normal use of `amoeba decisions` and `amoeba status`.
 
    Out of scope: launching member pipelines, notification mechanics, chat, and any check on an answer that could be a Squadron step. Dependencies: [100, 120, 140]. Status: not_started
+8. [ ] **(240) Agent Messaging** — Messages between agents in different repos, for any agent and any UI, not only Claude Code sessions. Scenario D: one repo needs another to build something (squadron needs context-forge, which needs ai-project-guide). Architecture: `240-arch.agent-messaging.md`. Scope:
+   - **Durable messages** in the Amoeba store, addressed to a member repo or a program. Requests have states with an exit for each (open, accepted, done, declined, cancelled, expired), and notes are information only.
+   - **Chains** as parent links between requests, shown but never walked, with a depth limit.
+   - **Delivery by polling** at moments named in each repo's rules file, the floor for every agent. **Push** from `amoeba-mcp` on top: Claude Code channel events, plus a standard MCP resource update for clients that act on it. Also session presence.
+   - **Hold and release:** a run paused on a request resumes when the request is done.
+   - **Waking:** a configured per-member command started when mail lands and nobody is working in that repo. This is the last slice.
+   - **Release reports** also drop a note in each consumer's inbox.
+
+   Out of scope: ordering across a chain, and Amoeba deciding what work to do. The slice plan waits for the PM's review of the architecture. Dependencies: [220]. Status: in_progress
 
 ## Cross-Initiative Dependencies
 
 - **120 depends on 100, and 140 depends on 100 and 120.** These hold for the code as built. 220's audit may remove the dependencies along with the code.
 - **220 depends on 100, 120 and 140.** It inherits their code and is what cuts it down, so it can change or delete any of it. It also inherits slices 180 and 181 from retired 180.
+- **240 depends on 220.** It builds on 220's store, operations, MCP server, resume procedure and question record. It revises 220's "pull, never push" principle and decisions 5 and 6, as listed in `240-arch`.
 
 ## External Dependencies
 
 - **`ecorkran/squadron#299`:** closed. Answering steps' `allowed_tools: []` runs tool-less on Claude models.
-- **The PM's chat agent app:** not a dependency. Amoeba pushes nothing, and getting waiting questions to the PM belongs to chat and agent communication.
+- **The PM's chat agent app:** not a dependency. Getting waiting questions to the PM belongs to chat and agent communication. From 240, Amoeba's MCP server pushes new mail to its own session, and pushes nothing else.
 - **Two more Squadron changes,** listed in `220-arch.program-tool`: a command started when a run pauses (`#302`), and the working directory in the run file with JSON from `sq runs list` (`#303`). A pipeline command step (`#304`) is on hold. All are general, off unless configured, and never make Squadron depend on Amoeba.
+- **Claude Code channels** (240's push): a research preview, observed 20261114. A custom server needs a launch flag, and the server has to negotiate a pre-2026-07-28 MCP revision. Polling still delivers without it.
 
 ## Sequencing
 
@@ -66,6 +79,8 @@ Work 220 in this order:
 4. **Scenario A,** then whatever it shows is next. The slice plan sets the order of B and C.
 
 Nothing new gets built before the audit, and slices 183 to 186 stay paused until the slice plan re-judges them.
+
+Work 240 in this order: architecture and its review with the PM, scenario D added to the concept, then the slice plan.
 
 ## Notes
 
