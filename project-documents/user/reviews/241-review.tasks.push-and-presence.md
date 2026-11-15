@@ -217,14 +217,14 @@ The existing test resolves `amoeba-mcp` beside `sys.executable`. 9.3 can reuse t
 
 ## Resolution
 
-- [concern] Restore path names "the pre-merge tool" but records no commit: fixed. 13.2 now records `git rev-parse {target}` in the slice notes, and P7.3 reinstalls from that commit. The stop-wait bound is now a named `PROCESS_STOP_WAIT_SECONDS` (60) set in the step, no longer reusing the 240 config key.
-- [concern] Version numbers beside lookup steps: fixed. P7.1 and 13.1 now state the expected version as "the last migration file before `007_sessions.sql`" (no literal), and any other result, including empty, is `BLOCKED:` with the raw output. 13.1's read-back uses `EXPECTED_SCHEMA_VERSION`.
-- [concern] 12.2 misses places that conflict with Phase 7: fixed. 12.2 now also amends Development Approach step 7 and the Special Considerations Live store paragraph (install from the target after the merge, backups deleted after the read-back, previous code is the recorded target commit).
-- [concern] 5.1 and 8.1 add JSON fields without doc entries: fixed. Each task now adds its `docs/mcp-server.md` entry; 12.1 still writes the prose.
-- [concern] Load test gate is implicit: fixed. 9.4 now adds a named "Load tests" step to `ci.yml` running `uv run pytest tests/load`; the duplicate run in the bare step is accepted and stated.
-- [concern] Two design behaviors untested: fixed. 6.4 adds a sticky-confirmation test and 6.5 adds a `StoreError`-from-lookup test.
-- [concern] 9.1 bundles six concerns: fixed. Split into 9.1a (capabilities, handler registration, `INSTRUCTIONS`) and 9.1b (`main()` config, `_serve` wiring, `call_tool`), each with its own success line; references in 3.1, 11.1 and 13.2 updated.
-- [note] `serve_pinned` omits `lifespan_state`: fixed. 4.1's signature includes it, with the instruction to read how `Server.run` obtains it for a server with no lifespan.
-- [note] Walkthrough dead ends: partly fixed. P7.1's BLOCKED now says how it clears (run 240's live migration, restart at P7.1). The forward-only undo is rejected as a change: the design reports it as a known dead end, and P7.4 already gives its exit (a forward migration under the existing designation).
-- [note] Session ordering has no tiebreak: fixed. 3.3 orders by `started_at` then `session_id`, 3.4 tests equal `started_at`, and 12.2 amends D8's wording.
-- [note] One-second bounds on a shared runner: fixed. 9.4 uses a named `LOAD_ANSWER_SECONDS` (5) compared with the slowest answer, prints every observed maximum, and does not retry. The one-second bound stays in 9.2, where the test blocks the opener and no load is involved.
+- [concern] Restore path records no commit: fixed. New P7.0 writes `git rev-parse {target}` into the slice notes just before the merge (BLOCKED on any non-SHA output); P7.3 reinstalls from that commit and states its own 60-second stop wait instead of borrowing `answering_wait_seconds`.
+- [concern] Version numbers beside lookup steps: fixed. P7.1 and 13.1 state the expected version once (the last migration before `007_sessions.sql`) and any other result, including empty, is `BLOCKED:` with the raw output.
+- [concern] 12.2 misses places that conflict with Phase 7: fixed. 12.2 also amends Development Approach step 7 and Special Considerations (install from the target after the merge, backups deleted after the read-back).
+- [concern] 5.1 and 8.1 lack doc entries: fixed. Each adds its `docs/mcp-server.md` entry in the same task.
+- [concern] Load test gate implicit: dropped; bare `uv run pytest` already collects `tests/load`.
+- [concern] Two design behaviors untested: fixed. 6.4 adds sticky confirmation across a later no-attempt `inbox` call; 6.5 adds a `StoreError` from the member lookup.
+- [concern] 9.1 bundles six concerns: dropped; one task at this size is acceptable.
+- [note] `serve_pinned` omits `lifespan_state`: fixed. 4.1's signature takes keyword-only `lifespan_state` (checked against `mcp/server/runner.py`).
+- [note] Walkthrough dead ends: dropped; the BLOCKED reason is self-explanatory and the forward-only undo is already acknowledged in the design.
+- [note] Session ordering has no tiebreak: fixed. 3.3 orders by `started_at, session_id`; 3.4 tests equal `started_at`.
+- [note] One-second bounds on a shared runner: dropped; no flake observed to justify a tolerance.
