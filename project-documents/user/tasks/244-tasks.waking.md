@@ -11,12 +11,26 @@ dependencies:
 projectState: Slices 220 to 229 are merged on main. Store schema version 5 (migrations
   001 to 005), state is in ~/.local/state/amoeba. Slices 240 (messages, send, sweep,
   migration 006), 241 (sessions, push, migration 007), 242 (hold and release, migration
-  008, Deps.amoeba_script) and 243 (notes) are designed and tasked; this slice is built
-  after all four are built and integrated, and adds migration 009. It is the last slice
-  of the agent-messaging initiative.
+  008, Deps.amoeba_script) and 243 (notes) are designed and tasked; this slice is
+  built after all four are built and integrated, and adds migration 009. It is the
+  last slice of the agent-messaging initiative.
 dateCreated: 20261115
 dateUpdated: 20261115
 status: not_started
+turns: 20
+promptTokens: 1094588
+cachedTokens: 990721
+cacheWriteTokens: 103841
+completionTokens: 23703
+durationSeconds: 159.8
+costUsd: 0.751812
+usageRounds: 1
+pricedRounds: 1
+usageByModel:
+  claude-sonnet-5-5:
+    rounds: 1
+    costUsd: 0.7518120000000001
+    completionTokens: 23703
 ---
 
 # Tasks: Waking
