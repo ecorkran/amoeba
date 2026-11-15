@@ -171,7 +171,7 @@ Status: decided
 
 `sweep(transaction, now, prune_after_days)` does two things, in that order:
 1. **Expire.** Every `open` request with `expires_at <= now` becomes `expired` (`state_changed_at` is `now`, the moment the sweep records it), with an `expired` delivery to each party.
-2. **Prune.** Delete terminal requests whose `state_changed_at` is older than `prune_after_days`, notes (`kind = 'note'`, from 243) whose `created_at` is older than that, their deliveries (deleted first, for the foreign key), and `message_rejections` older than that. `sweep_messages` counts an old note as due, the same as an old terminal request.
+2. **Prune.** Delete terminal requests whose `state_changed_at` is older than `prune_after_days`, their deliveries (deleted first, for the foreign key), and `message_rejections` older than that. No note can be written in this slice: 243 adds the note writer together with the note prune statement and the aged-note clause in `sweep_messages`' due check (243 D6).
 
 It returns nothing, and tests read the rows. 242 finds the runs held on an ended request by reading request state after each operation, so it needs no ids from the sweep. `expires_at` is fixed at `send` (`created_at + request_open_ttl_hours`), so a config change never moves an existing request's expiry. Open and accepted requests are never pruned, so each has an exit: expiry, or `done`, `decline` and `cancel`.
 

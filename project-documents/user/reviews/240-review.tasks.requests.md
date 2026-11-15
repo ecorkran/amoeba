@@ -180,3 +180,17 @@ Apart from the two references flagged above, dependencies run forward from schem
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 13
 - Finding-shaped matches — surviving validation: 13
+
+## Resolution
+
+Resolved by the planning agent, 2026-11-15. The task file governs.
+
+- F001 rejected: no note can exist before 243, which adds the note writer together with its prune statement and due clause (243 D6). That is slice ownership, not deferral; the architecture's Retention paragraph assigns no slice. 240's D6 wording ("from 243") was ambiguous and now says this outright.
+- F002 fixed: 5.1 points at 3.3; 11.1a names the constants it creates.
+- F003 fixed: 11.1 split into 11.1a (wiring, MCP row, INSTRUCTIONS) and 11.1b (CLI).
+- F004 fixed: 11.3 and 11.4 add their INSTRUCTIONS lines.
+- F005 dropped: the bare pytest step already runs `tests/load` in CI, as for the existing load tests.
+- F006 dropped: rolling blocks into member repos is set-up in those repos, as for 227's blocks; 13.2 already says how.
+- F007 fixed the other way: the run-start term is 242's. 11.6 has no start term, the 242 amendment is removed, and 242 adds `START_BOUND_SECONDS` to the timing test when it adds run starts, as both designs say.
+- F008 fixed: 10.1 requires the swallow comment.
+- F009, F010 dropped (notes).

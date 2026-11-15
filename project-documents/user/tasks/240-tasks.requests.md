@@ -85,12 +85,12 @@ usageByModel:
   - [ ] Success: checks pass
 
 - [ ] **2.5 Sweep, rejection rows and the member cascade**
-  - [ ] `store/message_sweep.py`: `sweep(transaction, now, prune_after_days)` per D6 in order: expire every `open` request with `expires_at <= now` through `change_state` (reason none, `state_changed_at` is `now`), then prune terminal requests older than the cutoff by `state_changed_at` (their deliveries first) and `message_rejections` by `created_at`. Notes are not pruned here: 243 adds the note statement and the aged-note due check (243 D6), and the request statement keys on terminal request states so it leaves `kind = 'note'` rows alone. `sweep_due(transaction, now, prune_after_days)` is the read-only check that answers "is anything due". Neither returns anything beyond the due flag
+  - [ ] `store/message_sweep.py`: `sweep(transaction, now, prune_after_days)` per D6 in order: expire every `open` request with `expires_at <= now` through `change_state` (reason none, `state_changed_at` is `now`), then prune terminal requests older than the cutoff by `state_changed_at` (their deliveries first) and `message_rejections` by `created_at`. No note can be written in 240; 243 adds the note writer together with its prune statement and due-check clause (243 D6), and the request statement keys on terminal request states so it leaves `kind = 'note'` rows alone. `sweep_due(transaction, now, prune_after_days)` is the read-only check that answers "is anything due". Neither returns anything beyond the due flag
   - [ ] `store/message_rejections.py`: `record_rejection(transaction, member_id, operation, to_ref, message_id, parent_id, code, detail, now)`
   - [ ] `cancel_member_requests(transaction, member_id, now)` (D10): every non-terminal request sent or received by the member becomes `cancelled`, reason `member_removed`, through `change_state` with actor `None`. Put it in `store/message_transitions.py`
   - [ ] Success: pyright clean; every function takes `now` as an argument (no clock reads in the store)
 - [ ] **2.6 Tests for 2.5**
-  - [ ] `tests/store/test_message_sweep.py`: expiry writes the state and the deliveries once and a second sweep writes nothing; open and accepted requests are never pruned; terminal requests with their deliveries, and rejection rows, older than the cutoff are pruned and younger ones kept, one test per table; a note row inserted directly is left alone and is not due; `sweep_due` is false on a quiet store and true for each due kind
+  - [ ] `tests/store/test_message_sweep.py`: expiry writes the state and the deliveries once and a second sweep writes nothing; open and accepted requests are never pruned; terminal requests with their deliveries, and rejection rows, older than the cutoff are pruned and younger ones kept, one test per table; a note row inserted directly is left alone by the request statement; `sweep_due` is false on a quiet store and true for each due kind
   - [ ] `tests/store/test_message_cascade.py`: sender removed and addressee removed each cancel open and accepted requests with `member_removed`, tell only the surviving party, and leave terminal requests alone; a re-registered member keeps its retained history
   - [ ] Success: checks pass
 
@@ -133,7 +133,7 @@ usageByModel:
 ## 5. Member resolution (D3)
 
 - [ ] **5.1 `operations/message_member.py`**
-  - [ ] `resolve_caller(directory, member, run)`: the directory is always looked up; a resolved member is the caller and an explicit `member` naming a different one is `member_mismatch`; a directory in no project or program takes the explicit `member`, with none given it is `not_a_member`; a `cf` failure or timeout propagates as `ContextForgeError` (exit 3, nothing written). A `cancel`-style optional mode returns "unknown actor" instead of `not_a_member`. `resolve_recipient(reference, run)` uses `member_reference` (3.4) and returns the member id or `unknown_recipient`; the recipient must be an active member in any program
+  - [ ] `resolve_caller(directory, member, run)`: the directory is always looked up; a resolved member is the caller and an explicit `member` naming a different one is `member_mismatch`; a directory in no project or program takes the explicit `member`, with none given it is `not_a_member`; a `cf` failure or timeout propagates as `ContextForgeError` (exit 3, nothing written). A `cancel`-style optional mode returns "unknown actor" instead of `not_a_member`. `resolve_recipient(reference, run)` uses `member_reference` (3.3) and returns the member id or `unknown_recipient`; the recipient must be an active member in any program
   - [ ] Success: pyright clean; returns a typed value, never raises for a refusal
 - [ ] **5.2 Tests**
   - [ ] `tests/operations/test_message_member.py` with the stub `cf`: directory resolves; same-member `member` accepted; different-member `member` is `member_mismatch`; no-project directory with `member` works; with none is `not_a_member`; optional mode returns unknown actor; `cf` failing and timing out raise `ContextForgeError`; a removed or unregistered recipient is `unknown_recipient`; a name and an id both resolve
@@ -196,7 +196,7 @@ usageByModel:
 ## 10. Sweep wrapper, status and list, removal cascade (D10, D11, D12)
 
 - [ ] **10.1 `operations/message_sweep.py`**
-  - [ ] `sweep_messages(store, config, now)`: reads `sweep_due` first and opens a write transaction only when something is due. A `StoreBusyError` is logged with `logger.exception` and returned as a problem text, never raised
+  - [ ] `sweep_messages(store, config, now)`: reads `sweep_due` first and opens a write transaction only when something is due. A `StoreBusyError` is logged with `logger.exception` and returned as a problem text, never raised, with an inline comment saying why swallowing it is correct (the read still returns; the next call sweeps)
   - [ ] Success: pyright clean
 - [ ] **10.2 Sweep wrapper tests**
   - [ ] `tests/operations/test_message_sweep_wrapper.py`: a quiet store is not write-locked (a second connection holding a write lock does not block it); due work is swept; a held store returns the problem text and the call returns
@@ -224,33 +224,36 @@ usageByModel:
 
 ## 11. Doors (D3, D11, API Contracts)
 
-Each of 11.1 to 11.4 adds one operation to wiring, the MCP server and the CLI together with its tests, so the parity tests (`tests/cli/test_parser_names.py`, the MCP tool table) hold and the suite is green after every task. 11.1 creates the shared modules; the later tasks add to them.
+Each of 11.1 to 11.4 adds one operation to wiring, the MCP server and the CLI together with its tests (11.1 split in two: wiring and MCP, then the CLI), so the parity tests (`tests/cli/test_parser_names.py`, the MCP tool table) hold and the suite is green after every task. 11.1a and 11.1b create the shared modules; the later tasks add to them.
 
-- [ ] **11.1 `send` on every door**
-  - [ ] `operations/names.py`: add `SEND`. `wiring_messages.py` (new): `place_message`, placing arguments as `wiring_releases.py` does (directory, request, `Deps`, store, config, clock), plus the bound constants of 11.6. `wiring.py`: the `invoke` arm (one line), `OperationResult`, `is_rejected`, `result_document`; growth to call sites only
+- [ ] **11.1a `send` in wiring and on MCP**
+  - [ ] `operations/names.py`: add `SEND`. `wiring_messages.py` (new): `place_message`, placing arguments as `wiring_releases.py` does (directory, request, `Deps`, store, config, clock), plus the lookup counts and `MESSAGE_STORE_WAITS` that 11.6 tests. `wiring.py`: the `invoke` arm (one line), `OperationResult`, `is_rejected`, `result_document`; growth to call sites only
   - [ ] `mcp/message_tools.py` (new): the `ToolSpec` row appended to `TOOLS`, with `directory` plus the request fields. The description carries the notice, says a rejection after a timeout means the first call took effect and `inbox` shows the state, and names the worst-case wait. Update the MCP server's `INSTRUCTIONS` text for `send`
+  - [ ] Tests: `tests/test_wiring.py`; `tests/mcp_server/test_tools.py` (the row, `directory`, the notice); `tests/mcp_server/test_instructions.py` passes
+  - [ ] Success: checks pass (the whole suite; if a CLI parity test needs the CLI command, do 11.1b before running them)
+- [ ] **11.1b `send` on the CLI**
   - [ ] `cli/registration_messages.py` (new, flags and request builder), `cli/parser.py` and `cli/commands.py` call sites, `cli/render/messages.py` (text, notice first when message text follows). Flags: `send --to --subject (--body | --body-file FILE|-) [--parent] --id [--member]`. `--body` with `--body-file` is exit 2. Exit 0 for `sent` and `unchanged`, 1 for `rejected`, 3 for operational failures. Add its synopsis and exits to `docs/cli-contract.md`
-  - [ ] Tests: `tests/test_wiring.py`; `tests/mcp_server/test_tools.py` and the in-process parity tests (the row, `directory`, the notice, the tool's result equals the CLI's `-j` document); `tests/cli/test_parser_names.py`; `tests/cli/test_send_cli.py` (text and `-j`, each exit code, `--body-file -` from stdin, the body conflict, `cf` failing is exit 3 with nothing written)
+  - [ ] Tests: the in-process parity tests (the tool's result equals the CLI's `-j` document); `tests/cli/test_parser_names.py`; `tests/cli/test_send_cli.py` (text and `-j`, each exit code, `--body-file -` from stdin, the body conflict, `cf` failing is exit 3 with nothing written)
   - [ ] Success: checks pass (the whole suite)
 - [ ] **11.2 `inbox` on every door**
-  - [ ] As 11.1 for `OperationName.INBOX`: wiring arm, tool row, `INSTRUCTIONS` text on when to call `inbox` (the four moments), CLI `inbox [--since] [--member]` (exit 0 for `listed`, 1 for `rejected`, 3), text rendering of requests and deliveries, `docs/cli-contract.md` entry
-  - [ ] Tests as 11.1, in `tests/cli/test_inbox_cli.py`, including `--since` and the `beyond_last_record` exit 1
+  - [ ] As 11.1a and 11.1b for `OperationName.INBOX`: wiring arm, tool row, `INSTRUCTIONS` text on when to call `inbox` (the four moments), CLI `inbox [--since] [--member]` (exit 0 for `listed`, 1 for `rejected`, 3), text rendering of requests and deliveries, `docs/cli-contract.md` entry
+  - [ ] Tests as 11.1a and 11.1b, in `tests/cli/test_inbox_cli.py`, including `--since` and the `beyond_last_record` exit 1
   - [ ] Success: checks pass
 - [ ] **11.3 `reply` on every door**
-  - [ ] As 11.1 for `OperationName.REPLY`: CLI `reply ID accept|decline|done [--text] [--commit] [--version] [--member]` (exit 0 for `applied`, 1 for `rejected`, 3), `id` positional
-  - [ ] Tests as 11.1, in `tests/cli/test_reply_cli.py`, including `decline` without `--text` and `--commit` on `accept` as usage or `malformed` per the 4.2 models
+  - [ ] As 11.1a and 11.1b for `OperationName.REPLY`, including the `INSTRUCTIONS` line for `reply` (`tests/mcp_server/test_instructions.py` requires every tool name in it): CLI `reply ID accept|decline|done [--text] [--commit] [--version] [--member]` (exit 0 for `applied`, 1 for `rejected`, 3), `id` positional
+  - [ ] Tests as 11.1a and 11.1b, in `tests/cli/test_reply_cli.py`, including `decline` without `--text` and `--commit` on `accept` as usage or `malformed` per the 4.2 models
   - [ ] Success: checks pass
 - [ ] **11.4 `cancel` on every door**
-  - [ ] As 11.1 for `OperationName.CANCEL`: CLI `cancel ID [--reason] [--member]` (exit 0 for `cancelled`, 1 for `rejected`, 3), `id` positional
-  - [ ] Tests as 11.1, in `tests/cli/test_cancel_cli.py`, including a repeated cancel exiting 1
+  - [ ] As 11.1a and 11.1b for `OperationName.CANCEL`, including the `INSTRUCTIONS` line for `cancel`: CLI `cancel ID [--reason] [--member]` (exit 0 for `cancelled`, 1 for `rejected`, 3), `id` positional
+  - [ ] Tests as 11.1a and 11.1b, in `tests/cli/test_cancel_cli.py`, including a repeated cancel exiting 1
   - [ ] Success: checks pass
 - [ ] **11.5 The notice on `list` and `status` (D11)**
   - [ ] `mcp/tools.py`: the `list` and `status` descriptions carry `QUOTED_DATA_NOTICE` through the shared constant (a call-site edit; the file is near its size limit)
   - [ ] Tests: `tests/mcp_server/test_tools.py` asserts both descriptions hold the notice; `tests/cli/test_list_cli.py` asserts `amoeba list -j` and `amoeba status -j` print the same document, with `notice` and the new member fields
   - [ ] Success: checks pass
 - [ ] **11.6 Timing bound test**
-  - [ ] `wiring_messages.py` defines each operation's `cf` lookup count (`send` 3, the others 2, counting an explicit `member`), `MESSAGE_STORE_WAITS` (3), `MAX_STARTS_PER_CALL` (5) and `START_BOUND_SECONDS` = `BUSY_TIMEOUT_SECONDS` × (1 + `MAX_STARTS_PER_CALL`) (30 s, the term slice 242's run-start path adds to `send`, `reply` and `cancel`). The bound for `send`, `reply` and `cancel` includes `START_BOUND_SECONDS` now, so the criterion is built here, not left to 242 (13.3 amends 242's design to import these two constants instead of defining them)
-  - [ ] `tests/test_message_timing.py`: run each operation against the stub `cf` and count the `cf` invocations the stub recorded; assert the count is at most the operation's lookup count. Compute each worst case as lookups × `CF_GET_TIMEOUT_SECONDS` + `MESSAGE_STORE_WAITS` × `BUSY_TIMEOUT_SECONDS` (+ `START_BOUND_SECONDS` for the three writers) and assert it is below `MCP_CALL_DEADLINE_SECONDS`. A second test feeds the check a bound that reaches the deadline and asserts it fails
+  - [ ] `wiring_messages.py` (created in 11.1) holds each operation's `cf` lookup count (`send` 3, the others 2, counting an explicit `member`) and `MESSAGE_STORE_WAITS` (3). 240 starts no runs, so its bound has no run-start term; slice 242 adds `START_BOUND_SECONDS` to this test for `send`, `reply` and `cancel` when it adds run starts (242's Per-call cap paragraph)
+  - [ ] `tests/test_message_timing.py`: run each operation against the stub `cf` and count the `cf` invocations the stub recorded; assert the count is at most the operation's lookup count. Compute each worst case as lookups × `CF_GET_TIMEOUT_SECONDS` + `MESSAGE_STORE_WAITS` × `BUSY_TIMEOUT_SECONDS` and assert it is below `MCP_CALL_DEADLINE_SECONDS`. A second test feeds the check a bound that reaches the deadline and asserts it fails
   - [ ] Success: checks pass
 
 ## 12. End-to-end tests (Success Criteria)
@@ -274,8 +277,7 @@ Each of 11.1 to 11.4 adds one operation to wiring, the MCP server and the CLI to
 
 - [ ] **13.3 Parent documents and changelog**
   - [ ] Amend `user/architecture/240-arch.agent-messaging.md` and `user/architecture/240-slices.agent-messaging.md` to match the design's Departures section: `request_open_ttl_hours`; no code defaults (reword the architecture's "Store and config" paragraph and the plan entry 1 criterion to "required, with no default in code; the suggested values are in the config contract's example"); the Requesting and Handling block names; the third table; the accept rejection naming the time; cancel authority; explicit `member`; `inbox --since` also returning `requests`; `request_ended`; `beyond_last_record` for `since`; the reworded notice
-  - [ ] Amend `user/slices/240-slice.requests.md` so the design matches what is built: D1's index list gains `deliveries(message_id)`; D6, the Sweep paragraph and the Technical Requirements retention line drop the note statement and the aged-note due check, which 243 D6 adds
-  - [ ] Amend `user/slices/242-slice.hold-and-release.md`: `START_BOUND_SECONDS` and `MAX_STARTS_PER_CALL` are imported from `wiring_messages.py` (240 defines them and its timing test already includes the term), not defined in 242
+  - [ ] Amend `user/slices/240-slice.requests.md` so the design matches what is built: D1's index list gains `deliveries(message_id)`
   - [ ] `CHANGELOG.md` `[Unreleased]`: slice 240 entry (four operations, migration 006, the two new required config keys marked **behavior change**, the notice rewording, the restart note, and that each member's rules file gets the Requesting and Handling blocks)
   - [ ] Success: `grep -n "request_open_ttl" project-documents/user/architecture/240-*.md` finds the new key and not the old; checks pass
 
