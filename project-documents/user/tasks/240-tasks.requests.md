@@ -8,12 +8,26 @@ dependencies:
 - 229-slice.human-cli
 projectState: Slices 220 to 229 are merged on main. Store schema version 5 (migrations
   001 to 005), the CLI prints text by default and JSON with -j, operations run through
-  wiring.invoke on the CLI and the MCP server, state is in ~/.local/state/amoeba. The
-  architecture (240-arch.agent-messaging) and slice plan (240-slices.agent-messaging)
+  wiring.invoke on the CLI and the MCP server, state is in ~/.local/state/amoeba.
+  The architecture (240-arch.agent-messaging) and slice plan (240-slices.agent-messaging)
   exist; slices 241 to 244 are designed and read the shapes this slice fixes.
 dateCreated: 20261115
 dateUpdated: 20261115
 status: not_started
+turns: 15
+promptTokens: 715483
+cachedTokens: 634272
+cacheWriteTokens: 81189
+completionTokens: 21772
+durationSeconds: 147.0
+costUsd: 0.606242
+usageRounds: 1
+pricedRounds: 1
+usageByModel:
+  claude-sonnet-5-5:
+    rounds: 1
+    costUsd: 0.6062415999999999
+    completionTokens: 21772
 ---
 
 # Tasks: Requests
