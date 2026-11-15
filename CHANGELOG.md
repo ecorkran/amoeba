@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-15
+
 ### Added
 
 - Slice 240: requests between repos. `amoeba send`, `inbox`, `reply` (`accept`, `decline`, `done`) and `cancel` (MCP `send`, `inbox`, `reply`, `cancel`) let an agent in one repo ask another repo for work and hear back by polling `inbox`, which keeps no read marker (`--since` takes the `as_of_seq` of the last call). A request moves through `open`, `accepted`, `done`, `declined`, `cancelled` and `expired`: the first `accept` wins, a resend of the same id and content changes nothing, and an `open` request expires `request_open_ttl_hours` after it was sent (an `accepted` one never does). `--parent` links a request to the one it serves, up to `max_chain_depth`. Removing a member cancels its open and accepted requests (reason `member_removed`). `list` and `status` show each member's requests, with age and any waiting chain, and its rejected calls; a rejected `send`, `reply` or `cancel` is recorded. Migration 006 adds `messages`, `deliveries` and `message_rejections`. `QUOTED_DATA_NOTICE` moved to `operations/quoted_data.py` and now covers messages. `docs/program-rules.md` gains the Requesting and Handling blocks: **each member's rules file gets them, pasted by an agent session in that repo.** The MCP tool table now has sixteen tools: **open agent sessions must be restarted** to see the four new ones.

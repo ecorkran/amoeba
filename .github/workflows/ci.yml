@@ -38,3 +38,19 @@ jobs:
 
       - name: Tests
         run: uv run pytest
+
+  # Publishes to PyPI on a version tag (vX.Y.Z), only after `check` passes.
+  # Trusted publishing (OIDC): no token is stored; PyPI trusts this workflow
+  # for the `amoeba` project.
+  publish:
+    needs: check
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.13
+      - run: uv build
+      - uses: pypa/gh-action-pypi-publish@release/v1
