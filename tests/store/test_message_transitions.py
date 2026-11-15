@@ -100,6 +100,24 @@ def test_an_unknown_actor_and_expiry_reach_both(
     assert _delivered(store) == [(SENDER, event.value), (ADDRESSEE, event.value)]
 
 
+def test_a_request_to_its_own_sender_is_told_once(store: Store) -> None:
+    with store.write() as transaction:
+        send_request(transaction, "own", to_member=SENDER)
+        message = get_message(transaction, "own")
+        assert message is not None
+        change_state(
+            transaction,
+            message,
+            RequestState.EXPIRED,
+            DeliveryEvent.EXPIRED,
+            None,
+            LATER,
+            StateFields(),
+        )
+
+    assert _delivered(store) == [(SENDER, "expired")]
+
+
 def test_a_removed_party_gets_nothing(store: Store) -> None:
     with store.write() as transaction:
         assert remove_member(transaction, SENDER, NOW)

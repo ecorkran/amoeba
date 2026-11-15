@@ -66,7 +66,8 @@ def change_state(
             message.message_id,
         ),
     )
-    for party in (message.from_member, message.to_member):
+    # dict.fromkeys keeps the order and tells a request to its own sender once.
+    for party in dict.fromkeys((message.from_member, message.to_member)):
         if party == actor or programs.get_member(transaction, party) is None:
             continue
         write_delivery(transaction, party, message.message_id, event, now)
