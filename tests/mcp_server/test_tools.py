@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from amoeba.cli.parser import build_parser
+from amoeba.mcp.message_tools import SEND_ADVICE, STATE_CHANGE_ADVICE
 from amoeba.mcp.tools import (
     READ_ADVICE,
     TOOLS,
@@ -23,9 +24,17 @@ from amoeba.mcp.tools import (
     prepare_arguments,
 )
 from amoeba.operations.answer import AnswerRequest
-from amoeba.operations.changes_models import QUOTED_DATA_NOTICE
+from amoeba.operations.message_models import MAX_BODY_LENGTH, MAX_ID_LENGTH
 from amoeba.operations.names import OperationName
+from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
+from amoeba.wiring_messages import worst_case_seconds
 
+MESSAGE_TOOL_NAMES = (
+    OperationName.SEND,
+    OperationName.INBOX,
+    OperationName.REPLY,
+    OperationName.CANCEL,
+)
 DIRECTORY_TOOLS = {
     OperationName.ADD,
     OperationName.RM,
@@ -34,13 +43,17 @@ DIRECTORY_TOOLS = {
     OperationName.HANDLE_PAUSE,
     OperationName.REPORT_RELEASE,
     OperationName.CHANGES,
+    *MESSAGE_TOOL_NAMES,
 }
 READ_TOOLS = {
     OperationName.STATUS,
     OperationName.DECISIONS,
     OperationName.LIST,
     OperationName.CHANGES,
+    OperationName.INBOX,
 }
+#: The message tools that write: their advice points at ``inbox``.
+MESSAGE_WRITE_TOOLS = {OperationName.SEND, OperationName.REPLY, OperationName.CANCEL}
 #: A CLI command that is a second name for another, so it has no tool of its own.
 CLI_ALIASES = {"remove"}
 
@@ -89,7 +102,12 @@ def test_handle_pause_is_the_only_detached_tool() -> None:
 def test_every_in_process_tool_has_advice_and_handle_pause_has_none() -> None:
     for tool in TOOLS:
         if tool.mode is RunMode.IN_PROCESS:
-            expected = READ_ADVICE if tool.name in READ_TOOLS else WRITE_ADVICE
+            if tool.name is OperationName.SEND:
+                expected = SEND_ADVICE
+            elif tool.name in MESSAGE_WRITE_TOOLS:
+                expected = STATE_CHANGE_ADVICE
+            else:
+                expected = READ_ADVICE if tool.name in READ_TOOLS else WRITE_ADVICE
             assert tool.timeout_advice == expected, tool.name
         else:
             assert tool.timeout_advice is None, tool.name
@@ -174,3 +192,59 @@ def test_a_tool_without_a_directory_strips_and_ignores_nothing() -> None:
 
 def test_the_changes_tool_tells_the_agent_report_text_is_quoted_data() -> None:
     assert QUOTED_DATA_NOTICE in _spec(OperationName.CHANGES).description
+
+
+@pytest.mark.parametrize(
+    "name",
+    [OperationName.LIST, OperationName.STATUS, *MESSAGE_TOOL_NAMES],
+    ids=lambda name: name.value,
+)
+def test_every_tool_that_shows_message_text_carries_the_notice(
+    name: OperationName,
+) -> None:
+    assert QUOTED_DATA_NOTICE in _spec(name).description
+
+
+@pytest.mark.parametrize("name", sorted(MESSAGE_WRITE_TOOLS), ids=lambda n: n.value)
+def test_a_write_tool_says_a_rejection_after_a_timeout_means_the_first_call_landed(
+    name: OperationName,
+) -> None:
+    description = _spec(name).description
+
+    assert f"If `{name.value}` is rejected after a timeout" in description
+    assert "`inbox` shows the state" in description
+
+
+WORST_CASES = {
+    OperationName.SEND: worst_case_seconds(OperationName.SEND),
+    OperationName.INBOX: worst_case_seconds(OperationName.INBOX),
+    OperationName.REPLY: worst_case_seconds(OperationName.REPLY),
+    OperationName.CANCEL: worst_case_seconds(OperationName.CANCEL),
+}
+
+
+@pytest.mark.parametrize("name", MESSAGE_TOOL_NAMES, ids=lambda n: n.value)
+def test_a_message_tool_names_its_worst_case_wait(name: OperationName) -> None:
+    assert f"up to {WORST_CASES[name]:g} s" in _spec(name).description
+
+
+def test_the_send_tool_states_the_id_and_text_limits() -> None:
+    description = _spec(OperationName.SEND).description
+
+    assert str(MAX_ID_LENGTH) in description
+    assert str(MAX_BODY_LENGTH) in description
+
+
+def test_the_message_tools_take_the_request_models_plus_a_directory() -> None:
+    for name in MESSAGE_TOOL_NAMES:
+        spec = _spec(name)
+        schema = input_schema(spec)
+        model_properties = spec.request_model.model_json_schema()["properties"]
+        assert set(schema["properties"]) == {*model_properties, "directory"}
+        assert "directory" in schema["required"]
+
+
+def test_only_the_send_advice_calls_a_repeat_safe() -> None:
+    assert "repeated `send` with the same `id` is safe" in SEND_ADVICE
+    assert "`send`" not in STATE_CHANGE_ADVICE
+    assert "rejected naming the state" in STATE_CHANGE_ADVICE

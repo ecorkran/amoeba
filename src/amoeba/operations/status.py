@@ -27,7 +27,9 @@ from amoeba.operations.members import (
     NotInProgram,
     resolve_member,
 )
+from amoeba.operations.message_sweep import sweep_messages
 from amoeba.operations.question_sweep_scope import sweep_scope
+from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import (
     RejectCode,
     unknown_program_problem,
@@ -42,6 +44,7 @@ from amoeba.operations.status_models import (
     StatusResult,
 )
 from amoeba.operations.status_placement import place_runs, scratch_roots
+from amoeba.operations.status_requests import MemberMessages, read_member_messages
 from amoeba.operations.status_runs import MemberRun, classify_runs
 from amoeba.operations.status_waiting import MemberWaiting, waiting_entries
 from amoeba.store.errors import StoreRowError
@@ -151,6 +154,9 @@ def status(
     if isinstance(scope, ScopeRejected):
         return _rejected(scope.code, scope.problems)
     members = {m.project_id: m for entry in scope for m in entry.members}
+    # Before the reads, so an expired request shows as recorded; a busy store is a
+    # problem text, never a failure (the reads apply effective_state).
+    message_problem = sweep_messages(store, config, deps.clock())
     with store.read() as transaction:
         candidates = sweep_candidates(transaction, list(members))
         rows = latest_rows_by_run(transaction, list(members))
@@ -185,18 +191,33 @@ def status(
     with store.read() as transaction:
         open_rows = open_questions(transaction, list(members))
     waiting = waiting_entries(open_rows, listed)
+    messages = read_member_messages(store, members, names, deps.clock())
     program_of = {
         m.project_id: entry.program_id for entry in scope for m in entry.members
     }
     pruned = deps.prune(store, now=deps.clock(), after_days=config.prune_after_days)
     return StatusResult(
         outcome=StatusOutcome.LISTED,
-        programs=tuple(_program_status(entry, names, runs, waiting) for entry in scope),
+        notice=QUOTED_DATA_NOTICE if _shows_message_text(messages) else None,
+        programs=tuple(
+            _program_status(entry, names, runs, waiting, messages) for entry in scope
+        ),
         unplaced_runs=placement.unplaced,
         closed_now=closed_now_entries(swept, program_of, names),
-        sweep_problem=swept.problem,
+        sweep_problem=_joined(message_problem, swept.problem),
         file_problems=with_calls.problems + pruned.problems,
     )
+
+
+def _joined(*problems: str | None) -> str | None:
+    """The sweep problems that happened, one text, or ``None`` when none did."""
+    found = [problem for problem in problems if problem is not None]
+    return "; ".join(found) if found else None
+
+
+def _shows_message_text(messages: dict[str, MemberMessages]) -> bool:
+    """Whether any member shows a request or a rejected call (other agents' text)."""
+    return any(item.requests or item.rejected_calls for item in messages.values())
 
 
 def _rejected(code: RejectCode, problems: tuple[str, ...]) -> StatusResult:
@@ -223,6 +244,7 @@ def _program_status(
     names: dict[str, str],
     runs: list[MemberRun],
     waiting: list[MemberWaiting],
+    messages: dict[str, MemberMessages],
 ) -> ProgramStatus:
     return ProgramStatus(
         program=entry.program_id,
@@ -237,6 +259,8 @@ def _program_status(
                     for item in waiting
                     if item.member_id == member.project_id
                 ),
+                requests=messages[member.project_id].requests,
+                rejected_calls=messages[member.project_id].rejected_calls,
             )
             for member in entry.members
         ),

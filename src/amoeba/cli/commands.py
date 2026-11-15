@@ -21,6 +21,12 @@ import yaml
 
 from amoeba.cli.exit_codes import EXIT_OK, EXIT_REJECTED
 from amoeba.cli.registration_arguments import add_document, list_document, rm_document
+from amoeba.cli.registration_messages import (
+    cancel_document,
+    inbox_document,
+    reply_document,
+    send_document,
+)
 from amoeba.cli.render.dispatch import render_result
 from amoeba.cli.render.simple import render_handle_pause
 from amoeba.config.home import StateLayout
@@ -59,6 +65,20 @@ def read_request_document(source: str) -> object:
     Raises:
         RequestDocumentError: Unreadable, not UTF-8 or not YAML.
     """
+    text = read_text_source(source)
+    try:
+        return yaml.safe_load(text)
+    except yaml.YAMLError as error:
+        name = STDIN_NAME if source == STDIN_SOURCE else source
+        raise RequestDocumentError(f"{name}: not YAML: {error}") from error
+
+
+def read_text_source(source: str) -> str:
+    """The text of the file at ``source``, or of stdin when it is ``-``.
+
+    Raises:
+        RequestDocumentError: Unreadable or not UTF-8.
+    """
     name = STDIN_NAME if source == STDIN_SOURCE else source
     try:
         raw = (
@@ -69,13 +89,9 @@ def read_request_document(source: str) -> object:
     except OSError as error:
         raise RequestDocumentError(f"{name}: cannot read: {error}") from error
     try:
-        text = raw.decode("utf-8")
+        return raw.decode("utf-8")
     except UnicodeDecodeError as error:
         raise RequestDocumentError(f"{name}: not UTF-8: {error}") from error
-    try:
-        return yaml.safe_load(text)
-    except yaml.YAMLError as error:
-        raise RequestDocumentError(f"{name}: not YAML: {error}") from error
 
 
 def _print_json(document: object) -> None:
@@ -142,6 +158,14 @@ def _document_for(name: OperationName, arguments: argparse.Namespace) -> object:
             return _report_release_document(arguments)
         case OperationName.CHANGES:
             return _with_optional({}, since=arguments.since)
+        case OperationName.SEND:
+            return send_document(arguments, read_text_source)
+        case OperationName.INBOX:
+            return inbox_document(arguments)
+        case OperationName.REPLY:
+            return reply_document(arguments)
+        case OperationName.CANCEL:
+            return cancel_document(arguments)
         case OperationName.HANDLE_PAUSE:
             raise ValueError(f"{name.value} has no request document")
 

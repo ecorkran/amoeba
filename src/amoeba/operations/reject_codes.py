@@ -25,6 +25,28 @@ class RejectCode(StrEnum):
     NOT_A_MEMBER = "not_a_member"
     #: ``correct`` or ``withdraw`` for a commit the member never reported (227 D2).
     NOT_REPORTED = "not_reported"
+    #: ``send`` to a reference that is no active member (240 D3).
+    UNKNOWN_RECIPIENT = "unknown_recipient"
+    #: An explicit ``member`` names someone other than the member the directory is in.
+    MEMBER_MISMATCH = "member_mismatch"
+    #: ``send`` with an id that exists and carries different content (240 D2).
+    ID_REUSED = "id_reused"
+    #: ``send`` again of a request that is done, declined, cancelled or expired.
+    REQUEST_ENDED = "request_ended"
+    #: ``reply`` or ``cancel`` for an id no request has (240 D4).
+    UNKNOWN_REQUEST = "unknown_request"
+    #: ``reply`` by a member the request was not sent to.
+    NOT_ADDRESSEE = "not_addressee"
+    #: ``reply accept`` on a request that is already accepted; names the time.
+    ALREADY_ACCEPTED = "already_accepted"
+    #: A ``reply`` or ``cancel`` the request's current state does not allow.
+    NOT_APPLICABLE = "not_applicable"
+    #: ``send`` whose ``parent`` names no request (240 D8).
+    PARENT_UNKNOWN = "parent_unknown"
+    #: ``send`` whose parent is already ``max_chain_depth`` deep.
+    CHAIN_TOO_DEEP = "chain_too_deep"
+    #: ``send`` by a sender that already has the most requests, all still live.
+    TOO_MANY_OPEN = "too_many_open"
 
 
 def validation_problems(error: ValidationError) -> tuple[str, ...]:

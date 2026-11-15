@@ -8,7 +8,6 @@ so the CLI and the MCP layer pass their input through unchanged.
 
 from __future__ import annotations
 
-import re
 from enum import StrEnum
 from typing import Annotated, Final, Self
 
@@ -17,38 +16,32 @@ from pydantic import (
     ConfigDict,
     Field,
     StrictStr,
-    StringConstraints,
     ValidationError,
     field_validator,
     model_validator,
 )
 
 from amoeba.operations.reject_codes import RejectCode, validation_problems
+from amoeba.operations.release_fields import (
+    Version,
+    bounded_text,
+    full_commit_hash,
+    tag_name,
+)
 from amoeba.operations.set_up_models import FrozenModel
 from amoeba.store.models import Release
 from amoeba.store.row_values import encode_timestamp
 
-#: A full git object name: SHA-1 or SHA-256, in hex.
-FULL_HASH_LENGTHS: Final = (40, 64)
-_HEX: Final = re.compile(r"[0-9a-f]+")
-
 #: The most a report may carry. A report over a limit is rejected as ``malformed``,
 #: naming the limit; nothing is cut. The text goes to other agents' context, so it
 #: has a bound. A release that covers more says so in less text.
-MAX_VERSION_LENGTH: Final = 128
 MAX_CHANGED_LENGTH: Final = 4000
 MAX_TOUCHED_ITEMS: Final = 50
 MAX_TOUCHED_ITEM_LENGTH: Final = 200
 
 
-def _bounded_text(max_length: int) -> StringConstraints:
-    """A stripped, non-empty string of at most ``max_length`` characters."""
-    return StringConstraints(strip_whitespace=True, min_length=1, max_length=max_length)
-
-
-_Version = Annotated[StrictStr, _bounded_text(MAX_VERSION_LENGTH)]
-_Changed = Annotated[StrictStr, _bounded_text(MAX_CHANGED_LENGTH)]
-_TouchedItem = Annotated[StrictStr, _bounded_text(MAX_TOUCHED_ITEM_LENGTH)]
+_Changed = Annotated[StrictStr, bounded_text(MAX_CHANGED_LENGTH)]
+_TouchedItem = Annotated[StrictStr, bounded_text(MAX_TOUCHED_ITEM_LENGTH)]
 
 
 class ReportMode(StrEnum):
@@ -82,7 +75,7 @@ class ReportReleaseRequest(BaseModel):
 
     mode: ReportMode = ReportMode.REPORT
     commit: StrictStr
-    version: _Version | None = None
+    version: Version | None = None
     changed: _Changed | None = None
     touched: (
         Annotated[tuple[_TouchedItem, ...], Field(max_length=MAX_TOUCHED_ITEMS)] | None
@@ -91,25 +84,12 @@ class ReportReleaseRequest(BaseModel):
     @field_validator("commit")
     @classmethod
     def _full_hash(cls, value: str) -> str:
-        commit = value.strip().lower()
-        if len(commit) not in FULL_HASH_LENGTHS or not _HEX.fullmatch(commit):
-            raise ValueError(
-                "must be a full commit hash of "
-                f"{' or '.join(str(length) for length in FULL_HASH_LENGTHS)} hex "
-                "characters, not an abbreviation; `git rev-parse` gives a full hash"
-            )
-        return commit
+        return full_commit_hash(value)
 
     @field_validator("version")
     @classmethod
     def _tag_name(cls, value: str | None) -> str | None:
-        if value is not None and any(
-            character.isspace() or not character.isprintable() for character in value
-        ):
-            raise ValueError(
-                "must be a tag name: no whitespace and no control characters"
-            )
-        return value
+        return tag_name(value)
 
     @field_validator("touched")
     @classmethod

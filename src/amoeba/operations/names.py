@@ -34,6 +34,10 @@ class OperationName(StrEnum):
     RETRACT = "retract"
     REPORT_RELEASE = "report_release"
     CHANGES = "changes"
+    SEND = "send"
+    INBOX = "inbox"
+    REPLY = "reply"
+    CANCEL = "cancel"
 
     @property
     def cli_name(self) -> str:

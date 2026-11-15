@@ -13,11 +13,11 @@ from typing import assert_never
 
 from amoeba.cli.render.text import SEPARATOR, indented, prose_line
 from amoeba.operations.changes_models import (
-    QUOTED_DATA_NOTICE,
     ChangesOutcome,
     ChangesResult,
     ProviderPair,
 )
+from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.report_release_models import (
     ReleaseProblem,
     ReleaseReport,

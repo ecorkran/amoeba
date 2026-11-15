@@ -99,6 +99,45 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "schema_meta.version",
         }
     ),
+    # What agents said to each other and where each request stands: Amoeba is the only
+    # place this exists. A request's state is Amoeba's own, never read from Context
+    # Forge or Squadron.
+    "messages": frozenset(
+        {
+            "messages.message_id",
+            "messages.kind",
+            "messages.from_member",
+            "messages.to_member",
+            "messages.to_program",
+            "messages.parent_id",
+            "messages.depth",
+            "messages.subject",
+            "messages.body",
+            "messages.state",
+            "messages.result",
+            "messages.result_commit",
+            "messages.result_version",
+            "messages.reason",
+            "messages.accepted_at",
+            "messages.created_at",
+            "messages.state_changed_at",
+            "messages.expires_at",
+            "deliveries.seq",
+            "deliveries.member_id",
+            "deliveries.message_id",
+            "deliveries.event",
+            "deliveries.created_at",
+            "message_rejections.id",
+            "message_rejections.member_id",
+            "message_rejections.operation",
+            "message_rejections.to_ref",
+            "message_rejections.message_id",
+            "message_rejections.parent_id",
+            "message_rejections.code",
+            "message_rejections.detail",
+            "message_rejections.created_at",
+        }
+    ),
     # How far the PM has read the decisions.
     "marker": frozenset({"pm_marker.id", "pm_marker.last_seen_seq"}),
 }

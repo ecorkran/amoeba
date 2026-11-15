@@ -11,7 +11,11 @@ import yaml
 from user_configs import CONFIG_CONTRACT as CONTRACT
 from user_configs import example_config_text
 
-from amoeba.config.user_config import ConfigError, load_user_config
+from amoeba.config.user_config import (
+    MAX_REQUEST_OPEN_TTL_HOURS,
+    ConfigError,
+    load_user_config,
+)
 
 TOP_LEVEL_KEYS = [
     "answer_model",
@@ -22,6 +26,8 @@ TOP_LEVEL_KEYS = [
     "answering_wait_seconds",
     "resume_wait_seconds",
     "prune_after_days",
+    "request_open_ttl_hours",
+    "max_chain_depth",
     "default_rules_paths",
     "default_consumed",
     "authorize_items",
@@ -61,6 +67,17 @@ def test_the_documented_example_loads(tmp_path: Path) -> None:
         "merge to main",
         "merge into main",
     )
+
+
+def test_the_examples_request_keys_load_into_the_config(tmp_path: Path) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text(example_config_text(), encoding="utf-8")
+    example = _example()
+
+    config = load_user_config(path)
+
+    assert config.request_open_ttl_hours == example["request_open_ttl_hours"]
+    assert config.max_chain_depth == example["max_chain_depth"]
 
 
 def test_every_documented_key_is_in_the_doc() -> None:
@@ -116,6 +133,18 @@ def _with(key: str, value: object) -> Callable[[dict[str, Any]], None]:
         (_with("prune_after_days", 1.5), "prune_after_days"),
         (_with("prune_after_days", True), "prune_after_days"),
         (_with("prune_after_days", "30"), "prune_after_days"),
+        (_with("request_open_ttl_hours", 0), "request_open_ttl_hours"),
+        (_with("request_open_ttl_hours", -1), "request_open_ttl_hours"),
+        (_with("request_open_ttl_hours", "72"), "request_open_ttl_hours"),
+        (_with("request_open_ttl_hours", 1.5), "request_open_ttl_hours"),
+        (
+            _with("request_open_ttl_hours", MAX_REQUEST_OPEN_TTL_HOURS + 1),
+            "request_open_ttl_hours",
+        ),
+        (_with("max_chain_depth", 0), "max_chain_depth"),
+        (_with("max_chain_depth", -2), "max_chain_depth"),
+        (_with("max_chain_depth", "3"), "max_chain_depth"),
+        (_with("max_chain_depth", True), "max_chain_depth"),
         (_with("answer_model", "a,b"), "answer_model"),
         (_with("check_model", "  "), "check_model"),
         (_with("authorize_items", "none"), "authorize_items"),
@@ -227,3 +256,15 @@ def test_a_positive_whole_number_of_days_is_accepted(
     document["prune_after_days"] = value
 
     assert load_user_config(_write(tmp_path, document)).prune_after_days == value
+
+
+def test_the_longest_request_ttl_is_accepted_and_stated_in_the_contract(
+    tmp_path: Path,
+) -> None:
+    document = _example()
+    document["request_open_ttl_hours"] = MAX_REQUEST_OPEN_TTL_HOURS
+
+    config = load_user_config(_write(tmp_path, document))
+
+    assert config.request_open_ttl_hours == MAX_REQUEST_OPEN_TTL_HOURS
+    assert str(MAX_REQUEST_OPEN_TTL_HOURS) in CONTRACT.read_text(encoding="utf-8")

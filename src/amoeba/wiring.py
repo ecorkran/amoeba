@@ -13,13 +13,9 @@ and ``state_home()``; the store is opened only through ``open_state_store``.
 
 from __future__ import annotations
 
-import json
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Final, assert_never
-
-from pydantic import BaseModel
 
 from amoeba.config.home import (
     AmoebaHomeError,
@@ -29,39 +25,29 @@ from amoeba.config.home import (
     state_layout,
 )
 from amoeba.config.user_config import ConfigError, UserConfig, load_user_config
-from amoeba.operations.answer import AnswerOutcome, AnswerResult, answer
+from amoeba.operations.answer import answer
 from amoeba.operations.answering_run import STDERR_LOG_SUFFIX, STDOUT_LOG_SUFFIX
-from amoeba.operations.changes_models import ChangesOutcome, ChangesResult
-from amoeba.operations.decisions import DecisionsOutcome, DecisionsResult, decisions
+from amoeba.operations.decisions import decisions
 from amoeba.operations.deps import Deps, production_deps
-from amoeba.operations.dismiss import DismissOutcome, DismissResult, dismiss
-from amoeba.operations.list_registry import (
-    DependenciesView,
-    MembersView,
-    ProgramsView,
-)
-from amoeba.operations.list_view import ListResult
-from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult, mark_read
+from amoeba.operations.dismiss import dismiss
+from amoeba.operations.mark_read import mark_read
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.names import Door, OperationName
 from amoeba.operations.processes import start_child
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
-from amoeba.operations.report_release_models import (
-    ReportOutcome,
-    ReportReleaseResult,
-)
 from amoeba.operations.resume import LOG_STAMP_FORMAT, resume_bound_seconds
-from amoeba.operations.retract import RetractOutcome, RetractResult, retract
-from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
+from amoeba.operations.retract import retract
 from amoeba.operations.state_move import open_state_store, prepare_state_home
-from amoeba.operations.status import StatusOutcome, StatusResult, status
+from amoeba.operations.status import status
 from amoeba.store.errors import StoreError
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
+from amoeba.wiring_messages import place_message
 from amoeba.wiring_registry import place_add, place_list, place_rm
 from amoeba.wiring_releases import place_release
+from amoeba.wiring_results import OperationResult, is_rejected, result_document
 
 __all__ = [
     "OPERATIONAL_ERRORS",
@@ -98,23 +84,6 @@ OPERATIONAL_ERRORS: Final = (
     ContextForgeError,
     SquadronError,
     StoreError,
-)
-
-#: What ``invoke`` returns: the in-process operations' results.
-type OperationResult = (
-    SetUpResult
-    | ListResult
-    | ProgramsView
-    | MembersView
-    | DependenciesView
-    | AnswerResult
-    | StatusResult
-    | DecisionsResult
-    | MarkReadResult
-    | DismissResult
-    | RetractResult
-    | ReportReleaseResult
-    | ChangesResult
 )
 
 
@@ -183,7 +152,8 @@ def invoke(
     Opens the store (after the legacy move), places the arguments exactly as the CLI
     always has, and closes the store whether the operation returns or raises.
     ``directory`` is the caller's checkout: required by ``add``, ``rm``, ``list``,
-    ``status``, ``report_release`` and ``changes``, ignored by the others. ``door`` is
+    ``status``, ``report_release``, ``changes`` and the four message operations,
+    ignored by the others. ``door`` is
     the interface that carried the call.
 
     Raises:
@@ -238,6 +208,20 @@ def invoke(
                 return place_release(
                     name,
                     store,
+                    document,
+                    _required_directory(name, directory),
+                    default_deps(layout),
+                )
+            case (
+                OperationName.SEND
+                | OperationName.INBOX
+                | OperationName.REPLY
+                | OperationName.CANCEL
+            ):
+                return place_message(
+                    name,
+                    store,
+                    load_config(),
                     document,
                     _required_directory(name, directory),
                     default_deps(layout),
@@ -310,33 +294,3 @@ def check_deadline(config: UserConfig, deadline_seconds: float) -> None:
         f"take {bound:g} s, which is not below the MCP call deadline of "
         f"{deadline_seconds:g} s; set resume_wait_seconds below {largest:g}"
     )
-
-
-def result_document(result: OperationResult) -> dict[str, object]:
-    """``result`` as the JSON document both doors give: enums are strings."""
-    if isinstance(result, ListResult):
-        return result.document()
-    if isinstance(result, BaseModel):
-        return result.model_dump(mode="json")
-    document: dict[str, object] = json.loads(json.dumps(asdict(result)))
-    return document
-
-
-def is_rejected(result: OperationResult) -> bool:
-    """Whether the operation refused the request (the CLI's exit 1)."""
-    match result:
-        case (
-            SetUpResult(outcome=SetUpOutcome.REJECTED)
-            | ListResult(status=StatusResult(outcome=StatusOutcome.REJECTED))
-            | AnswerResult(outcome=AnswerOutcome.REJECTED)
-            | StatusResult(outcome=StatusOutcome.REJECTED)
-            | DecisionsResult(outcome=DecisionsOutcome.REJECTED)
-            | MarkReadResult(outcome=MarkReadOutcome.REJECTED)
-            | DismissResult(outcome=DismissOutcome.REJECTED)
-            | RetractResult(outcome=RetractOutcome.REJECTED)
-            | ReportReleaseResult(outcome=ReportOutcome.REJECTED)
-            | ChangesResult(outcome=ChangesOutcome.REJECTED)
-        ):
-            return True
-        case _:
-            return False

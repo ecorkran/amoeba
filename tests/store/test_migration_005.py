@@ -8,7 +8,6 @@ import pytest
 
 from amoeba.store import migrations
 from amoeba.store.migrations import (
-    EXPECTED_SCHEMA_VERSION,
     migrate,
     migration_files,
     read_schema_version,
@@ -47,9 +46,12 @@ def test_a_version_four_member_keeps_its_rules_and_reads_named(
     before = connection.execute(MEMBER_BEFORE).fetchall()
     assert read_schema_version(connection) == 4
 
-    assert migrate(connection) == 5
+    with monkeypatch.context() as patch:
+        first_five = migration_files()[:5]
+        patch.setattr(migrations, "migration_files", lambda: first_five)
+        patch.setattr(migrations, "EXPECTED_SCHEMA_VERSION", 5)
+        assert migrate(connection) == 5
 
-    assert EXPECTED_SCHEMA_VERSION == 5
     assert read_schema_version(connection) == 5
     assert connection.execute(MEMBER_BEFORE).fetchall() == before
     assert connection.execute(
@@ -61,7 +63,10 @@ def test_a_value_that_is_not_a_rules_source_is_refused_by_the_check(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     connection = _version_four_store_with_a_member(monkeypatch)
-    migrate(connection)
+    with monkeypatch.context() as patch:
+        first_five = migration_files()[:5]
+        patch.setattr(migrations, "migration_files", lambda: first_five)
+        migrate(connection)
 
     with pytest.raises(sqlite3.IntegrityError):
         connection.execute(

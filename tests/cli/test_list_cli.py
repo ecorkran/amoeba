@@ -11,6 +11,7 @@ from fake_sq import recorded_listing, recorded_warning
 from amoeba.cli.exit_codes import EXIT_ERROR, EXIT_OK, EXIT_USAGE
 from amoeba.cli.main import main
 from amoeba.cli.render.registry import NO_PROGRAMS
+from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from cli.cli_support import (
     PROJECT_ID,
     PROJECT_NAME,
@@ -18,6 +19,7 @@ from cli.cli_support import (
     run_amoeba,
     write_config,
 )
+from cli.message_cli_support import send_request
 
 LISTING = recorded_listing(stderr=recorded_warning())
 
@@ -48,6 +50,24 @@ def test_list_all_json_adds_only_settled(tmp_path: Path) -> None:
 
     assert everything.pop("settled") == []
     assert everything == plain
+
+
+def test_list_and_status_print_the_same_document_with_requests_and_the_notice(
+    tmp_path: Path,
+) -> None:
+    _registered(tmp_path)
+    assert send_request(tmp_path, "ask-1").returncode == EXIT_OK
+
+    listed = run_amoeba(tmp_path, "list", listing=LISTING, as_json=True)
+    status = run_amoeba(tmp_path, "status", listing=LISTING, as_json=True)
+
+    assert listed.returncode == status.returncode == EXIT_OK
+    document = result_of(listed)
+    assert document == result_of(status)
+    assert document["notice"] == QUOTED_DATA_NOTICE
+    (member,) = document["programs"][0]["members"]
+    assert [request["id"] for request in member["requests"]] == ["ask-1"]
+    assert member["rejected_calls"] == []
 
 
 def test_list_text_is_the_status_text(tmp_path: Path) -> None:

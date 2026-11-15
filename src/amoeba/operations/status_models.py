@@ -15,9 +15,10 @@ from pydantic import BaseModel, ConfigDict
 from amoeba.answering.values import DeclineReason
 from amoeba.operations.calls_log import CallEntry
 from amoeba.operations.decisions_models import MemberName
+from amoeba.operations.message_results import RequestDirection
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.store.vocabulary import ClosedReason, ResumeOutcome
+from amoeba.store.vocabulary import ClosedReason, RequestState, ResumeOutcome
 
 
 class _Model(BaseModel):
@@ -105,10 +106,45 @@ class WaitingEntry(_Model):
     next: NextAction | None
 
 
+class RequestEntry(_Model):
+    """An open or accepted request a member sent or received (slice 240, D12)."""
+
+    id: str
+    direction: RequestDirection
+    #: The member at the other end: its project id, and its Context Forge name (null
+    #: when Context Forge no longer lists it).
+    other_member: str
+    other_name: str | None
+    subject: str
+    #: The effective state: an open request past its expiry reads ``expired``.
+    state: RequestState
+    created_at: datetime
+    state_changed_at: datetime
+    parent_id: str | None
+    #: The live requests whose parent is this one: what this request is waiting on.
+    child_ids: tuple[str, ...]
+
+
+class RejectedCall(_Model):
+    """A ``send``, ``reply`` or ``cancel`` the member made that was refused."""
+
+    operation: str
+    code: str
+    #: The recipient as given; ``send`` only.
+    to_ref: str | None
+    message_id: str | None
+    parent_id: str | None
+    detail: str
+    created_at: datetime
+
+
 class MemberStatus(_Model):
     member: MemberName
     runs: tuple[RunEntry, ...]
     waiting_on_pm: tuple[WaitingEntry, ...]
+    requests: tuple[RequestEntry, ...] = ()
+    #: The member's retained rejections, newest first.
+    rejected_calls: tuple[RejectedCall, ...] = ()
 
 
 class ProgramStatus(_Model):
@@ -157,6 +193,9 @@ class StatusResult(_Model):
 
     outcome: StatusOutcome
     rejection: RejectCode | None = None
+    #: Says request subjects and rejected-call recipients are other agents' text; set
+    #: when any member shows a request or a rejected call, else null (240 D11).
+    notice: str | None = None
     programs: tuple[ProgramStatus, ...] = ()
     unplaced_runs: tuple[UnplacedRunEntry, ...] = ()
     #: What this call closed, so the PM sees each automatic closure once (D12).

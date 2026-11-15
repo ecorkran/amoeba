@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from amoeba.operations.release_fields import MAX_VERSION_LENGTH
 from amoeba.operations.report_release_models import (
     MAX_CHANGED_LENGTH,
     MAX_TOUCHED_ITEM_LENGTH,
     MAX_TOUCHED_ITEMS,
-    MAX_VERSION_LENGTH,
     ReportMode,
     ReportReleaseRequest,
 )

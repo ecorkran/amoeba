@@ -14,7 +14,7 @@ import pytest
 from user_configs import example_config_text
 from wiring_support import TrackedStore, is_closed, record_opened_stores
 
-from amoeba import wiring, wiring_releases
+from amoeba import wiring, wiring_messages, wiring_releases
 from amoeba.cli import commands
 from amoeba.cli import main as cli
 from amoeba.config.home import AmoebaHomeError, config_path, state_layout
@@ -31,7 +31,20 @@ from amoeba.operations.dismiss import DismissResult
 from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
 from amoeba.operations.members import ContextForgeError
+from amoeba.operations.message_models import (
+    CancelOutcome,
+    InboxOutcome,
+    ReplyOutcome,
+    SendOutcome,
+)
+from amoeba.operations.message_results import (
+    CancelResult,
+    InboxResult,
+    ReplyResult,
+    SendResult,
+)
 from amoeba.operations.names import Door, OperationName
+from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.report_release_models import (
     ReleaseReport,
     ReportOutcome,
@@ -229,6 +242,10 @@ def test_invoke_refuses_handle_pause_naming_it(tmp_path: Path) -> None:
         OperationName.STATUS,
         OperationName.REPORT_RELEASE,
         OperationName.CHANGES,
+        OperationName.SEND,
+        OperationName.INBOX,
+        OperationName.REPLY,
+        OperationName.CANCEL,
     ],
 )
 def test_invoke_requires_a_directory_for_the_directory_operations(
@@ -343,3 +360,110 @@ def test_the_changes_document_has_the_designed_shape() -> None:
     assert pair["provider"] == {"id": "provider", "name": "core"}
     assert pair["consumed"] == "from_release"
     assert pair["releases"][0]["touched"] == ["one"]
+
+
+def _message_result(name: OperationName) -> wiring.OperationResult:
+    """A not-rejected result of the message operation ``name``."""
+    match name:
+        case OperationName.SEND:
+            return SendResult(
+                outcome=SendOutcome.SENT,
+                notice="n",
+                rejection=None,
+                request=None,
+                problems=(),
+            )
+        case OperationName.INBOX:
+            return InboxResult(
+                outcome=InboxOutcome.LISTED,
+                notice="n",
+                rejection=None,
+                member="m",
+                since=None,
+                as_of_seq=0,
+                requests=(),
+                deliveries=(),
+                problems=(),
+            )
+        case OperationName.REPLY:
+            return ReplyResult(
+                outcome=ReplyOutcome.APPLIED,
+                notice="n",
+                rejection=None,
+                request=None,
+                problems=(),
+            )
+        case _:
+            return CancelResult(
+                outcome=CancelOutcome.CANCELLED,
+                notice="n",
+                rejection=None,
+                request=None,
+                problems=(),
+            )
+
+
+MESSAGE_OPERATIONS = (
+    OperationName.SEND,
+    OperationName.INBOX,
+    OperationName.REPLY,
+    OperationName.CANCEL,
+)
+
+
+@pytest.mark.parametrize("name", MESSAGE_OPERATIONS, ids=lambda name: name.value)
+def test_invoke_gives_each_message_operation_the_directory_and_the_document(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, name: OperationName
+) -> None:
+    seen: list[tuple[object, Path]] = []
+
+    def recording(*arguments: object, directory: Path, **_keywords: object) -> object:
+        seen.append((arguments[-1], directory))
+        return _message_result(name)
+
+    monkeypatch.setattr(wiring_messages, name.value, recording)
+
+    wiring.invoke(name, {"marker": 1}, tmp_path, Door.CLI)
+
+    assert seen == [({"marker": 1}, tmp_path)]
+
+
+@pytest.mark.parametrize("name", MESSAGE_OPERATIONS, ids=lambda name: name.value)
+def test_a_message_result_is_rejected_only_when_its_outcome_is(
+    name: OperationName,
+) -> None:
+    rejected = {
+        OperationName.SEND: SendResult.rejected(RejectCode.MALFORMED, ("p",)),
+        OperationName.INBOX: InboxResult.rejected(
+            RejectCode.MALFORMED, ("p",), since=None
+        ),
+        OperationName.REPLY: ReplyResult.rejected(RejectCode.MALFORMED, ("p",)),
+        OperationName.CANCEL: CancelResult.rejected(RejectCode.MALFORMED, ("p",)),
+    }
+
+    assert wiring.is_rejected(rejected[name])
+    assert not wiring.is_rejected(_message_result(name))
+
+
+def test_the_message_documents_are_json_with_enums_as_strings() -> None:
+    sent = wiring.result_document(_message_result(OperationName.SEND))
+    listed = wiring.result_document(_message_result(OperationName.INBOX))
+
+    assert sent == {
+        "outcome": "sent",
+        "notice": "n",
+        "rejection": None,
+        "request": None,
+        "problems": [],
+    }
+    assert set(listed) == {
+        "outcome",
+        "notice",
+        "rejection",
+        "member",
+        "since",
+        "as_of_seq",
+        "requests",
+        "deliveries",
+        "problems",
+    }

@@ -59,6 +59,10 @@ def test_the_operation_names_are_the_ones_the_contract_lists() -> None:
         "retract",
         "report_release",
         "changes",
+        "send",
+        "inbox",
+        "reply",
+        "cancel",
     }
 
 
@@ -122,6 +126,10 @@ def test_every_command_takes_json_after_its_name() -> None:
         "retract": ["retract", "1", "--reason", "x"],
         "report-release": ["report-release"],
         "changes": ["changes"],
+        "send": ["send"],
+        "inbox": ["inbox"],
+        "reply": ["reply", "an-id", "accept"],
+        "cancel": ["cancel", "an-id"],
     }
 
     assert set(minimal) == {name.cli_name for name in OperationName}
