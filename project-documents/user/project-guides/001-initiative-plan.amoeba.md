@@ -54,7 +54,7 @@ Splitting it again (say, questions in one initiative and programs in another) wo
    - **Waking:** a configured per-member command started when mail lands and nobody is working in that repo. This is the last slice.
    - **Release reports** also drop a note in each consumer's inbox.
 
-   Out of scope: ordering across a chain, and Amoeba deciding what work to do. The slice plan waits for the PM's review of the architecture. Dependencies: [220]. Status: in_progress
+   Out of scope: ordering across a chain, and Amoeba deciding what work to do. Slice plan: `240-slices.agent-messaging.md` (240 requests, 241 push and presence, 242 hold and release, 243 notes, 244 waking). Dependencies: [220]. Status: in_progress
 
 ## Cross-Initiative Dependencies
 

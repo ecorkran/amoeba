@@ -7,7 +7,7 @@ component: agent-messaging
 initiative: agent-messaging
 parent: ../project-guides/001-initiative-plan.amoeba.md
 dependencies: [220-arch.program-tool]
-relatedSlices: []
+relatedSlices: [240, 241, 242, 243, 244]
 riskLevel: medium
 audience: [human, ai]
 description: Architecture for messages between agents in different repos, for any agent and any UI. Messages are durable rows in the Amoeba store. Requests go to a member repo, and notes go to a member or a whole program. Every agent polls its repo's inbox at moments named in its rules file. Amoeba's MCP server also pushes new mail to clients that act on it. A run paused on a request resumes when the request is done, and a repo nobody is working in can be woken by a configured command. Revised 20261114 from the first architecture review.
