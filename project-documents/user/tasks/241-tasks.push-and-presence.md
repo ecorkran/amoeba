@@ -12,7 +12,7 @@ projectState: Slices 220 to 229 are merged on main. Store schema version 5 (migr
   integrated. Slices 243 and 244 read the shapes this slice fixes.
 dateCreated: 20261115
 dateUpdated: 20261116
-status: in_progress
+status: complete
 turns: 14
 promptTokens: 678791
 cachedTokens: 597644
