@@ -15,6 +15,7 @@ from amoeba import wiring
 from amoeba.config.home import HOME_VARIABLE
 from amoeba.mcp import server
 from amoeba.mcp.detached import AmoebaScriptMissing
+from amoeba.mcp.presence import PresenceDeps
 from amoeba.operations.mark_read import MarkReadResult
 from amoeba.operations.names import Door, OperationName
 from amoeba.store.errors import StoreRelocateError
@@ -50,7 +51,7 @@ class _Serve:
         self.moved_when_reached: bool | None = None
         self._world = world
 
-    def __call__(self) -> None:
+    def __call__(self, deps: PresenceDeps) -> None:
         self.reached = True
         if self._world is not None:
             self.moved_when_reached = (
@@ -97,9 +98,9 @@ def test_the_legacy_state_is_moved_before_the_server_serves(
         order.append("prepare")
         real_prepare()
 
-    def recording_serve() -> None:
+    def recording_serve(deps: PresenceDeps) -> None:
         order.append("serve")
-        serve()
+        serve(deps)
 
     monkeypatch.setattr(server, "resolve_amoeba_script", lambda: SCRIPT)
     monkeypatch.setattr(wiring, "prepare_home", recording_prepare)

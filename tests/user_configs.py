@@ -22,10 +22,17 @@ def example_config_text() -> str:
     return match.group(1)
 
 
-def _example_integer(key: str) -> int:
-    """One integer key of the contract's example, so its value lives only there."""
+def _example_number(key: str) -> int | float:
+    """One numeric key of the contract's example, so its value lives only there."""
     document: dict[str, Any] = yaml.safe_load(example_config_text())
     value = document[key]
+    assert isinstance(value, int | float), f"the example's {key} is not a number"
+    return value
+
+
+def _example_integer(key: str) -> int:
+    """One integer key of the contract's example, so its value lives only there."""
+    value = _example_number(key)
     assert isinstance(value, int), f"the example's {key} is not an integer"
     return value
 
@@ -65,6 +72,9 @@ def user_config(
         prune_after_days=30,
         request_open_ttl_hours=_example_integer("request_open_ttl_hours"),
         max_chain_depth=_example_integer("max_chain_depth"),
+        notify_poll_seconds=_example_number("notify_poll_seconds"),
+        session_heartbeat_seconds=_example_number("session_heartbeat_seconds"),
+        session_stale_seconds=_example_number("session_stale_seconds"),
         default_rules_paths=("CLAUDE.md", "AGENTS.md"),
         default_consumed=ConsumedMode.FROM_SOURCE,
         authorize_items=authorize_items,

@@ -14,12 +14,14 @@ import json
 import logging
 import sys
 from collections.abc import Mapping
-from typing import Any, Final
+from functools import partial
+from typing import Any, Final, NoReturn
 
 import anyio
 import anyio.to_thread
 import mcp_types as types
 from mcp.server import Server, ServerRequestContext
+from mcp.server.connection import Connection
 from mcp.server.stdio import stdio_server
 
 from amoeba import wiring
@@ -34,6 +36,15 @@ from amoeba.mcp.in_process import (
     CallTimedOut,
     run_in_process,
 )
+from amoeba.mcp.inbox_resource import initialization_options, register_inbox_resource
+from amoeba.mcp.pinned_loop import serve_pinned
+from amoeba.mcp.presence import (
+    PresenceDeps,
+    PresenceState,
+    SessionTiming,
+    ToolPresence,
+)
+from amoeba.mcp.presence_task import run_presence
 from amoeba.mcp.tools import (
     TOOLS,
     RequestError,
@@ -42,6 +53,7 @@ from amoeba.mcp.tools import (
     input_schema,
     prepare_arguments,
 )
+from amoeba.wiring_presence import StoreOpener
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +94,10 @@ INSTRUCTIONS: Final = (
     "- A request sent to this repo: `reply` with `accept` before working, `decline` "
     "with a reason if this repo's rules do not settle it, `done` with the result and "
     "the commit or version. `cancel` ends a request you no longer need, by its `id`.\n"
+    "- Push: when this repo gets mail, an event may arrive as "
+    '`<channel source="amoeba">`. It says only that mail arrived, never what it '
+    "says. The response is to call `inbox`, passing the `as_of_seq` your last "
+    "`inbox` call gave, or no `since` if you have none.\n"
     "- `handle_pause` is normally started by Squadron's pause hook, not by you. It "
     "starts the work and returns a receipt; its result lands in the receipt's "
     "stdout log."
@@ -129,21 +145,26 @@ async def _run(
 
 
 async def call_tool(
-    name: str, arguments: Mapping[str, object] | None
+    name: str, arguments: Mapping[str, object] | None, presence: ToolPresence
 ) -> types.CallToolResult:
     """Run the tool ``name``; every outcome is a result, never an exception.
 
     This is the process boundary: the expected failures become ``isError`` texts
     (D7), and anything else is logged and reported as an internal error while the
-    server keeps serving.
+    server keeps serving. An ``inbox`` call that completes without error may confirm
+    push (slice 241, D6).
     """
+    logger.info("tool %s called", name)
     spec = _spec_named(name)
     if spec is None:
         return _error(f"unknown tool: {name}")
     try:
         document = await _run(spec, arguments)
         # Serialized in a thread: a long ``decisions`` listing is not loop-sized work.
-        return await anyio.to_thread.run_sync(_ok, document)
+        result = await anyio.to_thread.run_sync(_ok, document)
+        if spec.name is wiring.OperationName.INBOX:
+            presence.inbox_called()
+        return result
     except RequestError as error:
         return _error(f"RequestError: {error}")
     except CallTimedOut as error:
@@ -155,14 +176,9 @@ async def call_tool(
         return _error(f"internal error: {error}")
 
 
-async def _on_call_tool(
-    ctx: ServerRequestContext[Any], params: types.CallToolRequestParams
-) -> types.CallToolResult:
-    return await call_tool(params.name, params.arguments)
-
-
-def build_server() -> Server[Any]:
-    """The MCP server: one tool per ``TOOLS`` row, no input validation by the SDK.
+def build_server(presence: ToolPresence, open_store: StoreOpener) -> Server[Any]:
+    """The MCP server: one tool per ``TOOLS`` row, no input validation by the SDK,
+    and the ``amoeba://inbox`` resource over ``presence`` (slice 241, D5).
 
     The published tools, with their schemas, are built once here, not per request.
     """
@@ -182,28 +198,62 @@ def build_server() -> Server[Any]:
     ) -> types.ListToolsResult:
         return published
 
-    return Server(
+    async def on_call_tool(
+        ctx: ServerRequestContext[Any], params: types.CallToolRequestParams
+    ) -> types.CallToolResult:
+        return await call_tool(params.name, params.arguments, presence)
+
+    server: Server[Any] = Server(
         SERVER_NAME,
         instructions=INSTRUCTIONS,
         on_list_tools=on_list_tools,
-        on_call_tool=_on_call_tool,
+        on_call_tool=on_call_tool,
     )
+    register_inbox_resource(server, presence.state, open_store)
+    return server
 
 
-async def _serve() -> None:
-    server = build_server()
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream, write_stream, server.create_initialization_options()
+async def _serve(deps: PresenceDeps) -> None:
+    """Serve tools, with presence beside the loop in its own task (slice 241, D1)."""
+    state = PresenceState(started_at=deps.clock())
+    server = build_server(ToolPresence(state, deps.clock), deps.open_store)
+
+    async def presence(connection: Connection) -> None:
+        await run_presence(connection, state, deps)
+
+    async with stdio_server() as streams, server.lifespan(server) as lifespan_state:
+        await serve_pinned(
+            server,
+            streams,
+            initialization_options(server),
+            presence,
+            lifespan_state=lifespan_state,
         )
 
 
-def serve() -> None:
+def serve(deps: PresenceDeps) -> None:
     """Serve over stdio until the client closes its end."""
-    anyio.run(_serve)
+    anyio.run(_serve, deps)
 
 
-def _refuse_to_start(error: Exception) -> None:
+def _presence_deps(config: wiring.UserConfig) -> PresenceDeps:
+    """The real store opener, ``cf`` runner and clock, and the config's timing."""
+    layout = wiring.state_layout()
+    deps = wiring.default_deps(layout)
+    timing = SessionTiming(
+        notify_poll_seconds=config.notify_poll_seconds,
+        session_heartbeat_seconds=config.session_heartbeat_seconds,
+        session_stale_seconds=config.session_stale_seconds,
+    )
+    return PresenceDeps(
+        open_store=partial(wiring.open_store, layout),
+        cf_run=deps.cf_run,
+        clock=deps.clock,
+        timing=timing,
+    )
+
+
+def _refuse_to_start(error: Exception) -> NoReturn:
     sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
     raise SystemExit(EXIT_START_FAILED)
 
@@ -213,8 +263,9 @@ def main() -> None:
 
     Each failure to start is one stderr line, which the client shows, and a non-zero
     exit: a missing ``amoeba`` script, a failed state move (the next session start
-    tries again), or a config whose ``resume_wait_seconds`` is too large for the call
-    deadline.
+    tries again), a config missing a key (the push timing keys included), or one
+    whose ``resume_wait_seconds`` is too large for the call deadline. The config is
+    read here, before the event loop starts.
     """
     logging.basicConfig(
         stream=sys.stderr,
@@ -224,7 +275,9 @@ def main() -> None:
     try:
         resolve_amoeba_script()
         wiring.prepare_home()
-        wiring.check_deadline(wiring.load_config(), MCP_CALL_DEADLINE_SECONDS)
+        config = wiring.load_config()
+        wiring.check_deadline(config, MCP_CALL_DEADLINE_SECONDS)
+        deps = _presence_deps(config)
     except (AmoebaScriptMissing, wiring.DeadlineError, *wiring.OPERATIONAL_ERRORS) as e:
         _refuse_to_start(e)
-    serve()
+    serve(deps)

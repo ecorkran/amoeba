@@ -9,8 +9,8 @@ interfaces:
 - 243
 - 244
 dateCreated: 20261115
-dateUpdated: 20261115
-status: not_started
+dateUpdated: 20261116
+status: in_progress
 turns: 38
 promptTokens: 3541923
 cachedTokens: 3353387
@@ -61,7 +61,7 @@ User value. A live Claude Code session acts on a request when it arrives, not at
 ### Prerequisites
 - 240 built and integrated: `deliveries` with its `(member_id, seq)` index, `StatusResult`/`MemberStatus` with `requests`, `inbox` and the live store at schema 6. 241 changes no 240 function or signature.
 - Claude Code installed and logged in, for the live test only. Observed 20261115: 2.1.318.
-- `mcp>=2.3,<3`. Observed 20261115: 2.3.0.
+- `mcp>=2.3,<3`. Observed 20261115: 2.3.0. The range admits 2.x minor releases, and `pinned_loop.py` imports SDK internals (`mcp.server.runner`, `mcp.shared.jsonrpc_dispatcher`, `mcp.shared.transport_context`) with untyped streams, so a minor bump can move them without a type error. `tests/mcp_server/test_protocol_pin.py` runs in the default suite (CI included) and is what catches that drift. Observed 20261116: `serve_pinned` read against the installed 2.3.0 `serve_loop` builds the same dispatcher (`initialize` inline, default `raise_handler_exceptions`), the same `Connection.for_loop` and the same `serve_connection` call, and adds only the background task group.
 
 ### Interfaces Required
 - From 240: `deliveries(seq, member_id, message_id, event, created_at)`, `messages(from_member, to_member, kind)`, `highest_assigned_seq(transaction)` (the number `inbox` returns as `as_of_seq`), `MemberStatus`, and the `inbox` tool name, which `call_tool` watches for push confirmation (D6).
@@ -75,21 +75,25 @@ User value. A live Claude Code session acts on a request when it arrives, not at
 ```
 amoeba-mcp main ──► mcp/pinned_loop.py ──► serve_connection (handshake-only)
                          │
-                         └─ task group ─► mcp/presence.py     member, session row, heartbeat
-                                          mcp/inbox_watcher.py push check ─► mcp/channel_event.py
-                                          mcp/inbox_resource.py resources/list|read|subscribe
+                         └─ task group ─► mcp/presence_task.py run_presence: resolve, then
+                                            ├─ mcp/presence.py      state, member, heartbeat, confirmation
+                                            └─ mcp/inbox_watcher.py push check ─► mcp/channel_event.py
+                                          mcp/inbox_resource.py resources/list|read|subscribe|unsubscribe
                                                   │
-                         store/sessions.py · store/sql_sessions.py · store/push_reads.py
+                         wiring_presence.py ─► store/sessions.py · store/sql_sessions.py · store/push_reads.py
 ```
 
 - `mcp/pinned_loop.py`: `serve_pinned(server, streams, init_options, background)`. Builds the dispatcher and `Connection.for_loop`, starts `background(connection)` in a task group, runs `serve_connection`, cancels the background on return. It mirrors the SDK's `serve_loop` (which does not expose its connection) and nothing else.
-- `mcp/presence.py`: `PresenceState` (member id or none, set once, read by the resource handlers), `resolve_presence` (D3), the heartbeat loop and `note_inbox_called`, which `call_tool` invokes after a successful `inbox` (D6).
+- `mcp/presence.py`: `PresenceState` (member id or none, set once, read by the resource handlers), `resolve_presence` (D3), the heartbeat loop, `note_event_attempted` and `note_inbox_called`, and `ToolPresence`, through which `call_tool` reports a successful `inbox` (D6).
+- `mcp/presence_task.py`: `run_presence`, the background task: resolution, then the heartbeat and push loops in one child task group, its one top-level handler, and the shielded exit delete (D2).
 - `mcp/inbox_watcher.py`: the push loop (D2).
 - `mcp/channel_event.py`: a pure function from push rows to the event's params (D4). No I/O, so a test checks every field.
-- `mcp/inbox_resource.py`: the three resource handlers (D5).
+- `mcp/inbox_resource.py`: the four resource handlers (list, read, subscribe, unsubscribe; D5), `register_inbox_resource`, which adds them to the server (and so declares `resources: {subscribe: true}`), and `initialization_options`, which declares the channel capability.
+- `wiring_presence.py`: the synchronous bodies the worker threads run (member lookup, heartbeat, exit delete, the push reads, `as_of_seq`) and the types presence passes around. `amoeba.mcp` reaches nothing but `wiring` and the operations' types (226 D10), so the store is reached through this module, beside the other `wiring_*` modules.
+- `operations/status_sessions.py`: the sessions `status` shows, read in their own transaction.
 - `store/sessions.py`: `upsert_session`, `delete_session`, `prune_stale_sessions`, `live_sessions`, `live_member_ids`, with one `LIVE_SESSION` predicate constant in `store/sql_sessions.py`. `store/push_reads.py`: `member_high_seq` and `push_rows_after`. Rows are frozen dataclasses in `store/models.py` (`Session`, `PushRow`). The store imports nothing from `operations` or `mcp`.
 - `operations/status_models.py`: `SessionEntry`; `MemberStatus` gains `sessions`.
-- Each file stays near 300 lines. `server.py` (221 lines) only swaps `server.run` for `serve_pinned` and adds the capabilities and handlers.
+- Each file stays near 300 lines. `server.py` (221 lines before this slice, 283 after) only swaps `server.run` for `serve_pinned`, adds the capabilities and handlers, and threads `ToolPresence` to `call_tool`.
 
 ### Data Flow
 
@@ -125,7 +129,7 @@ The push loop and the heartbeat loop are two tasks, so a store wait in one does 
 - The push check is one indexed read, `SELECT MAX(seq) FROM deliveries WHERE member_id = ?`, a few milliseconds.
 - `StoreBusyError` in a push tick, the baseline read or a heartbeat: logged at WARNING once per run of failures, and the next tick or beat retries. This is a specific exception with a stated reason: push is a hint, and polling is the floor. If beats keep failing past `session_stale_seconds`, `list` stops showing the session (D6), and the first beat that succeeds re-creates the row.
 - Any other failure ends presence: a `StoreError` (corrupt, schema) from either loop, a `ContextForgeError` or `StoreError` during member resolution (D3), and anything else the task raises (an unreadable working directory, a bad config, a bug), including the exception group the child tasks raise. The background task shares its task group with `serve_connection`, so an escaping exception would cancel the loop and end every tool. Its one top-level handler therefore catches `Exception` (not `BaseException`, so cancellation passes), as `call_tool` does at its boundary: it calls `logger.exception`, the child tasks are cancelled, and the row is deleted (if that delete fails too, the row goes stale, D6). The server keeps serving its tools, which report their own errors. Presence is removed rather than left running, so `list` never shows a live session that has no push.
-- `Connection.notify` never raises: a send to a closed stream is dropped with a debug log (read in `mcp/server/connection.py`, 2.3.0, and unproven until the notify test in the success criteria exists). That happens only when the client's end is closed, and `serve_connection` returns right after, so nothing retries. The INFO line for an event therefore says `channel event attempted`, and does not claim delivery.
+- `Connection.notify` drops a send to a closed stream with a debug log, for `BrokenResourceError` and `ClosedResourceError` only; any other exception it raises reaches the top-level handler (read in `mcp/server/connection.py`, 2.3.0, and pinned by `tests/mcp_server/test_inbox_watcher.py`). That happens only when the client's end is closed, and `serve_connection` returns right after, so nothing retries. The INFO line for an event therefore says `channel event attempted`, and does not claim delivery.
 - A baseline taken after the member resolves can miss mail that arrived between the agent's first `inbox` call and that moment, a window of one `cf` call. Polling covers it.
 - Push fires on deliveries. An expiry becomes a delivery when a sweep records it (240 D6), so an expiry no write or `list` has swept is seen at the next poll, not pushed.
 
@@ -135,7 +139,7 @@ Status: decided
 `resolve_member(store, Path.cwd(), cf_run)` runs once, in a worker thread, after the handshake. Claude Code starts a stdio server in the session's project directory.
 - A `Member`: presence and push for it.
 - `NotInProgram` or `NotAProject`: the server serves its tools exactly as today. One INFO line says the directory is not a member. No row, no loop. After `amoeba add` in that repo, the exit is reconnecting the server (`/mcp`) or starting a new session.
-- `ContextForgeError`, or a `StoreError` in the lookup: the same as not a member, through D2's top-level handler (`logger.exception`, no row, no loop). The `cf` call is bounded by `CF_GET_TIMEOUT_SECONDS` (30 s): `run_cf` returns a timeout as a `CfCallFailed` value, and `resolve_member` raises it as `ContextForgeError`. The tools still work, and `list` shows the repo with no live session. The exit is reconnecting (`/mcp`) or a new session.
+- `ContextForgeError`, or a `StoreError` in the lookup: the same as not a member, through D2's top-level handler (`logger.exception`, no row, no loop). The `cf` call is bounded by `CF_GET_TIMEOUT_SECONDS` (30 s): `run_cf` returns a timeout as a `CfCallFailed` value, and `resolve_member` raises it as `ContextForgeError`. The tools still work, and `list` shows the repo with no live session. The exit is reconnecting (`/mcp`) or a new session. Resolution is one-shot by design: there is no retry, and `list` cannot tell a failed lookup from a repo with no agent running. The signal is the ERROR line with its traceback in the server's log. Both failures are rare (a local `cf` call and a local store), so one-shot resolution with a reconnect as the exit is accepted rather than adding a retry loop or a stored unresolved state.
 - Capabilities are fixed at `initialize` and cannot wait for this answer, so every server declares the channel capability and the resources capability, and a non-member server never sends. `resources/list` returns an empty list there. This differs from the plan's "today's tools" only in the declared capabilities.
 - A member removed with `rm` while its server runs keeps heartbeating. `list` shows live sessions only under active members, so it shows nothing; a member re-added later is live again at once, which is true.
 
@@ -181,12 +185,14 @@ Status: decided
 ### D8 — `list` and `status`
 Status: decided
 
-`MemberStatus` gains `sessions`: each live session's `client`, `directory`, `started_at`, `heartbeat_at` and `push_confirmed_at`, oldest first. The text renderer adds a **Live sessions** section per member that has any: `<client>  <directory>  up <age>  last beat <age> ago  push confirmed|push unconfirmed`, so the PM can see which sessions hold off waking. A member with none shows no section. Sessions do not count as "waiting on you", so `Nothing needs you.` is unchanged. They are not other repos' text, so they do not set the notice (240 D11). `list -j` still equals the `status` document.
+`MemberStatus` gains `sessions`: each live session's `client`, `directory`, `started_at`, `heartbeat_at` and `push_confirmed_at`, ordered by `started_at` then `session_id`. The text renderer adds a **Live sessions** section per member that has any: `<client>  <directory>  up <age>  last beat <age> ago  push confirmed|push unconfirmed`, so the PM can see which sessions hold off waking. A member with none shows no section. Sessions do not count as "waiting on you", so `Nothing needs you.` is unchanged. They are not other repos' text, so they do not set the notice (240 D11). `list -j` still equals the `status` document.
 
 ### D9 — Launch, registration and docs
 Status: decided
 
-What is decided is the order of forms and the `BLOCKED:` stop below. Which form is adopted is the output of step 1 of the Development Approach; until it runs, the project `.mcp.json` is the working assumption.
+What is decided is the order of forms and the `BLOCKED:` stop below. Which form is adopted is the output of step 1 of the Development Approach.
+
+**Observed 20261116 (Claude Code 2.1.318, then 2.1.325; task 1.2).** The project `.mcp.json` form registers the channel: a throwaway server declaring `experimental["claude/channel"]` sent one `notifications/claude/channel` event (`content`, `meta`) after `initialized`, the session showed `← <server>: <content>`, and the model called that server's tool with nothing typed. The client opened with a `server/discover` probe for 2026-07-28 and, answered `Method not found`, sent `initialize` at 2025-11-25 (D1). It is adopted; `--mcp-config` and the user-scope install were not needed and were not tried. Start-up screens appear in this order: folder trust ("Quick safety check", default "No, exit"), project-server consent ("New MCP server found in this project: <name>", default "Continue without using this MCP server"), then the development-channel warning (default "I am using this for local development"). The channels reference (read 20261116) agrees with D4 and this section; no correction to them.
 
 **Registration.** For each repo that should get push, a project `.mcp.json` naming `amoeba-mcp`, written by `claude mcp add --scope project amoeba -- amoeba-mcp` run in the repo (an agent in the repo commits it, as it does the rules blocks). This is the one form the channels reference documents for `server:<name>` ("a bare `.mcp.json` server"). Neither the channels reference nor the CLI reference says whether `server:amoeba` also names a user-scope server, so the design does not rely on it. The existing user-scope install (`claude mcp add --scope user`) stays for sessions that do not want push; both use the name `amoeba`, so a session loads one server.
 
@@ -198,6 +204,7 @@ Status: decided
 `tests/live/channels` drives a real interactive `claude --dangerously-load-development-channels server:amoeba` in a pseudo-terminal (`pty`, standard library), with a throwaway `AMOEBA_HOME`, two fixture repos through the real `cf`, and a launcher script that runs `amoeba-mcp` with its stderr appended to a file. The receiving fixture repo carries a `.mcp.json` of the D9 form, naming the launcher as its command.
 - The harness answers each known start-up screen (development-channel warning, folder trust, MCP server consent) by matching its text, and fails with the last screen contents when a screen is unknown or the next one does not appear within `STARTUP_SCREEN_WAIT_SECONDS` (60). The wait for `tool inbox called` is `INBOX_CALL_WAIT_SECONDS` (120: one poll interval plus a model turn), and the wait for a killed server's row to read as gone is `session_stale_seconds` plus `STALE_MARGIN_SECONDS` (5). Each is a constant in the harness module and each failure reports what the test was waiting for and the last screen.
 - The model comes from a required live setting (`AMOEBA_LIVE_CHANNEL_MODEL`, as the other live tiers' model settings), and the `inbox` tool is pre-allowed for the session.
+- Claude Code's login is held per config directory (a throwaway `CLAUDE_CONFIG_DIR` starts logged out, observed 20261116), so the session uses the operator's Claude config with `--setting-sources project,local`: the operator's user settings (hooks, permission mode) do not apply, and the consent screen shows as it does for an operator. The server is registered only in the fixture directory. The only write to the operator's config is Claude Code's own folder-trust record for each throwaway directory. `DISABLE_AUTOUPDATER=1` keeps a test run from updating the installed Claude Code (an unguarded run updated 2.1.318 to 2.1.325).
 - Evidence is the server's stderr, which gains three INFO lines: the negotiated protocol version and client name at `initialized`; `channel event attempted` with `first_seq`, `last_seq` and `count` (a diagnostic; the test's proof of delivery is the next line); and `tool <name> called` at the start of every tool call (the name only). The test sends a request from the other repo with `amoeba send`, then waits for `tool inbox called` with no prompt typed.
 - The config uses short intervals (`notify_poll_seconds` 1, `session_heartbeat_seconds` 1, `session_stale_seconds` 3) and three sessions run in turn:
   - In member repo `cf-s` (with the D9 `.mcp.json`): `amoeba list -j` shows a live session under `cf-s` with its directory. The test sends a request from `sq-s` with `amoeba send --to cf-s --id sq-1 --subject "Need X" --body "Please add X"`, and the server log gets `tool inbox called` with no prompt typed. Within `session_heartbeat_seconds` plus `STALE_MARGIN_SECONDS`, `amoeba list -j` shows that session with `push_confirmed_at` set. After a clean exit, `amoeba list -j` shows no session.
@@ -215,6 +222,8 @@ The docs step amends the architecture and plan entry so none stays a difference.
 - The serve loop is `serve_pinned`, not `server.run`, and the watcher runs beside it, not beside `server.run` as the plan and architecture say. The protocol pin is that loop choice, not "the SDK's version negotiation" (D1).
 - Stale sessions are pruned by every server's heartbeat, not by the sweep (D6). 240's sweep is unchanged.
 - Presence feeds waking only through push-confirmed sessions (D6): a session suppresses a wake once its agent has answered a channel event, and `list` shows every serving session with whether it is confirmed. The architecture's presence paragraph and its walkthrough step 3 are amended to say so.
+- The live-store migration runs in the Phase 7 hand-off, after the merge, not in Phase 6: migrating the live store before the merge would leave the installed tool refusing it.
+- A rehearsal of that migration on a copy of the live store and config (task 13.1) precedes it.
 
 ## Implementation Details
 
@@ -272,12 +281,25 @@ No new tool. Protocol surface added to `amoeba-mcp`:
 
 ### Verification Walkthrough
 
-This is the Phase 4 draft, refined when Phase 6 is complete. `tests/live/channels` and the `sessions` section of `list` do not exist until the slice is built. Every step runs unattended; step 3 uses a throwaway home and the Claude Code login on this machine.
+Refined at the end of Phase 6 (20261116, Claude Code 2.1.325, mcp 2.3.0). Every step runs unattended from the repo root. Step 3 uses throwaway Amoeba and Context Forge homes, the real `cf`, and the Claude Code login of the operator's own config (a throwaway Claude config directory has no login; D10).
 
-1. `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest`. Expected: all clean and passing.
-2. `uv run pytest tests/mcp_server/test_protocol_pin.py`. Expected: pass; it shows the probe getting `Method not found` and `initialize` served.
-3. `uv run pytest tests/live/channels`. Expected: pass, through the three sessions D10 describes.
-4. Live store: see Special Considerations.
+1. Checks:
+   ```
+   uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest -q
+   ```
+   Expected: `... files already formatted`, `All checks passed!`, `0 errors, 0 warnings, 0 informations`, and `N passed` with no failure (3378 at the end of Phase 6). The bare run includes `tests/load/test_presence_load.py` (12 presences on one store) and the real-stdio exit tests in `tests/mcp_server/test_presence_stdio.py`.
+2. Protocol pin:
+   ```
+   uv run pytest tests/mcp_server/test_protocol_pin.py -v
+   ```
+   Expected: 3 passed. `test_the_pinned_loop_refuses_the_probe_and_serves_the_handshake` (probe answered -32601, `initialize` served at a handshake version), `test_server_run_answers_the_probe_and_then_refuses_the_handshake` (the contrast: `supportedVersions` then -32022), and the background-cancellation test.
+3. Live tier, with the live settings in the environment (the pause tier's three `AMOEBA_LIVE_*` variables, which the repo's `.env` holds, plus the session model):
+   ```
+   set -a; source .env; set +a
+   AMOEBA_LIVE_CHANNEL_MODEL=sonnet uv run pytest tests/live/channels -v
+   ```
+   Expected: 4 passed in about a minute: the throwaway-home check, session one (push reaches the agent with nothing typed, `tool inbox called` in the server log, `push_confirmed_at` in `list -j`, no session after a clean exit), the killed server going stale, and session three (non-member: no session, a prompted `list` call answers). A missing variable fails collection naming it. A failure prints what it waited for and the last screen. Caveat: the first time Claude Code sees each throwaway directory it records folder trust in the operator's Claude config; nothing else there is written.
+4. Live store: the Phase 7 hand-off, `uv run python scripts/update_live.py update` after the merge (Special Considerations); task 13.1 rehearses the migration on a copy first.
 
 ## Risk Assessment
 
@@ -300,18 +322,18 @@ This is the Phase 4 draft, refined when Phase 6 is complete. `tests/live/channel
 4. `channel_event.py`, `inbox_watcher.py`, `presence.py`, `inbox_resource.py` with in-process tests (memory streams, SDK client, injected opener and short intervals).
 5. `SessionEntry`, `list`/`status` and the renderer.
 6. Docs, `INSTRUCTIONS`, the departures' wording in the architecture and plan.
-7. The live test, then the live-store migration.
+7. The live test. The live-store migration is the Phase 7 hand-off, after the merge (Special Considerations).
 
 ### Special Considerations
 - **Prompt injection.** The event is text the model reads as a user turn. It holds only enums, numbers and Context Forge ids, never another agent's words (D4).
 - **Spend.** The live test makes real model calls on the configured model.
-- **Live store (designated for migration; backup first).** The implementing agent runs these in order, after 240's migration. First back up, to the backups directory 240 uses (`~/.local/state/amoeba/backups/`): `sqlite3 ~/.local/state/amoeba/amoeba.sqlite3 ".backup ~/.local/state/amoeba/backups/amoeba.sqlite3.pre-007"` and `cp ~/.config/amoeba/config.yaml ~/.local/state/amoeba/backups/config.yaml.pre-241`. Then install the slice's code from the slice branch, `uv tool install --force <path to this repo>` (`docs/mcp-server.md`): `amoeba list` migrates with whatever code runs it, and a restarted session loads whatever is installed. Then add the three keys to the live config, and migrate by running `amoeba list`. Read back: `schema_meta.version` is 7, the member count matches the backup's, `amoeba list` works. Last, the PM restarts every client session once. Two windows are expected. Between the install and the key edit, every `amoeba` command fails with a `ConfigError` naming the missing keys; the agent runs those two steps back to back, so it lasts seconds. From the key edit until a session restarts, that session's old `amoeba-mcp` fails its tool calls with an error naming the config, then the schema (the config holds keys its code does not know, and the store is stamped 7). Restarting ends both. Restore, with every `amoeba` and `amoeba-mcp` process stopped: copy the store backup over the live file, delete its `-wal` and `-shm`, copy the config backup back, and reinstall the previous code (`uv tool install --force` from the previous commit) if you are going back to it, since the restored store at 6 would migrate again under this slice's code. The restore path goes in the slice notes, and the implementing agent deletes the two files, `amoeba.sqlite3.pre-007` and `config.yaml.pre-241`, with `rm` at slice integration (Phase 7), after the review passes.
+- **Live store (designated for migration; backup first).** One step, in the Phase 7 hand-off from the target checkout after the merge: `uv run python scripts/update_live.py update`. It backs up the live store and config, appends any config key the new code requires (value from the config contract's example), installs the target, migrates through `amoeba list`, reads back the schema version, integrity, foreign keys, member count and the installed `amoeba-mcp` tool list, and on any failure restores the backup and reinstalls the previously installed commit itself. Client sessions it lists are restarted afterwards (they run the old `amoeba-mcp` until then). `uv run python scripts/update_live.py restore` puts the newest backup back later. Task 13.1 rehearses the migration on a copy first.
 
 ## Operator Walkthrough
 
 Done as the person running it.
 
-- **Migration (once, by the implementing agent).** The live-store procedure in Special Considerations, including its two windows and the restart of client sessions.
+- **Migration (once, by the implementing agent, in the Phase 7 hand-off).** The live-store step in Special Considerations, then the restart of client sessions.
 - **Start.** In each repo that should get push, run `claude mcp add --scope project amoeba -- amoeba-mcp` and have an agent commit the `.mcp.json`. Start Claude Code with the alias and accept the start-up screens. `amoeba list` shows the session under its repo.
 - **Normal path.** A request arrives, the session shows the `← amoeba` line and calls `inbox`.
 - **No flag, an org with channels off, or `claude -p`.** The server runs and shows in `list`. Events are dropped by the client, and the agent polls at its rules-file moments. Nothing is lost.
@@ -322,4 +344,4 @@ Done as the person running it.
 - **A Claude Code update changes channels.** `uv run pytest tests/live/channels` fails with the screen it saw; polling still works until the docs and code are updated.
 - **A repo that should show a live session does not.** The reason is the server's stderr line (not a member, `cf` failed, or a store error with its traceback). `claude --debug` writes it to `~/.claude/debug/<session-id>.txt` (channels reference, read 20261115). Fix the cause (`cf` on `PATH`, `amoeba add`), then `/mcp` reconnect.
 - **An idle session in a repo with a wake command.** Without push it never confirms, so a request wakes the repo (244). With push, the event starts a turn and the session confirms; until its first event, a request can both push to it and wake an agent, and the second to accept gets `already_accepted`. `list` shows which sessions are push-confirmed.
-- **Undo.** To stop using push, remove the alias and run `claude mcp remove amoeba --scope project` in the repo. The only state is `sessions` rows: live ones plus killed servers' rows until the next beat of any server (D6). Before Phase 7, the backups restore the pre-241 store (Special Considerations). After it, the schema is deliberately forward-only: `sessions` is harmless when unused (empty once sessions end), and older code refuses a store stamped 7. Going back to pre-241 code would take, with every `amoeba` and `amoeba-mcp` process stopped, `DROP TABLE sessions` and `schema_meta.version` set to 6 on the live store, which needs the PM's explicit designation under the project rule; it loses only live-session records. Dead ends found: that one, by design.
+- **Undo.** To stop using push, remove the alias and run `claude mcp remove amoeba --scope project` in the repo. The only state is `sessions` rows: live ones plus killed servers' rows until the next beat of any server (D6). Until the next update, `uv run python scripts/update_live.py restore` puts back the pre-241 store and config from the hand-off's backup (Special Considerations). Past that, the schema is deliberately forward-only: `sessions` is harmless when unused (empty once sessions end), and older code refuses a store stamped 7. Going back to pre-241 code would take, with every `amoeba` and `amoeba-mcp` process stopped, `DROP TABLE sessions` and `schema_meta.version` set to 6 on the live store, which needs the PM's explicit designation under the project rule; it loses only live-session records. Dead ends found: that one, by design.

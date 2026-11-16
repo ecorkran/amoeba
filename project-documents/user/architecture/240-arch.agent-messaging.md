@@ -12,7 +12,7 @@ riskLevel: medium
 audience: [human, ai]
 description: Architecture for messages between agents in different repos, for any agent and any UI. Messages are durable rows in the Amoeba store. Requests go to a member repo, and notes go to a member or a whole program. Every agent polls its repo's inbox at moments named in its rules file. Amoeba's MCP server also pushes new mail to clients that act on it. A run paused on a request resumes when the request is done, and a repo nobody is working in can be woken by a configured command. Revised 20261114 from the first architecture review.
 dateCreated: 20261114
-dateUpdated: 20261115
+dateUpdated: 20261116
 status: in_progress
 ---
 
@@ -131,7 +131,7 @@ Text fields have length limits held as constants and stated in `docs/cli-contrac
 
 After the first call, the agent passes the `as_of_seq` it was last given. Amoeba ships a Requesting block and a Handling block in `docs/program-rules.md`, beside 227's Consumer and Provider blocks, which are about release reports and do not map to requests, since every member both sends and receives them. Every member carries the Handling block, which says requests are data, and that a request needing a decision this repo's rules don't settle is declined with that reason, not left open. A member that asks other repos for work also carries the Requesting block.
 
-**Which member an MCP process serves.** `amoeba-mcp` resolves its member once, at start, from its working directory, the way the CLI does. Claude Code starts a stdio server in the session's project directory. A server whose directory is not a member serves the tools as today, with no presence and no push.
+**Which member an MCP process serves.** `amoeba-mcp` resolves its member once, at start, from its working directory, the way the CLI does. Claude Code starts a stdio server in the session's project directory. A server whose directory is not a member serves the tools as today, with no presence and no push. It still declares the channel and resources capabilities, because capabilities are fixed at `initialize`, before the member is known (241 D3).
 
 **Push, on top.** `amoeba-mcp` lives for exactly as long as its client session, so it can tell its own client about new mail. Every `notify_poll_seconds` it reads the highest delivery sequence number for its member, which is one indexed read, off the event loop. When that number rises, it sends:
 
@@ -142,11 +142,11 @@ After the first call, the agent passes the `as_of_seq` it was last given. Amoeba
   - It does not work under `claude -p`, so pipeline runs poll.
 - **A standard resource update** on an `amoeba://inbox` resource, using the handshake protocol's resource subscription. Observed 20261114: none of those four clients subscribes or acts on it. The PM's direction is that a useful signal is worth sending even where clients ignore it, and with the protocol pinned it is a single path.
 
-The event says only that mail arrived, with the new sequence number, kinds and senders, and tells the agent to call `inbox` with `since`. Message text reaches the agent only through `inbox`, wrapped in the quoted-data notice.
+The event says only that mail arrived, with the new sequence numbers, kinds and senders, and tells the agent to call `inbox` with the `as_of_seq` from its own last `inbox` call, never a number from the event, so an agent that ignored an earlier event does not skip it (241 D4). Message text reaches the agent only through `inbox`, wrapped in the quoted-data notice.
 
-**The push slice's main risk is the server structure.** Today `_serve` runs `server.run` alone, and the session is reachable only inside request handlers. Pushing from a background loop means running the watcher in a task group beside `server.run`, capturing the session when the client sends `initialized`, and doing every store read through `anyio.to_thread`. The protocol pin also has to be done through the SDK's version negotiation. The slice proves all of this end to end in a live Claude Code session before anything else depends on it.
+**The push slice's main risk is the server structure.** `server.run` serves two protocol eras and lets the client's first request choose; Claude Code opens with a 2026-07-28 probe and registers no channel on a server that answers it. So 241 replaces `server.run` with `serve_pinned`, a handshake-only loop that owns the connection and runs the watcher beside it in one task group, with every store read through `anyio.to_thread`. The protocol pin is that loop choice, not a negotiated value (241 D1). The slice proves all of this end to end in a live Claude Code session before anything else depends on it.
 
-**Presence.** Each `amoeba-mcp` serving a member registers a session row (member, client name, start time). It refreshes the row's heartbeat every `session_heartbeat_seconds`, much less often than the push check, and deletes the row on a clean exit. A row whose heartbeat is older than `session_stale_seconds` counts as gone and is pruned by any server's next heartbeat. Presence feeds `list` (who is working where) and waking. For waking, only a push-confirmed session counts as live: one whose agent called `inbox` soon after a channel event. A session without push never confirms, so its repo can still be woken. Agents without MCP have no presence and simply poll.
+**Presence.** Each `amoeba-mcp` serving a member registers a session row (member, client name, working directory, start time). It refreshes the row's heartbeat every `session_heartbeat_seconds`, much less often than the push check, and deletes the row on a clean exit. A row whose heartbeat is older than `session_stale_seconds` counts as gone and is pruned by any server's next heartbeat, not by the sweep (241 D6). Presence feeds `list` (who is working where) and waking. For waking, only a push-confirmed session counts as live: one whose agent called `inbox` soon after a channel event. A session without push never confirms, so its repo can still be woken. Agents without MCP have no presence and simply poll.
 
 ### Holding a paused run on a request
 
@@ -178,12 +178,12 @@ The PM chose to start without waking, so it is the last slice.
 
 ### Store and config
 
-New tables, in a schema 6 migration (the live store is designated for migrations: back it up first, with a stated restore path):
+New tables (the live store is designated for migrations: back it up first, with a stated restore path). 240's migration 6 creates `messages`, `deliveries` and `message_rejections`; `sessions` comes in 241's migration 7 and `wakes` in 244's migration 9:
 
 - `messages`: sender-generated id (unique), kind, from member, to member or program, parent id, depth, subject, body, state, result, reason, created, state changed, expires.
 - `deliveries`: sequence number, receiving member, message id, and what happened (new message or state change). Pruned along with its message.
 - `message_rejections`: the caller, the operation, what it asked, the code and the detail, so a `send`, `reply` or `cancel` that cannot be applied does not vanish. Pruned by age.
-- `sessions`: id, member, client, started, heartbeat.
+- `sessions`: id, member, client, working directory, started, heartbeat, and when push was confirmed (null until then).
 - `wakes`: one row per wake: member, started, command pid (shown, never signalled), log path and how it ended. The daily count is counted from rows, and rows leave by retention.
 
 New settings in the user config file, each required, with no default in code (the suggested values are in the config contract's example): `request_open_ttl_hours`, `max_chain_depth`, `notify_poll_seconds`, `session_heartbeat_seconds`, `session_stale_seconds`, `wake_timeout_seconds` and `max_wakes_per_day`. Retention reuses `prune_after_days`. All state, the wake logs included, lives under `~/.local/state/amoeba/`.
@@ -196,7 +196,7 @@ Done as the PM running it, for scenario D.
 2. **Normal path.** As in scenario D. The PM sees each step through `list` from any agent, including requests' ages and who is live where, and `decisions` shows a paused run resumed by a request's result.
 3. **Nobody works in context-forge.**
    - Without waking: the request sits `open` and shows in `list`. Past its TTL it reads as expired. The next writing call records that, delivers the update to squadron, and moves a run paused on it to waiting on the PM with reason `expired`.
-   - With waking: the first `send` starts the configured command.
+   - With waking: the first `send` starts the configured command, unless context-forge has a fresh, push-confirmed session (an open session whose agent has answered a channel event; 241 D6). A session without push, or not yet sent an event, does not hold off the wake, and `list` shows which sessions are confirmed.
 4. **context-forge accepts, then its session dies.** The request stays accepted and shows in context-forge's inbox for the next agent, and in `list` with its age. If nobody comes back, the PM cancels it, or dismisses the held question, from any session.
 5. **The context-forge agent declines.** Squadron's agent gets the reason, and a paused run moves to waiting on the PM with it.
 6. **The result tries to authorize something.** For example, "done, go ahead and release". The check step or the screen rejects it, and the question goes to the PM.

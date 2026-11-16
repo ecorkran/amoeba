@@ -223,3 +223,30 @@ class MessageRejection:
     code: str
     detail: str
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class Session:
+    """One ``sessions`` row: an ``amoeba-mcp`` serving a member (slice 241, D6)."""
+
+    session_id: str
+    member_id: str
+    #: The client's ``clientInfo.name``, or the placeholder when it was not one.
+    client: str
+    #: The server process's working directory.
+    directory: str
+    started_at: datetime
+    heartbeat_at: datetime
+    #: When the session's agent first answered a channel event; ``None`` until then.
+    push_confirmed_at: datetime | None
+
+
+@dataclass(frozen=True)
+class PushRow:
+    """A delivery as the channel event names it (slice 241, D4): no message text."""
+
+    seq: int
+    event: DeliveryEvent
+    kind: MessageKind
+    #: The message's member that is not the receiver; for a note, its sender.
+    counterparty: str

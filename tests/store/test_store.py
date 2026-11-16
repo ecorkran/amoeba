@@ -93,9 +93,8 @@ def test_a_second_writer_past_the_timeout_gets_store_busy(tmp_path: Path) -> Non
     with holder.write():
         with pytest.raises(StoreBusyError) as busy, waiter.write():
             pass
-        # A third process opening while the lock is held waits, then fails the same way.
-        with pytest.raises(StoreBusyError):
-            Store.open(path, busy_timeout_seconds=SHORT_TIMEOUT_SECONDS)
+        # A third process opening a current store needs no lock, so it opens.
+        Store.open(path, busy_timeout_seconds=SHORT_TIMEOUT_SECONDS).close()
 
     assert str(path) in str(busy.value)
     assert str(SHORT_TIMEOUT_SECONDS) in str(busy.value)

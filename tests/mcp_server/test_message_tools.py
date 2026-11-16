@@ -22,6 +22,7 @@ from cli.cli_support import PROJECT_NAME, result_of, run_amoeba, write_config
 from amoeba.cli.exit_codes import EXIT_OK, EXIT_REJECTED
 from amoeba.mcp import server
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
+from mcp_server.presence_rig import idle_presence
 
 #: Wall-clock fields; everything else in a result is deterministic.
 CLOCK_FIELDS = {"created_at", "accepted_at", "state_changed_at", "expires_at"}
@@ -71,7 +72,7 @@ def _through_mcp(
     name: str, arguments: Mapping[str, object]
 ) -> tuple[dict[str, Any], bool]:
     async def run() -> types.CallToolResult:
-        return await server.call_tool(name, arguments)
+        return await server.call_tool(name, arguments, idle_presence())
 
     result = anyio.run(run)
     (block,) = result.content
@@ -222,7 +223,7 @@ def test_a_message_tool_without_a_directory_is_an_error_naming_the_field(
     for name in ("send", "inbox", "reply", "cancel"):
 
         async def run(tool: str = name) -> types.CallToolResult:
-            return await server.call_tool(tool, {})
+            return await server.call_tool(tool, {}, idle_presence())
 
         result = anyio.run(run)
         (block,) = result.content

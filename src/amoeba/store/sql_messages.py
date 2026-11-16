@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from amoeba.store.vocabulary import RequestState
+from amoeba.store.vocabulary import MessageKind, RequestState
 
 #: Select order: ``store.messages._message`` reads these positionally.
 _MESSAGE_COLUMNS: Final = (
@@ -98,6 +98,22 @@ SELECT_DELIVERIES_SINCE: Final = (
 #: when the prune deletes delivery rows. No row means none was ever assigned.
 SELECT_HIGHEST_ASSIGNED_SEQ: Final = (
     "SELECT seq FROM sqlite_sequence WHERE name = 'deliveries'"
+)
+
+# --- push reads (slice 241, D2, D4) ----------------------------------------
+
+#: The push check: one indexed read on ``(member_id, seq)``; null with no rows.
+SELECT_MEMBER_HIGH_SEQ: Final = "SELECT MAX(seq) FROM deliveries WHERE member_id = ?"
+#: The member's deliveries above a number, each with its message's kind and the
+#: counterparty: a note's sender, else the request member that is not the receiver.
+SELECT_PUSH_ROWS_AFTER: Final = (
+    "SELECT delivery.seq, delivery.event, message.kind, "
+    f"CASE WHEN message.kind = '{MessageKind.NOTE.value}' "
+    "OR message.to_member = delivery.member_id "
+    "THEN message.from_member ELSE message.to_member END "
+    "FROM deliveries AS delivery "
+    "JOIN messages AS message ON message.message_id = delivery.message_id "
+    "WHERE delivery.member_id = ? AND delivery.seq > ? ORDER BY delivery.seq"
 )
 
 # --- sweep -----------------------------------------------------------------

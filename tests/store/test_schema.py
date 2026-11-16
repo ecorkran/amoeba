@@ -33,6 +33,7 @@ TABLES = {
     "messages",
     "deliveries",
     "message_rejections",
+    "sessions",
 }
 
 
@@ -80,7 +81,7 @@ def _pair(
     )
 
 
-def test_a_new_store_has_all_eleven_tables(store: Store) -> None:
+def test_a_new_store_has_all_twelve_tables(store: Store) -> None:
     with store.read() as transaction:
         names = {
             row[0]

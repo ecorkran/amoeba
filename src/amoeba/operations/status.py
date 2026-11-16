@@ -40,12 +40,14 @@ from amoeba.operations.status_closed import closed_now_entries
 from amoeba.operations.status_models import (
     MemberStatus,
     ProgramStatus,
+    SessionEntry,
     StatusOutcome,
     StatusResult,
 )
 from amoeba.operations.status_placement import place_runs, scratch_roots
 from amoeba.operations.status_requests import MemberMessages, read_member_messages
 from amoeba.operations.status_runs import MemberRun, classify_runs
+from amoeba.operations.status_sessions import read_member_sessions
 from amoeba.operations.status_waiting import MemberWaiting, waiting_entries
 from amoeba.store.errors import StoreRowError
 from amoeba.store.models import Member
@@ -192,6 +194,9 @@ def status(
         open_rows = open_questions(transaction, list(members))
     waiting = waiting_entries(open_rows, listed)
     messages = read_member_messages(store, members, names, deps.clock())
+    sessions = read_member_sessions(
+        store, members, deps.clock(), config.session_stale_seconds
+    )
     program_of = {
         m.project_id: entry.program_id for entry in scope for m in entry.members
     }
@@ -200,7 +205,8 @@ def status(
         outcome=StatusOutcome.LISTED,
         notice=QUOTED_DATA_NOTICE if _shows_message_text(messages) else None,
         programs=tuple(
-            _program_status(entry, names, runs, waiting, messages) for entry in scope
+            _program_status(entry, names, runs, waiting, messages, sessions)
+            for entry in scope
         ),
         unplaced_runs=placement.unplaced,
         closed_now=closed_now_entries(swept, program_of, names),
@@ -245,6 +251,7 @@ def _program_status(
     runs: list[MemberRun],
     waiting: list[MemberWaiting],
     messages: dict[str, MemberMessages],
+    sessions: dict[str, tuple[SessionEntry, ...]],
 ) -> ProgramStatus:
     return ProgramStatus(
         program=entry.program_id,
@@ -261,6 +268,7 @@ def _program_status(
                 ),
                 requests=messages[member.project_id].requests,
                 rejected_calls=messages[member.project_id].rejected_calls,
+                sessions=sessions[member.project_id],
             )
             for member in entry.members
         ),
