@@ -140,6 +140,18 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
     ),
     # How far the PM has read the decisions.
     "marker": frozenset({"pm_marker.id", "pm_marker.last_seen_seq"}),
+    # Which amoeba-mcp processes are serving now, as their own heartbeats say.
+    "presence": frozenset(
+        {
+            "sessions.session_id",
+            "sessions.member_id",
+            "sessions.client",
+            "sessions.directory",
+            "sessions.started_at",
+            "sessions.heartbeat_at",
+            "sessions.push_confirmed_at",
+        }
+    ),
 }
 
 

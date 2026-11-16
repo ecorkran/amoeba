@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from importlib import resources
+from pathlib import Path
 
 import pytest
 
@@ -50,6 +51,20 @@ def test_migrating_twice_applies_nothing_the_second_time() -> None:
     migrate(connection)
 
     assert migrate(connection) == EXPECTED_SCHEMA_VERSION
+
+
+def test_an_up_to_date_store_migrates_without_the_writer_lock(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "store.sqlite3"
+    migrate(sqlite3.connect(path, isolation_level=None))
+    writer = sqlite3.connect(path, isolation_level=None)
+    writer.execute("BEGIN IMMEDIATE")
+    reader = sqlite3.connect(path, timeout=0, isolation_level=None)
+
+    assert migrate(reader) == EXPECTED_SCHEMA_VERSION
+
+    writer.execute("ROLLBACK")
 
 
 def test_a_newer_stamp_raises_and_rolls_back() -> None:

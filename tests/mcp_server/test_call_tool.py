@@ -27,6 +27,7 @@ from amoeba.operations.names import OperationName
 from amoeba.store.errors import StoreBusyError
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.wiring import DeadlineError
+from mcp_server.presence_rig import idle_presence
 
 REJECTED_STYLE_RESULT: dict[str, object] = {"outcome": "rejected", "problems": ["x"]}
 STARTED = StartedCall(
@@ -42,7 +43,7 @@ HANDLE_PAUSE_ARGUMENTS: dict[str, object] = {"run_id": "r", "directory": "/tmp/r
 
 def _call(name: str, arguments: Mapping[str, object] | None) -> types.CallToolResult:
     async def run() -> types.CallToolResult:
-        return await server.call_tool(name, arguments)
+        return await server.call_tool(name, arguments, idle_presence())
 
     return anyio.run(run)
 

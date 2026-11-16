@@ -138,6 +138,17 @@ class RejectedCall(_Model):
     created_at: datetime
 
 
+class SessionEntry(_Model):
+    """A live ``amoeba-mcp`` session serving the member (slice 241, D8)."""
+
+    client: str
+    directory: str
+    started_at: datetime
+    heartbeat_at: datetime
+    #: When its agent first answered a channel event; ``None`` while unconfirmed.
+    push_confirmed_at: datetime | None
+
+
 class MemberStatus(_Model):
     member: MemberName
     runs: tuple[RunEntry, ...]
@@ -145,6 +156,8 @@ class MemberStatus(_Model):
     requests: tuple[RequestEntry, ...] = ()
     #: The member's retained rejections, newest first.
     rejected_calls: tuple[RejectedCall, ...] = ()
+    #: The member's live sessions, oldest first (slice 241, D8).
+    sessions: tuple[SessionEntry, ...] = ()
 
 
 class ProgramStatus(_Model):

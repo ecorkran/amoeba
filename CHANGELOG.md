@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Slice 241: push and presence. A Claude Code session started with `claude --dangerously-load-development-channels server:amoeba`, in a repo whose project `.mcp.json` registers `amoeba-mcp` (`claude mcp add --scope project amoeba -- amoeba-mcp`), gets a channel event when its repo has new mail and calls `inbox` without waiting for a rules-file moment. The event carries only counts, sequence numbers, kinds and member ids, never message text. `amoeba-mcp` now serves the handshake protocol era only (`serve_pinned`), because Claude Code registers no channel on a server that answers its 2026-07-28 probe; clients that open with `initialize` are unaffected. Every serving server keeps a session row (migration 007, `sessions`), so `list` and `status` gain a **Live sessions** section and `sessions` per member, with whether push is confirmed (the agent answered an event with an `inbox` call). A clean exit deletes the row; a killed server's row stops counting after `session_stale_seconds` and the next heartbeat of any server deletes it. A subscribable `amoeba://inbox` resource gives the member and `as_of_seq`. `docs/mcp-server.md` covers the flag, the alias, the start-up screens and debugging; `tests/live/channels` drives a real session in a pseudo-terminal (it needs `AMOEBA_LIVE_CHANNEL_MODEL`). **Open agent sessions must be restarted** to get push and a session row.
+- Slice 241: **behavior change:** `config.yaml` now also requires `notify_poll_seconds`, `session_heartbeat_seconds` (at least `notify_poll_seconds`) and `session_stale_seconds` (at least twice the heartbeat), with no defaults, so an existing file fails naming the key; the suggested values (5, 30, 90) are in `docs/config-contract.md`'s example.
+
 ## [0.1.0] - 2026-11-15
 
 ### Added

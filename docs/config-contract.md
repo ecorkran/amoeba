@@ -20,7 +20,7 @@ any key. A missing
 file, a missing key, an unknown key or a bad value fails the command with exit 3,
 naming the file and the key, and every problem found is listed in one pass.
 
-Later slices add keys; each is required too, so an old file fails naming the new key. `request_open_ttl_hours` and `max_chain_depth` (slice 240) are two such keys: a config without one fails, naming it. The suggested values are in the example below and nowhere else.
+Later slices add keys; each is required too, so an old file fails naming the new key. `request_open_ttl_hours` and `max_chain_depth` (slice 240) are two such keys, and `notify_poll_seconds`, `session_heartbeat_seconds` and `session_stale_seconds` (slice 241) three more: a config without one fails, naming it. The suggested values are in the example below and nowhere else.
 
 ## Keys
 
@@ -36,6 +36,9 @@ Later slices add keys; each is required too, so an old file fails naming the new
 | `prune_after_days` | integer >= 1 | Age in days after which settled answering scratch, logs and calls-log days are deleted; anything tied to an open question is kept |
 | `request_open_ttl_hours` | integer, 1 to 87600 (ten years) | Hours an open request waits for an answer before it reads `expired`. Fixed into each request when it is sent, so changing the key never moves an existing request's expiry. An accepted request never expires |
 | `max_chain_depth` | integer >= 1 | Deepest a chain of requests may go. A root request has depth 1; a `send` whose parent is already this deep is rejected `chain_too_deep` |
+| `notify_poll_seconds` | number > 0 | How often a serving `amoeba-mcp` checks its member's deliveries and pushes a channel event when one is new (`mcp-server.md`) |
+| `session_heartbeat_seconds` | number > 0, at least `notify_poll_seconds` | How often a serving `amoeba-mcp` writes its session row, and prunes stale rows of every member (`store-contract.md`) |
+| `session_stale_seconds` | number > 0, at least twice `session_heartbeat_seconds` | Age of a session's last heartbeat past which `list` and waking treat it as gone, so one missed beat never reads as gone |
 | `default_rules_paths` | list of repo-relative paths, not empty | The rules files a member that names none reads. Each entry that matches no file at the pinned commit is skipped; when none is found the question waits (`rules.md`). A `*` is allowed in the last segment. Read when a question is answered, so an edit changes every default member |
 | `default_consumed` | `from_source` or `from_release` | Which of a provider's reports a `--depends-on` without `:MODE` consumes |
 | `authorize_items` | list, may be empty | Everything answers may be barred from authorizing |
@@ -66,6 +69,9 @@ resume_wait_seconds: 60
 prune_after_days: 30
 request_open_ttl_hours: 72
 max_chain_depth: 3
+notify_poll_seconds: 5
+session_heartbeat_seconds: 30
+session_stale_seconds: 90
 default_rules_paths: [CLAUDE.md, AGENTS.md]
 default_consumed: from_source
 authorize_items:

@@ -8,7 +8,6 @@ import pytest
 
 from amoeba.store import migrations
 from amoeba.store.migrations import (
-    EXPECTED_SCHEMA_VERSION,
     migrate,
     migration_files,
     read_schema_version,
@@ -76,9 +75,12 @@ def test_a_version_five_store_migrates_with_rows_untouched(
     connection = _version_five_store_with_members(monkeypatch)
     before = connection.execute(MEMBER_BEFORE).fetchall()
 
-    assert migrate(connection) == 6
+    with monkeypatch.context() as patch:
+        first_six = migration_files()[:6]
+        patch.setattr(migrations, "migration_files", lambda: first_six)
+        patch.setattr(migrations, "EXPECTED_SCHEMA_VERSION", 6)
+        assert migrate(connection) == 6
 
-    assert EXPECTED_SCHEMA_VERSION == 6
     assert read_schema_version(connection) == 6
     assert connection.execute(MEMBER_BEFORE).fetchall() == before
     assert connection.execute("PRAGMA foreign_key_check").fetchall() == []

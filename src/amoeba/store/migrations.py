@@ -22,7 +22,7 @@ from amoeba.store.errors import StoreCorruptError, StoreSchemaError
 
 #: The highest numbered file in ``store/schema/``. Bumped with each migration added;
 #: ``tests/store/test_migrations.py`` pins it to the files.
-EXPECTED_SCHEMA_VERSION: Final = 6
+EXPECTED_SCHEMA_VERSION: Final = 7
 
 #: Stamp of a store with no ``schema_meta`` table yet, as a new store has.
 UNINITIALIZED_SCHEMA_VERSION: Final = 0
@@ -118,6 +118,7 @@ def _apply_pending(connection: sqlite3.Connection) -> bool:
 def migrate(connection: sqlite3.Connection) -> int:
     """Bring the store to ``EXPECTED_SCHEMA_VERSION``; returns the stamped version.
 
+    A store already at the expected version is left untouched, with no lock taken.
     The connection must be in autocommit mode (``isolation_level=None``). Foreign
     keys are off for the transaction (the pragma does nothing inside one), so a
     migration may rebuild a referenced table; before commit ``foreign_key_check``
@@ -127,6 +128,10 @@ def migrate(connection: sqlite3.Connection) -> int:
         StoreSchemaError: The store is stamped higher than this code expects.
         StoreCorruptError: A migration left a dangling foreign key; rolled back.
     """
+    # Most opens find the store current: read the stamp without the writer lock,
+    # and take it only when a migration may be due (re-checked under the lock).
+    if read_schema_version(connection) == EXPECTED_SCHEMA_VERSION:
+        return EXPECTED_SCHEMA_VERSION
     connection.execute(sql.PRAGMA_FOREIGN_KEYS_OFF)
     try:
         connection.execute(sql.BEGIN_IMMEDIATE)

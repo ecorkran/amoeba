@@ -28,6 +28,7 @@ from amoeba.store import releases
 from amoeba.store.programs import get_member
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import ConsumedMode
+from mcp_server.presence_rig import idle_presence
 
 FULL_HASH = "cd34" * 10
 SEEDED_HASH = "ef56" * 10
@@ -57,7 +58,7 @@ def _through_mcp(
     name: str, arguments: Mapping[str, object]
 ) -> tuple[dict[str, Any], bool]:
     async def run() -> types.CallToolResult:
-        return await server.call_tool(name, arguments)
+        return await server.call_tool(name, arguments, idle_presence())
 
     result = anyio.run(run)
     (block,) = result.content

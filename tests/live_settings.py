@@ -17,6 +17,8 @@ import pytest
 ANSWER_MODEL_VARIABLE: Final = "AMOEBA_LIVE_ANSWER_MODEL"
 CHECK_MODEL_VARIABLE: Final = "AMOEBA_LIVE_CHECK_MODEL"
 MAX_COST_VARIABLE: Final = "AMOEBA_LIVE_MAX_COST_USD"
+#: The model of the interactive Claude Code session the channels tier drives (241).
+CHANNEL_MODEL_VARIABLE: Final = "AMOEBA_LIVE_CHANNEL_MODEL"
 
 
 @dataclass(frozen=True)
@@ -70,3 +72,12 @@ def read_live_settings(environ: Mapping[str, str]) -> LiveSettings:
         check_model=require_variable(environ, CHECK_MODEL_VARIABLE),
         max_cost_usd=read_cost(environ, MAX_COST_VARIABLE),
     )
+
+
+def read_channel_model(environ: Mapping[str, str]) -> str:
+    """The channels tier's session model (slice 241, D10).
+
+    Raises:
+        pytest.UsageError: When it is unset or blank, naming it.
+    """
+    return require_variable(environ, CHANNEL_MODEL_VARIABLE)

@@ -24,6 +24,7 @@ from pydantic import (
     StringConstraints,
     ValidationError,
     field_validator,
+    model_validator,
 )
 
 from amoeba.answering.settings import ModelAlias, RulesPath
@@ -32,6 +33,9 @@ from amoeba.store.vocabulary import ConsumedMode
 CONTRACT_DOC: Final = "docs/config-contract.md"
 #: The longest a request may stay open: ten years, in hours. Stated in the contract.
 MAX_REQUEST_OPEN_TTL_HOURS: Final = 24 * 365 * 10
+#: ``session_stale_seconds`` is at least this many heartbeats, so one missed beat
+#: does not read as a session gone (slice 241, D7).
+STALE_HEARTBEATS_MIN: Final = 2
 
 #: A stripped, non-empty string.
 NonBlank = Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -86,6 +90,13 @@ class UserConfig(BaseModel):
     #: Deepest a chain of requests may go; a send whose parent is this deep is
     #: rejected (slice 240, D8, D12).
     max_chain_depth: Annotated[StrictInt, Field(ge=1)]
+    #: How often ``amoeba-mcp`` checks its member's deliveries for push, in seconds
+    #: (slice 241, D2, D7).
+    notify_poll_seconds: Annotated[StrictInt | StrictFloat, Field(gt=0)]
+    #: How often a serving ``amoeba-mcp`` writes its session row (slice 241, D6).
+    session_heartbeat_seconds: Annotated[StrictInt | StrictFloat, Field(gt=0)]
+    #: Age of a session's last heartbeat past which it counts as gone (slice 241, D6).
+    session_stale_seconds: Annotated[StrictInt | StrictFloat, Field(gt=0)]
     #: Rules files a member that names none reads, each skipped when absent
     #: (slice 229, D7, D8). Not empty: a default of no rules is ``--no-rules``.
     default_rules_paths: Annotated[tuple[RulesPath, ...], Field(min_length=1)]
@@ -105,6 +116,23 @@ class UserConfig(BaseModel):
                 raise ValueError(f"duplicate key {item.key!r}")
             seen.add(item.key)
         return items
+
+    @model_validator(mode="after")
+    def _session_timing_holds(self) -> UserConfig:
+        """The heartbeat is no more often than the push check, and the stale limit
+        spans at least ``STALE_HEARTBEATS_MIN`` beats; each failure names both keys."""
+        if self.session_heartbeat_seconds < self.notify_poll_seconds:
+            raise ValueError(
+                "session_heartbeat_seconds must be at least notify_poll_seconds"
+            )
+        if self.session_stale_seconds < (
+            STALE_HEARTBEATS_MIN * self.session_heartbeat_seconds
+        ):
+            raise ValueError(
+                f"session_stale_seconds must be at least {STALE_HEARTBEATS_MIN} "
+                "times session_heartbeat_seconds"
+            )
+        return self
 
 
 def _read_document(path: Path) -> object:

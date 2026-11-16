@@ -8,7 +8,7 @@ component: agent-messaging
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 240. Requests between members over the CLI and MCP with polling, then push and presence from the MCP server, then holding a paused run on a request, then notes to members and programs with release-report notes, then waking a repo nobody is working in.
 dateCreated: 20261114
-dateUpdated: 20261115
+dateUpdated: 20261116
 status: not_started
 ---
 
@@ -48,14 +48,14 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
 
 ## Feature Slices (in implementation order)
 
-2. [ ] **(241) Push and Presence** — `amoeba-mcp` tells its own session about new mail. The server resolves its member once at start from its working directory, and a directory that is not a member gets today's tools with no presence and no push. The serve loop runs a watcher in a task group beside `server.run`, captures the session at `initialized`, and does every store read through `anyio.to_thread`. Every `notify_poll_seconds` the watcher reads the member's highest delivery sequence number. When it rises, it sends a Claude Code channel event (`notifications/claude/channel`, with the `claude/channel` experimental capability declared) and a resource update on `amoeba://inbox`. The event carries only the new sequence number, kinds and senders, and tells the agent to call `inbox` with `since`. The server pins the handshake to a protocol revision Claude Code registers channels on, through the SDK's version negotiation. Migration 7 adds `sessions`: each serving process registers a row, heartbeats every `session_heartbeat_seconds`, and deletes it on clean exit. The sweep prunes rows older than `session_stale_seconds`. `list` shows who is live where. The slice re-checks the dated channel facts first, and the docs give the launch flag and a shell alias for it.
+2. [ ] **(241) Push and Presence** — `amoeba-mcp` tells its own session about new mail. The server resolves its member once, beside the serve loop, from its working directory; a directory that is not a member gets today's tools with no presence and no push, though every server declares the channel and resources capabilities (they are fixed at `initialize`). The serve loop is `serve_pinned`, a handshake-only loop that owns the connection and runs the watcher beside it in one task group, doing every store read through `anyio.to_thread`; the protocol pin is that loop choice, since Claude Code registers no channel on a server that answers its 2026-07-28 probe. Every `notify_poll_seconds` the watcher reads the member's highest delivery sequence number. When it rises, it sends a Claude Code channel event (`notifications/claude/channel`, with the `claude/channel` experimental capability declared) and, to a client that subscribed, a resource update on `amoeba://inbox`. The event carries only sequence numbers, kinds and senders, and tells the agent to call `inbox` with the `as_of_seq` from its own last call. Migration 7 adds `sessions` (with the working directory and `push_confirmed_at`): each serving process registers a row, heartbeats every `session_heartbeat_seconds`, and deletes it on clean exit. Every heartbeat prunes rows older than `session_stale_seconds`; the sweep is untouched. A session whose agent answers an event with an `inbox` call is push-confirmed, and only those count as live for waking. The three keys are required, with no default in code. `list` shows who is live where and whether push is confirmed. The slice re-checks the dated channel facts first, and the docs give the launch flag, a shell alias and the project `.mcp.json` registration.
    **Value:** User value. A live Claude Code session acts on a request when it arrives, instead of at its next rules-file moment.
    **Success Criteria:**
    - An automated live test drives an interactive Claude Code session started with the development channels flag (in a pseudo-terminal), sends it a request from another fixture repo, and sees the session call `inbox` with no prompt from the test.
-   - The pinned protocol is the one negotiated in that session, and every existing MCP tool test still passes under it.
+   - The protocol in that session is a handshake-era version, a pin test shows the 2026-07-28 probe refused and `initialize` served, and every existing MCP tool test still passes.
    - The event carries no message text. A test checks its fields.
    - A server outside any member starts and serves the tools with no session row and no watcher.
-   - A killed server's row reads as gone after `session_stale_seconds` and is pruned by the sweep. A clean exit deletes it.
+   - A killed server's row reads as gone after `session_stale_seconds` and is pruned by the next heartbeat of any server. A clean exit deletes it.
    - The watcher never blocks a tool call. A test holds a store read and checks that tool calls still answer.
    - The live store is backed up and migrated to 7.
    **Dependencies:** 240.

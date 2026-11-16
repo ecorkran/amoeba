@@ -337,7 +337,7 @@ nothing to show. Result (`StatusResult`):
 | `outcome` | `listed` or `rejected` |
 | `rejection` | with `rejected`: `unknown_program` (`problems` lists the known ids) or `malformed` |
 | `notice` | the quoted-data notice (`QUOTED_DATA_NOTICE`), set when any member shows a request or a rejected call and null otherwise: those subjects and recipients are other agents' text |
-| `programs` | per program, `members`: each `{id, name}` with `runs`, `waiting_on_pm`, `requests` and `rejected_calls` |
+| `programs` | per program, `members`: each `{id, name}` with `runs`, `waiting_on_pm`, `requests`, `rejected_calls` and `sessions` |
 | `unplaced_runs` | paused runs no member could be found for: `run_id`, `status`, `reason`, `checkpoint_kind`, `detail` |
 | `closed_now` | what this call closed (closures made by `handle-pause` are in that call's calls-log `detail`, not here), so each automatic closure is seen once: `{program, member, run_id, paused_at, question, closed_reason, closed_detail}` for a question, and for an answer marked `not_delivered` the same with `answer_seq` and `resume_outcome` |
 | `sweep_problem` | set when the closing, or the message sweep, could not take the store's lock; nothing was closed and the rows show as before (both texts, joined, when both fail) |
@@ -360,6 +360,16 @@ Context Forge no longer lists the member, and `child_ids` are the live requests 
 the PM. A member's `rejected_calls` are its retained refused `send`, `reply` and
 `cancel` calls, newest first, each `{operation, code, to_ref, message_id, parent_id,
 detail, created_at}`.
+
+A member's `sessions` are its live `amoeba-mcp` sessions (slice 241), oldest first,
+each `{client, directory, started_at, heartbeat_at, push_confirmed_at}`: `client` is
+the client's name as it gave it (or `unrecognized`), `directory` the server's working
+directory, `heartbeat_at` its last beat, and `push_confirmed_at` when its agent first
+answered a channel event with an `inbox` call (null while unconfirmed). A session
+whose last beat is older than `session_stale_seconds` is gone and not listed, and only
+active members show sessions. Sessions do not count as waiting on the PM and do not
+set the `notice`. The text adds a **Live sessions** section, one line per session:
+`<client>  <directory>  up <age>  last beat <age> ago  push confirmed|push unconfirmed`.
 
 A run (`runs`) has `run_id`, `pipeline`, `status` (Squadron's text, raw),
 `working_directory`, `checkpoint` (`kind`, `paused_at`, `question`, or null), `pause`,

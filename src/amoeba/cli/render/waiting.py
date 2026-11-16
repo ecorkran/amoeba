@@ -22,6 +22,7 @@ from amoeba.cli.render.commands import (
     list_command,
 )
 from amoeba.cli.render.messages import message_sections
+from amoeba.cli.render.sessions import sessions_section
 from amoeba.cli.render.text import (
     SEPARATOR,
     command_line,
@@ -109,6 +110,7 @@ def render_waiting(
         sections.append([NOTHING_NEEDS_YOU])
     sections.extend(section for section in [_closed_now(result)] if section)
     sections.extend(message_sections(members, now))
+    sections.extend(section for section in [sessions_section(members, now)] if section)
     if settled is not None:
         sections.extend(
             section for section in (_other_runs(members), _settled(settled)) if section

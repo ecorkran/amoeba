@@ -29,6 +29,7 @@ from cli.requests_support import (
 
 from amoeba.mcp import server
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
+from mcp_server.presence_rig import idle_presence
 
 
 @pytest.fixture
@@ -45,7 +46,7 @@ def repos(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repos:
 
 def _call(name: str, arguments: Mapping[str, object]) -> dict[str, Any]:
     async def run() -> types.CallToolResult:
-        return await server.call_tool(name, arguments)
+        return await server.call_tool(name, arguments, idle_presence())
 
     result = anyio.run(run)
     (block,) = result.content

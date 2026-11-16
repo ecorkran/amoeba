@@ -70,7 +70,7 @@ file, pid file or read-only mode, and a missing store is created.
 ## Migrations
 
 - Numbered files in `src/amoeba/store/schema/` (`001_baseline.sql`, `002_pause_handling.sql`,
-  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (6).
+  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (7).
 - Opening applies the missing files in order inside one write transaction and stamps
   `schema_meta.version`. A store stamped higher than the code expects is refused
   (`StoreSchemaError`) and left untouched.
@@ -274,6 +274,24 @@ under it.
 
 Index: `(created_at)`.
 
+### `sessions` (migration `007`, slice 241)
+
+One row per serving `amoeba-mcp` whose working directory resolved to a member. Written
+by that server's heartbeat; see "Sessions" below for the stale rule, the prune and push
+confirmation.
+
+| Column | Meaning |
+|---|---|
+| `session_id` | Key; a random hex id the server makes once at start. |
+| `member_id` | The member it serves; references `members`. |
+| `client` | The client's `clientInfo.name` when it matches `[A-Za-z0-9._ -]{1,64}`, otherwise `unrecognized`. Shown by `list`, so never free text. |
+| `directory` | The server process's working directory. |
+| `started_at` | UTC time the server started; kept when a pruned row is re-created. |
+| `heartbeat_at` | UTC time of the last beat. |
+| `push_confirmed_at` | UTC time the session's agent first answered a channel event with an `inbox` call; null until then. |
+
+Indexes: `(member_id)` and `(heartbeat_at)`. No `CHECK` list.
+
 ### `pm_marker` (moved by slice 224)
 
 | Column | Meaning |
@@ -284,7 +302,7 @@ Index: `(created_at)`.
 ## Why each column exists
 
 The schema holds no state that Context Forge or Squadron already says; every column is
-one of five things. `tests/store/test_schema_holds_no_mirrored_state.py` pins the same
+one of six things. `tests/store/test_schema_holds_no_mirrored_state.py` pins the same
 columns under the same reasons, so a new column fails it until it is listed in both
 places and its reason is stated.
 
@@ -297,6 +315,8 @@ places and its reason is stated.
 - **messages**: what agents said to each other and where each request stands. Amoeba is the only place this exists, and a request's state is Amoeba's own, never read from Context Forge or Squadron. Columns: `deliveries.created_at`, `deliveries.event`, `deliveries.member_id`, `deliveries.message_id`, `deliveries.seq`, `message_rejections.code`, `message_rejections.created_at`, `message_rejections.detail`, `message_rejections.id`, `message_rejections.member_id`, `message_rejections.message_id`, `message_rejections.operation`, `message_rejections.parent_id`, `message_rejections.to_ref`, `messages.accepted_at`, `messages.body`, `messages.created_at`, `messages.depth`, `messages.expires_at`, `messages.from_member`, `messages.kind`, `messages.message_id`, `messages.parent_id`, `messages.reason`, `messages.result`, `messages.result_commit`, `messages.result_version`, `messages.state`, `messages.state_changed_at`, `messages.subject`, `messages.to_member`, `messages.to_program`.
 
 - **marker**: how far the PM has read the decisions. Columns: `pm_marker.id`, `pm_marker.last_seen_seq`.
+
+- **presence**: which `amoeba-mcp` processes are serving now, as their own heartbeats say. Nothing else knows this, and a row that stops beating stops counting. Columns: `sessions.client`, `sessions.directory`, `sessions.heartbeat_at`, `sessions.member_id`, `sessions.push_confirmed_at`, `sessions.session_id`, `sessions.started_at`.
 
 ## Question lifecycle and who writes it (slices 223 and 228)
 
@@ -416,6 +436,34 @@ request.
 Text from other repos is data: `subject`, `body`, `result` and `reason` are written by
 other repos' agents and stored as given, with the limits of the CLI contract. Amoeba
 never acts on a request's text.
+
+## Sessions and who writes them (slice 241)
+
+Only a serving `amoeba-mcp` writes `sessions`, and only for its own row, from its
+heartbeat; `list` and `status` read it. Nothing else touches the table.
+
+- **Register and beat are one statement.** An upsert on `session_id` sets
+  `heartbeat_at` and `push_confirmed_at` and, on a first insert, the other columns, so a
+  row re-created after a prune keeps the server's original `started_at`. The first beat
+  runs when the client finishes the handshake, then every `session_heartbeat_seconds`.
+- **The stale rule.** A row whose `heartbeat_at` is not newer than now minus
+  `session_stale_seconds` counts as gone. It is one predicate (`LIVE_SESSION` in
+  `store/sql_sessions.py`), used by the display read, the waking read and the prune, so a
+  stale row is never shown whether or not it has been pruned.
+- **The prune.** Each heartbeat deletes every member's stale rows before its upsert, in
+  the same write transaction. `sweep` is not involved. The table therefore holds the
+  live rows plus the rows of servers killed since the last beat of any server; with no
+  server running those stay until one starts, each a few dozen bytes and never shown.
+- **Push confirmation.** `push_confirmed_at` is null until the session's agent answers a
+  channel event with an `inbox` call within 300 seconds; the server remembers that in
+  memory and its next beat writes it. `live_member_ids` (what slice 244's waking reads)
+  returns active members with a fresh row whose `push_confirmed_at` is set: the same
+  members `status` shows with a confirmed session.
+- **Cleanup.** A clean exit deletes the row (shielded, bounded by twice the busy
+  timeout). A killed server's row goes stale and the next heartbeat of any server
+  deletes it. A held store skips a beat; the next beat retries.
+- A removed member's server keeps beating; its rows are never shown and never count for
+  waking, because both reads keep active members only.
 
 ## Derivations the schema deliberately has no column for
 
