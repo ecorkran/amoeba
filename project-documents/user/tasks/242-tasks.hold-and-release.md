@@ -250,11 +250,14 @@ usageByModel:
 
 **Commit**: `docs: refine the 242 walkthrough after final verification`
 
-## Phase 7 hand-off checklist
+### Phase 7 hand-off (not tasks; nothing here is checked off in this file)
 
-Phase 6 is complete when sections 0 to 10 are checked. These items are checked in Phase 7 by the implementing agent, after the code review passes and the slice is merged (the merge is Phase 7's, not a task). Designated by `CLAUDE.md`.
+Phase 6 is complete when sections 0 to 10 are checked. These items are not tasks; the implementing agent does them in Phase 7, after the code review passes and the slice is merged (the merge is Phase 7's, not a task). Designated by `CLAUDE.md`.
 
-- [ ] **P7.0 No claim in flight**
-  - [ ] `sqlite3 ~/.local/state/amoeba/amoeba.sqlite3 "SELECT count(*) FROM questions WHERE state = 'claimed'"` must print 0 (a running `handle_pause` is old code and would fail on the new schema). A claim whose process is alive ends by itself within `answering_wait_seconds`; one whose process died is listed by `amoeba status` as `claim_stale` with `next = handle_pause`, and `amoeba handle-pause <run id>` in the run's directory settles it. Repeat until the count is 0; any other output, including an empty one, is `BLOCKED:` with the raw output
-- [ ] **P7.1 Update the live install**
-  - [ ] From the target checkout: `uv run python scripts/update_live.py update`. It backs up the live store and config to `~/.local/state/amoeba/backups/<stamp>/`, appends any config key the new code requires (value from the config contract's example), installs the target, migrates the store through `amoeba list`, and checks the schema version, integrity, foreign keys, the member count and the installed `amoeba-mcp` tool list. If any check fails it restores the backup and reinstalls the previous commit itself, and exits 1. It needs `--previous <commit>` only when no earlier run has recorded the installed commit. Paste its output into the slice notes, and restart the client sessions it lists (they run the old `amoeba-mcp` until restarted). `uv run python scripts/update_live.py restore` puts the newest backup back later; a successful update deletes the older backup set
+**P7.0 No claim in flight**
+
+`sqlite3 ~/.local/state/amoeba/amoeba.sqlite3 "SELECT count(*) FROM questions WHERE state = 'claimed'"` must print 0 (a running `handle_pause` is old code and would fail on the new schema). A claim whose process is alive ends by itself within `answering_wait_seconds`; one whose process died is listed by `amoeba status` as `claim_stale` with `next = handle_pause`, and `amoeba handle-pause <run id>` in the run's directory settles it. Repeat until the count is 0; any other output, including an empty one, is `BLOCKED:` with the raw output
+
+**P7.1 Update the live install**
+
+From the target checkout: `uv run python scripts/update_live.py update`. It backs up the live store and config to `~/.local/state/amoeba/backups/<stamp>/`, appends any config key the new code requires (value from the config contract's example), installs the target, migrates the store through `amoeba list`, and checks the schema version, integrity, foreign keys, the member count and the installed `amoeba-mcp` tool list. If any check fails it restores the backup and reinstalls the previous commit itself, and exits 1. It needs `--previous <commit>` only when no earlier run has recorded the installed commit. Paste its output into the slice notes, and restart the client sessions it lists (they run the old `amoeba-mcp` until restarted). `uv run python scripts/update_live.py restore` puts the newest backup back later; a successful update deletes the older backup set
