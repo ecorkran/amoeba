@@ -32,7 +32,7 @@ The package is `amoeba-ai` on PyPI; it installs the `amoeba` and `amoeba-mcp` co
 
 ## Updating the installed amoeba
 
-From the main checkout, after a slice merges:
+The release skill runs this as its last step. To run it by hand, from the main checkout:
 
 ```
 uv run python scripts/update_live.py update
