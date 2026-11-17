@@ -92,12 +92,12 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
    **Risk Level:** Low
    **Relative Effort:** 2
 
-5. [ ] **(244) Waking** — A member may set `wake_command` through `add` (229: every member setting is set from the CLI). When `send` delivers a request to a member with a wake command, no live session (241) and no running wake, it starts the command detached under `amoeba wake-run`, in the member's registered directory. Migration 9 adds `wakes`. The wrapper holds the member's wake row while the command runs, records its log path under `~/.local/state/amoeba/`, stops a command past `wake_timeout_seconds`, and records how the wake ended. Rows leave by retention. The command runs with a fixed environment, never the sender's. A row left by a killed wrapper counts as gone after `wake_timeout_seconds`. Wakes per member per day stop at `max_wakes_per_day`, and the request then waits for the next agent up to its TTL. `list` shows waking stopped and why, and a failure to start. A wake's failure changes no message. Wake logs are pruned with the existing logs.
+5. [ ] **(244) Waking** — A member may set `wake_command` through `add` (229: every member setting is set from the CLI). When `send` delivers a request to a member with a wake command, no live session (241) and no running wake, it starts the command detached under `amoeba wake-run` (a CLI-only internal command), in the member's checkout (Context Forge's `projectPath`). Migration 9 adds `wakes`, one row per wake, kept after it ends. The wrapper stops a command past `wake_timeout_seconds` and records how the wake ended, with its log path under `~/.local/state/amoeba/`; rows leave by retention (the sweep deletes them). The command runs with a fixed environment, never the sender's. A row left by a killed wrapper counts as gone after `wake_timeout_seconds` (its `deadline_at`). Wakes per member in a rolling 24 hours, failed starts included, stop at `max_wakes_per_day`, and the request then waits for the next agent up to its TTL. `list` shows waking stopped and why, and a failure to start. A wake's failure changes no message. Wake logs are pruned with the existing logs.
    **Value:** User value. A request to a repo nobody has open gets worked without anyone opening it.
    **Success Criteria:**
    - A request to a fixture member with a wake command and no live session starts it once. A second request during the wake starts nothing and is in the woken agent's `inbox`.
    - A member with a live session, or with no wake command, is not woken.
-   - A command past `wake_timeout_seconds` is stopped and its row cleared. A wrapper killed with SIGKILL leaves a row that reads as gone after the timeout.
+   - A command past `wake_timeout_seconds` is stopped and its row ends `timed_out`. A wrapper killed with SIGKILL leaves a row that reads as gone after the timeout.
    - At `max_wakes_per_day` no wake starts, `list` says why, and the request still expires at its TTL.
    - A command that fails to start shows in `list` and leaves the request `open`.
    - Wake logs are pruned. Every wake row has a cleanup.
@@ -111,7 +111,7 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
 
 `240 → 241 → 242 → 243 → 244`.
 
-- **Dependencies.** Everything builds on 240. 244 needs 241's live-session check. 242 needs only 240 in code, and its migration 8 comes after 241's migration 7. 243 needs 240, plus 241 and 242 for one test each.
+- **Dependencies.** Everything builds on 240. 244 needs 240 to 243 built and integrated, 241's live-session check among them. 242 needs only 240 in code, and its migration 8 comes after 241's migration 7. 243 needs 240, plus 241 and 242 for one test each.
 - **Risk.** 241 rests on the least certain ground, so it comes right after 240. 242 is next because it resumes real runs.
 
 ## Notes

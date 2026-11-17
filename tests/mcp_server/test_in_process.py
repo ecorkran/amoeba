@@ -396,3 +396,26 @@ def test_an_exception_raised_after_the_deadline_is_logged_at_error(
     assert record.name == in_process.__name__
     assert record.exc_info is not None
     assert "sq went away" in str(record.exc_info[1])
+
+
+@pytest.mark.parametrize(
+    ("arguments", "location"),
+    [
+        ({"wake_command": "agent --max-seconds 60"}, "wake_command"),
+        (
+            {"bulk": {"program": "p", "members": [{"wake_command": "agent"}]}},
+            "bulk.members.0.wake_command",
+        ),
+    ],
+    ids=["single", "bulk"],
+)
+def test_an_add_tool_call_passing_wake_command_is_rejected_as_an_unknown_field(
+    arguments: dict[str, object], location: str, tmp_path: Path
+) -> None:
+    returned = _call(OperationName.ADD, arguments, tmp_path)
+
+    assert returned["outcome"] == "rejected"
+    problems: list[dict[str, str]] = returned["problems"]  # type: ignore[assignment]
+    assert [problem["detail"] for problem in problems] == [
+        f"{location}: Extra inputs are not permitted"
+    ]

@@ -259,6 +259,8 @@ def test_the_status_keys_gain_only_the_notice_and_the_two_member_fields(
         "rejected_calls",
         # Slice 241 (D8): the member's live sessions.
         "sessions",
+        # Slice 244 (D9): waking, null for a member with no wake command.
+        "wake",
     }
 
 

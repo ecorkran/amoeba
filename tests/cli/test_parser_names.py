@@ -8,6 +8,7 @@ import pytest
 
 from amoeba.cli.parser import build_parser
 from amoeba.cli.registration_arguments import list_document
+from amoeba.cli.wake_command import CLI_ONLY_COMMANDS
 from amoeba.mcp.tools import TOOLS
 from amoeba.operations.list_view import SUBJECT_ALIASES, ListRequest, ListSubject
 from amoeba.operations.names import OperationName
@@ -30,7 +31,9 @@ def _commands() -> dict[str, argparse.ArgumentParser]:
 def test_every_operation_has_one_command_by_its_cli_name_and_nothing_else() -> None:
     names = set(_commands())
 
-    assert names - set(ALIASES) == {name.cli_name for name in OperationName}
+    operations = names - set(ALIASES) - CLI_ONLY_COMMANDS
+
+    assert operations == {name.cli_name for name in OperationName}
 
 
 def test_every_operation_has_a_tool_row_by_its_value_and_nothing_else() -> None:

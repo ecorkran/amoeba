@@ -15,7 +15,8 @@ from amoeba.store.message_transitions import StateFields, change_state
 from amoeba.store.messages import get_message
 from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import DeliveryEvent, RequestState
+from amoeba.store.vocabulary import DeliveryEvent, RequestState, WakeOutcome
+from amoeba.store.wakes import finish_wake
 from store.message_support import (
     ADDRESSEE,
     NOW,
@@ -27,6 +28,7 @@ from store.message_support import (
     seed_members,
     send_request,
 )
+from store.wake_support import claim
 
 RETENTION_DAYS = 30
 PAST_TTL = NOW + TTL + timedelta(seconds=1)
@@ -262,3 +264,55 @@ def test_the_due_check_searches_an_index_and_never_scans_messages(
         )
 
     assert "SCAN messages" not in plan
+
+
+# --- wakes rows (slice 244, D10) ----------------------------------------------
+
+
+def _claim_wake_at(store: Store, wake_id: str, when: datetime) -> None:
+    """A claimed, unended wake row started at ``when`` for the addressee."""
+    with store.write() as transaction:
+        transaction.execute(
+            "UPDATE members SET wake_command = 'wake-agent' WHERE project_id = ?",
+            (ADDRESSEE,),
+        )
+        claimed = claim(transaction, wake_id, now=when, max_wakes=100)
+        assert claimed is not None
+
+
+def _wake_ids(store: Store) -> set[str]:
+    with store.read() as transaction:
+        return {str(row[0]) for row in transaction.execute("SELECT wake_id FROM wakes")}
+
+
+def test_the_sweep_deletes_an_aged_wake_row_ended_or_not_and_keeps_a_young_one(
+    store: Store,
+) -> None:
+    _claim_wake_at(store, "unended-aged", NOW)
+    _claim_wake_at(store, "ended-aged", NOW + timedelta(hours=1))
+    with store.write() as transaction:
+        finish_wake(
+            transaction,
+            "ended-aged",
+            WakeOutcome.EXITED,
+            0,
+            None,
+            NOW + timedelta(hours=2),
+        )
+    _claim_wake_at(store, "young", LONG_AFTER - timedelta(days=1))
+
+    _sweep(store, LONG_AFTER)
+
+    assert _wake_ids(store) == {"young"}
+
+
+def test_sweep_due_is_true_for_an_aged_wake_row_alone_and_false_for_a_young_one(
+    store: Store,
+) -> None:
+    _claim_wake_at(store, "only-row", NOW)
+
+    with store.read() as transaction:
+        young = sweep_due(transaction, NOW + timedelta(days=1), RETENTION_DAYS)
+        aged = sweep_due(transaction, LONG_AFTER, RETENTION_DAYS)
+
+    assert (young, aged) == (False, True)

@@ -17,6 +17,7 @@ from amoeba.cli.registration_arguments import (
     register_rm,
 )
 from amoeba.cli.registration_messages import register_messages
+from amoeba.cli.wake_command import register_wake_run
 from amoeba.operations.names import OperationName
 
 
@@ -129,6 +130,7 @@ def build_parser() -> argparse.ArgumentParser:
     retract_parser.add_argument("--reason", required=True, help="why it is retracted")
     _register_release_commands(commands, parent)
     register_messages(commands, parent)
+    register_wake_run(commands)
     return parser
 
 

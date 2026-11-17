@@ -18,6 +18,7 @@ from amoeba.store.messages import get_message
 from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import RequestState
+from amoeba.store.wakes import WakeLimits, claim_wake
 from operations.message_support import (
     CONFIG,
     RECIPIENT,
@@ -162,3 +163,48 @@ def test_the_expire_step_never_expires_a_note(
         note = get_message(transaction, "a-note")
         assert note is not None and note.state is None
         assert [row[3] for row in delivery_rows(transaction)] == ["sent"]
+
+
+def _claim_wake(store: Store, when: datetime) -> None:
+    with store.write() as transaction:
+        transaction.execute(
+            "UPDATE members SET wake_command = 'wake-agent' WHERE project_id = ?",
+            (RECIPIENT,),
+        )
+        claimed = claim_wake(
+            transaction,
+            RECIPIENT,
+            when,
+            WakeLimits(timeout_seconds=600, max_per_day=3, session_stale_seconds=90),
+            "a-wake",
+            "/work/checkout",
+            None,
+        )
+        assert claimed is not None
+
+
+def _wake_count(store: Store) -> int:
+    with store.read() as transaction:
+        return count(transaction, "wakes")
+
+
+def test_a_store_holding_only_an_aged_wake_row_is_swept_with_a_write(
+    store: Store, clock: SettableClock
+) -> None:
+    _claim_wake(store, clock.now)
+    clock.now += timedelta(days=CONFIG.prune_after_days + 1)
+
+    assert sweep_messages(store, CONFIG, clock.now) is None
+
+    assert _wake_count(store) == 0
+
+
+def test_a_young_wake_row_opens_no_write_transaction(
+    store: Store, clock: SettableClock
+) -> None:
+    _claim_wake(store, clock.now)
+
+    with closing(_hold_write_lock(store)):
+        assert sweep_messages(store, CONFIG, clock.now) is None
+
+    assert _wake_count(store) == 1

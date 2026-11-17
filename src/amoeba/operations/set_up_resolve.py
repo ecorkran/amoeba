@@ -48,6 +48,10 @@ class ResolvedMember:
     rules_default: bool
     authorize_allow: tuple[str, ...] | None
     authorize_deny: tuple[str, ...] | None
+    #: ``False``: the request did not mention the wake command; leave it.
+    wake_command_given: bool
+    #: With ``wake_command_given``: ``None`` clears it.
+    wake_command: str | None
     depends_on: tuple[ResolvedDependency, ...]
 
 
@@ -172,6 +176,8 @@ def resolve_request(request: SetUpRequest, directory: Path, run: CfRun) -> Resol
                 rules_default=entry.rules_default,
                 authorize_allow=entry.authorize_allow,
                 authorize_deny=entry.authorize_deny,
+                wake_command_given="wake_command" in entry.model_fields_set,
+                wake_command=entry.wake_command,
                 depends_on=tuple(dependencies),
             )
         )

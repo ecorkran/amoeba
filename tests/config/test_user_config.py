@@ -31,6 +31,8 @@ TOP_LEVEL_KEYS = [
     "notify_poll_seconds",
     "session_heartbeat_seconds",
     "session_stale_seconds",
+    "wake_timeout_seconds",
+    "max_wakes_per_day",
     "default_rules_paths",
     "default_consumed",
     "authorize_items",
@@ -271,3 +273,36 @@ def test_the_longest_request_ttl_is_accepted_and_stated_in_the_contract(
 
     assert config.request_open_ttl_hours == MAX_REQUEST_OPEN_TTL_HOURS
     assert str(MAX_REQUEST_OPEN_TTL_HOURS) in CONTRACT.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("wake_timeout_seconds", 0),
+        ("wake_timeout_seconds", -1),
+        ("wake_timeout_seconds", True),
+        ("max_wakes_per_day", 0),
+        ("max_wakes_per_day", -2),
+        ("max_wakes_per_day", 1.5),
+        ("max_wakes_per_day", True),
+    ],
+)
+def test_a_bad_wake_value_names_its_key(
+    tmp_path: Path, key: str, value: object
+) -> None:
+    document = _example()
+    document[key] = value
+
+    with pytest.raises(ConfigError, match=key):
+        load_user_config(_write(tmp_path, document))
+
+
+def test_the_example_loads_with_both_wake_keys(tmp_path: Path) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text(example_config_text(), encoding="utf-8")
+    example = _example()
+
+    config = load_user_config(path)
+
+    assert config.wake_timeout_seconds == example["wake_timeout_seconds"]
+    assert config.max_wakes_per_day == example["max_wakes_per_day"]

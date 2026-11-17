@@ -99,3 +99,16 @@ class DeliveryEvent(StrEnum):
     DONE = "done"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
+
+
+class WakeOutcome(StrEnum):
+    """How a wake ended (244 D3); a row that has not ended has none."""
+
+    #: The command ran and exited; the exit code is data (``wakes.exit_code``).
+    EXITED = "exited"
+    #: The command ran past the wake's deadline and its process group was stopped.
+    TIMED_OUT = "timed_out"
+    #: The command could not be started: no path, a bad command, a missing script.
+    START_FAILED = "start_failed"
+    #: The wrapper hit an unexpected error after the command started.
+    WRAPPER_FAILED = "wrapper_failed"

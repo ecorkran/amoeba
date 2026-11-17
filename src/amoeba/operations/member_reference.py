@@ -20,6 +20,9 @@ class Anchor:
 
     text: str
     project_id: str
+    #: Context Forge's ``projectPath`` for the project; ``None`` when ``cf`` did not
+    #: know the reference (it was read as an id) or gave no path.
+    project_path: str | None
 
 
 def anchor(text: str, run: CfRun) -> Anchor:
@@ -31,4 +34,6 @@ def anchor(text: str, run: CfRun) -> Anchor:
     found = project_of(reference=text, run=run)
     if isinstance(found, CfCallFailed):
         raise ContextForgeError(found.detail)
-    return Anchor(text, found.id if isinstance(found, CFProject) else text)
+    if isinstance(found, CFProject):
+        return Anchor(text, found.id, found.project_path)
+    return Anchor(text, text, None)

@@ -15,9 +15,12 @@ from pathlib import Path
 from typing import Any, Final, Self
 
 from pydantic import ValidationError, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from amoeba.answering.settings import RulesPath
 from amoeba.config.user_config import UserConfig
+from amoeba.operations.add_door import refuse_door_fields
+from amoeba.operations.names import Door
 from amoeba.operations.project_lookup import project_or_rejection
 from amoeba.operations.set_up import malformed_result, set_up
 from amoeba.operations.set_up_models import (
@@ -28,6 +31,7 @@ from amoeba.operations.set_up_models import (
     NonBlankText,
     SetUpRequest,
     SetUpResult,
+    WakeCommand,
 )
 from amoeba.store.programs import get_member_any
 from amoeba.store.store import Store
@@ -62,6 +66,9 @@ class AddRequest(FrozenModel):
     authorize_deny: tuple[NonBlankText, ...] | None = None
     depends_on: tuple[AddDependsOn, ...] = ()
     concept: ConceptRequest | None = None
+    #: Omitted leaves the member's wake command; null clears it (244 D1). Hidden from
+    #: the published schema: only the CLI door takes it.
+    wake_command: SkipJsonSchema[WakeCommand | None] = None
 
     @model_validator(mode="after")
     def _bulk_or_single(self) -> Self:
@@ -86,6 +93,7 @@ def single_member_request(
             "rules_default",
             "authorize_allow",
             "authorize_deny",
+            "wake_command",
         )
         if name in given
     }
@@ -116,13 +124,18 @@ def add(
     *,
     directory: Path,
     run: CfRun,
+    door: Door,
 ) -> SetUpResult:
-    """Apply the ``add`` request ``document``, which is validated here.
+    """Apply the ``add`` request ``document``, which is validated here. ``door`` is the
+    interface that carried it: a field it may not set is refused as an unknown field.
 
     Raises:
         ContextForgeError: ``cf`` failed to give a usable answer; nothing is written.
         StoreError: The store failed.
     """
+    refused = refuse_door_fields(document, door)
+    if refused is not None:
+        return refused
     try:
         request = AddRequest.model_validate(document)
     except ValidationError as error:

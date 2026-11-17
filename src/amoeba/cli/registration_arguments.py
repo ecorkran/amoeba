@@ -5,6 +5,8 @@ is ``rules_paths: [P...]``; ``--default-rules`` is ``rules_default: true``;
 ``--no-rules`` is ``rules_paths: []``; ``--allow K`` is ``authorize_allow: [K...]``;
 ``--no-allow`` is ``authorize_allow: []``; ``--deny`` and ``--no-deny`` likewise. A
 flag not given leaves its field omitted, which leaves the stored value alone.
+``--wake-command C`` is ``wake_command: C`` and ``--no-wake-command`` is
+``wake_command: null`` (244).
 """
 
 from __future__ import annotations
@@ -33,7 +35,19 @@ _ADD_DEFAULTS: Final = {
     "no_deny": False,
     "depends_on": None,
     "concept": None,
+    "wake_command": None,
+    "no_wake_command": False,
 }
+
+#: What ``add --help`` says about a wake command (244 D1, D12): it is unattended.
+WAKE_COMMAND_HELP: Final = (
+    "the command Amoeba starts, unattended and with your privileges, in this repo's "
+    "checkout when a request arrives for it and no agent is live there. It runs "
+    "without a shell and sees only a fixed set of environment variables. It is "
+    "shown in plain text by list, so it must carry no secret (put the secret in a "
+    "script that loads it), and it must carry its own cost or time cap, which Amoeba "
+    "cannot check"
+)
 
 
 def _split_once(text: str, flag: str, what: str) -> tuple[str, str]:
@@ -122,6 +136,13 @@ def register_add(
         type=concept_argument,
         metavar="MEMBER:PATH",
         help="set the program's concept",
+    )
+    waking = parser.add_mutually_exclusive_group()
+    waking.add_argument("--wake-command", metavar="COMMAND", help=WAKE_COMMAND_HELP)
+    waking.add_argument(
+        "--no-wake-command",
+        action="store_true",
+        help="clear the member's wake command, so nothing wakes it",
     )
     parser.add_argument(
         "--file",
@@ -239,6 +260,10 @@ def add_document(
     if arguments.concept is not None:
         member, path = arguments.concept
         document["concept"] = {"member": member, "path": path}
+    if arguments.wake_command is not None:
+        document["wake_command"] = arguments.wake_command
+    if arguments.no_wake_command:
+        document["wake_command"] = None
     return document
 
 

@@ -24,6 +24,7 @@ from amoeba.upstream.context_forge.cli_call import CfRun
 
 __all__ = [
     "Caller",
+    "Recipient",
     "Refusal",
     "UnknownActor",
     "resolve_actor",
@@ -37,6 +38,18 @@ class Caller:
     """The active member the call is made by."""
 
     member_id: str
+
+
+@dataclass(frozen=True)
+class Recipient:
+    """The active member a request is addressed to."""
+
+    member_id: str
+    #: Context Forge's ``projectPath``, the checkout a wake runs in (244 D4); ``None``
+    #: when ``cf`` did not know the reference, which is then read as an id.
+    project_path: str | None
+    #: The member's wake command as read now; ``None`` means no wake step (244 D2).
+    wake_command: str | None
 
 
 @dataclass(frozen=True)
@@ -115,15 +128,20 @@ def resolve_actor(
     return caller
 
 
-def resolve_recipient(store: Store, reference: str, run: CfRun) -> str | Refusal:
-    """The project id of the active member ``reference`` names, in any program.
+def resolve_recipient(store: Store, reference: str, run: CfRun) -> Recipient | Refusal:
+    """The active member ``reference`` names, in any program, with its checkout path
+    and wake command. One member read serves all three, so waking adds no read.
 
     Raises:
         ContextForgeError: ``cf`` failed or timed out; nothing should be written.
     """
     found = anchor(reference, run)
-    if _is_active_member(store, found.project_id):
-        return found.project_id
+    with store.read() as transaction:
+        member = get_member(transaction, found.project_id)
+    if member is not None:
+        return Recipient(
+            found.project_id, found.project_path, member.settings.wake_command
+        )
     return Refusal(
         RejectCode.UNKNOWN_RECIPIENT,
         f"{reference!r} is not an active member of any program",

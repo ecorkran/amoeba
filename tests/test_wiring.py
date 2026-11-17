@@ -459,6 +459,7 @@ def test_the_message_documents_are_json_with_enums_as_strings() -> None:
         "request": None,
         "note": None,
         "problems": [],
+        "wake_problem": None,
     }
     assert set(listed) == {
         "outcome",

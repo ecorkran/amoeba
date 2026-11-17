@@ -54,6 +54,7 @@ def insert_member(
     registered_at: datetime,
     updated_at: datetime,
     rules_from: RulesFrom = RulesFrom.NAMED,
+    wake_command: str | None = None,
 ) -> None:
     transaction.execute(
         sql.INSERT_MEMBER,
@@ -66,6 +67,7 @@ def insert_member(
             encode_timestamp(registered_at),
             encode_timestamp(updated_at),
             rules_from,
+            wake_command,
         ),
     )
 

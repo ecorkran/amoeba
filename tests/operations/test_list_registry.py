@@ -294,6 +294,7 @@ def test_each_views_json_has_its_documented_shape(store: Store) -> None:
         "rules_paths",
         "authorize_allow",
         "authorize_deny",
+        "wake_command",
         "depends_on",
     }
     assert set(dependencies.model_dump(mode="json")["dependencies"][0]) == {

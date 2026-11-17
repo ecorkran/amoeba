@@ -22,6 +22,7 @@ from amoeba.operations.decisions import DecisionsOutcome, decisions
 from amoeba.operations.dismiss import dismiss
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import PruneReport
+from amoeba.operations.wake import WAKE_LOG_DIRECTORY
 from amoeba.store.answers import add_pm_answer, answers_of, record_resume
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question, settle_waiting
@@ -348,3 +349,29 @@ def test_a_call_after_the_interval_walks_again(
 
     assert later.removed > 0
     assert not orphan.exists()
+
+
+def test_old_wake_logs_go_and_new_ones_stay(store: Store, layout: StateLayout) -> None:
+    """``logs/wake/`` is no protected directory (244 D10): the rule for old logs
+    removes it, so wake logs need no rule of their own."""
+    old = [
+        _file(layout.logs_dir / WAKE_LOG_DIRECTORY / f"aged-wake{suffix}", OLD)
+        for suffix in (".stdout.log", ".stderr.log")
+    ]
+    young = _file(layout.logs_dir / WAKE_LOG_DIRECTORY / "young-wake.stdout.log", YOUNG)
+
+    _prune(store, layout)
+
+    assert not any(path.exists() for path in old)
+    assert young.exists()
+
+
+def test_an_emptied_wake_log_directory_is_removed(
+    store: Store, layout: StateLayout
+) -> None:
+    old = _file(layout.logs_dir / WAKE_LOG_DIRECTORY / "aged-wake.stdout.log", OLD)
+
+    _prune(store, layout)
+
+    assert not old.exists()
+    assert not old.parent.exists()

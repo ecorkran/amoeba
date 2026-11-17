@@ -183,6 +183,15 @@ def _merged_rules(
     return stored.rules_paths, stored.rules_from
 
 
+def _merged_wake_command(
+    member: ResolvedMember, stored: MemberSettings | None
+) -> str | None:
+    """A given command (null clears) replaces; omitted keeps the stored one."""
+    if member.wake_command_given:
+        return member.wake_command
+    return None if stored is None else stored.wake_command
+
+
 def _merged_settings(
     member: ResolvedMember, stored: MemberSettings | None
 ) -> MemberSettings:
@@ -202,6 +211,7 @@ def _merged_settings(
         authorize_allow=pick(member.authorize_allow, stored and stored.authorize_allow),
         authorize_deny=pick(member.authorize_deny, stored and stored.authorize_deny),
         rules_from=rules_from,
+        wake_command=_merged_wake_command(member, stored),
     )
 
 

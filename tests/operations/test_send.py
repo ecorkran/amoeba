@@ -553,3 +553,16 @@ def test_a_parent_that_is_a_notes_id_is_parent_unknown_naming_a_note(
     assert result.rejection is RejectCode.PARENT_UNKNOWN
     assert "note" in result.problems[0]
     assert message_ids(store) == ["a-note"]
+
+
+def test_wake_problem_is_null_on_a_normal_send(store: Store, deps: Deps) -> None:
+    result = send(
+        store,
+        CONFIG,
+        {"id": "plain", "to": RECIPIENT_NAME, "subject": "s", "body": "b"},
+        directory=DIRECTORY,
+        deps=deps,
+    )
+
+    assert result.outcome is SendOutcome.SENT
+    assert result.wake_problem is None

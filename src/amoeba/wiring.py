@@ -185,7 +185,11 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
     match name:
         case OperationName.ADD:
             return place_add(
-                store, load_config(), document, _required_directory(name, directory)
+                store,
+                load_config(),
+                document,
+                _required_directory(name, directory),
+                door,
             )
         case OperationName.RM:
             return place_rm(

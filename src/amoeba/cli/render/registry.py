@@ -81,6 +81,8 @@ def _member_block(row: MemberRow, names: dict[str, str]) -> list[str]:
     for label, keys in (("allow", row.authorize_allow), ("deny", row.authorize_deny)):
         if keys:
             lines.append(prose_line(indented(f"{label}: "), ", ".join(keys)))
+    if row.wake_command is not None:
+        lines.extend([indented("wake command:"), command_line(row.wake_command)])
     lines.extend(
         prose_line(
             indented("depends on: "),

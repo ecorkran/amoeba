@@ -25,6 +25,7 @@ from amoeba.store.vocabulary import (
     RequestState,
     ResumeOutcome,
     RulesFrom,
+    WakeOutcome,
 )
 
 SCHEMA_FILES = sorted(
@@ -53,6 +54,7 @@ ENUM_FOR_COLUMN: dict[str, type[StrEnum]] = {
     "messages.kind": MessageKind,
     "messages.state": RequestState,
     "deliveries.event": DeliveryEvent,
+    "wakes.outcome": WakeOutcome,
 }
 
 

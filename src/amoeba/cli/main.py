@@ -25,8 +25,10 @@ from amoeba.cli.exit_codes import (
 )
 from amoeba.cli.parser import build_parser
 from amoeba.cli.registration_arguments import check_usage
+from amoeba.cli.wake_command import run_wake_run
 from amoeba.config.home import StateLayout, state_layout
 from amoeba.operations.names import OperationName
+from amoeba.operations.wake_run import WAKE_RUN_COMMAND, WakeRunError
 from amoeba.wiring import OPERATIONAL_ERRORS
 
 __all__ = [
@@ -43,9 +45,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     arguments = parser.parse_args(argv)
     check_usage(parser, arguments)
-    name: OperationName = arguments.operation
     layout: StateLayout | None = None
+    # A CLI-only command (``wake-run``) sets no operation.
+    name: OperationName | None = getattr(arguments, "operation", None)
     try:
+        if getattr(arguments, "cli_only", None) == WAKE_RUN_COMMAND:
+            # Before the operation lookup and before any config load (244 D6).
+            return run_wake_run(state_layout(), arguments.wake_id)
+        if name is None:
+            raise AssertionError("a parsed command is an operation or CLI-only")
         if name is OperationName.HANDLE_PAUSE:
             layout = state_layout()
             return run_handle_pause(layout, arguments.run_id, as_json=arguments.json)
@@ -53,7 +61,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except RequestDocumentError as error:
         sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
         return EXIT_USAGE
-    except OPERATIONAL_ERRORS as error:
+    except (WakeRunError, *OPERATIONAL_ERRORS) as error:
         # The process boundary: these are the expected failures, reported once. With
         # no layout (no state home) there is no calls log to write: stderr only.
         sys.stderr.write(f"error: {type(error).__name__}: {error}\n")

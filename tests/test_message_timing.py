@@ -37,6 +37,7 @@ from amoeba.operations.names import OperationName
 from amoeba.operations.reply import reply
 from amoeba.operations.request_release import MAX_STARTS_PER_CALL, START_BOUND_SECONDS
 from amoeba.operations.send import send
+from amoeba.operations.wake import WAKE_BOUND_SECONDS
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.context_forge.project_of import CF_GET_TIMEOUT_SECONDS
 from amoeba.wiring_messages import (
@@ -148,10 +149,30 @@ def test_a_bound_that_reaches_the_deadline_fails_the_check() -> None:
         check_below_deadline(MCP_CALL_DEADLINE_SECONDS + 1, MCP_CALL_DEADLINE_SECONDS)
 
 
+#: The operations followed by the wake step (slice 244, D11): only ``send``.
+WAKE_AFTER_OPERATIONS = frozenset({OperationName.SEND})
+
+
 def _with_start(name: MessageOperation) -> float:
-    """The operation's worst case, plus the start trigger's when it runs after it."""
+    """The operation's worst case, plus the start trigger's and, for ``send``, the
+    wake step's when they run after it."""
     start = START_BOUND_SECONDS if name in START_AFTER_OPERATIONS else 0.0
-    return worst_case_seconds(name) + start
+    wake = WAKE_BOUND_SECONDS if name in WAKE_AFTER_OPERATIONS else 0.0
+    return worst_case_seconds(name) + start + wake
+
+
+def test_the_wake_bound_is_five_store_waits() -> None:
+    """The legacy-move lock, the open, and the read, claim and failure transactions."""
+    assert WAKE_BOUND_SECONDS == 5 * BUSY_TIMEOUT_SECONDS
+
+
+def test_sends_worst_case_with_the_start_and_the_wake_is_the_design_figure() -> None:
+    assert _with_start(OperationName.SEND) == (
+        worst_case_seconds(OperationName.SEND)
+        + START_BOUND_SECONDS
+        + WAKE_BOUND_SECONDS
+    )
+    check_below_deadline(_with_start(OperationName.SEND), MCP_CALL_DEADLINE_SECONDS)
 
 
 def test_the_start_bound_is_one_read_and_one_write_per_start() -> None:

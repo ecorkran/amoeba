@@ -90,7 +90,7 @@ def rm(
         found = _working_directory_project(directory, run)
         if isinstance(found, SetUpResult):
             return found
-        anchors = [Anchor(found.name, found.id)]
+        anchors = [Anchor(found.name, found.id, found.project_path)]
         members = () if request.concept else (found.id,)
     program = _program_of(store, request, anchors)
     if isinstance(program, SetUpResult):

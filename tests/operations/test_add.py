@@ -12,6 +12,7 @@ from user_configs import user_config
 
 from amoeba.operations.add import NOT_A_PROJECT_DETAIL, add
 from amoeba.operations.members import ContextForgeError
+from amoeba.operations.names import Door
 from amoeba.operations.set_up_models import (
     SetUpOutcome,
     SetUpProblemCode,
@@ -48,6 +49,7 @@ def _add(
         document or {},
         directory=DIRECTORY,
         run=FakeCf(directory_fixture=directory_fixture, projects=OTHER),
+        door=Door.CLI,
     )
 
 
@@ -206,7 +208,14 @@ def test_bulk_and_single_fields_together_are_malformed(store: Store) -> None:
 
 def test_cf_failing_raises_and_writes_nothing(store: Store) -> None:
     with pytest.raises(ContextForgeError):
-        add(store, user_config(), {}, directory=DIRECTORY, run=fake_cf_run(None))
+        add(
+            store,
+            user_config(),
+            {},
+            directory=DIRECTORY,
+            run=fake_cf_run(None),
+            door=Door.CLI,
+        )
 
     assert row_counts(store)["members"] == 0
 

@@ -55,6 +55,8 @@ class MemberRow(FrozenModel):
     rules_paths: tuple[str, ...]
     authorize_allow: tuple[str, ...]
     authorize_deny: tuple[str, ...]
+    #: The command a wake starts for this member, in plain text; null for none (244).
+    wake_command: str | None
     depends_on: tuple[DependencyRef, ...]
 
 
@@ -148,6 +150,7 @@ def _member_row(
         rules_paths=config.default_rules_paths if default else settings.rules_paths,
         authorize_allow=settings.authorize_allow,
         authorize_deny=settings.authorize_deny,
+        wake_command=settings.wake_command,
         depends_on=tuple(
             DependencyRef(provider=pair.provider_id, consumed=pair.consumed)
             for pair in pairs

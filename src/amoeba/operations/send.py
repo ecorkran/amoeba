@@ -19,6 +19,7 @@ from amoeba.config.user_config import UserConfig
 from amoeba.operations.deps import Deps
 from amoeba.operations.message_document import declared_text
 from amoeba.operations.message_member import (
+    Recipient,
     Refusal,
     resolve_caller,
     resolve_recipient,
@@ -30,6 +31,7 @@ from amoeba.operations.names import OperationName
 from amoeba.operations.reject_codes import RejectCode, validation_problems
 from amoeba.operations.send_note import write_note
 from amoeba.operations.send_write import write_send
+from amoeba.operations.wake import wake_for_sent_request
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import MessageKind
 
@@ -62,7 +64,7 @@ def send(
         problems = validation_problems(error)
         malformed = Refusal(RejectCode.MALFORMED, "; ".join(problems), caller.member_id)
         return _refuse(store, malformed, document, now, problems)
-    recipient = (
+    recipient: Recipient | Refusal | None = (
         None
         if request.to is None
         else resolve_recipient(store, request.to, deps.cf_run)
@@ -76,20 +78,21 @@ def send(
             store,
             config,
             sender=caller.member_id,
-            recipient=recipient,
+            recipient=None if recipient is None else recipient.member_id,
             request=request,
             now=now,
         )
     if recipient is None:
         raise AssertionError("a request names its recipient; the model checked")
-    return write_send(
+    result = write_send(
         store,
         config,
         sender=caller.member_id,
-        recipient=recipient,
+        recipient=recipient.member_id,
         request=request,
         now=now,
     )
+    return wake_for_sent_request(store, config, deps, recipient, result)
 
 
 def _refuse(

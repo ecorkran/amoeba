@@ -75,6 +75,8 @@ def user_config(
         notify_poll_seconds=_example_number("notify_poll_seconds"),
         session_heartbeat_seconds=_example_number("session_heartbeat_seconds"),
         session_stale_seconds=_example_number("session_stale_seconds"),
+        wake_timeout_seconds=_example_number("wake_timeout_seconds"),
+        max_wakes_per_day=_example_integer("max_wakes_per_day"),
         default_rules_paths=("CLAUDE.md", "AGENTS.md"),
         default_consumed=ConsumedMode.FROM_SOURCE,
         authorize_items=authorize_items,

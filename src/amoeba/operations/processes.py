@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Final, Protocol
@@ -26,6 +27,8 @@ from amoeba.upstream.squadron.launch import (
 
 #: How long a stopped child gets to exit after SIGTERM before it is killed.
 TERMINATE_GRACE_SECONDS: Final = 5.0
+#: How often the stop looks again at the child and its group.
+GROUP_POLL_SECONDS: Final = 0.05
 
 
 class WaitableChild(Protocol):
@@ -94,10 +97,12 @@ def spawn_failure(error: OSError) -> LaunchError:
 
 
 def terminate_group(child: WaitableChild) -> None:
-    """Stop the child's whole process group, then wait for the child to exit.
+    """Stop the child's whole process group, then wait until the group is gone.
 
     The child leads its own session (``start_new_session``), so its group is its
-    pid. SIGTERM first; SIGKILL if it has not exited after the grace period.
+    pid. SIGTERM first; SIGKILL if any member of the group is still there after the
+    grace period. The grace waits for the whole group, not just its leader: a leader
+    that exits on SIGTERM must not leave a member that ignored it running.
     """
     for sending in (signal.SIGTERM, signal.SIGKILL):
         try:
@@ -106,10 +111,30 @@ def terminate_group(child: WaitableChild) -> None:
             # Expected: the group is already gone, which is what was wanted.
             child.wait()
             return
-        try:
-            child.wait(timeout=TERMINATE_GRACE_SECONDS)
-        except subprocess.TimeoutExpired:
-            # Expected: it ignored SIGTERM; the loop goes on to SIGKILL.
-            continue
-        return
+        if _group_gone_within_grace(child):
+            return
     child.wait()
+
+
+def _group_gone_within_grace(child: WaitableChild) -> bool:
+    """Whether the child exited and its group has no member left within the grace."""
+    deadline = time.monotonic() + TERMINATE_GRACE_SECONDS
+    while True:
+        try:
+            child.wait(timeout=GROUP_POLL_SECONDS)
+        except subprocess.TimeoutExpired:
+            # Expected: the leader has not exited yet; the loop looks again.
+            pass
+        if not _group_exists(child.pid):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(GROUP_POLL_SECONDS)
+
+
+def _group_exists(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    return True

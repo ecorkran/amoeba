@@ -19,6 +19,7 @@ from user_configs import user_config
 
 from amoeba.operations.add import add
 from amoeba.operations.members import ContextForgeError
+from amoeba.operations.names import Door
 from amoeba.operations.rm import rm
 from amoeba.operations.set_up_models import (
     SetUpOutcome,
@@ -311,6 +312,7 @@ def _add(store: Store, document: dict[str, Any]) -> SetUpResult:
         document,
         directory=DIRECTORY,
         run=FakeCf(directory_fixture=DEFAULT_WORKTREE, projects=PROJECTS),
+        door=Door.CLI,
     )
 
 

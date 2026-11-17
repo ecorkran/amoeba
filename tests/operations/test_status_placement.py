@@ -19,7 +19,7 @@ from operations.status_support import in_directory, recorded_run
 MEMBER_ID = "project-in-scope"
 MEMBER = Member(
     "demo",
-    MemberSettings(MEMBER_ID, (), (), (), RulesFrom.NAMED),
+    MemberSettings(MEMBER_ID, (), (), (), RulesFrom.NAMED, None),
     NOW,
     NOW,
     None,

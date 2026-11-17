@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: Installing and registering amoeba-mcp, the MCP server that gives an agent session the amoeba commands, and what its tools, timeouts and start-up checks do.
 dateCreated: 20261112
-dateUpdated: 20261116
+dateUpdated: 20261117
 status: complete
 ---
 
@@ -83,17 +83,17 @@ on the CLI; it is not an error.
 
 | Tool | Notes |
 |---|---|
-| `add` | Registers a repo in a program. Takes `directory` (the caller's checkout, an absolute path) and the single-member fields (`program`, `project`, `rules_paths`, `rules_default`, `authorize_allow`, `authorize_deny`, `depends_on`, `concept`) or `bulk`, a whole multi-member request, never both. |
+| `add` | Registers a repo in a program. Takes `directory` (the caller's checkout, an absolute path) and the single-member fields (`program`, `project`, `rules_paths`, `rules_default`, `authorize_allow`, `authorize_deny`, `depends_on`, `concept`) or `bulk`, a whole multi-member request, never both. It does not take `wake_command` (the command Amoeba starts for a request when no agent is live in a repo): that is the PM's CLI setting, `amoeba add --wake-command`, and a call that passes it is rejected as an unknown field. |
 | `rm` | Removes members, pairs (`PROVIDER:CONSUMER`) or the concept (`concept: true`). Also takes `directory`; with nothing named it removes that repo. |
 | `list` | What needs the PM: with no `subject`, the same document as `status` (and `all` adds `settled`); `programs`, `members` and `dependencies` show what is registered. Also takes `directory`. Like `status`, it then starts `handle_pause` for each held question whose request has ended (slice 242). |
-| `status` | Also takes `directory`. Its listing gives each run's `run_id` and `directory` for `handle_pause`, and the question key for `answer`. After its listing it starts `handle_pause` for each held question whose request has ended (slice 242); the result does not change, and a held run (`waiting_on_request`) needs no call from you. |
+| `status` | Also takes `directory`. Its listing gives each run's `run_id` and `directory` for `handle_pause`, and the question key for `answer`. After its listing it starts `handle_pause` for each held question whose request has ended (slice 242); the result does not change, and a held run (`waiting_on_request`) needs no call from you. A member with a wake command also has a `wake` object (slice 244: `command`, `running`, `stopped`, `last_problem`; `cli-contract.md`), shown in plain text. |
 | `decisions` | `read_through` goes to `mark_read`. Each record shows `via`, the door that carried a PM answer (`cli` or `mcp`). |
 | `mark_read` | |
 | `answer` | `text` must be a decision the PM actually gave, passed on as given. It becomes precedent. Recorded with `via: mcp`. |
 | `dismiss`, `retract` | |
 | `report_release` | Takes `directory` (the caller's checkout, an absolute path) and `commit` (the full hash), `changed`, `touched`, `version`, and `mode` (`report`, `correct` or `withdraw`; `report` when absent). |
 | `changes` | Takes `directory` (the caller's checkout, an absolute path) and `since` (ISO-8601 with a UTC offset). Writes nothing. |
-| `send` | Asks another repo for work. Takes `directory` (the sender's checkout, an absolute path), `id` (yours; a retry with the same `id` is safe), `kind` (`request`, or `note` for information that needs no reply; `request` when absent), `to`, `to_program` (a note to every other member of a program), `subject`, `body`, `parent` and `member`. |
+| `send` | Asks another repo for work. Takes `directory` (the sender's checkout, an absolute path), `id` (yours; a retry with the same `id` is safe), `kind` (`request`, or `note` for information that needs no reply; `request` when absent), `to`, `to_program` (a note to every other member of a program), `subject`, `body`, `parent` and `member`. Its result has `wake_problem` (slice 244): a line when the wake step for the recipient hit a store error, else null; the request is written either way. |
 | `inbox` | Takes `directory` and optional `since` and `member`. Writes nothing; pass its `as_of_seq` back as `since`. Returns `requests`, `notes` and `deliveries`. |
 | `reply` | Takes `directory`, `id`, `action` (`accept`, `decline` or `done`), `text`, `commit`, `version` and `member`. |
 | `cancel` | Takes `directory`, `id`, `reason` and `member`. |

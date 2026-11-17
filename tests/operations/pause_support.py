@@ -199,6 +199,7 @@ def register_member(
                 authorize_allow=(),
                 authorize_deny=(),
                 rules_from=RulesFrom.NAMED,
+                wake_command=None,
             ),
             now=START,
         )

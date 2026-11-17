@@ -130,7 +130,10 @@ def render_send(result: SendResult, *, now: datetime) -> str:
     if result.request is None:
         return _rejection(result.rejection, result.problems)
     head = f"{result.outcome.value}: {result.request.id}"
-    return _with_notice(result.notice, [head, *_request_block(result.request, now)])
+    lines = [head, *_request_block(result.request, now)]
+    if result.wake_problem is not None:
+        lines.append(result.wake_problem)
+    return _with_notice(result.notice, lines)
 
 
 def render_reply(result: ReplyResult, *, now: datetime) -> str:
