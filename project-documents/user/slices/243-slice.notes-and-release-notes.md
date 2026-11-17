@@ -193,7 +193,7 @@ For `withdrawn`, the report must still exist to be read, so recipients are found
 - **Id.** `release:` followed by `uuid4().hex`, one per row. A colon cannot appear in a sender's id (240 D2's grammar), so a release note's id can never collide with an agent's, and `release:` is the one prefix constant the tests use to find release notes. Nothing parses it, and nothing reads the id to decide behavior.
 - **Delivery event.** `sent`, as for any note. A correction or withdrawal is a new note, not a state change of the earlier one.
 
-**Atomicity.** The notes are written inside `report_release`'s `store.write()` block, after the report write. A raise from a note write rolls the report back, so a consumer can never see a note for a report that is not stored, and a report is never stored without its notes. A retry of the same call then runs as a first call. `ReportReleaseResult` is unchanged.
+**Atomicity.** The notes are written inside `report_release`'s `store.write()` block, after the report write. A raise from a note write rolls the report back, so a consumer can never see a note for a report that is not stored, and a report is never stored without its notes. A retry of the same call then runs as a first call. `ReportReleaseResult` gains only `sweep_problem`, the text of a skipped sweep (D6).
 
 - Rejected: one note to a program (the visible set is a subset of the program's members, and `to_program` means all of them); a note at a fixed event only, such as at merge (it would disagree with `changes` for a `from_release` consumer); a link column from note to report (a migration, for a read nothing makes); a `notified` field on the result (nothing in the plan reads it, and `inbox` shows the notes).
 
@@ -241,7 +241,7 @@ The decisions above change what 240, the architecture and the plan say. The docs
 
 ### API Contracts
 
-`NoteView`: `id`, `from_member`, `to_member` (null for a program note), `to_program` (null for a direct note), `subject`, `body`, `created_at`. Members are ids; no message operation looks up names (240 D7). `SendResult` and `InboxResult` carry the notice (240 D11). `ReportReleaseResult` is unchanged and holds no text of other agents. Exit codes are as in 240.
+`NoteView`: `id`, `from_member`, `to_member` (null for a program note), `to_program` (null for a direct note), `subject`, `body`, `created_at`. Members are ids; no message operation looks up names (240 D7). `SendResult` and `InboxResult` carry the notice (240 D11). `ReportReleaseResult` gains only `sweep_problem` (D6) and holds no text of other agents. Exit codes are as in 240.
 
 ## Integration Points
 

@@ -757,7 +757,7 @@ hold a colon, so the two never collide), and a subject and body composed by Amoe
 commit, the version or `none`, the `changed` text and the `touched` items; a correction
 says it replaces the earlier text; a withdrawal carries the commit and version and says
 to disregard the report. A report that cannot write its notes is not stored and the
-call exits 3, so retrying runs as a first call. Before its write, `report-release` runs the due-checked message sweep (so notes are pruned); a store held past the busy timeout skips that sweep, which is logged, and the report is still recorded: the result does not show it. The body is bounded by
+call exits 3, so retrying runs as a first call. Before its write, `report-release` runs the due-checked message sweep (so notes are pruned); a store held past the busy timeout skips that sweep, which is logged and returned as `sweep_problem` in the result, and the report is still recorded. The body is bounded by
 `MAX_RELEASE_NOTE_BODY_LENGTH`, 14439 characters: the length of the longest body the
 template composes from a report with every field at its limit (4000 characters of
 `changed`, 50 touched items of 200 characters, a 128-character version and a

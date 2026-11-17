@@ -26,9 +26,10 @@ from amoeba.operations.request_release import (
     START_FAILED_OUTCOME,
     start_ended_held,
 )
-from amoeba.store.errors import StoreBusyError, StoreRowError
+from amoeba.store.errors import StoreBusyError
 from amoeba.store.held_questions import mark_start_attempted
 from amoeba.store.models import QuestionKey, QuestionRecord
+from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.questions import get_question
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import QuestionState, RequestState
@@ -277,18 +278,14 @@ def test_a_store_error_on_the_read_is_logged_and_not_raised(
 
 
 def test_a_held_row_naming_a_note_is_a_logged_row_error_not_a_silent_skip(
-    tmp_path: Path,
-    store: Store,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path, store: Store, caplog: pytest.LogCaptureFixture
 ) -> None:
-    _held(store, 1, RequestState.DONE)
-
-    def a_note(*_arguments: object) -> RequestState:
-        """A note has no state; ``link_for`` never holds a question on one."""
-        raise StoreRowError("message 'n' is a note, not a request")
-
-    monkeypatch.setattr(request_release, "effective_state", a_note)
+    """A note has no state and ``link_for`` never holds a question on one, so the real
+    ``effective_state`` refuses the row."""
+    note = NewNote("request-1", MEMBER_ID, OTHER_MEMBER_ID, None, "a subject", "a body")
+    with store.write() as transaction:
+        insert_note(transaction, note, [OTHER_MEMBER_ID], START)
+        insert_held_row(transaction, _key(1), request_id="request-1", now=START)
     rig = _rig(tmp_path, store)
 
     with caplog.at_level(logging.ERROR):
