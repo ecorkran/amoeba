@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,11 +22,20 @@ from operations.release_support import (
     release_deps,
     release_rows,
 )
-from store.release_support import FULL_HASH, PROVIDER, seed_members
+from store.release_support import (
+    FULL_HASH,
+    PROGRAM,
+    PROVIDER,
+    START,
+    seed_members,
+)
+from store.seed import insert_member, insert_pair
 
+from amoeba.operations.message_models import MAX_NOTES_PER_SENDER
 from amoeba.operations.report_release import report_release
 from amoeba.operations.report_release_models import ReportOutcome
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
+from amoeba.store.vocabulary import ConsumedMode
 
 WRITERS = 8
 REPORTS_PER_WRITER = 25
@@ -35,6 +45,8 @@ LATENCY_BOUND_SECONDS = BUSY_TIMEOUT_SECONDS
 #: The whole burst of ``WRITERS * REPORTS_PER_WRITER`` writes, with generous headroom
 #: for a slow runner; a burst this slow is lock contention that has gone wrong.
 BURST_BUDGET_SECONDS = 30.0
+#: Active consumers of the provider in the note burst, half of each ``consumed`` value.
+CONSUMERS = 6
 
 
 @dataclass(frozen=True)
@@ -48,12 +60,18 @@ def _document(commit: str, changed: str) -> dict[str, object]:
     return {"commit": commit, "changed": changed, "touched": ["api"]}
 
 
-def _burst(tmp_path: Path, batches: list[list[dict[str, object]]]) -> Burst:
+def _burst(
+    tmp_path: Path,
+    batches: list[list[dict[str, object]]],
+    seed_consumers: Callable[[Store], None] | None = None,
+) -> Burst:
     """Each batch is one writer's documents, run in order on its own connection; all
-    writers start together."""
+    writers start together. ``seed_consumers`` adds the pairs a test needs."""
     path = tmp_path / "amoeba.sqlite3"
     with Store.open(path) as setup:
         seed_members(setup)
+        if seed_consumers is not None:
+            seed_consumers(setup)
     deps = release_deps(tmp_path, SettableClock())
     gate = threading.Barrier(len(batches))
 
@@ -116,5 +134,76 @@ def test_a_burst_of_distinct_reports_is_kept_within_the_latency_and_budget(
         rows = release_rows(store)
     assert len(rows) == total
     assert len({row[0] for row in rows}) == total, "every row has its own seq"
+    assert burst.slowest_write_seconds < LATENCY_BOUND_SECONDS
+    assert burst.elapsed_seconds < BURST_BUDGET_SECONDS
+
+
+def _seed_consumers(store: Store) -> None:
+    """``CONSUMERS`` consumers of ``PROVIDER``, alternating ``from_source`` and
+    ``from_release``."""
+    with store.write() as transaction:
+        for number in range(CONSUMERS):
+            insert_member(
+                transaction,
+                project_id=_consumer_id(number),
+                program_id=PROGRAM,
+                rules_paths=(),
+                authorize_allow=(),
+                authorize_deny=(),
+                registered_at=START,
+                updated_at=START,
+            )
+            insert_pair(
+                transaction,
+                program_id=PROGRAM,
+                provider_id=PROVIDER,
+                consumer_id=_consumer_id(number),
+                consumed=_mode(number),
+                registered_at=START,
+                updated_at=START,
+            )
+
+
+def _consumer_id(number: int) -> str:
+    return f"load-consumer-{number}"
+
+
+def _mode(number: int) -> ConsumedMode:
+    return ConsumedMode.FROM_SOURCE if number % 2 == 0 else ConsumedMode.FROM_RELEASE
+
+
+def test_release_notes_written_inside_the_write_lock_stay_within_the_bounds(
+    tmp_path: Path,
+) -> None:
+    batches = [
+        [
+            _document(
+                f"{writer * REPORTS_PER_WRITER + report:040x}", f"report {report}"
+            )
+            for report in range(REPORTS_PER_WRITER)
+        ]
+        for writer in range(WRITERS)
+    ]
+
+    burst = _burst(tmp_path, batches, _seed_consumers)
+
+    total = WRITERS * REPORTS_PER_WRITER
+    assert burst.outcomes == [ReportOutcome.RECORDED] * total
+    with Store.open(tmp_path / "amoeba.sqlite3") as store, store.read() as transaction:
+        per_member = dict(
+            transaction.execute(
+                "SELECT member_id, count(*) FROM deliveries GROUP BY member_id"
+            ).fetchall()
+        )
+        seqs = [
+            int(row[0]) for row in transaction.execute("SELECT seq FROM deliveries")
+        ]
+    from_source = {_consumer_id(n) for n in range(CONSUMERS) if n % 2 == 0}
+    written = total * len(from_source)
+    # The provider's note cap (243 D6) keeps only its newest notes, one delivery each.
+    assert written > MAX_NOTES_PER_SENDER
+    assert set(per_member) <= from_source
+    assert sum(per_member.values()) == MAX_NOTES_PER_SENDER
+    assert len(seqs) == len(set(seqs)) == MAX_NOTES_PER_SENDER
     assert burst.slowest_write_seconds < LATENCY_BOUND_SECONDS
     assert burst.elapsed_seconds < BURST_BUDGET_SECONDS

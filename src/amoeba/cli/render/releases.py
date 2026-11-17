@@ -62,6 +62,8 @@ def render_report_release(result: ReportReleaseResult) -> str:
             (result.report.commit, *(() if version is None else (version,)))
         )
         lines.append(indented(head))
+    if result.sweep_problem is not None:
+        lines.append(result.sweep_problem)
     return "\n".join(lines) + "\n"
 
 

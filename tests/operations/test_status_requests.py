@@ -6,7 +6,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -14,6 +14,7 @@ from store.decision_support import CORE, LINT, seed_programs
 from store.message_support import TTL, delivery_rows, send_request
 from user_configs import user_config
 
+from amoeba.cli.render.waiting import NOTHING_NEEDS_YOU, render_waiting
 from amoeba.operations.deps import Deps
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.status import StatusResult, status
@@ -21,6 +22,7 @@ from amoeba.operations.status_models import MemberStatus, StatusOutcome
 from amoeba.store.message_rejections import record_rejection
 from amoeba.store.message_transitions import StateFields, change_state
 from amoeba.store.messages import get_message
+from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, RequestState
 from operations.list_support import ListCf, names_of, project_entry
@@ -258,3 +260,56 @@ def test_the_status_keys_gain_only_the_notice_and_the_two_member_fields(
         # Slice 241 (D8): the member's live sessions.
         "sessions",
     }
+
+
+def _send_note(store: Store, note_id: str, when: datetime) -> None:
+    note = NewNote(note_id, CORE, LINT, None, "subject", "body")
+    with store.write() as transaction:
+        insert_note(transaction, note, [LINT], when)
+
+
+def test_a_note_alone_changes_nothing_in_status_and_needs_no_notice(
+    store: Store, deps: Deps, clock: SettableClock
+) -> None:
+    empty = _status(store, deps)
+    _send_note(store, "a-note", clock.now)
+
+    result = _status(store, deps)
+
+    assert result.model_dump(mode="json") == empty.model_dump(mode="json")
+    assert result.notice is None
+    assert render_waiting(result, now=clock.now) == f"{NOTHING_NEEDS_YOU}\n"
+
+
+def test_a_store_with_a_request_and_a_note_shows_the_request_only(
+    store: Store, deps: Deps, clock: SettableClock
+) -> None:
+    _send(store, "ask")
+    _send_note(store, "a-note", clock.now)
+
+    lint = _members(_status(store, deps))[LINT]
+
+    assert [entry.id for entry in lint.requests] == ["ask"]
+
+
+def test_a_rejected_note_send_shows_under_the_senders_rejected_calls(
+    store: Store, deps: Deps, clock: SettableClock
+) -> None:
+    with store.write() as transaction:
+        record_rejection(
+            transaction,
+            CORE,
+            "send",
+            "no-such-program",
+            "a-note",
+            None,
+            "unknown_recipient",
+            "unknown program",
+            clock.now,
+        )
+
+    core = _members(_status(store, deps))[CORE]
+
+    assert [(call.operation, call.message_id) for call in core.rejected_calls] == [
+        ("send", "a-note")
+    ]

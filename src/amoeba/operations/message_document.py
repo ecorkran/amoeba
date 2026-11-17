@@ -18,3 +18,16 @@ def declared_text(document: object, field: str) -> str | None:
     # A JSON object always has string keys.
     value = cast("dict[str, object]", document).get(field)
     return value if isinstance(value, str) else None
+
+
+def recipient_ref(to: str | None, to_program: str | None) -> str | None:
+    """The one recipient rule: ``to``, else ``to_program``, else ``None``."""
+    return to if to is not None else to_program
+
+
+def declared_recipient(document: object) -> str | None:
+    """The recipient as the document gave it: ``to``, else ``to_program`` (243), else
+    ``None``. This is what a rejection row keeps as the recipient."""
+    return recipient_ref(
+        declared_text(document, "to"), declared_text(document, "to_program")
+    )

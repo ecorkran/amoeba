@@ -29,6 +29,7 @@ from amoeba.operations.status_models import StatusOutcome
 from amoeba.store.answers import add_pm_answer, record_resume
 from amoeba.store.message_rejections import record_rejection
 from amoeba.store.models import QuestionKey
+from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.question_closing import close_question
 from amoeba.store.questions import get_question, insert_question
 from amoeba.store.store import Store
@@ -247,3 +248,42 @@ def test_each_singular_form_names_the_same_subject_as_its_plural() -> None:
     for singular, subject in SUBJECT_ALIASES.items():
         assert ListRequest.model_validate({"subject": singular}).subject is subject
         assert ListRequest.model_validate({"subject": subject.value}).subject is subject
+
+
+def test_list_on_a_store_holding_only_an_aged_note_prunes_it(
+    store: Store, tmp_path: Path
+) -> None:
+    deps = _deps(tmp_path)
+    aged = deps.clock() - timedelta(days=CONFIG.prune_after_days + 1)
+    note = NewNote("aged-note", CORE, LINT, None, "subject", "body")
+    with store.write() as transaction:
+        insert_note(transaction, note, [LINT], aged)
+
+    _list(store, tmp_path)
+
+    with store.read() as transaction:
+        row = transaction.execute("SELECT count(*) FROM messages").fetchone()
+        assert row is not None and row[0] == 0
+        row = transaction.execute("SELECT count(*) FROM deliveries").fetchone()
+        assert row is not None and row[0] == 0
+
+
+def test_with_a_note_in_the_store_list_shows_none_and_equals_status(
+    store: Store, tmp_path: Path
+) -> None:
+    with store.write() as transaction:
+        send_request(transaction, "ask", from_member=CORE, to_member=LINT)
+        insert_note(
+            transaction,
+            NewNote("a-note", CORE, LINT, None, "subject", "body"),
+            [LINT],
+            NOW,
+        )
+
+    result = _list(store, tmp_path)
+
+    expected = status(store, CONFIG, {}, directory=ELSEWHERE, deps=_deps(tmp_path))
+    assert isinstance(result, ListResult)
+    assert result.document() == expected.model_dump(mode="json")
+    lint = {m.member.id: m for p in expected.programs for m in p.members}[LINT]
+    assert [entry.id for entry in lint.requests] == ["ask"]

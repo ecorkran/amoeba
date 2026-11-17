@@ -87,8 +87,6 @@ def held_request_states(
             states[row.request_id] = None
             continue
         state = effective_state(message, now)
-        if state is None:
-            raise StoreRowError(f"held question {row.key} names a note")
         states[row.request_id] = state
     return states
 

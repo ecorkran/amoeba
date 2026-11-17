@@ -10,13 +10,19 @@ given) shows each change; ``list`` shows the chain while it is open and nothing 
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
+from cf_routing import RoutedProject
 from user_configs import user_config
 
 from amoeba.cli.exit_codes import EXIT_REJECTED
+from amoeba.config.home import store_path
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
+from amoeba.store.notes import NewNote, insert_note
+from amoeba.store.store import Store
 from cli.cli_support import write_config
 from cli.requests_support import (
     CHILD,
@@ -238,3 +244,93 @@ def test_a_reply_by_a_non_addressee_is_recorded_and_shown_under_the_caller(
         PARENT,
     )
     assert requests_by_id(repos.run(repos.forge, "inbox"))[PARENT]["state"] == "open"
+
+
+def _write_note(
+    note_id: str, sender: RoutedProject, recipients: list[RoutedProject], **to: str
+) -> None:
+    """A note written into the CLI's own store, as ``send --note`` will (243 6.1)."""
+    note = NewNote(
+        note_id,
+        sender.id,
+        to.get("to_member"),
+        to.get("to_program"),
+        "news",
+        "not a request",
+    )
+    with Store.open(store_path()) as store, store.write() as transaction:
+        insert_note(transaction, note, [r.id for r in recipients], datetime.now(UTC))
+
+
+def _request_events(document: dict[str, Any]) -> list[tuple[str, str]]:
+    return [pair for pair in events(document) if not pair[0].startswith("note-")]
+
+
+def test_notes_in_the_store_leave_the_request_chain_unchanged(repos: Repos) -> None:
+    """Scenario D again, with a program note sent first and a direct note in the
+    middle: every request result and every inbox request list is as without them."""
+    squadron, forge, guide = repos.squadron, repos.forge, repos.guide
+    _write_note("note-program", squadron, [forge, guide], to_program="demo")
+
+    sent = repos.run(
+        squadron,
+        "send",
+        "--id",
+        PARENT,
+        "--to",
+        "context-forge",
+        "--subject",
+        "add a flag",
+        "--body",
+        "squadron needs a flag in cf",
+    )
+    assert sent["outcome"] == "sent" and sent["request"]["state"] == "open"
+    forge_inbox = repos.run(forge, "inbox")
+    assert set(requests_by_id(forge_inbox)) == {PARENT}
+    assert [note["id"] for note in forge_inbox["notes"]] == ["note-program"]
+    forge_seen = forge_inbox["as_of_seq"]
+
+    accepted = repos.run(forge, "reply", PARENT, "accept")
+    assert accepted["request"]["state"] == "accepted"
+    child = repos.run(
+        forge,
+        "send",
+        "--id",
+        CHILD,
+        "--to",
+        "ai-project-guide",
+        "--subject",
+        "guide text",
+        "--body",
+        "context-forge needs a guide section",
+        "--parent",
+        PARENT,
+    )
+    assert (child["request"]["parent_id"], child["request"]["depth"]) == (PARENT, 2)
+    _write_note("note-direct", guide, [forge], to_member=forge.id)
+
+    guide_inbox = repos.run(guide, "inbox")
+    assert set(requests_by_id(guide_inbox)) == {CHILD}
+    repos.run(guide, "reply", CHILD, "accept")
+    done_child = repos.run(
+        guide, "reply", CHILD, "done", "--text", "added section 4", "--commit", HASH
+    )
+    assert done_child["request"]["state"] == "done"
+
+    forge_after = repos.run(forge, "inbox", "--since", str(forge_seen))
+    assert _request_events(forge_after) == [(CHILD, "accepted"), (CHILD, "done")]
+    assert set(requests_by_id(forge_after)) == {CHILD}
+    assert [note["id"] for note in forge_after["notes"]] == ["note-direct"]
+    done = repos.run(
+        forge, "reply", PARENT, "done", "--text", "flag added", "--version", "v2.0.0"
+    )
+    assert done["request"]["state"] == "done"
+
+    assert set(requests_by_id(repos.run(forge, "inbox"))) == {PARENT, CHILD}
+    assert {n["id"] for n in repos.run(forge, "inbox")["notes"]} == {
+        "note-program",
+        "note-direct",
+    }
+    listed = repos.run(squadron, "list")
+    assert listed["notice"] is None
+    assert all(not entry["requests"] for entry in chain_members(listed).values())

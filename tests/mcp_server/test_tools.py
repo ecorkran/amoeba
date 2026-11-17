@@ -248,3 +248,21 @@ def test_only_the_send_advice_calls_a_repeat_safe() -> None:
     assert "repeated `send` with the same `id` is safe" in SEND_ADVICE
     assert "`send`" not in STATE_CHANGE_ADVICE
     assert "rejected naming the state" in STATE_CHANGE_ADVICE
+
+
+def test_the_send_tool_takes_kind_and_to_program_and_still_needs_neither() -> None:
+    schema = input_schema(_spec(OperationName.SEND))
+
+    assert {"kind", "to_program"} <= set(schema["properties"])
+    assert "kind" not in schema["required"]
+    assert "to_program" not in schema["required"]
+    assert "to" not in schema["required"]
+
+
+def test_the_send_and_inbox_descriptions_say_a_note_needs_no_reply() -> None:
+    send = _spec(OperationName.SEND).description
+    inbox = _spec(OperationName.INBOX).description
+
+    assert "`kind` `note`" in send and "needs no reply" in send
+    assert "`to_program`" in send
+    assert "`notes`" in inbox and "needs no reply" in inbox

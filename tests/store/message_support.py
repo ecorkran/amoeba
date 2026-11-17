@@ -65,10 +65,11 @@ def send_request(
     )
 
 
-def insert_note(
+def insert_raw_note(
     transaction: Transaction, message_id: str, *, changed: datetime
 ) -> None:
-    """A note straight into the table: 240 has no writer, 243 adds one."""
+    """A note straight into the table, with no delivery: for tests of reads that must
+    ignore a note, where ``store.notes.insert_note`` would add what they do not test."""
     stamp = encode_timestamp(changed)
     transaction.execute(
         "INSERT INTO messages (message_id, kind, from_member, to_member, depth, "

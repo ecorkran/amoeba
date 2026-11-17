@@ -35,7 +35,12 @@ from amoeba.operations.message_results import (
 )
 from amoeba.operations.names import OperationName
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
-from amoeba.operations.reject_codes import RejectCode, validation_problems
+from amoeba.operations.reject_codes import (
+    NotARequest,
+    RejectCode,
+    as_request,
+    validation_problems,
+)
 from amoeba.store.message_sweep import sweep
 from amoeba.store.message_transitions import StateFields, change_state
 from amoeba.store.messages import effective_state, get_message
@@ -147,19 +152,14 @@ def _problem(
     now: datetime,
 ) -> Refusal | None:
     """Why this cancel cannot be applied, or ``None`` when it may be."""
-    if message is None:
-        return Refusal(
-            RejectCode.UNKNOWN_REQUEST,
-            f"no request has the id {request.id!r}",
-            record_under=actor_id,
-        )
-    state = effective_state(message, now)
-    if state is None:
-        raise ValueError(f"{request.id!r} is not a request; it has no state")
+    found = as_request(request.id, message)
+    if isinstance(found, NotARequest):
+        return Refusal(RejectCode.UNKNOWN_REQUEST, found.detail, record_under=actor_id)
+    state = effective_state(found, now)
     if state in _CANCELLABLE:
         return None
     return Refusal(
         RejectCode.NOT_APPLICABLE,
-        f"request {request.id!r} is already {state.value}",
+        f"request {request.id!r} is already {state}",
         record_under=actor_id,
     )

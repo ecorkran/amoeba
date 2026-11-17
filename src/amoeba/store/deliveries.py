@@ -46,7 +46,7 @@ def deliveries_since(
     rows = transaction.execute(
         sql_messages.SELECT_DELIVERIES_SINCE, (member_id, since)
     ).fetchall()
-    return tuple(_delivery(row) for row in rows)
+    return tuple(delivery_from_row(row) for row in rows)
 
 
 def highest_assigned_seq(transaction: Transaction) -> int:
@@ -58,7 +58,7 @@ def highest_assigned_seq(transaction: Transaction) -> int:
     return NONE_ASSIGNED if row is None else integer(row[0], "sqlite_sequence.seq")
 
 
-def _delivery(row: tuple[object, ...]) -> Delivery:
+def delivery_from_row(row: tuple[object, ...]) -> Delivery:
     return Delivery(
         seq=integer(row[0], "deliveries.seq"),
         member_id=text(row[1], "deliveries.member_id"),

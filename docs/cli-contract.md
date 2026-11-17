@@ -502,10 +502,13 @@ Result (`ReportReleaseResult`), the same document over MCP:
  "report": {"seq": 0, "commit": "<full hash>", "version": "<tag>", "changed": "<text>",
             "touched": ["<item>"], "reported_at": "<UTC ISO-8601>",
             "versioned_at": "<UTC ISO-8601>"},
- "problems": []}
+ "problems": [],
+ "sweep_problem": null}
 ```
 
-`member` is null when the directory is not a member. `report` is the stored report after
+`sweep_problem` is the text of the message sweep that did not run because the store stayed
+locked (the report was still made); text mode prints it as a last line. `member` is null
+when the directory is not a member. `report` is the stored report after
 the call; it is null after `withdrawn` and on a rejection. `version` and `versioned_at`
 are null until the report has a version. `problems` is `{code, detail}` per problem:
 
@@ -584,6 +587,7 @@ project name or id). A directory in a member plus a `--member` naming a differen
 
 ```
 amoeba send --id ID --to MEMBER --subject TEXT (--body TEXT | --body-file FILE|-) [--parent ID] [--member MEMBER]
+amoeba send --note --id ID (--to MEMBER | --to-program ID) --subject TEXT (--body TEXT | --body-file FILE|-) [--member MEMBER]
 amoeba inbox [--since SEQ] [--member MEMBER]
 amoeba reply ID accept|decline|done [--text TEXT] [--commit HASH] [--version TAG] [--member MEMBER]
 amoeba cancel ID [--reason TEXT] [--member MEMBER]
@@ -606,14 +610,16 @@ Any of them is exit 3 when `cf` fails or times out, with nothing written.
 **Text limits.** A text over its limit is rejected `malformed`, naming the limit; it is
 never cut. `id` 64 characters (`[A-Za-z0-9][A-Za-z0-9._-]*`), `subject` 200, `body`
 4000, a `done` result and a `decline` text 4000, a cancel `reason` 1000, a `version` 128.
-`parent` follows the `id` rule. `commit` is a full hash (40 or 64 hex characters).
+`parent` follows the `id` rule. `commit` is a full hash (40 or 64 hex characters). A release note's body is composed by Amoeba and has its own bound, `MAX_RELEASE_NOTE_BODY_LENGTH` (14439 characters; see Release notes below).
 
 **Caps.** What `inbox`, `status` and `list` read is bounded by how it is written. A
 member keeps its newest 100 rejected calls: an older one is dropped as a new one
 arrives. A sender holds at most 200 requests: a `send` that would pass that first drops
 the sender's oldest finished requests (`done`, `declined`, `cancelled`, `expired`) with
 their deliveries, and is rejected `too_many_open` only when all 200 are still `open` or
-`accepted`; finishing or cancelling one frees a place. A rejected call keeps the id,
+`accepted`; finishing or cancelling one frees a place. A sender holds at most 200
+notes: a note that would pass that first drops the sender's oldest notes with their
+deliveries (a note has no state, so none is ever refused). A rejected call keeps the id,
 recipient, parent and detail as given, cut to 500 characters and ending in `…` when
 longer (a request's own text is never cut).
 
@@ -711,3 +717,49 @@ when the caller is neither party, as for a `cancel` from a session in no member)
 effective state), `result`, `result_commit`, `result_version`, `reason`, `created_at`,
 `accepted_at`, `state_changed_at` and `expires_at`. A delivery view has `seq`,
 `message_id`, `event` and `created_at`.
+
+**Notes (slice 243).** `send --note` sends information that needs no reply, to one
+member (`--to`) or to every other active member of a program (`--to-program`, a
+program id). `--note` is a flag: absent, the document carries no `kind` and means a
+request. A `send` document carries `kind`, `request` (the default when absent) or
+`note`, and `to_program`. The rules by kind:
+
+- A **request** needs `to`, `subject`, `body` and `id`, and takes no `to_program`.
+- A **note** needs `subject`, `body`, `id` and exactly one of `to` and `to_program`,
+  and takes no `parent`: it has no chain and no state. A violation is `malformed`,
+  naming the field and the kind, and is recorded; the text limits are the request's.
+- A note to a program reaches the program's active members except the sender, each as
+  its own delivery, fixed when it is sent (a member added later gets nothing). An
+  unknown program, and a program with no one else in it, are `unknown_recipient`, the
+  detail saying which. A note to one's own member (`--to`) is delivered.
+- Resending a note with the same content is `unchanged` and writes no delivery; a
+  reused id with other content, or another kind, is `id_reused`.
+- A note needs no reply and has no state. `reply` and `cancel` of a note's id are
+  `unknown_request`, and a `--parent` that names one is `parent_unknown`, each saying
+  the id is a note. A note leaves by age: it is pruned `prune_after_days` after it was
+  sent, read or not, with its deliveries. `list` and `status` show no note.
+
+`send` gives `note` in its result, a note view or null (null for a request and on
+rejection). `inbox` gives `notes`, a list of note views, empty when there are none: the
+notes the member has a delivery for, with `--since` (those after that delivery number,
+in order) or without (every one still held). A program note's sender does not see it.
+Its text has a **Notes** section after **Requests**: each note's id, sender, age,
+subject and body, the notice first. A note view has `id`, `from_member`, `to_member`
+(null for a program note), `to_program` (null for a direct note), `subject`, `body`
+and `created_at`. A send with neither recipient is rejected `malformed` by the
+operation, as on the MCP tool: `--to` is no longer required by the parser.
+
+**Release notes.** `report-release` writes one note to each consumer that sees the
+report in `changes`, in the report's own transaction, for `recorded`, `versioned`,
+`corrected` and `withdrawn` (`unchanged` and a rejection write none). The note is from
+the provider, with an id of `release:` and a random hex string (a sender's id cannot
+hold a colon, so the two never collide), and a subject and body composed by Amoeba: the
+commit, the version or `none`, the `changed` text and the `touched` items; a correction
+says it replaces the earlier text; a withdrawal carries the commit and version and says
+to disregard the report. A report that cannot write its notes is not stored and the
+call exits 3, so retrying runs as a first call. Before its write, `report-release` runs the due-checked message sweep (so notes are pruned); a store held past the busy timeout skips that sweep, which is logged, and the report is still recorded: the result does not show it. The body is bounded by
+`MAX_RELEASE_NOTE_BODY_LENGTH`, 14439 characters: the length of the longest body the
+template composes from a report with every field at its limit (4000 characters of
+`changed`, 50 touched items of 200 characters, a 128-character version and a
+64-character hash), so it follows those limits and the template. It is composed, not
+caller text, so `send`'s `body` limit does not bind it.

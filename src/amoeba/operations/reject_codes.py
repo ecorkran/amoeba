@@ -7,12 +7,15 @@ The CLI exits 1 for a rejected result.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 
 from pydantic import ValidationError
 
+from amoeba.store.models import Message
 from amoeba.store.programs import list_programs
 from amoeba.store.store import Transaction
+from amoeba.store.vocabulary import MessageKind
 
 
 class RejectCode(StrEnum):
@@ -65,3 +68,33 @@ def unknown_program_problem(transaction: Transaction, program: str) -> str | Non
         return None
     listed = ", ".join(known) if known else "none registered"
     return f"unknown program {program!r}; known programs: {listed}"
+
+
+@dataclass(frozen=True)
+class NotARequest:
+    """Why an id names no request: ``detail`` goes into the rejection."""
+
+    detail: str
+
+
+def as_request(request_id: str, message: Message | None) -> Message | NotARequest:
+    """``message`` when it is a request, else why ``request_id`` names none.
+
+    A note's id is not a request's (243 D4): a note takes no reply, cannot be
+    cancelled and cannot be a parent. A request always has a state (the table's
+    ``CHECK``); a row that has none is a bug, and callers read ``effective_state``
+    of what this returns without a second guard.
+
+    Raises:
+        ValueError: A request row has no state.
+    """
+    if message is None:
+        return NotARequest(f"no request has the id {request_id!r}")
+    if message.kind is MessageKind.NOTE:
+        return NotARequest(
+            f"{request_id!r} is a note, not a request: a note takes no reply, "
+            "cannot be cancelled and cannot be a parent"
+        )
+    if message.state is None:
+        raise ValueError(f"{request_id!r} is a request with no state")
+    return message

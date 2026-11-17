@@ -1,4 +1,5 @@
-"""``send``: ask another member for work (slice 240, D2, D3, D9).
+"""``send``: ask another member for work, or tell it something with a note (slice 240,
+D2, D3, D9; slice 243, D1).
 
 The sender and the recipient are resolved, and the document validated, before any
 store lock, so no ``cf`` call runs under one. A refusal found once the sender is known
@@ -27,8 +28,10 @@ from amoeba.operations.message_rejection import record_declared
 from amoeba.operations.message_results import SendResult
 from amoeba.operations.names import OperationName
 from amoeba.operations.reject_codes import RejectCode, validation_problems
+from amoeba.operations.send_note import write_note
 from amoeba.operations.send_write import write_send
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import MessageKind
 
 __all__ = ["SendResult", "send"]
 
@@ -59,11 +62,26 @@ def send(
         problems = validation_problems(error)
         malformed = Refusal(RejectCode.MALFORMED, "; ".join(problems), caller.member_id)
         return _refuse(store, malformed, document, now, problems)
-    recipient = resolve_recipient(store, request.to, deps.cf_run)
+    recipient = (
+        None
+        if request.to is None
+        else resolve_recipient(store, request.to, deps.cf_run)
+    )
     if isinstance(recipient, Refusal):
         return _refuse(
             store, replace(recipient, record_under=caller.member_id), document, now
         )
+    if request.kind is MessageKind.NOTE:
+        return write_note(
+            store,
+            config,
+            sender=caller.member_id,
+            recipient=recipient,
+            request=request,
+            now=now,
+        )
+    if recipient is None:
+        raise AssertionError("a request names its recipient; the model checked")
     return write_send(
         store,
         config,

@@ -169,3 +169,6 @@ class ReportReleaseResult(FrozenModel):
     #: The stored report after the call; null after ``withdrawn`` and on rejection.
     report: ReleaseReport | None
     problems: tuple[ReleaseProblem, ...]
+    #: Why the message sweep before the report did not run (a held store); the
+    #: report itself was still made. ``None`` when the sweep ran.
+    sweep_problem: str | None = None

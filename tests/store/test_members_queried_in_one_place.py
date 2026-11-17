@@ -27,6 +27,7 @@ ACTIVE_READS = frozenset(
         "SELECT_MEMBERS_OF",
         "SELECT_PAIRS_OF",
         "SELECT_PAIRS_CONSUMED_BY",
+        "SELECT_PAIRS_PROVIDED_BY",  # 243
         "SELECT_PAIR",
     }
 )

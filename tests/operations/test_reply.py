@@ -33,6 +33,7 @@ from operations.message_support import (
     message_deps,
     open_message_store,
     rejection_rows,
+    send_note_as_sender,
     send_request_as_sender,
 )
 from operations.release_support import SettableClock
@@ -335,3 +336,21 @@ def test_the_sender_name_is_not_needed_to_reply(
     assert result.request is not None
     assert result.request.from_member == SENDER
     assert SENDER_NAME not in result.request.subject
+
+
+def test_a_notes_id_is_unknown_request_naming_a_note_and_the_note_is_unchanged(
+    store: Store, sender_deps: Deps, addressee_deps: Deps
+) -> None:
+    send_note_as_sender(store, sender_deps, "a-note")
+    before = _stored(store, "a-note")
+
+    result = _reply(store, addressee_deps, "a-note", "accept")
+
+    assert result.rejection is RejectCode.UNKNOWN_REQUEST
+    assert "note" in result.problems[0]
+    assert _stored(store, "a-note") == before
+    with store.read() as transaction:
+        assert count(transaction, "deliveries") == 1
+    assert rejection_rows(store) == [
+        (RECIPIENT, "reply", "-", "a-note", "-", "unknown_request")
+    ]

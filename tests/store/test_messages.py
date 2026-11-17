@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from amoeba.store.deliveries import write_delivery
+from amoeba.store.errors import StoreRowError
 from amoeba.store.messages import (
     effective_state,
     get_message,
@@ -26,7 +27,7 @@ from store.message_support import (
     SENDER,
     TTL,
     delivery_rows,
-    insert_note,
+    insert_raw_note,
     seed_members,
     send_request,
 )
@@ -114,12 +115,13 @@ def test_a_terminal_state_is_unchanged(store: Store, state: RequestState) -> Non
 
 def test_a_note_has_no_state(store: Store) -> None:
     with store.write() as transaction:
-        insert_note(transaction, "note-1", changed=NOW)
+        insert_raw_note(transaction, "note-1", changed=NOW)
         note = get_message(transaction, "note-1")
 
     assert note is not None
     assert note.kind is MessageKind.NOTE
-    assert effective_state(note, NOW + 10 * TTL) is None
+    with pytest.raises(StoreRowError, match="is a note"):
+        effective_state(note, NOW + 10 * TTL)
 
 
 def test_live_children_of_member_lists_each_live_childs_id_under_its_parent(

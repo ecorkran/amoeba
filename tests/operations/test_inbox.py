@@ -35,6 +35,7 @@ from operations.message_support import (
     message_deps,
     open_message_store,
     rejection_rows,
+    send_note_as_sender,
     send_request_as_sender,
 )
 from operations.release_support import SettableClock
@@ -298,3 +299,15 @@ def test_the_senders_own_name_resolves_from_its_directory(
 
     assert result.member == SENDER
     assert _ids(result) == ["ask"]
+
+
+def test_a_note_in_the_store_is_not_listed_among_the_requests(
+    store: Store, sender_deps: Deps, outside_deps: Deps
+) -> None:
+    send_request_as_sender(store, sender_deps, "ask")
+    send_note_as_sender(store, sender_deps, "a-note")
+
+    assert _ids(_as_addressee(store, outside_deps)) == ["ask"]
+    assert _ids(_as_sender(store, sender_deps)) == ["ask"]
+    assert _ids(_as_addressee(store, outside_deps, since=0)) == ["ask"]
+    assert "a-note" not in _ids(_as_sender(store, sender_deps, since=0))

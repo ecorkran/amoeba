@@ -22,7 +22,7 @@ from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.set_up_models import FrozenModel
 from amoeba.store.messages import effective_state
 from amoeba.store.models import Delivery, Message
-from amoeba.store.vocabulary import DeliveryEvent, RequestState
+from amoeba.store.vocabulary import DeliveryEvent, MessageKind, RequestState
 
 
 class RequestDirection(StrEnum):
@@ -65,9 +65,10 @@ class RequestView(FrozenModel):
 
         Raises:
             ValueError: The row is not a request (240 writes none other).
+            StoreRowError: The row is a note.
         """
         state = effective_state(message, now)
-        if state is None or message.to_member is None or message.expires_at is None:
+        if message.to_member is None or message.expires_at is None:
             raise ValueError(f"message {message.message_id!r} is not a request")
         return cls(
             id=message.message_id,
@@ -87,6 +88,40 @@ class RequestView(FrozenModel):
             accepted_at=message.accepted_at,
             state_changed_at=message.state_changed_at,
             expires_at=message.expires_at,
+        )
+
+
+class NoteView(FrozenModel):
+    """A note as a member sees it (243 D1): information, with no state. Members and the
+    program are ids."""
+
+    id: str
+    from_member: str
+    #: Null for a program note.
+    to_member: str | None
+    #: Null for a direct note.
+    to_program: str | None
+    subject: str
+    body: str
+    created_at: datetime
+
+    @classmethod
+    def from_message(cls, message: Message) -> NoteView:
+        """The view of a note row.
+
+        Raises:
+            ValueError: The row is not a note.
+        """
+        if message.kind is not MessageKind.NOTE:
+            raise ValueError(f"message {message.message_id!r} is not a note")
+        return cls(
+            id=message.message_id,
+            from_member=message.from_member,
+            to_member=message.to_member,
+            to_program=message.to_program,
+            subject=message.subject,
+            body=message.body,
+            created_at=message.created_at,
         )
 
 
@@ -116,8 +151,10 @@ class SendResult(FrozenModel):
     notice: str
     #: Null unless rejected.
     rejection: RejectCode | None
-    #: The stored request; null on rejection.
+    #: The stored request; null on rejection and for a note.
     request: RequestView | None
+    #: The stored note; null on rejection and for a request.
+    note: NoteView | None
     #: One line per problem when rejected; empty otherwise.
     problems: tuple[str, ...]
 
@@ -128,6 +165,7 @@ class SendResult(FrozenModel):
             notice=QUOTED_DATA_NOTICE,
             rejection=code,
             request=None,
+            note=None,
             problems=problems,
         )
 
@@ -145,6 +183,8 @@ class InboxResult(FrozenModel):
     #: The highest delivery number ever assigned; pass it as the next ``since``.
     as_of_seq: int | None
     requests: tuple[RequestView, ...]
+    #: The notes the member has a delivery for (243 D4); empty when none.
+    notes: tuple[NoteView, ...]
     deliveries: tuple[DeliveryView, ...]
     problems: tuple[str, ...]
 
@@ -160,6 +200,7 @@ class InboxResult(FrozenModel):
             since=since,
             as_of_seq=None,
             requests=(),
+            notes=(),
             deliveries=(),
             problems=problems,
         )

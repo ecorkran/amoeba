@@ -199,8 +199,8 @@ def test_a_note_pushes_naming_its_kind_and_sender(
     outbound = RecordingOutbound()
 
     def deliver_note() -> None:
-        # The table's note shape (240's migration allows it). 243 adds the writer,
-        # and its push criterion tests this path with notes that writer makes.
+        # The table's note shape written directly; ``test_note_push`` sends notes
+        # through the real writers.
         stamp = encode_timestamp(START)
         with Store.open(store_path) as store, store.write() as transaction:
             transaction.execute(

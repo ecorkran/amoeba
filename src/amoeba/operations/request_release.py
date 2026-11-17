@@ -109,8 +109,6 @@ def _due_rows(store: Store, config: UserConfig, now: datetime) -> list[QuestionR
                 due.append(row)
                 continue
             state = effective_state(message, now)
-            if state is None:
-                raise StoreRowError(f"held question {row.key} names a note")
             if state in RequestState.terminal():
                 due.append(row)
     due.sort(key=_start_order)

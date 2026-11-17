@@ -98,6 +98,24 @@ def send_request_as_sender(
     return send(store, CONFIG, document, directory=DIRECTORY, deps=deps)
 
 
+def send_note_as_sender(
+    store: Store, deps: Deps, note_id: str, **fields: object
+) -> SendResult:
+    """``send`` a note from ``SENDER``'s directory to ``RECIPIENT`` (243), through the
+    real operation. A field given as ``None`` is dropped, so ``to=None`` with a
+    ``to_program`` sends a program note."""
+    document: dict[str, object] = {
+        "kind": "note",
+        "id": note_id,
+        "to": RECIPIENT_NAME,
+        "subject": f"subject of {note_id}",
+        "body": f"body of {note_id}",
+        **fields,
+    }
+    clean = {key: value for key, value in document.items() if value is not None}
+    return send(store, CONFIG, clean, directory=DIRECTORY, deps=deps)
+
+
 def end_request(store: Store, request_id: str, state: RequestState, deps: Deps) -> None:
     """Move a stored request to the terminal ``state`` as the addressee would."""
     with store.write() as transaction:

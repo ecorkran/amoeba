@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 from cf_fixtures import DEFAULT_WORKTREE
-from store.message_support import delivery_rows, send_request
+from store.message_support import NOW, delivery_rows, send_request
 from user_configs import user_config
 
 from amoeba.operations import set_up_remove
@@ -20,14 +20,16 @@ from amoeba.operations.rm import rm
 from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.message_transitions import MEMBER_REMOVED_REASON
 from amoeba.store.messages import get_message
+from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.programs import get_member_any
-from amoeba.store.store import Store
+from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import RequestState
 from operations.set_up_support import DIRECTORY, FakeCf, run_set_up
 
 PROVIDER = "provider-id"
 CONSUMER = "consumer-id"
 PROJECTS = [(PROVIDER, "provider"), (CONSUMER, "consumer")]
+NOTE_IDS = ("to-it", "from-it")
 RULES = {"rules_paths": ["CLAUDE.md"]}
 REMOVE_CONSUMER = {"program": "demo", "remove": {"members": ["consumer"]}}
 
@@ -136,3 +138,28 @@ def test_the_whole_removal_rolls_back_if_the_cascade_fails(
     assert _request(store, "sent").state is RequestState.OPEN
     with store.read() as transaction:
         assert delivery_rows(transaction) == []
+
+
+def _note_deliveries(transaction: Transaction) -> list[tuple[int, str, str, str]]:
+    return [row for row in delivery_rows(transaction) if row[2] in NOTE_IDS]
+
+
+@pytest.mark.parametrize("remove", [_remove_by_rm, _remove_by_add])
+def test_removing_a_member_leaves_notes_to_and_from_it_and_their_deliveries(
+    store: Store, remove: Any
+) -> None:
+    with store.write() as transaction:
+        to_removed = NewNote("to-it", PROVIDER, CONSUMER, None, "s", "b")
+        from_removed = NewNote("from-it", CONSUMER, PROVIDER, None, "s", "b")
+        insert_note(transaction, to_removed, [CONSUMER], NOW)
+        insert_note(transaction, from_removed, [PROVIDER], NOW)
+        before = _note_deliveries(transaction)
+    assert len(before) == 2
+
+    remove(store)
+
+    for note_id in NOTE_IDS:
+        row = _request(store, note_id)
+        assert row is not None and row.state is None
+    with store.read() as transaction:
+        assert _note_deliveries(transaction) == before

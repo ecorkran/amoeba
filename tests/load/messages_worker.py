@@ -6,6 +6,8 @@ Usage: ``messages_worker.py <store path> <gate directory> <mode> <number>``.
   as the recipient, then read the recipient's ``inbox`` twice (without ``since``, and
   from 0).
 * ``shared``: ``accept`` the one request every ``shared`` worker races for.
+* ``notes``: ``send`` ``NOTES_PER_WORKER`` program notes, ``note-<number>-<k>``, to the
+  whole program (slice 243).
 
 The worker marks itself ready, waits for the parent to create ``go``, runs, and prints
 one JSON line with each call's operation, outcome, rejection and wall time (``busy``
@@ -27,10 +29,12 @@ from operations.message_support import (
     RECIPIENT_NAME,
     message_cf,
     message_deps,
+    send_note_as_sender,
     send_request_as_sender,
 )
 from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY
+from store.message_support import PROGRAM
 
 from amoeba.operations.deps import Deps
 from amoeba.operations.inbox import inbox
@@ -45,6 +49,8 @@ BUSY = "busy"
 SHARED_REQUEST_ID = "shared"
 MIXED = "mixed"
 SHARED = "shared"
+NOTES = "notes"
+NOTES_PER_WORKER = 3
 
 
 def _timed(operation: str, call: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -84,9 +90,22 @@ def _send(store: Store, deps: Deps, request_id: str) -> dict[str, Any]:
     return {"outcome": result.outcome.value}
 
 
+def _send_program_note(store: Store, deps: Deps, note_id: str) -> dict[str, Any]:
+    result = send_note_as_sender(store, deps, note_id, to=None, to_program=PROGRAM)
+    return {"outcome": result.outcome.value}
+
+
 def _run(mode: str, number: str, store: Store, work: Path) -> list[dict[str, Any]]:
     sender = message_deps(work, SettableClock())
     addressee = message_deps(work, SettableClock(), message_cf(OUTSIDE_ANY_PROJECT))
+    if mode == NOTES:
+        return [
+            _timed(
+                "note",
+                lambda k=k: _send_program_note(store, sender, f"note-{number}-{k}"),
+            )
+            for k in range(NOTES_PER_WORKER)
+        ]
     if mode == SHARED:
         return [_timed("accept", lambda: _accept(store, addressee, SHARED_REQUEST_ID))]
     own = f"req-{number}"

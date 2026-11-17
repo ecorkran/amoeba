@@ -3,6 +3,8 @@ D5)."""
 
 from __future__ import annotations
 
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -11,9 +13,11 @@ from amoeba import wiring
 from amoeba.cli import commands
 from amoeba.cli.exit_codes import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE
 from amoeba.cli.main import main
+from amoeba.config.home import store_path
 from amoeba.operations.changes_models import ChangesOutcome, ChangesResult, MemberRef
 from amoeba.operations.names import Door, OperationName
 from cli.cli_support import PROJECT_ID, result_of, run_amoeba, write_config
+from cli.requests_support import HASH, Repos
 
 FULL_HASH = "ab12" * 10
 SINCE = "2026-11-09T12:00:00+00:00"
@@ -221,3 +225,43 @@ def test_changes_builds_since_when_given_and_nothing_otherwise(
     assert main(["changes"]) == EXIT_OK
 
     assert [document for _, document in documents] == [{"since": SINCE}, {}]
+
+
+def test_a_failing_note_write_exits_three_prints_no_report_and_stores_none(
+    tmp_path: Path,
+) -> None:
+    """A trigger makes every note insert fail, as a store fault would (243 D5): the
+    report rolls back with the note, and the call exits 3 with no result printed."""
+    write_config()
+    repos = Repos(tmp_path)
+    for project in repos.projects:
+        repos.run(project, "add", "--program", "demo")
+    repos.run(
+        repos.forge, "add", "--program", "demo", "--depends-on", "squadron:from_source"
+    )
+    with closing(sqlite3.connect(store_path())) as connection:
+        connection.execute(
+            "CREATE TRIGGER no_notes BEFORE INSERT ON messages "
+            "WHEN NEW.kind = 'note' "
+            "BEGIN SELECT RAISE(ABORT, 'note write refused'); END"
+        )
+
+    completed = run_amoeba(
+        tmp_path,
+        "report-release",
+        "--commit",
+        HASH,
+        "--changed",
+        "text",
+        "--touched",
+        "item",
+        as_json=True,
+        cwd=repos.squadron.path,
+        routing=repos.projects,
+    )
+
+    assert completed.returncode == EXIT_ERROR, completed.stdout + completed.stderr
+    assert completed.stdout == ""
+    with closing(sqlite3.connect(store_path())) as connection:
+        assert connection.execute("SELECT count(*) FROM releases").fetchone() == (0,)
+        assert connection.execute("SELECT count(*) FROM deliveries").fetchone() == (0,)

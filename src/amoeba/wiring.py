@@ -230,6 +230,7 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
                 document,
                 _required_directory(name, directory),
                 default_deps(layout),
+                load_config,
             )
         case (
             OperationName.SEND

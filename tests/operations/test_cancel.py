@@ -32,6 +32,7 @@ from operations.message_support import (
     message_deps,
     open_message_store,
     rejection_rows,
+    send_note_as_sender,
     send_request_as_sender,
 )
 from operations.release_support import SettableClock
@@ -272,3 +273,19 @@ def test_a_cf_failure_raises_and_writes_nothing(
     assert _state(store) is RequestState.OPEN
     with store.read() as transaction:
         assert count(transaction, "message_rejections") == 0
+
+
+def test_a_notes_id_is_unknown_request_naming_a_note_and_the_note_is_unchanged(
+    store: Store, sender_deps: Deps
+) -> None:
+    send_note_as_sender(store, sender_deps, "a-note")
+    with store.read() as transaction:
+        before = get_message(transaction, "a-note")
+
+    result = _cancel(store, sender_deps, id="a-note")
+
+    assert result.rejection is RejectCode.UNKNOWN_REQUEST
+    assert "note" in result.problems[0]
+    with store.read() as transaction:
+        assert get_message(transaction, "a-note") == before
+        assert count(transaction, "deliveries") == 1

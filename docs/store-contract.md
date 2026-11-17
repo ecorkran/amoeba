@@ -224,28 +224,31 @@ Append-only, so an automatic answer and a later PM answer are both kept.
 
 ### `messages` (migration `006`, slice 240)
 
-One row per request. `note` rows and `to_program` are in the table for slice 243 and are
-never written by 240 (SQLite cannot widen a `CHECK` in place, and 243 has no migration).
+One row per request or note. 240 wrote only requests; `note` rows and `to_program` were
+in the table already (SQLite cannot widen a `CHECK` in place), so 243 has no migration.
+Notes are written by `send` and, for a release report, by `report_release`.
 
 | Column | Meaning |
 |---|---|
 | `message_id` | Key; the id the sender chose (1 to 64 characters, `[A-Za-z0-9][A-Za-z0-9._-]*`). |
 | `kind` | `request` or `note` (`MessageKind`, a `CHECK`). |
 | `from_member` | The sender's project id; references `members`. |
-| `to_member` | The addressee's project id; references `members`. Set for a request. |
-| `to_program` | References `programs`; null for a request. |
+| `to_member` | The addressee's project id; references `members`. Set for a request and a direct note; null for a program note. |
+| `to_program` | References `programs`; set for a program note, null otherwise. |
 | `parent_id` | The request this one serves, as given; not a foreign key, because a terminal parent can be pruned while a child is open. |
-| `depth` | At least 1: the parent's depth plus one, or 1 for a root. Stored at send so pruning never changes it. |
+| `depth` | At least 1: the parent's depth plus one, or 1 for a root; always 1 for a note. Stored at send so pruning never changes it. |
 | `subject`, `body` | The sender's text. |
 | `state` | `open`, `accepted`, `done`, `declined`, `cancelled` or `expired` (`RequestState`, a `CHECK`); null for a note. Read through `effective_state`, which shows an `open` request past `expires_at` as `expired` before the sweep records it. |
 | `result`, `result_commit`, `result_version` | The `done` reply's text, commit and version. |
 | `reason` | The decline text, or the cancel reason (`member_removed` when a member's removal cancelled it). |
 | `accepted_at` | UTC time of the accept. |
-| `created_at`, `state_changed_at` | UTC times; `state_changed_at` moves with every state change (an expiry records the sweep's own time). |
+| `created_at`, `state_changed_at` | UTC times; `state_changed_at` moves with every state change (an expiry records the sweep's own time); a note's equals `created_at`. |
 | `expires_at` | `created_at` plus `request_open_ttl_hours`, fixed at send, so a config change never moves it; null for a note. |
 
 Table `CHECK`s: a request has `to_member`, a state and `expires_at` and no `to_program`;
 a note has exactly one of `to_member` and `to_program`, and no state or `expires_at`.
+A note's id is the sender's, or `release:` and a random hex string for a release note
+(a sender's id cannot hold a colon, so it cannot start with `release:`).
 `depth` is at least 1. Indexes: `(to_member, state)`, `(from_member, state)`,
 `(parent_id)` and `(state, expires_at)`.
 
@@ -439,7 +442,9 @@ problem in `status` and `list` (`sweep_problem`) and as a note in `handle-pause`
 **Caps.** Retention is also by count. `send` keeps a sender within 200 requests: before
 storing a new one it deletes the sender's oldest terminal requests (deliveries first)
 to make room, and is rejected `too_many_open` when all of them are `open` or `accepted`,
-dropping nothing in that case. Each rejection row written trims its member to the newest
+dropping nothing in that case. `send` and `report-release` keep a sender within 200
+notes the same way, deleting its oldest notes (deliveries first) to make room and
+refusing nothing. Each rejection row written trims its member to the newest
 100 rows, and cuts the text the caller gave to 500 characters (`…` marks a cut). So the
 rows `inbox`, `status` and `list` read are bounded by these caps times the members.
 
@@ -449,6 +454,17 @@ first, and `message_rejections` rows older than that. `open` and `accepted` requ
 never pruned: each has an exit. A pruned request's id sent again is a new request. A
 member that is registered again keeps its retained history and starts with no live
 request.
+
+**Notes (slice 243).** A note is a `messages` row of kind `note` with no state and no
+expiry and one `sent` delivery per recipient; nothing changes it afterwards. Its only
+exit is the prune: the sweep deletes notes whose `created_at` is older than
+`prune_after_days`, read or not, with their deliveries (the sweep's due check counts an
+aged note, and `report_release` runs the due-checked sweep before its own write, so every
+write that adds a note also prunes). The expire step never touches a note (null state),
+the request prune never touches one, and removing a member leaves its notes and their
+deliveries until the prune. A release note is written by `report_release` inside the
+report's own transaction, for `recorded`, `versioned`, `corrected` and `withdrawn`: if a
+note write fails the report rolls back with it.
 
 Text from other repos is data: `subject`, `body`, `result` and `reason` are written by
 other repos' agents and stored as given, with the limits of the CLI contract. Amoeba

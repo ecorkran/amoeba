@@ -30,12 +30,13 @@ from operations.message_support import (
     THIRD,
     message_cf,
     message_deps,
+    send_note_as_sender,
     send_request_as_sender,
 )
 from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY
 from process_containment import contained_popen
-from store.message_support import NOW, seed_members, send_request
+from store.message_support import NOW, PROGRAM, seed_members, send_request
 
 from amoeba.operations.cancel import cancel
 from amoeba.operations.inbox import inbox
@@ -50,7 +51,15 @@ from amoeba.operations.reply import reply
 from amoeba.store.deliveries import highest_assigned_seq
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from load.lock_probe import write_lock_is_held
-from load.messages_worker import BUSY, GATE_FILE, MIXED, SHARED, SHARED_REQUEST_ID
+from load.messages_worker import (
+    BUSY,
+    GATE_FILE,
+    MIXED,
+    NOTES,
+    NOTES_PER_WORKER,
+    SHARED,
+    SHARED_REQUEST_ID,
+)
 
 WORKER = Path(__file__).with_name("messages_worker.py")
 TESTS_DIRECTORY = Path(__file__).parents[1]
@@ -81,8 +90,6 @@ def _start(
 def _run_workers(tmp_path: Path) -> tuple[Path, list[list[dict[str, Any]]]]:
     """The seeded store and each worker's calls, in start order, mixed workers first."""
     store_path = tmp_path / "home" / "amoeba.sqlite3"
-    gate = tmp_path / "gate"
-    gate.mkdir()
     with Store.open(store_path) as store, store.write() as transaction:
         seed_members(transaction, SENDER, RECIPIENT, THIRD)
         send_request(
@@ -93,6 +100,14 @@ def _run_workers(tmp_path: Path) -> tuple[Path, list[list[dict[str, Any]]]]:
             now=NOW,
         )
     modes = [MIXED] * MIXED_PROCESSES + [SHARED] * SHARED_PROCESSES
+    return store_path, _run_processes(store_path, tmp_path / "gate", modes)
+
+
+def _run_processes(
+    store_path: Path, gate: Path, modes: list[str]
+) -> list[list[dict[str, Any]]]:
+    """Start one worker per mode, release them together and return each one's calls."""
+    gate.mkdir()
     workers = [
         _start(store_path, gate, mode, number) for number, mode in enumerate(modes)
     ]
@@ -106,7 +121,7 @@ def _run_workers(tmp_path: Path) -> tuple[Path, list[list[dict[str, Any]]]]:
         stdout, stderr = worker.communicate(timeout=FINISH_TIMEOUT_SECONDS)
         assert worker.returncode == 0, stderr
         calls.append(json.loads(stdout))
-    return store_path, calls
+    return calls
 
 
 @pytest.fixture(scope="module")
@@ -245,3 +260,78 @@ def test_no_cf_call_runs_while_the_write_lock_is_held(tmp_path: Path) -> None:
     probed = [*in_member.held_at_call, *in_none.held_at_call]
     assert len(probed) >= 6, "every operation resolves through cf"
     assert not any(probed)
+
+
+# --- program notes (slice 243, D5's write-lock paragraph) ----------------------
+
+#: The program of the note burst: the sender, ``RECIPIENT``, ``THIRD`` and this many
+#: more members, each of whom is a recipient of a program note.
+EXTRA_READERS = 3
+NOTE_PROCESSES = 6
+EXTRA_MEMBERS = tuple(f"note-reader-{number}" for number in range(EXTRA_READERS))
+
+
+def _note_recipients() -> list[str]:
+    return [RECIPIENT, THIRD, *EXTRA_MEMBERS]
+
+
+NOTE_RECIPIENTS = len(_note_recipients())
+
+
+@pytest.fixture(scope="module")
+def note_burst(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> tuple[Path, list[list[dict[str, Any]]]]:
+    tmp_path = tmp_path_factory.mktemp("notes-load")
+    store_path = tmp_path / "home" / "amoeba.sqlite3"
+    with Store.open(store_path) as store, store.write() as transaction:
+        seed_members(transaction, SENDER, *_note_recipients())
+    return store_path, _run_processes(
+        store_path, tmp_path / "gate", [NOTES] * NOTE_PROCESSES
+    )
+
+
+def test_every_program_note_send_is_sent_and_reaches_each_recipient_once(
+    note_burst: tuple[Path, list[list[dict[str, Any]]]],
+) -> None:
+    store_path, calls = note_burst
+
+    sends = [call for worker in calls for call in worker]
+    total = NOTE_PROCESSES * NOTES_PER_WORKER
+    assert [call["outcome"] for call in sends] == [SendOutcome.SENT.value] * total
+    with Store.open(store_path) as store, store.read() as transaction:
+        per_member = dict(
+            transaction.execute(
+                "SELECT member_id, count(*) FROM deliveries GROUP BY member_id"
+            ).fetchall()
+        )
+        seqs = [
+            int(row[0]) for row in transaction.execute("SELECT seq FROM deliveries")
+        ]
+    assert per_member == {member: total for member in _note_recipients()}
+    assert SENDER not in per_member
+    assert len(seqs) == len(set(seqs)) == total * NOTE_RECIPIENTS
+
+
+def test_no_program_note_send_waits_beyond_one_store_wait_bound(
+    note_burst: tuple[Path, list[list[dict[str, Any]]]],
+) -> None:
+    _, calls = note_burst
+
+    sends = [call for worker in calls for call in worker]
+    assert not [call for call in sends if call["outcome"] == BUSY]
+    assert max(call["seconds"] for call in sends) < WRITE_BOUND_SECONDS
+
+
+def test_no_cf_call_runs_while_a_program_note_is_written(tmp_path: Path) -> None:
+    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+        with store.write() as transaction:
+            seed_members(transaction, SENDER, *_note_recipients())
+        probing = _LockProbingCf(store.path, DEFAULT_WORKTREE)
+        deps = message_deps(tmp_path, SettableClock(), probing)
+
+        sent = send_note_as_sender(store, deps, "news", to=None, to_program=PROGRAM)
+
+    assert sent.outcome is SendOutcome.SENT
+    assert probing.held_at_call, "send resolves the sender through cf"
+    assert not any(probing.held_at_call)

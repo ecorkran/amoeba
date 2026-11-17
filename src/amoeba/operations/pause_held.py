@@ -120,8 +120,6 @@ def _evaluate(
         failed = ClaimFailed(DeclineReason.REQUEST_UNKNOWN, detail, None)
         return settle_held(store, deps, target, request_id, failed)
     state = effective_state(message, deps.clock())
-    if state is None:
-        raise StoreRowError(f"held question {target.key} names note {request_id}")
     if state in STILL_WAITING:
         return HandlePauseResult(
             HandlePauseOutcome.HELD,

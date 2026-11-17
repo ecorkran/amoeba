@@ -21,3 +21,14 @@ def test_instructions_say_what_amoeba_is() -> None:
 
 def test_instructions_give_the_request_marker_line_with_a_placeholder_id() -> None:
     assert_marker_rule(INSTRUCTIONS)
+
+
+def test_instructions_say_a_note_needs_no_reply_and_arrives_under_notes() -> None:
+    assert "`kind` `note`" in INSTRUCTIONS
+    assert "`to_program`" in INSTRUCTIONS
+    assert "needs no reply" in INSTRUCTIONS
+    assert "`notes`" in INSTRUCTIONS
+
+
+def test_instructions_name_every_release_note_outcome() -> None:
+    assert "recorded, versioned, corrected or withdrew" in INSTRUCTIONS

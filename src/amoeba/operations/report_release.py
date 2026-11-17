@@ -2,7 +2,8 @@
 (slice 227, D2).
 
 The member is resolved before any write transaction, so no ``cf`` call runs under a
-lock. The stored-row check and the write share one ``BEGIN IMMEDIATE`` transaction.
+lock. The stored-row check, the write and the release notes (slice 243, D5) share one
+``BEGIN IMMEDIATE`` transaction.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from pydantic import ValidationError
 from amoeba.operations.deps import Deps
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.release_member import resolve_release_member
+from amoeba.operations.release_notes import NOTE_OUTCOMES, write_release_notes
 from amoeba.operations.report_release_models import (
     ReleaseProblem,
     ReleaseReport,
@@ -95,9 +97,8 @@ def report_release(
         plan = _plan(request, stored)
         if plan.outcome is ReportOutcome.REJECTED:
             return _rejected(member.project_id, (_not_reported(request),))
-        _apply(transaction, plan.write, member.project_id, request, now=now)
-        after = releases.release_for_commit(
-            transaction, member.project_id, request.commit
+        after = _write_report(
+            transaction, plan, member.project_id, request, stored, now=now
         )
     return ReportReleaseResult(
         outcome=plan.outcome,
@@ -105,6 +106,30 @@ def report_release(
         report=None if after is None else ReleaseReport.from_release(after),
         problems=(),
     )
+
+
+def _write_report(
+    transaction: Transaction,
+    plan: _Plan,
+    member_id: str,
+    request: ReportReleaseRequest,
+    stored: Release | None,
+    *,
+    now: datetime,
+) -> Release | None:
+    """The report write and its release notes, in the caller's one transaction; the
+    stored report afterwards. A raise from a note write rolls the report back too
+    (243 D5). A withdrawal's notes are written first: its recipients are read from the
+    report, which the write deletes."""
+    if plan.outcome is ReportOutcome.WITHDRAWN:
+        withdrawn = _required(stored, "stored report")
+        write_release_notes(transaction, member_id, plan.outcome, withdrawn, now)
+    _apply(transaction, plan.write, member_id, request, now=now)
+    after = releases.release_for_commit(transaction, member_id, request.commit)
+    if plan.outcome in NOTE_OUTCOMES and plan.outcome is not ReportOutcome.WITHDRAWN:
+        written = _required(after, "stored report after its write")
+        write_release_notes(transaction, member_id, plan.outcome, written, now)
+    return after
 
 
 def _required[ValueT](value: ValueT | None, field: str) -> ValueT:

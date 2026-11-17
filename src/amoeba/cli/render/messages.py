@@ -1,4 +1,4 @@
-"""The text of requests (slice 240, D7, D11, D12).
+"""The text of requests and notes (slice 240, D7, D11, D12; slice 243).
 
 Under each member in ``status`` and ``list``: **Requests** (age, state, and what a
 request is "waiting on") and **Rejected calls** (the newest few), each left out when
@@ -16,15 +16,24 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Final
 
-from amoeba.cli.render.text import SEPARATOR, how_long, indented, prose_line
+from amoeba.cli.render.text import (
+    SEPARATOR,
+    command_line,
+    how_long,
+    indented,
+    prose_line,
+    was_cut,
+)
 from amoeba.operations.message_results import (
     CancelResult,
     DeliveryView,
     InboxResult,
+    NoteView,
     ReplyResult,
     RequestView,
     SendResult,
 )
+from amoeba.operations.names import OperationName
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.status_models import (
     MemberStatus,
@@ -36,6 +45,11 @@ from amoeba.operations.status_models import (
 #: How many of a member's rejected calls the text shows; ``-j`` has them all.
 REJECTED_CALLS_SHOWN: Final = 5
 NOT_IN_CONTEXT_FORGE: Final = "not in Context Forge"
+#: How deep ``inbox`` indents a note.
+INBOX_NOTE_DEPTH: Final = 1
+#: Where a note cut in the text is whole.
+NOTE_CUT_IN_SEND: Final = "A note cut with … is whole in the -j result of this call."
+INBOX_JSON_COMMAND: Final = f"amoeba {OperationName.INBOX.cli_name} -j"
 _DIRECTION_WORD: Final = {
     RequestDirection.SENT: "to",
     RequestDirection.RECEIVED: "from",
@@ -106,7 +120,13 @@ def _rejected_call_lines(call: RejectedCall) -> list[str]:
 
 
 def render_send(result: SendResult, *, now: datetime) -> str:
-    """``sent <id>`` (or ``unchanged``), then the request."""
+    """``sent <id>`` (or ``unchanged``), then the request or the note."""
+    if result.note is not None:
+        head = f"{result.outcome.value}: {result.note.id}"
+        lines = [head, *_note_block(result.note, now)]
+        if _note_was_cut(result.note, now):
+            lines.append(NOTE_CUT_IN_SEND)
+        return _with_notice(result.notice, lines)
     if result.request is None:
         return _rejection(result.rejection, result.problems)
     head = f"{result.outcome.value}: {result.request.id}"
@@ -130,7 +150,8 @@ def render_cancel(result: CancelResult, *, now: datetime) -> str:
 
 
 def render_inbox(result: InboxResult, *, now: datetime) -> str:
-    """The requests, the deliveries, then the number to pass as the next ``since``."""
+    """The requests, the notes, the deliveries, then the number to pass as the next
+    ``since``."""
     if result.as_of_seq is None:
         return _rejection(result.rejection, result.problems)
     lines: list[str] = []
@@ -138,13 +159,20 @@ def render_inbox(result: InboxResult, *, now: datetime) -> str:
         lines.append("Requests")
         for view in result.requests:
             lines.extend(_request_block(view, now, depth=1))
+    if result.notes:
+        lines.append("Notes")
+        for note in result.notes:
+            lines.extend(_note_block(note, now, depth=INBOX_NOTE_DEPTH))
+        if any(_note_was_cut(note, now, INBOX_NOTE_DEPTH) for note in result.notes):
+            lines.append(indented("A note cut with … is whole in:"))
+            lines.append(command_line(INBOX_JSON_COMMAND))
     if result.deliveries:
         lines.append("Deliveries")
         lines.extend(_delivery_line(item) for item in result.deliveries)
     if not lines:
         lines.append("No requests." if result.since is None else "Nothing new.")
     lines.append(f"as_of_seq: {result.as_of_seq} (pass it as --since next time)")
-    shows_text = bool(result.requests)
+    shows_text = bool(result.requests or result.notes)
     return _with_notice(result.notice if shows_text else None, lines)
 
 
@@ -192,6 +220,30 @@ def _request_block(view: RequestView, now: datetime, depth: int = 0) -> list[str
         if value
     )
     return lines
+
+
+def _note_rows(view: NoteView, now: datetime, depth: int) -> list[tuple[str, str]]:
+    """A note as ``(prefix, text)`` lines: its id, who it is from (and the program, for
+    a program note) and its age, then its subject and body."""
+    parts = [view.id, f"from {view.from_member}"]
+    if view.to_program is not None:
+        parts.append(f"to program {view.to_program}")
+    parts.append(how_long(view.created_at, now))
+    return [
+        (indented("", depth + 1), SEPARATOR.join(parts)),
+        (indented("subject: ", depth + 2), view.subject),
+        (indented("body: ", depth + 2), view.body),
+    ]
+
+
+def _note_block(view: NoteView, now: datetime, depth: int = 0) -> list[str]:
+    return [prose_line(prefix, text) for prefix, text in _note_rows(view, now, depth)]
+
+
+def _note_was_cut(view: NoteView, now: datetime, depth: int = 0) -> bool:
+    """Whether the text shows any line of ``view`` cut to the line width (a release
+    note's body is several lines, shown on one)."""
+    return any(was_cut(prefix, text) for prefix, text in _note_rows(view, now, depth))
 
 
 def _delivery_line(item: DeliveryView) -> str:

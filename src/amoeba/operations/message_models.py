@@ -14,6 +14,7 @@ from typing import Annotated, Final, Self
 
 from pydantic import Field, StrictInt, StrictStr, field_validator, model_validator
 
+from amoeba.operations.message_document import recipient_ref
 from amoeba.operations.release_fields import (
     Version,
     bounded_text,
@@ -21,6 +22,7 @@ from amoeba.operations.release_fields import (
     tag_name,
 )
 from amoeba.operations.set_up_models import FrozenModel, NonBlankText
+from amoeba.store.vocabulary import MessageKind
 
 #: Text limits (D12). Stated in ``docs/cli-contract.md``; each is the most a field may
 #: carry, in characters. Text goes to other agents' context, so it has a bound.
@@ -41,9 +43,12 @@ MAX_RECORDED_LENGTH: Final = 500
 #: rows (older ones are dropped as new ones arrive). A sender keeps at most
 #: ``MAX_REQUESTS_PER_SENDER`` requests: a ``send`` that would pass it first drops the
 #: sender's oldest finished requests, and is rejected ``too_many_open`` only when every
-#: one of them is still open or accepted.
+#: one of them is still open or accepted. A sender also keeps at most
+#: ``MAX_NOTES_PER_SENDER`` notes: a note that would pass it first drops the sender's
+#: oldest notes, with their deliveries (a note has no state, so none is ever refused).
 MAX_REJECTIONS_PER_MEMBER: Final = 100
 MAX_REQUESTS_PER_SENDER: Final = 200
+MAX_NOTES_PER_SENDER: Final = 200
 
 #: A request id: starts with a letter or digit, then letters, digits, ``.``, ``_``,
 #: ``-``. The length is the separate limit above, so an over-long id names it. The
@@ -99,17 +104,52 @@ class CancelOutcome(StrEnum):
 
 
 class SendRequest(FrozenModel):
-    """A request to send to another member (D2, D3)."""
+    """A request or a note to send (240 D2, D3; 243 D1).
 
+    A request needs ``to`` and takes no ``to_program``. A note needs exactly one of
+    ``to`` and ``to_program`` and takes no ``parent``.
+    """
+
+    #: Absent means a request, as an absent ``mode`` means ``report`` in
+    #: ``report_release``.
+    kind: MessageKind = MessageKind.REQUEST
     id: RequestId
-    #: A Context Forge project name or id: the addressee.
-    to: NonBlankText
+    #: A Context Forge project name or id: the addressee. Not for a program note.
+    to: NonBlankText | None = None
+    #: A program id: a note to every active member but the sender (243 D2).
+    to_program: NonBlankText | None = None
     subject: _Subject
     body: _Body
-    #: The request this one serves; it must exist (D8).
+    #: The request this one serves; it must exist (D8). A request only.
     parent: RequestId | None = None
     #: A Context Forge project name or id; only from a directory in no member (D3).
     member: NonBlankText | None = None
+
+    @property
+    def recipient_ref(self) -> str | None:
+        """The recipient as given: ``to``, else ``to_program``, else ``None``. What a
+        rejection row keeps as the recipient."""
+        return recipient_ref(self.to, self.to_program)
+
+    @model_validator(mode="after")
+    def _kind_rules(self) -> Self:
+        is_note = self.kind is MessageKind.NOTE
+        problems: list[str] = []
+        if is_note:
+            if (self.to is None) == (self.to_program is None):
+                problems.append(
+                    f"exactly one of to and to_program is required for kind {self.kind}"
+                )
+            if self.parent is not None:
+                problems.append(f"parent is not allowed for kind {self.kind}")
+        else:
+            if self.to is None:
+                problems.append(f"to is required for kind {self.kind}")
+            if self.to_program is not None:
+                problems.append(f"to_program is not allowed for kind {self.kind}")
+        if problems:
+            raise ValueError("; ".join(problems))
+        return self
 
 
 class InboxRequest(FrozenModel):

@@ -104,7 +104,7 @@ MCP tools (same names)        ─┘                         │
 
 **Timeouts and lost responses.** Every `cf` call goes through `run_cf` with a constant timeout, `CF_GET_TIMEOUT_SECONDS` (30 s, not configurable), for the directory and reference lookups. `run_cf` returns a timeout as a `CfCallFailed` value, and the lookups map it to `ContextForgeError`, as `resolve_member` and `rm` do, so the CLI exits 3 with nothing written. No message operation reads project names. The store waits are `BUSY_TIMEOUT_SECONDS` (5 s) for each of the legacy-move lock, the open and the transaction, as `ANSWER_STORE_WAITS` counts for `answer`. Worst cases: `send` makes up to three lookups (directory, an explicit `member`, the recipient), so 3×30 + 3×5 = 105 s; `reply`, `cancel` and `inbox` up to two (directory, explicit `member`), so 2×30 + 3×5 = 75 s. All are below `MCP_CALL_DEADLINE_SECONDS` (180 s). `status` and `list` are outside that bound: their existing per-run lookups grow with the number of runs, which is why their timeout advice sends the caller to the CLI. The message sweep adds at most one more busy wait (5 s) to them. If it hits `StoreBusyError`, the error is logged and reported in the existing `sweep_problem` field (joined to the question sweep's text when both fail), and the call still returns, because every read applies `effective_state` and shows nothing wrong. When a call times out, or its response is lost, the work may have happened. A `send` is retried with the same `id`: `unchanged`, or `request_ended` naming the state, says the first call landed. A retried `reply` or `cancel` is rejected naming the state the first call reached (`already_accepted`, or `not_applicable` naming `done`, `declined` or `cancelled`). The tool descriptions say that such a rejection after a timeout means the first call took effect, and that `inbox` shows the state.
 
-**Sweep.** `send`, `reply` and `cancel` call `sweep(transaction, now, …)` at the start of their own write transaction. `status`, `list` and `handle_pause` call `sweep_messages(store, config, now)`, which reads first and opens a write transaction only when something is due, so a quiet store is never write-locked by a poll. `handle_pause` calls it last, beside the existing prune, and a `StoreError` there becomes a note in `detail`, as the prune's does.
+**Sweep.** `send`, `reply` and `cancel` call `sweep(transaction, now, …)` at the start of their own write transaction. `status`, `list` and `handle_pause` call `sweep_messages(store, config, now)`, which reads first and opens a write transaction only when something is due, so a quiet store is never write-locked by a poll. `handle_pause` calls it last, beside the existing prune, and a `StoreError` there becomes a note in `detail`, as the prune's does. Its due check also counts a note older than the prune cutoff (243), and `report_release` calls it too, through its door wiring, before its own write (243 D6).
 
 ### State Management
 
@@ -131,7 +131,7 @@ Status: decided
 ### D2 — Ids and resend
 Status: decided
 
-The sender passes `id` (required; a missing one is `malformed`): 1 to 64 characters, `[A-Za-z0-9][A-Za-z0-9._-]*`. Because the sender picks it, a retry after a lost response is safe. A second `send` with an id that exists compares `(kind, from_member, to_member, parent_id, subject, body)`: equal, with the stored request not ended, changes nothing and returns outcome `unchanged` with the stored request; equal but the request has ended (done, declined, cancelled or expired) is rejected `request_ended`, naming the state and telling the sender to send it again under a new id, so a retry never reads as success for a request that is gone; different content is rejected `id_reused`, whoever sent it. The id is never reused after pruning in a way the store can detect; a pruned id sent again is a new request.
+The sender passes `id` (required; a missing one is `malformed`): 1 to 64 characters, `[A-Za-z0-9][A-Za-z0-9._-]*`. Because the sender picks it, a retry after a lost response is safe. A second `send` with an id that exists compares `(kind, from_member, to_member, to_program, parent_id, subject, body)` (`to_program` is 243's, null for a request): equal, with the stored request not ended, changes nothing and returns outcome `unchanged` with the stored request; equal but the request has ended (done, declined, cancelled or expired) is rejected `request_ended`, naming the state and telling the sender to send it again under a new id, so a retry never reads as success for a request that is gone; different content is rejected `id_reused`, whoever sent it. The id is never reused after pruning in a way the store can detect; a pruned id sent again is a new request.
 
 ### D3 — Who is the caller
 Status: decided
@@ -158,6 +158,7 @@ Anything else is rejected with the current state:
 - A `done` on an `open` request: `not_applicable`, "accept it first". `done` from `open` is refused so that the accept, which is the lock, always happens.
 - Any action on a terminal request: `not_applicable`, naming its state.
 - An id that does not exist: `unknown_request`.
+- An id that names a note (243): `unknown_request`, with a detail saying the id is a note and notes take no reply. `reply` and `cancel` load their message through `get_message` and refuse a row that is not a request.
 
 `effective_state(row, now)` is the one function every read uses: an `open` request whose `expires_at` has passed reads as `expired`. `inbox`, `status`, `list` and the transition checks all call it, so nobody sees a stale `open`. The sweep writes the stored change (D6). `accepted` never expires: the work can take days. Its exits are `done` and `decline` from the addressee and `cancel` from anyone naming the id, and `list` shows its age.
 
@@ -171,26 +172,27 @@ Status: decided
 
 `sweep(transaction, now, prune_after_days)` does two things, in that order:
 1. **Expire.** Every `open` request with `expires_at <= now` becomes `expired` (`state_changed_at` is `now`, the moment the sweep records it), with an `expired` delivery to each party.
-2. **Prune.** Delete terminal requests whose `state_changed_at` is older than `prune_after_days`, their deliveries (deleted first, for the foreign key), and `message_rejections` older than that. No note can be written in this slice: 243 adds the note writer together with the note prune statement and the aged-note clause in `sweep_messages`' due check (243 D6).
+2. **Prune.** Delete terminal requests whose `state_changed_at` is older than `prune_after_days`, their deliveries (deleted first, for the foreign key), and `message_rejections` older than that. 243 adds the note statement: it deletes notes whose `created_at` is older than `prune_after_days`, their deliveries first, after the request statements (243 D6).
 
 It returns nothing, and tests read the rows. 242 finds the runs held on an ended request by reading request state after each operation, so it needs no ids from the sweep. `expires_at` is fixed at `send` (`created_at + request_open_ttl_hours`), so a config change never moves an existing request's expiry. Open and accepted requests are never pruned by the sweep, so each has an exit: expiry, or `done`, `decline` and `cancel`. A sender also holds at most 200 requests: a `send` that would pass that drops the sender's oldest finished requests first, and is rejected `too_many_open` only when all 200 are `open` or `accepted`. So what `inbox`, `status` and `list` read is bounded by how it is written.
 
 ### D7 — `inbox`
 Status: decided
 
-Request: optional `since` (integer, at least 0) and optional `member`. Result: `outcome`, `notice`, `rejection`, `member`, `since`, `as_of_seq`, `requests`, `deliveries`, `problems`. `rejection` is a `RejectCode`, null unless rejected; `problems` is one line per problem when rejected and empty otherwise, as in `StatusResult`.
+Request: optional `since` (integer, at least 0) and optional `member`. Result: `outcome`, `notice`, `rejection`, `member`, `since`, `as_of_seq`, `requests`, `notes` (243), `deliveries`, `problems`. `rejection` is a `RejectCode`, null unless rejected; `problems` is one line per problem when rejected and empty otherwise, as in `StatusResult`.
 
 - **No `since`:** `requests` is every request to or from the member that is not terminal, plus terminal ones still held (retention bounds them). `deliveries` is empty.
 - **With `since`:** `deliveries` is the member's deliveries with `seq > since`, in order; `requests` is the requests they concern, in their current state. A request that changed twice since appears once in `requests` and twice in `deliveries`. `requests` also holds the member's `open` requests, sent or received, whose `expires_at` has passed but which the sweep has not yet recorded, shown as `expired` by `effective_state`, so a poller sees an expiry at once. Their `expired` delivery follows when a write, `list` or `status` runs the sweep, and the request then appears again with it.
 - `as_of_seq` is the highest delivery sequence ever assigned (`sqlite_sequence`, so it does not fall when rows are pruned), read in the same transaction. The caller passes it as the next `since`.
 - A `since` above that number is rejected `beyond_last_record` (the existing code), with a message telling the caller to call without `since`. This catches a cursor from a replaced store, which would otherwise hide all new mail until the numbers caught up.
 - A `RequestView` carries `direction` (`sent` or `received`, relative to the caller), both members as ids (`list` and `status` show names; no message operation looks them up), `parent_id`, `depth`, `subject`, `body`, the effective `state`, `result`, `result_commit`, `result_version`, `reason` and the four times (`created_at`, `accepted_at`, `state_changed_at`, `expires_at`).
+- The request reads select `kind = 'request'`, so a note never appears in `requests`. `notes` (243) holds the notes the member has a delivery for, found through its deliveries: every one still held without `since`, those whose delivery has `seq > since` with it, in delivery order, each once.
 - Two worktrees of a member read with different `since` values and each sees every delivery after its own point, because nothing is marked.
 
 ### D8 — Chains
 Status: decided
 
-`send` with `parent`: the parent must exist (`parent_unknown`), and nothing else about it is checked, as in the architecture. The new request's `depth` is the parent's plus one, and a parent whose `depth >= max_chain_depth` is rejected `chain_too_deep`. With `max_chain_depth` 3, a root (depth 1), a child and a grandchild are allowed and a fourth link is not. Scenario D has depth 2. Cycles are allowed, as in the architecture. Amoeba never acts on a chain: it stores it and shows it.
+`send` with `parent`: the parent must exist and be a request (`parent_unknown`; a note's id is refused with a detail saying it is a note, 243), and nothing else about it is checked, as in the architecture. The new request's `depth` is the parent's plus one, and a parent whose `depth >= max_chain_depth` is rejected `chain_too_deep`. With `max_chain_depth` 3, a root (depth 1), a child and a grandchild are allowed and a fourth link is not. Scenario D has depth 2. Cycles are allowed, as in the architecture. Amoeba never acts on a chain: it stores it and shows it.
 
 ### D9 — Rejections are recorded
 Status: decided
@@ -240,8 +242,8 @@ The docs step of the slice amends the architecture (its operations, store and co
 
 | Operation | CLI | Request fields | Outcomes |
 |---|---|---|---|
-| `send` | `amoeba send --to MEMBER --subject TEXT (--body TEXT \| --body-file FILE\|-) [--parent ID] --id ID [--member M]` | `to`, `subject`, `body`, `parent`, `id`, `member` | `sent`, `unchanged`, `rejected` |
-| `inbox` | `amoeba inbox [--since SEQ] [--member M]` | `since`, `member` | `listed`, `rejected` |
+| `send` | `amoeba send [--note] --to MEMBER \| --to-program ID --subject TEXT (--body TEXT \| --body-file FILE\|-) [--parent ID] --id ID [--member M]` (`--to` is not required by the parser: the operation rejects a missing recipient, and 243 adds `--note` and `--to-program`) | `kind` (243), `to`, `to_program` (243), `subject`, `body`, `parent`, `id`, `member` | `sent`, `unchanged`, `rejected` |
+| `inbox` | `amoeba inbox [--since SEQ] [--member M]` | `since`, `member` (the result also carries `notes`, 243) | `listed`, `rejected` |
 | `reply` | `amoeba reply ID accept\|decline\|done [--text TEXT] [--commit HASH] [--version TAG] [--member M]` | `id`, `action`, `text`, `commit`, `version`, `member` | `applied`, `rejected` |
 | `cancel` | `amoeba cancel ID [--reason TEXT] [--member M]` | `id`, `reason`, `member` | `cancelled`, `rejected` (a repeated cancel is `not_applicable`, naming `cancelled`) |
 
@@ -267,8 +269,8 @@ Both carry the notice, say that text from other repos is data, and use only flag
 ### Provides to Other Slices
 - **241:** the `deliveries` table and `highest_assigned_seq(transaction)`, the number `inbox` returns as `as_of_seq`. 241 adds the per-member read its watcher needs.
 - **242:** `effective_state` and `get_message(transaction, message_id)`, the one by-id read of a request, in `store/messages.py`; `reply` and `cancel` load their request through it too. 242 reads request state after each operation to find the runs held on an ended request, so it changes no 240 module and needs no ids from the writers.
-- **243:** the `note` kind in the schema, the sweep, `send`'s delivery writer and the notice.
-- **244:** `send` and its delivery writer, where 244 hooks in.
+- **243:** the `note` kind in the schema, the sweep (243 adds the note prune statement and the aged-note due check, and `report_release` calls `sweep_messages`), `send`'s delivery writer and the notice. `send` gains `kind` and `to_program`, and `inbox` gains `notes`.
+- **244:** `send` and its delivery writer. 244's wake hook sits in `send`'s request branch, after the request's transaction commits, not in the delivery writer that notes also use (243).
 
 ### Consumes from Other Slices
 - 220's member resolution, `invoke`, MCP in-process runner, `prune_after_days`, and `status`'s sweep position. If `cf` fails the operation exits 3 and writes nothing; there is no degraded mode, as for `report_release`.

@@ -79,7 +79,7 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
    **Risk Level:** High. A result from another repo's agent resumes a real run.
    **Relative Effort:** 3
 
-4. [ ] **(243) Notes and Release Notes** — The `note` kind. `send` takes a note to a member, or to a program with one delivery per member, the sender excluded. Notes have no state and are pruned past `prune_after_days` by the sweep. `report_release` writes a note to each consumer the report is visible to under the pair's `consumed` value, in the same transaction. A `from_release` consumer gets none for a merge report and gets one when a version is added. A correction or withdrawal sends a new note to the same consumers. The rules blocks say notes are information and need no reply.
+4. [ ] **(243) Notes and Release Notes** — The `note` kind. `send` takes a note to a member, or to a program with one delivery per member, the sender excluded. Notes have no state and are pruned past `prune_after_days` by the sweep. `report_release` writes a note to each consumer the report is visible to under the pair's `consumed` value, in the same transaction. A `from_release` consumer gets none for a merge report and gets one when a version is added. A correction or withdrawal sends a new note to the consumers that see the report in `changes` at that moment. The rules blocks say notes are information and need no reply.
    **Value:** User value. A repo hears about an upstream release and about program-wide news in the same inbox as its requests.
    **Success Criteria:**
    - A note to a program reaches every member except the sender, each as its own delivery.
@@ -87,7 +87,7 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
    - The note and the report are written in one transaction. A test fails the note write and finds no report.
    - Notes past `prune_after_days` are pruned with their deliveries.
    - 241's push fires for a note the same as for a request.
-   **Dependencies:** 240, and 241 for the push test. 227 (complete) for `report_release`. Release-note bodies stay within a limit derived from 227's report text limits.
+   **Dependencies:** 222, 227 (complete) for `report_release`, 240, and, for the push test and the request-resolution test, 241 and 242. Release-note bodies stay within `MAX_RELEASE_NOTE_BODY_LENGTH`, derived from 227's report text limits and the note template.
    **Interfaces:** Provides the note kind and release-report notes. Consumes 227's `report_release`.
    **Risk Level:** Low
    **Relative Effort:** 2
@@ -111,7 +111,7 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
 
 `240 → 241 → 242 → 243 → 244`.
 
-- **Dependencies.** Everything builds on 240. 244 needs 241's live-session check. 242 and 243 need only 240 in code; 242's migration 8 comes after 241's migration 7.
+- **Dependencies.** Everything builds on 240. 244 needs 241's live-session check. 242 needs only 240 in code, and its migration 8 comes after 241's migration 7. 243 needs 240, plus 241 and 242 for one test each.
 - **Risk.** 241 rests on the least certain ground, so it comes right after 240. 242 is next because it resumes real runs.
 
 ## Notes
