@@ -25,7 +25,6 @@ from amoeba.operations.message_results import (
     RequestView,
     SendResult,
 )
-from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.status_models import (
     MemberStatus,
@@ -44,15 +43,13 @@ _DIRECTION_WORD: Final = {
 
 
 def message_sections(members: list[MemberStatus], now: datetime) -> list[list[str]]:
-    """The **Requests** and **Rejected calls** sections, the notice first."""
-    sections = [
+    """The **Requests** and **Rejected calls** sections. The quoted-data notice is
+    not here: ``render_waiting`` prints ``StatusResult.notice`` once, first."""
+    return [
         section
         for section in (_requests(members, now), _rejected_calls(members))
         if section
     ]
-    if sections:
-        sections[0].insert(0, QUOTED_DATA_NOTICE)
-    return sections
 
 
 def _requests(members: list[MemberStatus], now: datetime) -> list[str]:

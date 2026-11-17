@@ -88,7 +88,10 @@ def render_decisions(result: DecisionsResult) -> str:
     if not result.records:
         return f"no answers to show (marker at {result.marker})\n"
     count = len(result.records)
-    lines = [f"{count} answer{'s' if count != 1 else ''} (marker at {result.marker})"]
+    lines = [] if result.notice is None else [result.notice]
+    lines.append(
+        f"{count} answer{'s' if count != 1 else ''} (marker at {result.marker})"
+    )
     for record in result.records:
         lines.extend(_record(record))
     if result.read_through is not None:

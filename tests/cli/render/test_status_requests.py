@@ -88,8 +88,8 @@ def test_a_request_shows_age_state_direction_and_subject_below_the_notice() -> N
     text = _text(requests=(_request(),))
 
     assert text == (
+        f"{QUOTED_DATA_NOTICE}\n\n"
         f"{NOTHING_NEEDS_YOU}\n\n"
-        f"{QUOTED_DATA_NOTICE}\n"
         "Requests\n"
         "  core\n"
         "    ask · to lint · open · 3h 5m\n"
@@ -100,7 +100,7 @@ def test_a_request_shows_age_state_direction_and_subject_below_the_notice() -> N
 def test_requests_do_not_change_nothing_needs_you() -> None:
     text = _text(requests=(_request(),), rejected=(_rejected(),))
 
-    assert text.startswith(NOTHING_NEEDS_YOU + "\n")
+    assert text.startswith(f"{QUOTED_DATA_NOTICE}\n\n{NOTHING_NEEDS_YOU}\n")
 
 
 def test_a_received_request_says_from_and_an_expired_one_says_expired() -> None:
@@ -133,8 +133,8 @@ def test_rejected_calls_show_the_code_and_detail() -> None:
     text = _text(rejected=(_rejected(),))
 
     assert text == (
+        f"{QUOTED_DATA_NOTICE}\n\n"
         f"{NOTHING_NEEDS_YOU}\n\n"
-        f"{QUOTED_DATA_NOTICE}\n"
         "Rejected calls\n"
         "  core\n"
         "    2026-11-14 12:00 · send · unknown_recipient\n"
@@ -159,13 +159,13 @@ def test_exactly_five_rejected_calls_have_no_more_line() -> None:
     assert "more (see -j)" not in _text(rejected=calls)
 
 
-def test_the_notice_is_once_and_before_the_first_message_section() -> None:
+def test_the_notice_is_once_and_first() -> None:
     text = _text(requests=(_request(),), rejected=(_rejected(),))
 
     assert text.count(QUOTED_DATA_NOTICE) == 1
     assert _headings(text) == [
-        NOTHING_NEEDS_YOU,
         QUOTED_DATA_NOTICE,
+        NOTHING_NEEDS_YOU,
         "Requests",
         "Rejected calls",
     ]

@@ -115,6 +115,8 @@ def render_waiting(
         sections.extend(
             section for section in (_other_runs(members), _settled(settled)) if section
         )
+    if result.notice is not None:
+        sections.insert(0, [result.notice])
     return "\n\n".join("\n".join(section) for section in sections) + "\n"
 
 

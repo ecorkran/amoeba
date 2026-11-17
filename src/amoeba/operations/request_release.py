@@ -5,9 +5,10 @@ instead of being handed ids, so one function covers every way a request ends
 (``reply``, ``cancel``, expiry, the ``rm`` cascade) and the retry of a start that was
 lost or failed. Each start is the ordinary ``amoeba handle-pause``, detached in the
 row's checkout; the caller never waits for it. A row is started at most once per
-``answering_wait_seconds``, so children cannot pile up, and at most
-``MAX_STARTS_PER_CALL`` rows are started per call; each child runs this function at
-its end too, so a larger batch drains on its own.
+``answering_wait_seconds`` and at most ``MAX_STARTS_PER_CALL`` rows are started per
+call; each child runs this function at its end too, so a larger batch drains on its
+own. What this bounds is starts per call and per row, not live children: a burst of
+ended requests can have every held question answering at once, one child per row.
 """
 
 from __future__ import annotations

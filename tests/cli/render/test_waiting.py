@@ -15,6 +15,7 @@ from amoeba.operations.calls_log import CallEntry
 from amoeba.operations.decisions_models import MemberName
 from amoeba.operations.list_view import SettledEntry
 from amoeba.operations.pause_class import PauseClass
+from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.status_models import (
     ClosedNowEntry,
@@ -368,3 +369,12 @@ def test_a_rejected_result_prints_its_problems() -> None:
     assert _text(result) == (
         "rejected: unknown_program: unknown program 'x'; known programs: trading\n"
     )
+
+
+def test_the_notice_comes_first_when_a_waiting_reason_is_another_repos_text() -> None:
+    entry = _waiting(waiting_detail="their reason text", request_id="guide-change")
+
+    text = _text(_status(waiting=(entry,), notice=QUOTED_DATA_NOTICE))
+
+    assert text.startswith(f"{QUOTED_DATA_NOTICE}\n\nWaiting on you\n")
+    assert text.count(QUOTED_DATA_NOTICE) == 1

@@ -30,6 +30,7 @@ from amoeba.operations.pause_models import (
     ResumeResult,
     SkipReason,
 )
+from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.retract import RetractOutcome, RetractRejection, RetractResult
 from amoeba.store.models import QuestionKey
@@ -266,3 +267,16 @@ def test_a_long_handle_pause_detail_stays_on_one_line() -> None:
 
     assert text.count("\n") == 1
     assert len(text.rstrip("\n")) <= COLUMNS
+
+
+def test_decisions_print_the_notice_first_when_a_record_came_from_a_request() -> None:
+    result = DecisionsResult(
+        outcome=DecisionsOutcome.LISTED,
+        notice=QUOTED_DATA_NOTICE,
+        records=(_record(4, AnsweredBy.ANSWERER, request_id="guide-change"),),
+        marker=3,
+    )
+
+    text = render_decisions(result)
+
+    assert text.startswith(f"{QUOTED_DATA_NOTICE}\n1 answer (marker at 3)\n")
