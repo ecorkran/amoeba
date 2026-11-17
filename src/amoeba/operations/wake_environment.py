@@ -15,7 +15,8 @@ from amoeba.config.home import HOME_VARIABLE
 
 #: The only environment variables a wake command sees. The Amoeba home variable
 #: (``config.home.HOME_VARIABLE``) stays so the woken agent's ``amoeba`` calls reach
-#: the same store.
+#: the same store, and the Context Forge data directory stays so they resolve the
+#: same projects.
 WAKE_ENV_NAMES: Final = (
     "PATH",
     "HOME",
@@ -26,6 +27,7 @@ WAKE_ENV_NAMES: Final = (
     "LC_ALL",
     "TMPDIR",
     HOME_VARIABLE,
+    "CONTEXT_FORGE_DATA_DIR",
 )
 
 

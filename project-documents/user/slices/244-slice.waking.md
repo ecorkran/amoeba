@@ -311,10 +311,10 @@ Refined in Phase 6 (2026-11-17), when steps 2 to 7 were run by hand against the 
      | sed -E 's/^wake_timeout_seconds: .*/wake_timeout_seconds: 5/; s/^max_wakes_per_day: .*/max_wakes_per_day: 2/' > $AMOEBA_HOME/config.yaml
    cd $(mktemp -d)
    for n in sq-s cf-s; do mkdir $n && git -C $n init -q -b main && (cd $n && git commit -q --allow-empty -m seed && cf init --lite --name $n && amoeba add --program toolchain); done
-   (cd cf-s && amoeba add --wake-command "python3 $REPO/tests/live/waking/fixture_agent.py --max-seconds 60 --cf-data-dir $CONTEXT_FORGE_DATA_DIR")
+   (cd cf-s && amoeba add --wake-command "python3 $REPO/tests/live/waking/fixture_agent.py --max-seconds 60")
    amoeba list members
    ```
-   Expected: `list members` shows both members in program `toolchain`, and under `cf-s` a `wake command:` line with the command on the next line. (The fixture agent takes `--cf-data-dir` because a wake command receives only the `WAKE_ENV_NAMES` variables, and `CONTEXT_FORGE_DATA_DIR` is not one of them; a real agent's repo needs no such flag.) The `list` output below is cut to its Waking section, because the real Squadron's unrelated runs add an `Unplaced runs` section.
+   Expected: `list members` shows both members in program `toolchain`, and under `cf-s` a `wake command:` line with the command on the next line. (The fixture agent needs no data-directory flag: `CONTEXT_FORGE_DATA_DIR` is one of the `WAKE_ENV_NAMES` variables.) The `list` output below is cut to its Waking section, because the real Squadron's unrelated runs add an `Unplaced runs` section.
 3. In `sq-s`: `amoeba send --to cf-s --id w-1 --subject "Need X" --body "Please add X"`. Expected: `sent: w-1` and the request, `open`. `amoeba list | sed -n '/^Waking/,/^$/p'` shows `cf-s` with its command and, while the agent runs, `running since <1m, stops <time>`.
 4. After about 6 seconds, `amoeba inbox` in `sq-s`. Expected: `w-1` is `done`, with `result: done by the fixture agent`. `amoeba list`'s Waking section has no `last wake` line (the command exited 0). `ls $AMOEBA_HOME/logs/wake` shows the wake's `.stdout.log` and `.stderr.log`.
 5. Limit: send `w-2` (it wakes), wait 6 seconds, then send `w-3`. Expected: `w-3` stays `open`, starts nothing, and `amoeba list | sed -n '/^Waking/,/^$/p'` shows `waking stopped: 2 of 2 wakes used in the last 24 h`; `sqlite3 $AMOEBA_HOME/amoeba.sqlite3 "select outcome, exit_code from wakes"` gives two `exited|0` rows.

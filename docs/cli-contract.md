@@ -285,8 +285,8 @@ one: that is the PM's duty when choosing a command.
 
 **Its environment.** The command runs with only these variables, copied from the wrapper
 when set (`WAKE_ENV_NAMES`): `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`,
-`LC_ALL`, `TMPDIR` and `AMOEBA_HOME`, so its `amoeba` calls reach the same
-store. The sender's other variables, keys and tokens never cross repos, so a script
+`LC_ALL`, `TMPDIR`, `AMOEBA_HOME` and `CONTEXT_FORGE_DATA_DIR`, so its `amoeba`
+calls reach the same store and resolve the same Context Forge projects. The sender's other variables, keys and tokens never cross repos, so a script
 loads its own secrets (from the repo's `.env` or the user's profile).
 
 **Its output and its end.** Its stdout and stderr go to the wake's log files,

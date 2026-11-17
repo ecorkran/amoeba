@@ -31,6 +31,14 @@ def test_an_unset_name_is_absent_not_empty() -> None:
     assert "HOME" not in built
 
 
+def test_the_context_forge_data_directory_reaches_the_command() -> None:
+    # The woken agent's `amoeba` calls resolve its project through Context Forge,
+    # which must look in the same data directory as the sender's did.
+    built = build_wake_environment({"CONTEXT_FORGE_DATA_DIR": "/cf-data"})
+
+    assert built == {"CONTEXT_FORGE_DATA_DIR": "/cf-data"}
+
+
 def test_an_empty_value_that_is_set_is_kept() -> None:
     assert build_wake_environment({"LANG": ""}) == {"LANG": ""}
 

@@ -93,17 +93,15 @@ def build_waking_world(parent: Path, base: PauseWorld) -> WakingWorld:
 
 
 def agent_command(world: WakingWorld, *flags: str) -> str:
-    """The wake command that runs the fixture agent with its own cap and the throwaway
-    Context Forge data directory, plus the case's ``flags``."""
-    data_dir = world.recipient.environ["CONTEXT_FORGE_DATA_DIR"]
+    """The wake command that runs the fixture agent with its own cap, plus the case's
+    ``flags``. The throwaway Context Forge data directory reaches it through the wake
+    environment, as a real agent's would."""
     return shlex.join(
         [
             sys.executable,
             str(FIXTURE_AGENT),
             "--max-seconds",
             str(AGENT_CAP_SECONDS),
-            "--cf-data-dir",
-            data_dir,
             *flags,
         ]
     )

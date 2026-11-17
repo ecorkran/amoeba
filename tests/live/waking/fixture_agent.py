@@ -11,8 +11,6 @@ flags, never environment variables:
 * ``--gate-file PATH``: wait until PATH exists before reading ``inbox``.
 * ``--sleep-seconds N``: sleep N seconds before reading ``inbox`` (past the timeout).
 * ``--parent-pid-file PATH``: write the parent pid, which is the wrapper's, to PATH.
-* ``--cf-data-dir PATH``: the Context Forge data directory its ``amoeba`` calls use (a
-  throwaway one in the test; a real agent's repo needs no such flag).
 
 It finds ``amoeba`` through ``PATH`` only.
 """
@@ -32,7 +30,6 @@ AMOEBA_COMMAND: Final = "amoeba"
 POLL_SECONDS: Final = 0.1
 #: The exit code of an agent that ran out of its own cap.
 EXIT_CAP_REACHED: Final = 4
-CF_DATA_DIR_VARIABLE: Final = "CONTEXT_FORGE_DATA_DIR"
 DONE_TEXT: Final = "done by the fixture agent"
 
 
@@ -42,7 +39,6 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--gate-file", type=Path)
     parser.add_argument("--sleep-seconds", type=float)
     parser.add_argument("--parent-pid-file", type=Path)
-    parser.add_argument("--cf-data-dir", type=Path)
     return parser.parse_args(argv)
 
 
@@ -54,8 +50,6 @@ class Agent:
     def __init__(self, arguments: argparse.Namespace) -> None:
         self._deadline = time.monotonic() + arguments.max_seconds
         self._environment = dict(os.environ)
-        if arguments.cf_data_dir is not None:
-            self._environment[CF_DATA_DIR_VARIABLE] = str(arguments.cf_data_dir)
 
     def check_cap(self) -> None:
         if time.monotonic() >= self._deadline:
