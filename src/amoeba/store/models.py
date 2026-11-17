@@ -24,6 +24,7 @@ from amoeba.store.vocabulary import (
     RequestState,
     ResumeOutcome,
     RulesFrom,
+    WakeOutcome,
 )
 
 
@@ -53,6 +54,8 @@ class MemberSettings:
     authorize_deny: tuple[str, ...]
     #: Whether the rules are ``rules_paths`` or the config's default (229 D7).
     rules_from: RulesFrom
+    #: The command a wake starts for this member (244 D1); ``None`` means no wake.
+    wake_command: str | None
 
 
 @dataclass(frozen=True)
@@ -254,3 +257,28 @@ class PushRow:
     kind: MessageKind
     #: The message's member that is not the receiver; for a note, its sender.
     counterparty: str
+
+
+@dataclass(frozen=True)
+class Wake:
+    """One ``wakes`` row: a wake of a member's command (244 D3)."""
+
+    wake_id: str
+    member_id: str
+    #: The checkout the command runs in; ``None`` only for a ``start_failed`` row
+    #: Context Forge gave no path for.
+    directory: str | None
+    #: The member's ``wake_command`` as claimed; a later edit changes nothing.
+    command: str
+    started_at: datetime
+    #: ``started_at`` plus ``wake_timeout_seconds``, fixed at the claim.
+    deadline_at: datetime
+    #: The log files' path without the ``.stdout.log`` / ``.stderr.log`` suffix.
+    log_stem: str | None
+    #: The command's pid, also its process group id; ``None`` until it has started.
+    command_pid: int | None
+    ended_at: datetime | None
+    outcome: WakeOutcome | None
+    exit_code: int | None
+    #: Why, for a start failure or an error; never argv text.
+    detail: str | None

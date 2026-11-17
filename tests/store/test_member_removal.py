@@ -87,6 +87,7 @@ def _settings(project_id: str) -> MemberSettings:
         authorize_allow=(),
         authorize_deny=(),
         rules_from=RulesFrom.NAMED,
+        wake_command=None,
     )
 
 

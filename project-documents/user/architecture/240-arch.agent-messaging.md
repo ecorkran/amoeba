@@ -163,16 +163,16 @@ When a request reaches any terminal state (by `reply`, `cancel`, `rm` or the swe
 
 ### Waking a repo nobody is working in
 
-A member may set `wake_command` in its member settings: any command, such as `codex exec ...`, `claude -p ...` or a script. When `send` delivers a request to a member that has a wake command, no live session and no running wake, it starts the command detached, in the directory the member was registered with.
+A member may set `wake_command` in its member settings: any command, such as `codex exec ...`, `claude -p ...` or a script. When `send` delivers a request to a member that has a wake command, no live session, no running wake and a day's count under the limit, it starts the command detached, in the member's checkout: Context Forge's `projectPath` for it, which `send`'s recipient lookup already returns (members are stored by id with no path). This happens when the request is stored `open`, and again at a same-id retry of it while it is still `open`; never for an `accepted` request, a note, or from anywhere but `send`.
 
-The command runs under a small `amoeba wake-run` wrapper, which holds the member's wake row for as long as the command runs and clears it on exit. The woken agent reads `inbox` like any other.
+The command runs under a small `amoeba wake-run` wrapper, a CLI-only internal command (no operation, no MCP tool). It runs the command in a session of its own, stops it at `wake_timeout_seconds`, and records how the wake ended: one `wakes` row per wake, kept after it ends and deleted by retention. The wrapper's own pid is not recorded. The woken agent reads `inbox` like any other.
 
 - **One wake at a time per member.** A second request arriving during a wake adds to the inbox the woken agent reads. A wake row left by a killed wrapper counts as gone after `wake_timeout_seconds`, and the wrapper itself stops a command that runs past that time.
-- **A daily limit on wakes per member** (`max_wakes_per_day`). Each wake command carries its own cost cap, for example `pipeline.max_cost_usd` in an sq run, and this limit bounds how many such runs a member can start. When the limit is hit, the request is not lost. It waits for the next agent, up to its TTL, and `list` shows that waking stopped and why.
-- **The wake process is never waited on, and its failure changes no message.** Its log path is recorded on the wake row, and a failure to start shows in `list`.
+- **A daily limit on wakes per member** (`max_wakes_per_day`), counted over a rolling 24 hours from the rows, not a calendar day and with no stored count. A wake that failed to start counts like any other, so a broken command uses its day's wakes. Each wake command carries its own cost cap, for example `pipeline.max_cost_usd` in an sq run, and this limit bounds how many such runs a member can start. When the limit is hit, the request is not lost. It waits for the next agent, up to its TTL, and `list` shows that waking stopped and why.
+- **The wake process is never waited on, and its failure changes no message.** Its log path is recorded on the wake row, and a failure to start shows in `list`. A request a wake leaves behind keeps its exits: `open` waits for the next agent, a same-id retry or its TTL; `accepted` ends by `done` or `decline` from the next agent, or `cancel`.
 - **Without `wake_command`,** the request simply waits for the next agent, up to its TTL.
-- **The PM sets it, from the CLI only.** `amoeba add --wake-command`. The MCP `add` tool has no such field.
-- **A clean environment.** The command runs with a fixed list of variables (PATH, HOME and the like), never the sender's environment.
+- **The PM sets it, from the CLI only.** `amoeba add --wake-command`, cleared with `--no-wake-command`. The MCP `add` tool has no such field.
+- **A clean environment.** The command runs with only the variables in `WAKE_ENV_NAMES` (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_ALL`, `TMPDIR` and the Amoeba home variable), never the sender's environment, so credentials do not cross repos.
 - **Each wake command carries its own cost or time cap.** If the wrapper is killed with SIGKILL, that cap, or the PM stopping the process (`list` shows it as overdue with its pid and log), is the only bound. A new wake may start once the old row's deadline passes.
 
 The PM chose to start without waking, so it is the last slice.
@@ -185,7 +185,7 @@ New tables (the live store is designated for migrations: back it up first, with 
 - `deliveries`: sequence number, receiving member, message id, and what happened (new message or state change). Pruned along with its message.
 - `message_rejections`: the caller, the operation, what it asked, the code and the detail, so a `send`, `reply` or `cancel` that cannot be applied does not vanish. Pruned by age.
 - `sessions`: id, member, client, working directory, started, heartbeat, and when push was confirmed (null until then).
-- `wakes`: one row per wake: member, started, command pid (shown, never signalled), log path and how it ended. The daily count is counted from rows, and rows leave by retention.
+- `wakes`: one row per wake: member, checkout, the command as claimed, started, deadline, log path, the command's pid (shown, never signalled), and how it ended (`exited` with its code, `timed_out`, `start_failed`, `wrapper_failed`). The daily count is counted from rows, and every row, ended or not, is deleted by the message sweep (a fourth step) once past `prune_after_days`.
 
 New settings in the user config file, each required, with no default in code (the suggested values are in the config contract's example): `request_open_ttl_hours`, `max_chain_depth`, `notify_poll_seconds`, `session_heartbeat_seconds`, `session_stale_seconds`, `wake_timeout_seconds` and `max_wakes_per_day`. Retention reuses `prune_after_days`. All state, the wake logs included, lives under `~/.local/state/amoeba/`.
 

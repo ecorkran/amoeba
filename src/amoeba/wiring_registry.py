@@ -15,15 +15,18 @@ from amoeba.config.user_config import UserConfig
 from amoeba.operations.add import add
 from amoeba.operations.deps import Deps
 from amoeba.operations.list_view import ListOutcome, list_view
+from amoeba.operations.names import Door
 from amoeba.operations.rm import rm
 from amoeba.operations.set_up_models import SetUpResult
 from amoeba.store.store import Store
 
 
 def place_add(
-    store: Store, config: UserConfig, document: object, directory: Path
+    store: Store, config: UserConfig, document: object, directory: Path, door: Door
 ) -> SetUpResult:
-    return add(store, config, document, directory=directory, run=subprocess.run)
+    return add(
+        store, config, document, directory=directory, run=subprocess.run, door=door
+    )
 
 
 def place_rm(

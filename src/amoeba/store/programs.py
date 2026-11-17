@@ -50,6 +50,7 @@ def _member(row: Sequence[object]) -> Member:
             authorize_allow=decode_string_list(row[3], "members.authorize_allow"),
             authorize_deny=decode_string_list(row[4], "members.authorize_deny"),
             rules_from=vocabulary(row[8], RulesFrom, "members.rules_from"),
+            wake_command=optional_text(row[9], "members.wake_command"),
         ),
         registered_at=decode_timestamp(row[5], "members.registered_at"),
         updated_at=decode_timestamp(row[6], "members.updated_at"),
@@ -193,6 +194,7 @@ def upsert_member(
                 stamp,
                 stamp,
                 settings.rules_from,
+                settings.wake_command,
             ),
         )
         return True
@@ -205,6 +207,7 @@ def upsert_member(
                 settings.rules_from,
                 allow,
                 deny,
+                settings.wake_command,
                 stamp,
                 stamp,
                 settings.project_id,
@@ -225,6 +228,7 @@ def upsert_member(
             settings.rules_from,
             allow,
             deny,
+            settings.wake_command,
             stamp,
             settings.project_id,
         ),

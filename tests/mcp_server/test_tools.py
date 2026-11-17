@@ -7,11 +7,13 @@ SDK when pytest puts ``tests/`` on the import path.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from amoeba.cli.parser import build_parser
+from amoeba.cli.wake_command import CLI_ONLY_COMMANDS
 from amoeba.mcp.message_tools import SEND_ADVICE, STATE_CHANGE_ADVICE
 from amoeba.mcp.tools import (
     READ_ADVICE,
@@ -79,7 +81,9 @@ def test_tool_names_are_the_operation_names_and_the_cli_commands_their_cli_names
 
     assert len(names) == len(set(names))
     assert set(names) == {name.value for name in OperationName}
-    assert {name.cli_name for name in OperationName} == _subcommands() - CLI_ALIASES
+    assert {
+        name.cli_name for name in OperationName
+    } == _subcommands() - CLI_ALIASES - CLI_ONLY_COMMANDS
 
 
 def test_the_tool_table_has_add_rm_and_list_and_no_set_up() -> None:
@@ -266,3 +270,11 @@ def test_the_send_and_inbox_descriptions_say_a_note_needs_no_reply() -> None:
     assert "`kind` `note`" in send and "needs no reply" in send
     assert "`to_program`" in send
     assert "`notes`" in inbox and "needs no reply" in inbox
+
+
+def test_the_add_schema_has_no_wake_command_anywhere() -> None:
+    """The wake command is the PM's CLI setting (244 D1): no field of the published
+    schema, at the top or in a bulk member, offers it."""
+    schema = input_schema(_spec(OperationName.ADD))
+
+    assert "wake_command" not in json.dumps(schema)

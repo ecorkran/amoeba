@@ -13,6 +13,7 @@ from store.message_support import NOW, seed_members
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.message_member import (
     Caller,
+    Recipient,
     Refusal,
     UnknownActor,
     resolve_actor,
@@ -174,7 +175,10 @@ def test_a_cf_failure_on_the_explicit_member_propagates(store: Store) -> None:
 def test_a_name_and_an_id_both_resolve_a_recipient(
     store: Store, reference: str
 ) -> None:
-    assert resolve_recipient(store, reference, _cf()) == OTHER_ID
+    recipient = resolve_recipient(store, reference, _cf())
+
+    assert isinstance(recipient, Recipient)
+    assert recipient.member_id == OTHER_ID
 
 
 def test_an_unregistered_recipient_is_unknown(store: Store) -> None:

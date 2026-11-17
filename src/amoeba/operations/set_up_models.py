@@ -8,10 +8,11 @@ stored value) from given (replace it) the same way.
 
 from __future__ import annotations
 
+import shlex
 from collections.abc import Sequence
 from enum import StrEnum
 from functools import partial
-from typing import Annotated, Self
+from typing import Annotated, Final, Self
 
 from pydantic import (
     AfterValidator,
@@ -22,6 +23,7 @@ from pydantic import (
     computed_field,
     model_validator,
 )
+from pydantic.json_schema import SkipJsonSchema
 
 from amoeba.answering.settings import RulesPath, validate_repo_relative_path
 from amoeba.store.vocabulary import ConsumedMode, RulesFrom
@@ -34,6 +36,29 @@ ConceptPath = Annotated[
     NonBlankText,
     AfterValidator(partial(validate_repo_relative_path, glob_allowed=False)),
 ]
+
+
+#: What a wake command may not contain: a NUL or a line break (244 D1).
+_WAKE_COMMAND_FORBIDDEN: Final = ("\0", "\n", "\r")
+
+
+def validate_wake_command(command: str) -> str:
+    """``command`` when it splits, with ``shlex.split``, into at least one token and
+    holds no NUL or line break. The executable is not looked up: it may be installed
+    later, and a missing one is a recorded ``start_failed`` (244 D1, D6)."""
+    if any(character in command for character in _WAKE_COMMAND_FORBIDDEN):
+        raise ValueError("a wake command may not contain a NUL or a line break")
+    try:
+        tokens = shlex.split(command)
+    except ValueError as error:
+        raise ValueError(f"a wake command must split into words: {error}") from error
+    if not tokens:
+        raise ValueError("a wake command needs at least an executable")
+    return command
+
+
+#: The command a wake starts, validated once for every place that takes one.
+WakeCommand = Annotated[NonBlankText, AfterValidator(validate_wake_command)]
 
 
 class FrozenModel(BaseModel):
@@ -68,6 +93,9 @@ class MemberRequest(FrozenModel):
     authorize_allow: tuple[NonBlankText, ...] | None = None
     authorize_deny: tuple[NonBlankText, ...] | None = None
     depends_on: tuple[DependsOnRequest, ...] = ()
+    #: Omitted leaves the member's wake command; null clears it (244 D1). Hidden
+    #: from the published schema: the MCP door does not take it (``add`` rejects it).
+    wake_command: SkipJsonSchema[WakeCommand | None] = None
 
     @model_validator(mode="after")
     def _rules_named_or_default(self) -> Self:

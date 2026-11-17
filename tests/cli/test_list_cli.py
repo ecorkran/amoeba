@@ -145,6 +145,7 @@ def test_list_members_text_and_json(tmp_path: Path) -> None:
         "rules_paths",
         "authorize_allow",
         "authorize_deny",
+        "wake_command",
         "depends_on",
     }
     assert member["rules_from"] == "config_default"

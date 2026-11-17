@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: The amoeba command line: each command's arguments, its text and `-j` JSON output and the exit-code table.
 dateCreated: 20261110
-dateUpdated: 20261116
+dateUpdated: 20261117
 status: complete
 ---
 
@@ -66,7 +66,8 @@ A Squadron or Context Forge failure is an exit 3, never a skip: "cannot tell" is
 ```
 amoeba add [--program ID] [--project NAME] [--rules PATH]... [--default-rules]
            [--no-rules] [--allow KEY]... [--no-allow] [--deny KEY]... [--no-deny]
-           [--depends-on PROVIDER[:MODE]]... [--concept MEMBER:PATH] [-j]
+           [--depends-on PROVIDER[:MODE]]... [--concept MEMBER:PATH]
+           [--wake-command COMMAND | --no-wake-command] [-j]
 amoeba add --file PATH [-j]
 ```
 
@@ -87,10 +88,13 @@ Context Forge project, on the default rules. A repeat changes nothing and is
 | `--deny KEY`, `--no-deny` | `authorize_deny` | The same for the deny list |
 | `--depends-on PROVIDER[:MODE]` (repeatable) | `depends_on: [{provider, consumed}]` | A provider (Context Forge name or id); `MODE` is `from_source` or `from_release`, and without it the config's `default_consumed` |
 | `--concept MEMBER:PATH` | `concept: {member, path}` | The program's concept file, split at the first `:`; an empty side is a usage error |
+| `--wake-command COMMAND` | `wake_command: COMMAND` | The command Amoeba starts, unattended, when a request arrives for this member and no agent is live in it ("The wake command", below). The text must split into words (`shlex` rules) with at least one, and hold no NUL or line break; the executable is not looked up. Omitted leaves the member's command. A CLI-only setting: the MCP `add` tool does not take it |
+| `--no-wake-command` | `wake_command: null` | Clears the member's wake command, so nothing wakes it |
 | `--file PATH` (`-` is stdin) | `bulk` | A whole request document (below); it cannot be combined with another flag |
 
 `--rules`, `--default-rules` and `--no-rules` are mutually exclusive, and so are
-`--allow` with `--no-allow` and `--deny` with `--no-deny`. A flag not given leaves its
+`--allow` with `--no-allow`, `--deny` with `--no-deny` and `--wake-command` with
+`--no-wake-command`. A flag not given leaves its
 field out of the request, and a field left out leaves the stored value alone; giving
 none of the three rules flags leaves an existing member's rules as they are and gives a
 new member the default. `--allow`, `--deny` and `--rules` replace the list, they do not
@@ -98,7 +102,8 @@ add to it.
 
 The MCP `add` tool takes the same fields (`program`, `project`, `rules_paths`,
 `rules_default`, `authorize_allow`, `authorize_deny`, `depends_on`, `concept`) or `bulk`,
-never both, plus `directory`. `add` builds a request for the `set_up` engine and returns
+never both, plus `directory`; it does not take `wake_command`, in the single fields or
+in a bulk member, and a call that passes it is `rejected` as an unknown field. `add` builds a request for the `set_up` engine and returns
 its result (`SetUpResult`): `outcome` (`applied`, `unchanged` or `rejected`), `changes`
 (one line per changed row, `<added|updated|removed> <program|member|dependency|pair>
 ...`), `change_records` (the same changes as `{verb, subject, detail}`), `problems` (empty unless rejected), `program` (the program as stored, or null)
@@ -164,12 +169,14 @@ and **Settled**. `--program ID` narrows the view.
 records), and `add --program` refills it.
 
 **`members`**: `{members: [{project_id, name, path, in_context_forge, program,
-rules_from, rules_paths, authorize_allow, authorize_deny, depends_on: [{provider,
-consumed}]}]}`. `path` is Context Forge's `projectPath`; the text says `(no path in
+rules_from, rules_paths, authorize_allow, authorize_deny, wake_command, depends_on:
+[{provider, consumed}]}]}`. `path` is Context Forge's `projectPath`; the text says `(no path in
 Context Forge)` when it has none, and a member whose project is gone shows its id and
 `(not in Context Forge)`. `rules_paths` is the stored entries for `named` rules and the
-config's current `default_rules_paths` for `config_default`. A removed member is not
-listed.
+config's current `default_rules_paths` for `config_default`. `wake_command` is the
+stored command in plain text, or null; the text shows it on a `wake command:` line, with
+the command on the next line, for a member that has one and no such line for one that
+does not. A removed member is not listed.
 
 **`dependencies`**: `{dependencies: [{provider_id, provider_name, consumer_id,
 consumer_name, consumed}]}`.
@@ -192,6 +199,7 @@ members:
     rules_default: false          # true returns the member to the default rules
     authorize_allow: []
     authorize_deny: []
+    wake_command: null            # omitted: keep; a command sets it, null clears it (CLI only)
     depends_on:
       - {provider: some-provider, consumed: from_source}
 remove:
@@ -222,6 +230,97 @@ remove:
   `members` and `remove.members`, a pair under both `depends_on` and `remove.pairs`,
   and a removed member named as the end of a pair (in `remove.pairs` or as a
   `depends_on` provider). Any problem rejects the whole request.
+
+## `amoeba wake-run WAKE_ID`
+
+Internal: Amoeba starts it, detached, when a request wakes a member (see "The wake
+command"); it is not meant for people. It reads the wake's row (a row that already has a command, or has ended, is refused), runs the row's command
+in the member's checkout with only the `WAKE_ENV_NAMES` variables, stops the command's
+process group at the row's `deadline_at`, and records how the wake ended. It loads no
+config and prints no result: its stdout and stderr are the wake's log files. It is a
+CLI command only: no MCP tool, and it takes no `-j`. Exit codes: 0 when the command ran
+and was recorded (its own exit code is data in the row, not the wrapper's), 1 when the
+command could not be started (recorded `start_failed`), 3 for an operational failure
+(a missing or already ended row, a store that cannot be read or written, or the
+wrapper's own unexpected error, recorded `wrapper_failed`) with one `error:` line on
+stderr.
+
+## The wake command
+
+A member can carry a **wake command** (slice 244): a command Amoeba starts, unattended,
+when a request is sent to that member and nobody is working in its repo. The PM sets it
+with `amoeba add --wake-command`, from the repo or with `--project`, and clears it with
+`--no-wake-command`; `list members`, `list -j` and `status` show it in plain text, so it
+must carry no secret. A pipe, a redirect or an environment assignment needs a script,
+because the command runs without a shell. An example, a script that carries its own cap:
+
+```
+amoeba add --wake-command "python3 /home/pm/bin/wake_agent.py --max-seconds 600"
+```
+
+**When a wake starts.** `send` starts one after a request is stored, when the request
+is `open` (outcome `sent`, or `unchanged` with the stored request still `open`) and the
+recipient has a wake command, has no push-confirmed live session (`sessions`, above),
+has no wake running, and has fewer than `max_wakes_per_day` wakes started in the last
+24 hours (failed starts count). A note never wakes anyone, nor does a request already
+`accepted`. Amoeba starts `amoeba wake-run` (above) detached in the member's checkout,
+which is Context Forge's `projectPath` for it, and `send` returns without waiting. The
+wake step never changes a request and never makes `send` fail: a store error in it is
+`wake_problem` in the result, and the request stays `open`. If the store also cannot
+record a start failure, the row stays unended: `list` shows it as `running` (with no
+pid) until its deadline and then as `overdue`, and it leaves by retention; `wake_problem`
+is the only sign that nothing started.
+
+**What the command must do.** It runs in the checkout with no arguments from Amoeba and
+no stdin. Nothing about the request reaches it (no argument, no variable, no input): it
+learns what to do from its own rules, through `inbox`. It must check `inbox` at its
+start, handle each request by the repo's own rules (accept before working, decline with
+a reason when the rules do not settle it, reply `done` with the result), check `inbox`
+again before it ends, and exit.
+
+**It must carry its own cost or time cap.** Amoeba stops the command at
+`wake_timeout_seconds`, but if its wrapper is killed (SIGKILL, a reboot) nothing stops
+it, and the command's own cap is the only bound. Amoeba cannot check that a command has
+one: that is the PM's duty when choosing a command.
+
+**Its environment.** The command runs with only these variables, copied from the wrapper
+when set (`WAKE_ENV_NAMES`): `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`,
+`LC_ALL`, `TMPDIR` and `AMOEBA_HOME`, so its `amoeba` calls reach the same
+store. The sender's other variables, keys and tokens never cross repos, so a script
+loads its own secrets (from the repo's `.env` or the user's profile).
+
+**Its output and its end.** Its stdout and stderr go to the wake's log files,
+`<state home>/logs/wake/<wake id>.stdout.log` and `.stderr.log` (the row's `log_stem` is
+the path without the suffix; `prune` removes them by age). The wake ends one of four
+ways, recorded in its `wakes` row: `exited` (with the command's exit code, which is
+data), `timed_out` (the command and its whole process group were stopped at
+`wake_timeout_seconds`), `start_failed` (the command could not start: not found, not
+executable, no checkout, no path from Context Forge, a missing `amoeba` script) or
+`wrapper_failed` (the wrapper's own error after the start; the command's group was
+stopped). A `detail` is never the command's text.
+
+**What a wake does not do.** Amoeba wakes at `send` and never again, so these cases end
+by their own exits, none of which needs a file edited:
+
+- A request that arrives after the woken agent's last `inbox` read, or while the limit
+  is reached or a live session exists, waits for the next agent, or for the sender's
+  same-id `send` retry once the cause is gone, or until its TTL, when it expires and the
+  sender is told. An idle push-confirmed session gets the request by push.
+- An agent that accepts and then times out, exits or dies leaves the request
+  `accepted`, which has no timeout. It ends by `done` or `decline` from the next agent
+  in that repo, or `cancel` from any session naming the id.
+- A start failure or a held store leaves the request `open`, and the sender's same-id
+  retry runs the wake step again once the cause is fixed.
+
+**What `list` shows** (the **Waking** section, per member with a command): the command;
+`running since <age>, stops <time>`; when no end was recorded by the deadline,
+`overdue since <time>: no end was recorded, so its wrapper is probably gone; the
+command's own cap ends it, or check and stop pid <pid>, log <path>` (Amoeba never signals that pid; the row stops counting as running at its
+deadline, so the member can be woken again, and the row is deleted by the sweep after
+`prune_after_days`); `waking stopped: <used> of <limit> wakes used in the last 24 h`
+(the limit frees by the clock alone: the next `send` after the oldest counted wake is 24
+hours old wakes again, or the PM raises `max_wakes_per_day`); and `last wake <outcome>
+<age> ago: <detail>, log <path>` for the newest wake that went wrong.
 
 ## `amoeba handle-pause RUN_ID`
 
@@ -355,7 +454,7 @@ nothing to show. After the result is built, `status` (and `list`'s default view)
 | `outcome` | `listed` or `rejected` |
 | `rejection` | with `rejected`: `unknown_program` (`problems` lists the known ids) or `malformed` |
 | `notice` | the quoted-data notice (`QUOTED_DATA_NOTICE`), set when any member shows a request, a rejected call, a `waiting_on_request` run or a waiting question with a `request_id`, and null otherwise: those subjects, recipients and request reasons are other agents' text |
-| `programs` | per program, `members`: each `{id, name}` with `runs`, `waiting_on_pm`, `requests`, `rejected_calls` and `sessions` |
+| `programs` | per program, `members`: each `{id, name}` with `runs`, `waiting_on_pm`, `requests`, `rejected_calls`, `sessions` and `wake` |
 | `unplaced_runs` | paused runs no member could be found for: `run_id`, `status`, `reason`, `checkpoint_kind`, `detail` |
 | `closed_now` | what this call closed (closures made by `handle-pause` are in that call's calls-log `detail`, not here), so each automatic closure is seen once: `{program, member, run_id, paused_at, question, closed_reason, closed_detail}` for a question, and for an answer marked `not_delivered` the same with `answer_seq` and `resume_outcome` |
 | `sweep_problem` | set when the closing, or the message sweep, could not take the store's lock; nothing was closed and the rows show as before (both texts, joined, when both fail) |
@@ -388,6 +487,28 @@ whose last beat is older than `session_stale_seconds` is gone and not listed, an
 active members show sessions. Sessions do not count as waiting on the PM and do not
 set the `notice`. The text adds a **Live sessions** section, one line per session:
 `<client>  <directory>  up <age>  last beat <age> ago  push confirmed|push unconfirmed`.
+
+A member's `wake` (slice 244) is present only for a member with a wake command, else
+null: `{command, running, stopped, last_problem}`. `command` is the stored command in
+plain text. `running` is the member's wake not yet recorded as ended, or null:
+`{started_at, deadline_at, command_pid, log_stem, overdue}`; `overdue` is true once
+`deadline_at` has passed with the row still unended, which most likely means its wrapper
+is gone (the row cannot show it; it only shows that no end was recorded): it no longer
+counts as a live wake, so the member can be woken again, and `command_pid`
+(null when unknown) is the command's pid, which Amoeba never signals. `log_stem` is the
+log files' path without the `.stdout.log` and `.stderr.log` suffix. `stopped` is
+`{used, limit}` once the member has used `max_wakes_per_day` wakes in the last 24 hours
+(failed starts included), else null. `last_problem` is the member's newest ended wake
+when it was `start_failed`, `timed_out`, `wrapper_failed` or `exited` with a non-zero
+code: `{outcome, exit_code, detail, ended_at, log_stem}`; a newest wake that exited 0
+clears it. `detail` is an exception class and its OS message, never the command's text.
+Waking does not count as waiting on the PM, so it does not change `Nothing needs you.`
+The text adds a **Waking** section: under each such member the command on its own line,
+then `running since <age>, stops <time>`, or when overdue `overdue since <time>: no end
+was recorded, so its wrapper is probably gone; the command's own cap ends it, or check
+and stop pid <pid>, log <log_stem>` (no pid text when the pid is unknown), then `waking stopped: <used> of
+<limit> wakes used in the last 24 h`, then `last wake <outcome> <age> ago: <detail>, log
+<log_stem>`.
 
 A run (`runs`) has `run_id`, `pipeline`, `status` (Squadron's text, raw),
 `working_directory`, `checkpoint` (`kind`, `paused_at`, `question`, or null), `pause`,
@@ -709,7 +830,11 @@ vocabulary:
 Every result has `outcome`, `notice`, `rejection` (a code, null unless rejected) and
 `problems` (one line per problem when rejected, empty otherwise). `send`, `reply` and
 `cancel` add `request`, a request view or null; `inbox` adds `member`, `since`,
-`as_of_seq`, `requests` and `deliveries`.
+`as_of_seq`, `requests` and `deliveries`. `send` also has `wake_problem` (slice 244):
+a string when the wake step of a stored request failed with a store error, so no wake
+was claimed or its start could not be recorded, and null otherwise. The request is
+written regardless, and the text output prints the line; a same-id retry while the
+request is still `open` runs the wake step again.
 
 A request view has `id`, `direction` (`sent` or `received`, relative to the caller; null
 when the caller is neither party, as for a `cancel` from a session in no member),

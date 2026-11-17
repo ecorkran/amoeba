@@ -97,6 +97,12 @@ class UserConfig(BaseModel):
     session_heartbeat_seconds: Annotated[StrictInt | StrictFloat, Field(gt=0)]
     #: Age of a session's last heartbeat past which it counts as gone (slice 241, D6).
     session_stale_seconds: Annotated[StrictInt | StrictFloat, Field(gt=0)]
+    #: Longest a woken agent's command may run before its wrapper stops it, in
+    #: seconds; fixed into each wake at the claim (slice 244, D7, D8).
+    wake_timeout_seconds: Annotated[StrictInt | StrictFloat, Field(gt=0)]
+    #: Most wakes started for one member in any rolling 24 hours, failed starts
+    #: included (slice 244, D7, D8).
+    max_wakes_per_day: Annotated[StrictInt, Field(ge=1)]
     #: Rules files a member that names none reads, each skipped when absent
     #: (slice 229, D7, D8). Not empty: a default of no rules is ``--no-rules``.
     default_rules_paths: Annotated[tuple[RulesPath, ...], Field(min_length=1)]

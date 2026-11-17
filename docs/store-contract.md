@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: The Amoeba store contract: the home, every table and column of the schema with its vocabulary and the operation that writes it, and the migration rule.
 dateCreated: 20261109
-dateUpdated: 20261116
+dateUpdated: 20261117
 status: complete
 ---
 
@@ -70,7 +70,7 @@ file, pid file or read-only mode, and a missing store is created.
 ## Migrations
 
 - Numbered files in `src/amoeba/store/schema/` (`001_baseline.sql`, `002_pause_handling.sql`,
-  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (8).
+  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`, `009_wakes.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (9).
 - Opening applies the missing files in order inside one write transaction and stamps
   `schema_meta.version`. A store stamped higher than the code expects is refused
   (`StoreSchemaError`) and left untouched.
@@ -128,6 +128,7 @@ a foreign key would be circular.
 | `registered_at`, `updated_at` | As above. |
 | `removed_at` | Migration `003`. UTC time `set_up` removed the member; null for an active one. The row stays, because the member's questions and answers reference it and are the record. |
 | `rules_from` | Migration `005`. `named` or `config_default` (`RulesFrom`, a `CHECK`), `NOT NULL`, default `named`. `named` means the member's own `rules_paths` entries (an empty list is a valid named choice: no rules); `config_default` means the config's `default_rules_paths`, read at answering time, and the stored `rules_paths` is unused (written as `[]`). Existing members stay `named`. |
+| `wake_command` | Migration `009`, slice 244. Text, nullable: the command Amoeba starts, unattended, when a request is sent to this member and it has no live session. Null means no wake, and is what every existing member holds. Set by the CLI's `add --wake-command` and cleared by `--no-wake-command`; `list members` shows it in plain text, so it holds no secret. |
 
 ### `dependency_pairs` (`set_up`; read by slice 227)
 
@@ -302,6 +303,32 @@ confirmation.
 
 Indexes: `(member_id)` and `(heartbeat_at)`. No `CHECK` list.
 
+### `wakes` (migration `009`, slice 244)
+
+One row per wake of a member's `wake_command`, kept after the wake ends. The claim in
+`send` writes the row (`claim_wake`); the `amoeba wake-run` wrapper writes `command_pid`
+and the end fields, and `wake_after_send` writes them for a start failure it sees
+itself. See "Wakes and who writes them" below for the live rule, the limit and the
+retention.
+
+| Column | Meaning |
+|---|---|
+| `wake_id` | Key; `uuid4().hex`, so a restored store never collides with an existing log file. |
+| `member_id` | The member woken; references `members`. |
+| `directory` | The checkout the command runs in (Context Forge's `projectPath`); null only for a `start_failed` row Context Forge gave no path for. |
+| `command` | The member's `wake_command` as claimed, so a later edit changes nothing running. |
+| `started_at` | UTC time of the claim. |
+| `deadline_at` | `started_at` plus `wake_timeout_seconds`, fixed at the claim. |
+| `log_stem` | The log files' path without the `.stdout.log` and `.stderr.log` suffix; null when nothing was started. |
+| `command_pid` | The command's pid, also its process group id; written by the wrapper right after the command starts, null until then. It is a compare-and-set: only the first run of a wake records one, and a second `wake-run` of the same id stops its own command. Shown by `list` for an overdue row; Amoeba never signals it. |
+| `ended_at` | UTC time the wake was recorded as ended; null while it has not. |
+| `outcome` | `WakeOutcome` (a `CHECK`): `exited` (the command ran and exited), `timed_out` (it ran past `deadline_at` and its group was stopped), `start_failed` (it could not be started), `wrapper_failed` (the wrapper hit an unexpected error after the start). Null until `ended_at` is set. |
+| `exit_code` | The command's exit code; set only for `exited`. |
+| `detail` | Why, for a failure, never the wake command's text: from the wrapper an exception class and its OS message (`wake_detail`, the one place it makes one); for a start failure `wake_after_send` sees, the launch error's or missing-script error's own text, which names a path. |
+
+`ended_at` and `outcome` are both null or both set, and `exit_code` is set only for
+`exited` (table `CHECK`s). Indexes: `(member_id, started_at)` and `(started_at)`.
+
 ### `pm_marker` (moved by slice 224)
 
 | Column | Meaning |
@@ -312,7 +339,7 @@ Indexes: `(member_id)` and `(heartbeat_at)`. No `CHECK` list.
 ## Why each column exists
 
 The schema holds no state that Context Forge or Squadron already says; every column is
-one of six things. `tests/store/test_schema_holds_no_mirrored_state.py` pins the same
+one of seven things. `tests/store/test_schema_holds_no_mirrored_state.py` pins the same
 columns under the same reasons, so a new column fails it until it is listed in both
 places and its reason is stated.
 
@@ -320,9 +347,11 @@ places and its reason is stated.
 
 - **membership**: who is in a program, the PM's registration and the one thing only Amoeba knows. Columns: `dependency_pairs.consumer_id`, `dependency_pairs.program_id`, `dependency_pairs.provider_id`, `dependency_pairs.registered_at`, `dependency_pairs.updated_at`, `members.program_id`, `members.project_id`, `members.registered_at`, `members.removed_at`, `members.updated_at`, `programs.program_id`, `programs.registered_at`, `programs.updated_at`.
 
-- **settings**: what the PM chose for a program or member, and the store's own schema version. Columns: `dependency_pairs.consumed`, `members.authorize_allow`, `members.authorize_deny`, `members.rules_from`, `members.rules_paths`, `programs.concept_member`, `programs.concept_path`, `schema_meta.id`, `schema_meta.version`.
+- **settings**: what the PM chose for a program or member, and the store's own schema version. Columns: `dependency_pairs.consumed`, `members.authorize_allow`, `members.authorize_deny`, `members.rules_from`, `members.rules_paths`, `members.wake_command`, `programs.concept_member`, `programs.concept_path`, `schema_meta.id`, `schema_meta.version`.
 
 - **messages**: what agents said to each other and where each request stands. Amoeba is the only place this exists, and a request's state is Amoeba's own, never read from Context Forge or Squadron. Columns: `deliveries.created_at`, `deliveries.event`, `deliveries.member_id`, `deliveries.message_id`, `deliveries.seq`, `message_rejections.code`, `message_rejections.created_at`, `message_rejections.detail`, `message_rejections.id`, `message_rejections.member_id`, `message_rejections.message_id`, `message_rejections.operation`, `message_rejections.parent_id`, `message_rejections.to_ref`, `messages.accepted_at`, `messages.body`, `messages.created_at`, `messages.depth`, `messages.expires_at`, `messages.from_member`, `messages.kind`, `messages.message_id`, `messages.parent_id`, `messages.reason`, `messages.result`, `messages.result_commit`, `messages.result_version`, `messages.state`, `messages.state_changed_at`, `messages.subject`, `messages.to_member`, `messages.to_program`.
+
+- **waking**: what Amoeba started with nobody present and how each start ended. Amoeba is the only place this exists, and a wake's end is what its own wrapper recorded. Columns: `wakes.command`, `wakes.command_pid`, `wakes.deadline_at`, `wakes.detail`, `wakes.directory`, `wakes.ended_at`, `wakes.exit_code`, `wakes.log_stem`, `wakes.member_id`, `wakes.outcome`, `wakes.started_at`, `wakes.wake_id`.
 
 - **marker**: how far the PM has read the decisions. Columns: `pm_marker.id`, `pm_marker.last_seen_seq`.
 
@@ -365,6 +394,13 @@ terminal and a new PM answer replaces it as precedent. A PM answer resets the an
 limit, which counts `answerer` answers after the run's newest `pm` answer (a retracted
 one still counts as the last). Precedent is each question's newest PM answer, left out
 when retracted or when the question is `closed`; an older answer is not revived.
+
+A wake (slice 244) ends by its wrapper recording `exited`, `timed_out`, `start_failed` or
+`wrapper_failed`, or `wake_after_send` recording `start_failed`; a row whose wrapper was
+killed stays unended, stops counting as live at its `deadline_at` and shows as overdue,
+and every row, ended or not, is deleted by the sweep once `started_at` is past
+`prune_after_days`. The daily limit exits by the clock alone: a row older than 24 hours
+no longer counts, so the next `send` wakes again.
 
 Pruning (`prune_after_days`, run by `handle_pause` and `status`) removes only files:
 answering scratch and logs of settled or orphaned answering runs, resume logs of runs
@@ -497,6 +533,20 @@ heartbeat; `list` and `status` read it. Nothing else touches the table.
   deletes it. A held store skips a beat; the next beat retries.
 - A removed member's server keeps beating; its rows are never shown and never count for
   waking, because both reads keep active members only.
+
+## Wakes and who writes them (slice 244)
+
+- **Live.** A wake is live while its row is not ended and `deadline_at` is later than
+  now. It is one predicate (`LIVE_WAKE` in `store/sql_wakes.py`), used by the claim and
+  every read. A row whose wrapper was killed stays unended, reads as gone once its
+  deadline passes, and `list` shows it as overdue.
+- **The day's count is read, not stored:** every row of the member with `started_at` in
+  the last 24 hours, whatever its outcome (`WAKE_WINDOW`). The limit is
+  `max_wakes_per_day`; a start failure counts like any wake.
+- **Retention.** The sweep deletes every `wakes` row whose `started_at` is older than
+  `prune_after_days`, ended or not, and the sweep's due check counts an aged row, so a
+  quiet store is not write-locked by a poll. `logs/wake/` files are removed by
+  `prune`'s rule for old logs. Removing a member leaves its rows to retention.
 
 ## Derivations the schema deliberately has no column for
 

@@ -31,6 +31,7 @@ from amoeba.cli.render.text import (
     prose_line,
     was_cut,
 )
+from amoeba.cli.render.waking import waking_section
 from amoeba.operations.calls_log import CallEntry
 from amoeba.operations.list_view import SettledEntry
 from amoeba.operations.pause_class import PauseClass
@@ -111,6 +112,7 @@ def render_waiting(
     sections.extend(section for section in [_closed_now(result)] if section)
     sections.extend(message_sections(members, now))
     sections.extend(section for section in [sessions_section(members, now)] if section)
+    sections.extend(section for section in [waking_section(members, now)] if section)
     if settled is not None:
         sections.extend(
             section for section in (_other_runs(members), _settled(settled)) if section

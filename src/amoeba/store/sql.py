@@ -86,12 +86,12 @@ WHERE program_id = ?
 
 _MEMBER_INSERT_COLUMNS: Final = (
     "project_id, program_id, rules_paths, authorize_allow, authorize_deny, "
-    "registered_at, updated_at, rules_from"
+    "registered_at, updated_at, rules_from, wake_command"
 )
 #: Select order: ``store.programs._member`` reads these positionally.
 _MEMBER_COLUMNS: Final = (
     "project_id, program_id, rules_paths, authorize_allow, authorize_deny, "
-    "registered_at, updated_at, removed_at, rules_from"
+    "registered_at, updated_at, removed_at, rules_from, wake_command"
 )
 #: The active-member predicate (228 D8), the one place "a removed member is not a
 #: member" is written. Every member and pair read below uses it.
@@ -106,18 +106,18 @@ SELECT_MEMBERS_OF: Final = (
     f"AND {ACTIVE_MEMBER} ORDER BY project_id"
 )
 INSERT_MEMBER: Final = (
-    f"INSERT INTO members ({_MEMBER_INSERT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    f"INSERT INTO members ({_MEMBER_INSERT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 UPDATE_MEMBER: Final = """
 UPDATE members SET rules_paths = ?, rules_from = ?, authorize_allow = ?,
-    authorize_deny = ?, updated_at = ?
+    authorize_deny = ?, wake_command = ?, updated_at = ?
 WHERE project_id = ?
 """
 # Re-registering a removed member: a fresh registration, possibly in another program.
 REREGISTER_MEMBER: Final = """
 UPDATE members SET program_id = ?, rules_paths = ?, rules_from = ?,
-    authorize_allow = ?, authorize_deny = ?, registered_at = ?, updated_at = ?,
-    removed_at = NULL
+    authorize_allow = ?, authorize_deny = ?, wake_command = ?, registered_at = ?,
+    updated_at = ?, removed_at = NULL
 WHERE project_id = ?
 """
 REMOVE_MEMBER: Final = (

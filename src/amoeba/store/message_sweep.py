@@ -3,7 +3,8 @@
 Open requests past ``expires_at`` become ``expired``, with a delivery to each party.
 Terminal requests (with their deliveries) and rejection rows older than the retention
 are deleted, and so are notes (with their deliveries) older than the retention, read or
-not (243 D6). Open and accepted requests are never pruned: each leaves through expiry,
+not (243 D6), and so are ``wakes`` rows started before it, ended or not (244 D10). Open
+and accepted requests are never pruned: each leaves through expiry,
 ``done``, ``decline`` or ``cancel``.
 """
 
@@ -18,6 +19,7 @@ from amoeba.store.notes import prune_notes
 from amoeba.store.row_values import encode_timestamp, integer
 from amoeba.store.store import Transaction
 from amoeba.store.vocabulary import DeliveryEvent, RequestState
+from amoeba.store.wakes import prune_wakes, wakes_due
 
 
 def sweep(transaction: Transaction, now: datetime, prune_after_days: int) -> None:
@@ -40,6 +42,7 @@ def sweep(transaction: Transaction, now: datetime, prune_after_days: int) -> Non
     transaction.execute(sql_messages.DELETE_PRUNABLE_REQUESTS, (cutoff,))
     transaction.execute(sql_messages.DELETE_OLD_REJECTIONS, (cutoff,))
     prune_notes(transaction, cutoff)
+    prune_wakes(transaction, cutoff)
 
 
 def sweep_due(transaction: Transaction, now: datetime, prune_after_days: int) -> bool:
@@ -50,7 +53,7 @@ def sweep_due(transaction: Transaction, now: datetime, prune_after_days: int) ->
     ).fetchone()
     if row is None:
         raise AssertionError("the sweep due check returned no row")
-    return integer(row[0], "sweep due") == 1
+    return integer(row[0], "sweep due") == 1 or wakes_due(transaction, cutoff)
 
 
 def _cutoff(now: datetime, prune_after_days: int) -> str:

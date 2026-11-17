@@ -18,7 +18,12 @@ from amoeba.operations.decisions_models import MemberName
 from amoeba.operations.message_results import RequestDirection
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.store.vocabulary import ClosedReason, RequestState, ResumeOutcome
+from amoeba.store.vocabulary import (
+    ClosedReason,
+    RequestState,
+    ResumeOutcome,
+    WakeOutcome,
+)
 
 
 class _Model(BaseModel):
@@ -152,6 +157,50 @@ class SessionEntry(_Model):
     push_confirmed_at: datetime | None
 
 
+class WakeRunning(_Model):
+    """The member's wake that has not been recorded as ended (slice 244, D9)."""
+
+    started_at: datetime
+    deadline_at: datetime
+    #: The command's pid, also its process group id; null until it started, or when
+    #: the store was held while the wrapper wrote it.
+    command_pid: int | None
+    #: The log files' path without the ``.stdout.log`` and ``.stderr.log`` suffix.
+    log_stem: str | None
+    #: True once ``deadline_at`` has passed with the row still unended: no end was
+    #: recorded, so its wrapper is probably gone. It no longer counts as a live wake, so
+    #: the member can be woken again.
+    overdue: bool
+
+
+class WakeStopped(_Model):
+    """Waking is stopped: the member has used its wakes of the last 24 hours."""
+
+    used: int
+    limit: int
+
+
+class WakeLastProblem(_Model):
+    """The member's newest ended wake, when it went wrong."""
+
+    outcome: WakeOutcome
+    exit_code: int | None
+    #: An exception class and its OS message, never the command's text.
+    detail: str | None
+    ended_at: datetime
+    log_stem: str | None
+
+
+class WakeStatus(_Model):
+    """Waking for a member that has a wake command (slice 244, D9)."""
+
+    #: The member's wake command, in plain text.
+    command: str
+    running: WakeRunning | None
+    stopped: WakeStopped | None
+    last_problem: WakeLastProblem | None
+
+
 class MemberStatus(_Model):
     member: MemberName
     runs: tuple[RunEntry, ...]
@@ -161,6 +210,8 @@ class MemberStatus(_Model):
     rejected_calls: tuple[RejectedCall, ...] = ()
     #: The member's live sessions, oldest first (slice 241, D8).
     sessions: tuple[SessionEntry, ...] = ()
+    #: Waking, present only for a member with a wake command (slice 244, D9).
+    wake: WakeStatus | None = None
 
 
 class ProgramStatus(_Model):

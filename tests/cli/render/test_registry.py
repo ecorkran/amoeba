@@ -39,6 +39,7 @@ def _member(project_id: str, **fields: object) -> MemberRow:
         "rules_paths": ("CLAUDE.md", "AGENTS.md"),
         "authorize_allow": (),
         "authorize_deny": (),
+        "wake_command": None,
         "depends_on": (),
     }
     return MemberRow.model_validate({**values, **fields})
@@ -203,3 +204,13 @@ def test_a_provider_cf_does_not_name_is_marked_in_a_members_dependencies() -> No
     )
 
     assert f"  depends on: id-gone {NOT_IN_CF} (from_source)\n" in render_members(view)
+
+
+def test_a_wake_command_is_on_its_own_line_and_a_member_without_one_has_none() -> None:
+    with_command = _member("id-core", wake_command="wake-agent --max-seconds 60")
+    without = _member("id-lint")
+
+    text = render_members(MembersView(members=(with_command, without)))
+
+    assert "  wake command:\n    wake-agent --max-seconds 60\n" in text
+    assert text.count("wake command") == 1

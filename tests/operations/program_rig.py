@@ -157,6 +157,7 @@ def member(project_id: str, *, updated: datetime = REGISTERED) -> Member:
             authorize_allow=(),
             authorize_deny=(),
             rules_from=RulesFrom.NAMED,
+            wake_command=None,
         ),
         registered_at=REGISTERED,
         updated_at=updated,

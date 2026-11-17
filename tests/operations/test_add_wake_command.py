@@ -1,0 +1,170 @@
+"""``add`` sets, clears and keeps a member's wake command (slice 244, D1)."""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+
+import pytest
+from cf_fixtures import DEFAULT_WORKTREE
+from store.message_support import seed_members
+from store.wake_support import seed_waking_member
+from user_configs import user_config
+
+from amoeba.operations.add import add
+from amoeba.operations.list_registry import members_view
+from amoeba.operations.names import Door
+from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
+from amoeba.store.programs import member_settings
+from amoeba.store.store import Store
+from operations.list_support import ListCf, project_entry
+from operations.set_up_support import (
+    DIRECTORY,
+    RECORDED_ID,
+    FakeCf,
+    row_counts,
+)
+
+COMMAND = "wake-agent --max-seconds 60"
+OTHER_COMMAND = "other-agent --cap 5"
+FIELD = "wake_command"
+
+
+@pytest.fixture
+def store(tmp_path: Path) -> Iterator[Store]:
+    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+        yield opened
+
+
+def _add(
+    store: Store, document: dict[str, Any] | None = None, door: Door = Door.CLI
+) -> SetUpResult:
+    return add(
+        store,
+        user_config(),
+        document or {},
+        directory=DIRECTORY,
+        run=FakeCf(directory_fixture=DEFAULT_WORKTREE),
+        door=door,
+    )
+
+
+def _stored(store: Store) -> str | None:
+    with store.read() as transaction:
+        settings = member_settings(transaction, RECORDED_ID)
+    assert settings is not None
+    return settings.wake_command
+
+
+def test_a_wake_command_is_set(store: Store) -> None:
+    result = _add(store, {FIELD: COMMAND})
+
+    assert result.outcome is SetUpOutcome.APPLIED
+    assert _stored(store) == COMMAND
+
+
+def test_null_clears_it(store: Store) -> None:
+    _add(store, {FIELD: COMMAND})
+
+    result = _add(store, {FIELD: None})
+
+    assert result.outcome is SetUpOutcome.APPLIED
+    assert _stored(store) is None
+
+
+def test_omitted_leaves_an_existing_value(store: Store) -> None:
+    _add(store, {FIELD: COMMAND})
+
+    result = _add(store, {})
+
+    assert result.outcome is SetUpOutcome.UNCHANGED
+    assert _stored(store) == COMMAND
+
+
+def test_a_second_add_of_other_settings_leaves_it(store: Store) -> None:
+    _add(store, {FIELD: COMMAND})
+
+    _add(store, {"rules_paths": ["docs/rules.md"]})
+
+    assert _stored(store) == COMMAND
+
+
+def test_a_new_command_replaces_the_old_one(store: Store) -> None:
+    _add(store, {FIELD: COMMAND})
+
+    _add(store, {FIELD: OTHER_COMMAND})
+
+    assert _stored(store) == OTHER_COMMAND
+
+
+def test_a_bulk_member_sets_and_a_bulk_null_clears(store: Store) -> None:
+    bulk = {"program": "demo", "members": [{FIELD: COMMAND}]}
+    _add(store, {"bulk": bulk})
+    assert _stored(store) == COMMAND
+
+    _add(store, {"bulk": {"program": "demo", "members": [{FIELD: None}]}})
+
+    assert _stored(store) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["", "   ", "agent 'unbalanced", "agent\0name", "agent\nsecond-line"],
+    ids=["blank", "whitespace", "unbalanced-quote", "nul", "newline"],
+)
+def test_an_unusable_text_is_rejected_naming_the_field(store: Store, text: str) -> None:
+    result = _add(store, {FIELD: text})
+
+    assert result.outcome is SetUpOutcome.REJECTED
+    assert [problem.detail.split(":")[0] for problem in result.problems] == [FIELD]
+
+
+def test_a_bulk_member_with_an_unusable_text_names_its_location(store: Store) -> None:
+    bulk = {"program": "demo", "members": [{FIELD: "agent 'unbalanced"}]}
+
+    result = _add(store, {"bulk": bulk})
+
+    assert result.outcome is SetUpOutcome.REJECTED
+    assert result.problems[0].detail.startswith(f"bulk.members.0.{FIELD}")
+
+
+def test_an_executable_that_does_not_exist_is_accepted(store: Store) -> None:
+    result = _add(store, {FIELD: "no-such-agent-installed --flag"})
+
+    assert result.outcome is SetUpOutcome.APPLIED
+
+
+def test_list_members_returns_the_command_and_null_for_none(store: Store) -> None:
+    with store.write() as transaction:
+        seed_members(transaction)
+        seed_waking_member(transaction, "with-command", COMMAND)
+        seed_waking_member(transaction, "without-command", None)
+    cf = ListCf(
+        [project_entry("with-command", "a"), project_entry("without-command", "b")]
+    )
+
+    view = members_view(store, user_config(), cf, program=None)
+
+    assert {row.project_id: row.wake_command for row in view.members} == {
+        "with-command": COMMAND,
+        "without-command": None,
+    }
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {FIELD: COMMAND},
+        {"bulk": {"program": "demo", "members": [{FIELD: COMMAND}]}},
+    ],
+    ids=["single", "bulk"],
+)
+def test_the_operation_itself_refuses_a_door_that_may_not_set_it(
+    store: Store, document: dict[str, Any]
+) -> None:
+    result = _add(store, document, door=Door.MCP)
+
+    assert result.outcome is SetUpOutcome.REJECTED
+    assert result.problems[0].detail.endswith("Extra inputs are not permitted")
+    assert row_counts(store)["members"] == 0

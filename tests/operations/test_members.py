@@ -50,6 +50,7 @@ def _register(store: Store, project_id: str) -> None:
                 authorize_allow=(),
                 authorize_deny=(),
                 rules_from=RulesFrom.NAMED,
+                wake_command=None,
             ),
             now=NOW,
         )

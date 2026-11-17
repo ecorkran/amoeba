@@ -44,6 +44,7 @@ from amoeba.operations.status_models import (
     SessionEntry,
     StatusOutcome,
     StatusResult,
+    WakeStatus,
 )
 from amoeba.operations.status_placement import place_runs, scratch_roots
 from amoeba.operations.status_requests import MemberMessages, read_member_messages
@@ -54,6 +55,7 @@ from amoeba.operations.status_runs import (
 )
 from amoeba.operations.status_sessions import read_member_sessions
 from amoeba.operations.status_waiting import MemberWaiting, waiting_entries
+from amoeba.operations.wake_status import read_member_wakes
 from amoeba.store.errors import StoreRowError
 from amoeba.store.models import Member
 from amoeba.store.programs import get_program, list_programs, members_of
@@ -204,6 +206,7 @@ def status(
     sessions = read_member_sessions(
         store, members, deps.clock(), config.session_stale_seconds
     )
+    wakes = read_member_wakes(store, members, deps.clock(), config.max_wakes_per_day)
     program_of = {
         m.project_id: entry.program_id for entry in scope for m in entry.members
     }
@@ -214,7 +217,7 @@ def status(
         if _shows_others_text(messages, runs, waiting)
         else None,
         programs=tuple(
-            _program_status(entry, names, runs, waiting, messages, sessions)
+            _program_status(entry, names, runs, waiting, messages, sessions, wakes)
             for entry in scope
         ),
         unplaced_runs=placement.unplaced,
@@ -270,6 +273,7 @@ def _program_status(
     waiting: list[MemberWaiting],
     messages: dict[str, MemberMessages],
     sessions: dict[str, tuple[SessionEntry, ...]],
+    wakes: dict[str, WakeStatus],
 ) -> ProgramStatus:
     return ProgramStatus(
         program=entry.program_id,
@@ -287,6 +291,7 @@ def _program_status(
                 requests=messages[member.project_id].requests,
                 rejected_calls=messages[member.project_id].rejected_calls,
                 sessions=sessions[member.project_id],
+                wake=wakes.get(member.project_id),
             )
             for member in entry.members
         ),

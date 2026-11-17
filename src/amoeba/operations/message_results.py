@@ -157,6 +157,9 @@ class SendResult(FrozenModel):
     note: NoteView | None
     #: One line per problem when rejected; empty otherwise.
     problems: tuple[str, ...]
+    #: Why the wake step of a stored request failed (a store error); the request is
+    #: written regardless. Null when nothing went wrong (244 D2).
+    wake_problem: str | None = None
 
     @classmethod
     def rejected(cls, code: RejectCode, problems: tuple[str, ...]) -> SendResult:

@@ -10,8 +10,8 @@ dependencies:
 - 243
 interfaces: []
 dateCreated: 20261115
-dateUpdated: 20261115
-status: not_started
+dateUpdated: 20261117
+status: complete
 turns: 25
 promptTokens: 1949023
 cachedTokens: 1799448
@@ -210,7 +210,7 @@ Status: decided
 ### D9 — `list` and `status`
 Status: decided
 
-`MemberStatus` gains `wake`, present only for a member with a `wake_command`: `command`, `running` (the member's unended row, live or past its deadline: `started_at`, `deadline_at`, `command_pid`, `log_stem`; or null), `stopped` (when the limit is hit: `used`, `limit`; else null) and `last_problem` (the member's newest ended row when its outcome is `start_failed`, `timed_out`, `wrapper_failed` or `exited` with a non-zero code: `outcome`, `exit_code`, `detail`, `ended_at`, `log_stem`; else null). The text renderer adds a **Waking** section: the command, `running since <age>, stops <time>` (past its deadline: `overdue since <time>: its wrapper is gone; the command's own cap ends it, or check and stop pid <pid>, log <path>`), `waking stopped: <used> of <limit> wakes used in the last 24 h`, and `last wake <outcome> <age> ago: <detail>, log <path>`. Waking does not count as "waiting on you", so `Nothing needs you.` is unchanged. `list -j` still equals the `status` document. `list members` shows the command.
+`MemberStatus` gains `wake`, present only for a member with a `wake_command`: `command`, `running` (the member's unended row, live or past its deadline: `started_at`, `deadline_at`, `command_pid`, `log_stem`; or null), `stopped` (when the limit is hit: `used`, `limit`; else null) and `last_problem` (the member's newest ended row when its outcome is `start_failed`, `timed_out`, `wrapper_failed` or `exited` with a non-zero code: `outcome`, `exit_code`, `detail`, `ended_at`, `log_stem`; else null). The text renderer adds a **Waking** section: the command, `running since <age>, stops <time>` (past its deadline: `overdue since <time>: no end was recorded, so its wrapper is probably gone; the command's own cap ends it, or check and stop pid <pid>, log <path>`), `waking stopped: <used> of <limit> wakes used in the last 24 h`, and `last wake <outcome> <age> ago: <detail>, log <path>`. Waking does not count as "waiting on you", so `Nothing needs you.` is unchanged. `list -j` still equals the `status` document. `list members` shows the command.
 
 ### D10 — Cleanup
 Status: decided
@@ -241,7 +241,6 @@ The docs step amends the architecture and plan entry so none stays a difference.
 - **After a wrapper is killed, Amoeba does not stop the command.** The architecture says the wrapper stops a command past its timeout and one wake runs at a time. When the wrapper is SIGKILLed, the command's own cap (required by the contract) or the PM's stop ends it, and a new wake can start beside it once the old row's deadline passes (D6). The architecture's Waking section is amended to say each wake command must carry its own cap and is the bound in that case.
 - **The limit counts every row,** failed starts included (D7), where the architecture speaks only of wakes started.
 - **A wake starts at `send`, or at a same-id retry of it while the request is still `open`,** and never again. The plan's entry does not say what happens to a request a wake leaves behind; D2 lists each case and its exit.
-- **Dependencies.** The plan's entry 5 says "Dependencies: 240, 241". The design also needs 242 (`Deps.amoeba_script`, schema 8) and 243 (the note path its test relies on), so the docs step amends the entry to 240, 241, 242, 243. No later slice depends on 244, so `interfaces` is empty.
 - The sweep gains a fourth step with no new parameter (D10). The architecture's "Store and config" paragraph is amended for both tables' columns and the two keys.
 
 ## Implementation Details
@@ -301,23 +300,28 @@ As D3. `ADD COLUMN` and `CREATE TABLE` only, so existing rows are untouched and 
 
 ### Verification Walkthrough
 
-This is the Phase 4 draft, refined when Phase 6 is complete. `--wake-command`, `wake-run` and `tests/live/waking` do not exist until the slice is built. Every step runs unattended, with a throwaway home and the fixture agent, and spends nothing.
+Refined in Phase 6 (2026-11-17), when steps 2 to 7 were run by hand against the built code and the live tier ran the same cases. Every step runs unattended, with a throwaway home and the fixture agent, and spends nothing. Set `REPO` to this repository's root first. The `PATH` line matters: an older `amoeba` installed elsewhere would answer instead of this build, and the fixture agent finds `amoeba` through `PATH` only.
 
-1. `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest`. Expected: all clean and passing.
-2. Set up two scratch repos and a throwaway home with the config example plus short values for the two new keys (`wake_timeout_seconds: 5`, `max_wakes_per_day: 2`):
+1. `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest`. Expected: `ruff` reports the files formatted and `All checks passed!`, `pyright` reports `0 errors`, and `pytest` ends with every test passing (the live tier under `tests/live` is not part of a bare run).
+2. Set up two scratch repos and a throwaway home and Context Forge data directory, with the config example and short values for the two new keys, then give `cf-s` a wake command that carries its own cap:
    ```
-   export AMOEBA_HOME=$(mktemp -d)
+   export PATH=$REPO/.venv/bin:$PATH
+   export AMOEBA_HOME=$(mktemp -d) CONTEXT_FORGE_DATA_DIR=$(mktemp -d)
+   PYTHONPATH=$REPO/tests $REPO/.venv/bin/python -c "from user_configs import example_config_text; print(example_config_text())" \
+     | sed -E 's/^wake_timeout_seconds: .*/wake_timeout_seconds: 5/; s/^max_wakes_per_day: .*/max_wakes_per_day: 2/' > $AMOEBA_HOME/config.yaml
+   cd $(mktemp -d)
    for n in sq-s cf-s; do mkdir $n && git -C $n init -q -b main && (cd $n && git commit -q --allow-empty -m seed && cf init --lite --name $n && amoeba add --program toolchain); done
-   (cd cf-s && amoeba add --wake-command "python3 <repo>/tests/live/waking/fixture_agent.py --max-seconds 60")
+   (cd cf-s && amoeba add --wake-command "python3 $REPO/tests/live/waking/fixture_agent.py --max-seconds 60 --cf-data-dir $CONTEXT_FORGE_DATA_DIR")
+   amoeba list members
    ```
-   Expected: `amoeba list members` shows the command under `cf-s`.
-3. In `sq-s`: `amoeba send --to cf-s --id w-1 --subject "Need X" --body "Please add X"`. Expected: `sent w-1 -> cf-s`. `amoeba list` shows `cf-s` with a Waking section, `running since ...`.
-4. Wait for the fixture agent to finish, then `amoeba inbox` in `sq-s`. Expected: `w-1` is `done`. `amoeba list`: `last wake` absent (it exited 0). The log is at the path the row names: `ls $AMOEBA_HOME/logs/wake`.
-5. Limit: send `w-2` and `w-3` (each after the previous wake ends). Expected: `w-2` wakes; `w-3` starts nothing, stays `open`, and `amoeba list` shows `waking stopped: 2 of 2 wakes used in the last 24 h`.
-6. Failures: `amoeba add --project cf-s --wake-command "no-such-agent"` and send `w-4` after the window clears (or with the limit raised in the throwaway config): `amoeba list` shows `last wake start_failed` with the reason and `w-4` is `open`. With the fixture agent set to sleep, `amoeba list` shows it `timed_out` after 5 seconds.
-7. Undo: `amoeba add --project cf-s --no-wake-command`; `amoeba list members` shows no command; a new `send` starts nothing.
-8. `uv run pytest tests/live/waking`. Expected: pass, covering steps 3 to 7 plus the live-session, SIGKILL and note cases.
-9. Live store: see Special Considerations.
+   Expected: `list members` shows both members in program `toolchain`, and under `cf-s` a `wake command:` line with the command on the next line. (The fixture agent takes `--cf-data-dir` because a wake command receives only the `WAKE_ENV_NAMES` variables, and `CONTEXT_FORGE_DATA_DIR` is not one of them; a real agent's repo needs no such flag.) The `list` output below is cut to its Waking section, because the real Squadron's unrelated runs add an `Unplaced runs` section.
+3. In `sq-s`: `amoeba send --to cf-s --id w-1 --subject "Need X" --body "Please add X"`. Expected: `sent: w-1` and the request, `open`. `amoeba list | sed -n '/^Waking/,/^$/p'` shows `cf-s` with its command and, while the agent runs, `running since <1m, stops <time>`.
+4. After about 6 seconds, `amoeba inbox` in `sq-s`. Expected: `w-1` is `done`, with `result: done by the fixture agent`. `amoeba list`'s Waking section has no `last wake` line (the command exited 0). `ls $AMOEBA_HOME/logs/wake` shows the wake's `.stdout.log` and `.stderr.log`.
+5. Limit: send `w-2` (it wakes), wait 6 seconds, then send `w-3`. Expected: `w-3` stays `open`, starts nothing, and `amoeba list | sed -n '/^Waking/,/^$/p'` shows `waking stopped: 2 of 2 wakes used in the last 24 h`; `sqlite3 $AMOEBA_HOME/amoeba.sqlite3 "select outcome, exit_code from wakes"` gives two `exited|0` rows.
+6. Failures. Raise the limit first: `sed -i.bak -E 's/^max_wakes_per_day: .*/max_wakes_per_day: 6/' $AMOEBA_HOME/config.yaml`. Then `amoeba add --project cf-s --wake-command "no-such-agent"` and send `w-4`. Expected after 2 seconds: Waking shows `last wake start_failed <1m ago: FileNotFoundError: No such file or directory, log <path>` and `w-4` is `open`. Then give `cf-s` the fixture agent with `--sleep-seconds 50` (the command from step 2 plus that flag), send `w-5`, and expect `running since ...` after 2 seconds and, 6 seconds later, `last wake timed_out <1m ago, log <path>`.
+7. Undo: `amoeba add --project cf-s --no-wake-command`. Expected: `amoeba list members` has no `wake command:` line, a new `send` (`w-6`) adds no `wakes` row, and `amoeba list` has no Waking section.
+8. `uv run pytest tests/live/waking` (the three `AMOEBA_LIVE_*` variables must be set, as for every live tier; nothing is spent). Expected: `11 passed`, covering steps 3 to 7 plus the live-session, note, message-text and SIGKILL cases. `tests/live/program`, `tests/live/messaging`, `tests/live/notes` and, with `AMOEBA_LIVE_CHANNEL_MODEL` set (it spends on a real session), `tests/live/channels` also pass.
+9. Live store: the Phase 7 hand-off at the end of the task file (Special Considerations has the backup and restore).
 
 ## Risk Assessment
 
@@ -338,12 +342,12 @@ This is the Phase 4 draft, refined when Phase 6 is complete. `--wake-command`, `
 4. `resolve_recipient`'s return type, `send`'s read of `wake_command`, `wake_after_send`, `SendResult.wake_problem`, the sweep step and due check, and the timing test.
 5. `WakeStatus`, `list`/`status` and the renderer.
 6. Docs, the departures' wording in the architecture and plan, then the fixture agent and `tests/live/waking`.
-7. The live-store migration.
+7. The live-store migration, as the Phase 7 hand-off.
 
 ### Special Considerations
 - **Command execution.** `wake_command` is a program run with the user's privileges and nobody present. The PM sets it from the CLI; the design rests on the architecture's trust assumption, shows every command in `list members`, runs it with an explicit environment, and never passes message text to it. No SQL or shell is built from a message.
 - **No process held across a lock.** The claim commits before the spawn, and the wrapper holds no store lock while the command runs.
-- **Live store (designated for migration; backup first).** The implementing agent runs these in order, after 242's migration. Back up to `~/.local/state/amoeba/backups/`: `sqlite3 ~/.local/state/amoeba/amoeba.sqlite3 ".backup ~/.local/state/amoeba/backups/amoeba.sqlite3.pre-009"` and `cp ~/.config/amoeba/config.yaml ~/.local/state/amoeba/backups/config.yaml.pre-244`. Install the slice's code from the slice branch with `uv tool install --force <path to this repo>`, add the two keys to the live config, and migrate by running `amoeba list`. Read back: `schema_meta.version` is 9, the member count matches the backup's, `members.wake_command` is null for every member, `amoeba list` works. As in 241, every `amoeba` command fails with a `ConfigError` naming the missing keys between the install and the key edit, so the agent runs them back to back, and a running `amoeba-mcp` from older code errors until its client session restarts. Restore, with every `amoeba` and `amoeba-mcp` process stopped: copy the store backup over the live file, delete its `-wal` and `-shm`, copy the config backup back, and reinstall the previous code, since the restored store at 8 would migrate again. The restore path goes in the slice notes, and the implementing agent deletes the two backup files with `rm` at slice integration (Phase 7), after the review passes. No member has a wake command until the PM sets one, so migrating starts nothing.
+- **Live store (designated for migration; backup first).** The implementing agent runs these in order, after 242's migration. Back up to `~/.local/state/amoeba/backups/`: `sqlite3 ~/.local/state/amoeba/amoeba.sqlite3 ".backup ~/.local/state/amoeba/backups/amoeba.sqlite3.pre-009"` and `cp ~/.config/amoeba/config.yaml ~/.local/state/amoeba/backups/config.yaml.pre-244`. Install the slice's code from the target, at the Phase 7 hand-off after the merge (an install before the merge would leave the installed tool refusing the store), with `uv tool install --force <path to this repo>`, add the two keys to the live config, and migrate by running `amoeba list`. Read back: `schema_meta.version` is 9, the member count matches the backup's, `members.wake_command` is null for every member, `amoeba list` works. As in 241, every `amoeba` command fails with a `ConfigError` naming the missing keys between the install and the key edit, so the agent runs them back to back, and a running `amoeba-mcp` from older code errors until its client session restarts. Restore, with every `amoeba` and `amoeba-mcp` process stopped: copy the store backup over the live file, delete its `-wal` and `-shm`, copy the config backup back, and reinstall the previous code (the target commit recorded in task 10.1), since the restored store at 8 would migrate again. The restore path goes in the slice notes, and the implementing agent deletes the two backup files with `rm` once the read-back passes (the hand-off itself runs in Phase 7, after the review). No member has a wake command until the PM sets one, so migrating starts nothing.
 
 ## Operator Walkthrough
 

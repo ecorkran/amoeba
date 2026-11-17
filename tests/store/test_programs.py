@@ -47,6 +47,7 @@ def _settings(project_id: str = "a", **changes: tuple[str, ...]) -> MemberSettin
         authorize_allow=(),
         authorize_deny=(),
         rules_from=RulesFrom.NAMED,
+        wake_command=None,
     )
     return replace(base, **changes)
 

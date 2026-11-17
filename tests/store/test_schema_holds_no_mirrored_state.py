@@ -93,6 +93,7 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "programs.concept_member",
             "programs.concept_path",
             "members.rules_from",
+            "members.wake_command",
             "members.rules_paths",
             "members.authorize_allow",
             "members.authorize_deny",
@@ -138,6 +139,23 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "message_rejections.code",
             "message_rejections.detail",
             "message_rejections.created_at",
+        }
+    ),
+    # What Amoeba started with nobody present, and how each start ended (244).
+    "waking": frozenset(
+        {
+            "wakes.wake_id",
+            "wakes.member_id",
+            "wakes.directory",
+            "wakes.command",
+            "wakes.started_at",
+            "wakes.deadline_at",
+            "wakes.log_stem",
+            "wakes.command_pid",
+            "wakes.ended_at",
+            "wakes.outcome",
+            "wakes.exit_code",
+            "wakes.detail",
         }
     ),
     # How far the PM has read the decisions.
