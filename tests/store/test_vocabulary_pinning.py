@@ -89,3 +89,14 @@ def test_check_list_equals_enum_values(column: str) -> None:
     listed = _check_lists(SCHEMA_FILES)[column]
 
     assert listed == {member.value for member in ENUM_FOR_COLUMN[column]}
+
+
+def test_questions_state_lists_waiting_on_request_from_migration_008() -> None:
+    """The held state (242 D2) is in the newest list, and only from ``008`` on."""
+    newest = _check_lists(SCHEMA_FILES)["questions.state"]
+    before_008 = _check_lists([file for file in SCHEMA_FILES if file.name < "008"])[
+        "questions.state"
+    ]
+
+    assert QuestionState.WAITING_ON_REQUEST.value in newest
+    assert QuestionState.WAITING_ON_REQUEST.value not in before_008

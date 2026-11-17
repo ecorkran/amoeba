@@ -135,4 +135,6 @@ def render_handle_pause(result: HandlePauseResult) -> str:
             line = f"skipped: {reason}{detail}"
         case HandlePauseOutcome.SUPERSEDED:
             line = "superseded" + detail
+        case HandlePauseOutcome.HELD:
+            line = f"held on request {result.request_id}{detail}"
     return prose_line("", line) + "\n"

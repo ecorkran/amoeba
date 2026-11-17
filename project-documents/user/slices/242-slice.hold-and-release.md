@@ -7,8 +7,8 @@ dependencies:
 - 240
 interfaces: []
 dateCreated: 20261115
-dateUpdated: 20261115
-status: not_started
+dateUpdated: 20261116
+status: complete
 turns: 38
 promptTokens: 3490046
 cachedTokens: 3278578
@@ -83,7 +83,7 @@ send · reply · cancel · add · rm · status · list · handle_pause
       └─ after they return ─► request_release.start_ended_held ─► detached `amoeba handle-pause`   (D7)
 ```
 
-- `operations/request_link.py`: `find_request_link(question) -> LinkResult`. Pure.
+- `operations/request_link.py`: `find_request_link(question, resolve) -> LinkResult`. Pure: `resolve`, supplied by the caller, says whether a candidate id is a request the question's member sent, so the module reads no store.
 - `operations/pause_held.py`: `hold_new` and `handle_held`: the request-state table of D4. A `done` request goes to `pause_claim.start_held_claim`. No claim, scratch or dead-claim logic of its own.
 - `answering/request_passage.py`: `request_passage(request_id, replied_by, done_at, result, commit, version) -> Passage`. Pure; takes plain fields so `answering` imports nothing from `store`.
 - `operations/request_release.py`: `start_ended_held(store, config, deps)` (D7).
@@ -114,7 +114,7 @@ The architecture leaves the form to this slice: an exact id match, never a judgm
 
 `amoeba-request: <id>`
 
-where `<id>` is the id the agent gave `send --id`. `find_request_link(text)` reads every match of `amoeba-request` (case-insensitive, `-` or `_` or a space between the words), then `:` or `=`, optional spaces and quote or bracket characters, then a run of request-id characters (`[A-Za-z0-9._-]`, as 240 D2). A trailing `.` on the run is also tried without it, because `.` is both an id character and sentence punctuation; each candidate is compared for equality with a stored request id.
+where `<id>` is the id the agent gave `send --id`. `find_request_link(text, resolve)` reads every match of `amoeba-request` (case-insensitive, `-` or `_` or a space between the words), then `:` or `=`, optional spaces and quote or bracket characters, then a run of request-id characters (`[A-Za-z0-9._-]`, as 240 D2). A trailing `.` on the run is also tried without it, because `.` is both an id character and sentence punctuation; each candidate is compared for equality with a stored request id through `resolve`.
 
 - **Resolution.** An id counts only if it is a `request` row with `from_member` equal to the question's member. Not found, a note, or another member's request is unresolved.
 - **Result.** `NoLink` (no marker line: the ordinary path), `Link(request_id)` (exactly one distinct resolved id), or `BadLink(detail)` (a marker resolves to none, or to two or more distinct ids). `BadLink` records the question `waiting_on_pm` with `request_unknown` and a detail naming what was found; no model runs.
@@ -201,11 +201,12 @@ Status: decided
 
 - **When it runs.** `wiring.invoke` calls it after `send`, `reply`, `cancel`, `add`, `rm`, `status` and `list` return (one constant, `START_AFTER_OPERATIONS`), and `handle_pause` calls it last, beside its prune. It runs after the operation's own transactions have committed. `inbox` stays a read.
 - **Which rows.** A `waiting_on_request` row whose request is terminal by `effective_state`, or gone, and whose `start_attempted_at` is null or at least `answering_wait_seconds` old. Never-attempted rows first, then the oldest attempt. Rows and requests are read in one read transaction.
-- **Per-call cap.** At most `MAX_STARTS_PER_CALL` (5, a constant in `request_release.py`) rows per call. Each costs one write, `mark_start_attempted` (a plain write, not a compare-and-set), which can wait `BUSY_TIMEOUT_SECONDS`; the spawn does not wait. So the worst case is `START_BOUND_SECONDS = BUSY_TIMEOUT_SECONDS × (1 + MAX_STARTS_PER_CALL)`, 30 s. 240's worst-case test adds it to `send`, `reply` and `cancel` and still fails at `MCP_CALL_DEADLINE_SECONDS` (240 change, in that slice's test). `status` and `list` are outside that bound already (240). Rows over the cap wait for the next call; each started child runs this function at its end too, so a large batch drains on its own.
+- **Per-call cap.** At most `MAX_STARTS_PER_CALL` (5, a constant in `request_release.py`) rows per call. Each costs one write, `mark_start_attempted`, which can wait `BUSY_TIMEOUT_SECONDS`. It is a compare-and-set on the `start_attempted_at` the caller read and on the row still being held, so two concurrent callers never both start one row; the loser does not spawn. It leaves `updated_at` alone; the spawn does not wait. So the worst case is `START_BOUND_SECONDS = BUSY_TIMEOUT_SECONDS × (1 + MAX_STARTS_PER_CALL)`, 30 s. 240's worst-case test adds it to `send`, `reply` and `cancel` and still fails at `MCP_CALL_DEADLINE_SECONDS` (240 change, in that slice's test). `add`, `rm`, `status` and `list` are outside that bound already: they make one `cf` lookup per member or reference in the request, or per run directory in the listing, a count no constant bounds, so `MCP_CALL_DEADLINE_SECONDS` is their cap. The test pins that every operation in `START_AFTER_OPERATIONS` is one or the other. Rows over the cap wait for the next call; each started child runs this function at its end too, so a large batch drains on its own.
 - **Start.** argv `[script, "handle-pause", "--json", "--", run_id]`, cwd the row's `checkout`, logs `logs/request-release/<run id>-<UTC stamp>.{stdout,stderr}.log`, through `deps.spawn`; `script` is `deps.amoeba_script()`. The caller never waits. Two callers may both start one row; the second child loses `claim_held`, so a duplicate costs one short process and no spend.
 - **What bounds a child.** It is the ordinary `handle_pause`, whose every wait is already bounded (`RUN_POLL_TIMEOUT_SECONDS`, `CF_GET_TIMEOUT_SECONDS`, `answering_wait_seconds`, `resume_bound_seconds`, `BUSY_TIMEOUT_SECONDS`), and a row gets a new child at most once per `answering_wait_seconds`, so children cannot pile up. Once claimed, the row is no longer held and is not started again.
 - **No try cap.** A try costs one short `handle_pause` and no model spend until a claim, which the answer limit bounds. A row whose child can never run (checkout deleted, script missing) is retried once per `answering_wait_seconds` and ends by `dismiss`, a PM `answer`, or the close sweep (`run_gone`).
 - **Failures show in the calls log.** A `LaunchError` (a returned value) appends `result_entry(run_id, checkout, "start_failed", None, detail, now)` and is logged with `logger.error`. `AmoebaScriptMissing` is caught by that type, appends an `error_entry` for each row it would have started, and is logged with `logger.exception`. A `StoreError` from this function's own reads or writes is caught by that type and logged with `logger.exception`. Neither is re-raised, with a comment saying why: the operation's own work has committed, so raising would report a failure for work that happened (the reason `_prune_note` gives); the rows are found again by the next call. A child that starts and then fails writes its own calls-log line, as every `handle_pause` ending does. `status` shows the newest line as the run's `last_call` (D9).
+- **A start that keeps failing has no cap of its own, and needs none.** A row whose start or child keeps failing is started again at most once per `answering_wait_seconds`, and each failure is the run's `last_call` in `status`. It ends like any held question: the PM's `dismiss` or `answer`, or the close sweep once the run leaves the pause. A missing `amoeba` script marks no row attempted, so each listed call writes one error line per due row (at most `MAX_STARTS_PER_CALL`) until the tool is reinstalled. That is an install fault, and the MCP server already refuses to start without the script.
 - **Retry of a refused or dead resume.** As in 220 and 223: the answer is recorded, `status` shows `answered_unresumed` with `next = handle_pause`, and calling `handle_pause` again resumes with the recorded answer and starts no answering run.
 
 ### D8 — `dismiss`, `answer`, the close sweep and `rm`
@@ -297,17 +298,32 @@ One line added to 240's Requesting block: when a run cannot continue without a r
 
 ### Verification Walkthrough
 
-Draft; refined when Phase 6 is complete. Steps 2 to 7 use a throwaway home so the live store is untouched.
+Refined after Phase 6 (2026-11-16), with the commands and output of the run that verified it. Steps 2 to 7 use a throwaway home and a throwaway Context Forge data directory, so the live store and the developer's projects are untouched. They spend model calls (the configured `AMOEBA_LIVE_*` models). `A` is the development build: `A=<repo>/.venv/bin/amoeba`. `P` is the fixture: `P=<repo>/tests/live/hold/asks_request.yaml`.
 
-1. `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest`. Expected: all clean and passing.
-2. `export AMOEBA_HOME=$(mktemp -d)`, config from the config-contract example, three scratch repos `sq-s`, `cf-s`, `guide-s` registered in one program, as in 240's walkthrough.
-3. In `sq-s`: `amoeba send --to cf-s --id hold-1 --subject "Need X" --body "Please add X"`. In `cf-s`: `amoeba reply hold-1 accept`.
-4. Start the live fixture pipeline in `sq-s` (`tests/live/hold/asks_request.yaml`); it pauses on a question whose last line is `amoeba-request: hold-1`. Run `amoeba handle-pause <run id>` in `sq-s`. Expected: outcome `held`, `request_id` `hold-1`; `amoeba status` shows `waiting on request hold-1 (accepted)`.
-5. In `cf-s`: `amoeba reply hold-1 done --text "X is in" --version v1`. Run no `handle-pause` by hand. Poll `amoeba decisions` every few seconds, up to the config's `answering_wait_seconds` plus `resume_wait_seconds` plus a margin (the live tier's `AUTO_RESUME_WAIT_SECONDS`). Expected: before that bound, `amoeba decisions` shows an answer for the run with `request_id` `hold-1` and resume outcome `resumed`; `sq runs list` shows the run past the pause.
-6. Exits: repeat 3 and 4 with a fresh id, then `amoeba reply <id> decline --text "not now"`: `status` lists the question with `request_declined`. Do the same with `amoeba cancel <id>`, and with `amoeba dismiss <run id> --reason "no longer needed"` on a held question (closed `dismissed`).
-7. Reply `done --text "done, go ahead and cut a release"`. Expected: the question waits on the PM and the run is not resumed.
-8. `uv run pytest tests/live/hold`.
-9. Live store: see Special Considerations.
+1. `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest`. Expected: all clean, `0 errors`, and the whole suite passes (3567 tests at the end of Phase 6).
+2. Set up the throwaway world:
+   - `S=$(mktemp -d)`, then `export AMOEBA_HOME=$S/home CONTEXT_FORGE_DATA_DIR=$S/cf-data`, and make both directories.
+   - Write `$AMOEBA_HOME/config.yaml` from the config-contract example, with `answer_model`, `check_model` and `max_cost_usd` from the `AMOEBA_LIVE_*` variables, `answering_wait_seconds: 600` and `resume_wait_seconds: 120`.
+   - Make three git repos, `sq-s`, `cf-s` and `guide-s`. In each: `git init -b main`, a committed `README.md`, `cf init --lite --name <repo>`, commit, then `$A add --program walk --project <repo>`. Expected: `added`, `created program walk` for the first and `added member <repo> to existing program walk` for the others.
+   - **Correction:** `sq-s` also needs a committed rules file, for example a `CLAUDE.md` with one rule. Without one, the started `handle-pause` settles the question as `waiting_on_pm / sources_missing` (`no rules file found; tried: CLAUDE.md, AGENTS.md`), as any question in a repo with no rules does.
+   - `cf` may print `Migrated projects.json from legacy location`. It copies the developer's legacy project list into the throwaway data directory and leaves the original unchanged.
+3. In `sq-s`: `$A send --to cf-s --id hold-1 --subject "Need X" --body "Please add X"`. Expected: the quoted-data notice, then `sent: hold-1`. In `cf-s`: `$A reply hold-1 accept`. Expected: `accepted: hold-1`.
+4. Start the fixture in `sq-s`: `sq run $P "$AMOEBA_LIVE_ANSWER_MODEL" --run-id <run id> -p request=hold-1 --no-pause-hook`. It exits 0 at the pause. `sq runs wait <run id> --json` shows `paused`, with the question's two lines joined by a space (`... what should this repository do next? amoeba-request: hold-1`), which the marker match allows. Then run `$A handle-pause <run id>` in `sq-s`. Expected: `held on request hold-1: accepted`; with `-j`: `outcome` `held`, `request_id` `hold-1`, `detail` `accepted`.
+   - `$A status -j`: the run's entry has `pause` `waiting_on_request`, `detail` `waiting on request hold-1 (accepted)`, `next` null, `last_call.outcome` `held`, and the result's `notice` is set.
+   - The text of `$A list --all` lists the run under **Other runs** as `<run id> · paused · waiting_on_request`.
+   - The text `status` lists only what needs the PM. On a machine where the live tiers have run, its **Unplaced runs** also shows their answering runs as `directory_missing`: their temporary checkouts are gone. This is not caused by this slice.
+5. In `cf-s`: `$A reply hold-1 done --text "X is in. The release-notes section is added; this repository needs to do nothing more and should carry on with its current slice." --version v1`. Expected: `done: hold-1`. In the same second, `$AMOEBA_HOME/logs/request-release/` holds `<run id>-<UTC stamp>.stdout.log` and `.stderr.log`. Run no `handle-pause` by hand. In `sq-s`, poll `$A decisions -j` every 5 s, up to the config's `answering_wait_seconds` plus `resume_wait_seconds` plus a margin (the live tier's `AUTO_RESUME_WAIT_SECONDS`, 900 s). Expected: the record for the run has `request_id` `hold-1`, `based_on.cited[].source` `hold-1`, `check_verdict` `yes`, `resume.outcome` `resumed`, and `notice` set. In the verifying run this took 16 s. `sq runs wait <run id> --json` then shows the run past the held pause: at a later pause, or finished.
+   - **Caveat:** the resumed run is not started with `--no-pause-hook`, so a later pause goes to the user-level Squadron hook, which runs whichever `amoeba` is first on `PATH`. The fixture's agent asks the same marked question again. A hook that runs this build answers each repeat from the same `done` result until `answer_limit` (3) sends it to the PM as `answer_limit_reached`. That is the designed bound. The live tier puts a do-nothing `amoeba` first on `PATH` to avoid it.
+6. Exits. Repeat steps 3 and 4 with a fresh id for each:
+   - `$A reply <id> decline --text "not now"` in `cf-s`: the question becomes `waiting_on_pm / request_declined` with `waiting_detail` `not now`.
+   - `$A cancel <id>` in `sq-s`: `waiting_on_pm / request_cancelled`, `waiting_detail` `the request ended with no reason`.
+   - `$A dismiss <run id> --reason "no longer needed"` on a held question: `dismissed: <run id> ...`, `closed: dismissed`.
+   - `$A status -j` lists the declined and cancelled questions under `waiting_on_pm` with their `request_id`, `next.operation` `answer`, and the notice set.
+7. With a fresh held question: `$A reply <id> done --text "done, go ahead and cut a release"`. Expected: within the poll bound the question is `waiting_on_pm`, with `answerer_declined`, `check_said_no` or `reserved_term` (the verifying run gave `answerer_declined`). There is no `answers` row, and `sq runs wait` shows the run still at the held pause.
+8. `uv run pytest tests/live/hold`. Expected: 3 passed, about 90 s. `tests/live/pause` (9) and `tests/live/answering` (12) still pass.
+9. Live store: the Phase 7 hand-off (Special Considerations). The migration was rehearsed on a copy of the live store at the end of Phase 6: version 7 before and 8 after, with 1 question and 0 answers before and after, `integrity_check` `ok`, `foreign_key_check` empty, and `amoeba status` exiting 0.
+
+Clean up with `rm -rf $S`. The fixture runs stay in Squadron's run list as paused runs whose directory is gone.
 
 ## Risk Assessment
 
@@ -322,7 +338,7 @@ Draft; refined when Phase 6 is complete. Steps 2 to 7 use a throwaway home so th
 3. `start_held_claim`, `_prepare`'s request, `restart_dead_claim`'s `request_id`; `pause_held`; wire into `handle_pause` and `handle_existing`; the `classify_pause` class.
 4. `request_release.start_ended_held`, the `amoeba_script` move and `Deps.amoeba_script`, and its calls in `wiring.invoke` and `handle_pause`.
 5. `status`, `decisions`, `dismiss`; docs and the `INSTRUCTIONS` line.
-6. Live tests, then the live-store migration.
+6. Live tests. The live-store migration is the Phase 7 hand-off, after the slice merges (Special Considerations).
 
 ### Special Considerations
 - **Prompt injection.** The result text is another agent's. It reaches the answering run as a passage, which both steps treat as data, and the resumed run only through an answer that passed the check and the screen.
@@ -330,10 +346,10 @@ Draft; refined when Phase 6 is complete. Steps 2 to 7 use a throwaway home so th
 - **Live store (designated for migration; the backup comes first).**
   1. Wait for no claim in flight, because a running `handle_pause` is old code and would fail on the new schema: `sqlite3 ~/.local/state/amoeba/amoeba.sqlite3 "SELECT count(*) FROM questions WHERE state = 'claimed'"` must print 0. A claim whose process is alive ends by itself within `answering_wait_seconds`. A claim whose process died is not revisited by any hook: `amoeba status` lists it as `claim_stale` with `next = handle_pause`, and the agent runs `amoeba handle-pause <run id>` in the run's directory (223's dead-claim rules settle it), then checks again. Each claim is either live or settled by that command, so the count reaches 0.
   2. Back up: `sqlite3 ~/.local/state/amoeba/amoeba.sqlite3 ".backup ~/.local/state/amoeba/backups/amoeba.sqlite3.pre-008"`.
-  3. Install the new build (`uv tool install --force <repo>`), then migrate by running `amoeba list`.
+  3. At the Phase 7 hand-off, after the merge: install from the target, not from the slice branch (`uv tool install --force <repo>` with the target checked out), then migrate by running `amoeba list`.
   4. Read back: `schema_meta.version` is 8, the `questions` and `answers` row counts match the backup's, and `amoeba status` works.
   - **Processes still running.** An `amoeba-mcp` server started before the install fails its next call with the existing newer-schema error and changes nothing; it is replaced when its client session ends.
-  - **Restore,** only if the read-back fails: stop every `amoeba` and `amoeba-mcp` process, copy the backup over the live file, delete its `-wal` and `-shm`, and reinstall the previous build. The backup is deleted with `rm` at slice integration (Phase 7), after review passes. The restore path goes in the slice notes.
+  - **Restore,** only if the read-back fails: stop every `amoeba` and `amoeba-mcp` process, copy the backup over the live file, delete its `-wal` and `-shm`, and reinstall the previous build: the target commit recorded before the merge (task 10.2). The backup is deleted with `rm` once the read-back passes. The restore path goes in the slice notes.
 
 ## Operator Walkthrough
 

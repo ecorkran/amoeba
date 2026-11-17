@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: The amoeba command line: each command's arguments, its text and `-j` JSON output and the exit-code table.
 dateCreated: 20261110
-dateUpdated: 20261114
+dateUpdated: 20261116
 status: complete
 ---
 
@@ -236,21 +236,35 @@ or could not do, is appended to `detail`. Every call adds one line to the calls 
 
 | Field | Meaning |
 |---|---|
-| `outcome` | `skipped`, `waiting_on_pm`, `superseded`, `resumed`, `refused` or `not_delivered` |
+| `outcome` | `skipped`, `waiting_on_pm`, `superseded`, `resumed`, `refused`, `not_delivered` or `held` |
 | `skip_reason` | with `skipped`: `not_paused`, `not_agent_question`, `no_question_text`, `answering_run`, `not_a_project`, `not_in_program`, `prompt_only`, `other_member`, `already_claimed`, `waiting_on_pm`, `settled`, `closed` or `wrong_checkout` |
-| `waiting_reason` | with `waiting_on_pm`: the `DeclineReason` (see `store-contract.md`) |
+| `waiting_reason` | with `waiting_on_pm`: the `DeclineReason` (see `store-contract.md`). For a held question (slice 242): `request_declined`, `request_cancelled` or `request_expired` when its request ended that way, and `request_unknown` when its request was pruned or its marker names no request this project sent |
 | `detail` | why it was skipped (some reasons), declined, refused or not delivered, then any sweep or prune notes |
 | `key` | the question: `run_id` and `paused_at` exactly as `sq runs wait --json` prints it |
 | `checkout` | the checkout the question was claimed in |
 | `answering_run_id` | the answering run, when one was involved |
 | `answer_seq` | the answer that was handed to the run, with `resumed`, `refused` or `not_delivered` |
+| `request_id` | the request a held question waits on or came from (slice 242); null for any other question |
 
 `skip_reason` `closed`: the pause's question was closed (dismissed, or its run moved
 on or is gone) and is not handled again; `answer` reopens it. `wrong_checkout`: the
 call was not from the checkout of the run's recorded directory (a subdirectory of it
 is the same checkout; another worktree is not); `detail` names both directories, and says
 so when the recorded directory no longer exists (then use Squadron's own commands, such as
-`sq run --resume`). Exit 0 for every outcome.
+`sq run --resume`). `held` (slice 242): the question ends with an `amoeba-request: <id>`
+marker naming a request this project sent, and that request is still `open` or
+`accepted`; `detail` gives its state. The run stays paused, and Amoeba starts
+`handle-pause` for it again once the request ends: `send`, `reply`, `cancel`, `add`,
+`rm`, `status`, `list` and `handle-pause` itself each start, after their own work, a
+detached `amoeba handle-pause --json -- <run id>` in the run's checkout for every held
+question whose request is `done`, `declined`, `cancelled`, `expired` or no longer
+stored (at most five per call, and one question at most once per
+`answering_wait_seconds`). Its output goes to
+`<state home>/logs/request-release/<run id>-<UTC stamp>.{stdout,stderr}.log`, and a
+start that fails is a `start_failed` line in the calls log. That call settles the
+question by the request: a `done` result is given to the answering run as a passage, and
+any other end waits on the PM. Nothing else needs to run `handle-pause` for a held
+question. Exit 0 for every outcome.
 
 ### The calls log
 
@@ -298,7 +312,9 @@ continues it. The reason is stored and returned as data. Result (`DismissResult`
 | `closed_reason`, `closed_detail` | with `dismissed` or `unchanged`: why the question is closed (`dismissed` and the reason, or what closed it before) |
 | `problems` | one line per problem when `rejected` |
 
-`claimed` and `waiting_on_pm` close as `dismissed`; an `answered` question whose
+`claimed`, `waiting_on_pm` and `waiting_on_request` (a held question, slice 242) close
+as `dismissed`; a dismissed held question's request keeps its own state, and its end
+starts nothing; an `answered` question whose
 answer was not yet handed back closes too and that answer becomes `not_delivered`
 (`dismissed`). Already `closed` is `unchanged`. `answered` with a delivered answer is
 `not_open`: the detail says a `resumed` answer was delivered and that `retract` stops it
@@ -330,13 +346,15 @@ What is running, paused and waiting on the PM. Needs the config (for
 program; with no flag, run from a member's checkout it is that member's program, and
 from anywhere else it is every program. A failing `cf` while finding the checkout's
 project is exit 3, never a wider scope. Every member in scope is listed, even with
-nothing to show. Result (`StatusResult`):
+nothing to show. After the result is built, `status` (and `list`'s default view) starts
+`handle-pause` for each held question whose request has ended, as `handle-pause`'s
+`held` describes; the result does not change. Result (`StatusResult`):
 
 | Field | Meaning |
 |---|---|
 | `outcome` | `listed` or `rejected` |
 | `rejection` | with `rejected`: `unknown_program` (`problems` lists the known ids) or `malformed` |
-| `notice` | the quoted-data notice (`QUOTED_DATA_NOTICE`), set when any member shows a request or a rejected call and null otherwise: those subjects and recipients are other agents' text |
+| `notice` | the quoted-data notice (`QUOTED_DATA_NOTICE`), set when any member shows a request, a rejected call, a `waiting_on_request` run or a waiting question with a `request_id`, and null otherwise: those subjects, recipients and request reasons are other agents' text |
 | `programs` | per program, `members`: each `{id, name}` with `runs`, `waiting_on_pm`, `requests`, `rejected_calls` and `sessions` |
 | `unplaced_runs` | paused runs no member could be found for: `run_id`, `status`, `reason`, `checkpoint_kind`, `detail` |
 | `closed_now` | what this call closed (closures made by `handle-pause` are in that call's calls-log `detail`, not here), so each automatic closure is seen once: `{program, member, run_id, paused_at, question, closed_reason, closed_detail}` for a question, and for an answer marked `not_delivered` the same with `answer_seq` and `resume_outcome` |
@@ -388,16 +406,19 @@ A run (`runs`) has `run_id`, `pipeline`, `status` (Squadron's text, raw),
 | `answered_unresumed` | answered, not handed back; `detail` gives the resume outcome | `handle_pause` |
 | `settled` | answered and handed back; `detail` gives the outcome | none |
 | `closed` | the pause's question was closed; `detail` gives the reason and says the run is still paused in Squadron | none |
+| `waiting_on_request` | held on a request this repo sent (slice 242); `detail` is `waiting on request <id> (<state>)`, the state being the request's effective state or `gone` when the store no longer holds it, followed by `; handle_pause last started <time>` once Amoeba has started one; Amoeba starts `handle-pause` itself once the request ends | none |
 | `run_file_unreadable` | Squadron's run file could not be read; `detail` says why | none |
 
-A run with `pause` `unhandled` or `claim_stale` also has `last_call`: the newest
-calls-log line for it (see above), or null if none was logged, which shows why a hook
-missed.
+A run with `pause` `unhandled`, `claim_stale` or `waiting_on_request` also has
+`last_call`: the newest calls-log line for it (see above), or null if none was logged,
+which shows why a hook missed or, for a held run, why a start failed (`start_failed`)
+or how the started `handle-pause` ended.
 
 `next` is `{operation, run_id, paused_at, directory}` or null. For `handle_pause`,
 `directory` is the run's own checkout: run the command there. A waiting question
 (`waiting_on_pm`) has `run_id`, `paused_at`, `question`, `slice_label`,
-`waiting_reason`, `waiting_detail`, `since`, `run_state` and `next`. Every open waiting
+`waiting_reason`, `waiting_detail`, `since`, `run_state`, `next` and `request_id`: the
+request behind a `request_*` reason (slice 242), else null. Every open waiting
 question of a member in scope is listed. `run_state` is `at_pause` (`next` is
 `answer`); `moved_on` (`detail` gives the run's state) and `not_listed` appear only for
 a row a failed closing left open, since the closing otherwise closes them in the same
@@ -415,7 +436,8 @@ Result (`DecisionsResult`):
 |---|---|
 | `outcome` | `listed` or `rejected` |
 | `rejection` | with `rejected`: `unknown_program` or `malformed` |
-| `records` | each: `seq`, `recorded_at`, `program`, `member` (`{id, name}`), `run_id`, `paused_at`, `slice_label`, `question`, `answered_by` (`answerer` or `pm`), `via` (`cli` or `mcp`, the door that carried a PM answer; null for an answer from before schema version 4 and for automatic answers), `answer`, `prior_answer_seq`, `based_on`, `resume` |
+| `notice` | the quoted-data notice (`QUOTED_DATA_NOTICE`), set when any record has a `request_id` and null otherwise: a request's result, reason and cited passage are another repo's text |
+| `records` | each: `seq`, `recorded_at`, `program`, `member` (`{id, name}`), `run_id`, `paused_at`, `slice_label`, `question`, `answered_by` (`answerer` or `pm`), `via` (`cli` or `mcp`, the door that carried a PM answer; null for an answer from before schema version 4 and for automatic answers), `answer`, `prior_answer_seq`, `based_on`, `resume`, `retracted_at`, `retract_reason`, `request_id` (the request a held question waited on, slice 242; null for any other question) |
 | `read_through` | the last listed `seq`, only when the listing started at the marker, was not narrowed and is not empty; else null. Give it to `mark-read` |
 | `marker` | the marker's value when read |
 | `problems` | one line per problem when `rejected` |
@@ -423,7 +445,9 @@ Result (`DecisionsResult`):
 `prior_answer_seq` is the newest earlier answer to the same question (a PM answer after
 an automatic one is an override). `based_on` is, for `answerer`, the cited passages
 (`id`, `kind`, `source`, `date`; `kind` is `pm_answer` for a PM precedent and null for
-the others, which the store records no kind for) with `check_verdict` and
+the others, which the store records no kind for; a cited `request_result` passage, a
+held question's request result, has the request id as its `source` and a null `kind`,
+being a passage the store records no kind for) with `check_verdict` and
 `check_reason`; for `pm`, the question's `waiting_reason` and `waiting_detail`, or null
 if the PM answered before the question waited. `resume` is `outcome`, `detail`, `at`.
 

@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: The user config file Amoeba reads from its home, key by key, with one complete example.
 dateCreated: 20261109
-dateUpdated: 20261112
+dateUpdated: 20261116
 status: complete
 ---
 
@@ -31,7 +31,7 @@ Later slices add keys; each is required too, so an old file fails naming the new
 | `max_cost_usd` | number > 0 | Cost cap of one answering run, in US dollars |
 | `answer_limit` | integer >= 1 | Most automatic answers one run may take |
 | `passages_max_chars` | integer >= 1 | Most characters of passages an answering run is sent. Rules and plan passages are never trimmed, so it must cover all of them: the rules (after duplicates are dropped), the slice's plan files, the program concept, and room for precedent. The example, 250000, suits a repo whose slice plan files run to about 150 KB; see `rules.md` |
-| `answering_wait_seconds` | number > 0 | Longest one answering run may take before it is stopped; also the age at which an unfinished claim counts as dead |
+| `answering_wait_seconds` | number > 0 | Longest one answering run may take before it is stopped; also the age at which an unfinished claim counts as dead, and the least time between two starts of `handle-pause` for one held question (slice 242) |
 | `resume_wait_seconds` | number > 0 | Longest a resumed run may take to start running before the resume is judged refused |
 | `prune_after_days` | integer >= 1 | Age in days after which settled answering scratch, logs and calls-log days are deleted; anything tied to an open question is kept |
 | `request_open_ttl_hours` | integer, 1 to 87600 (ten years) | Hours an open request waits for an answer before it reads `expired`. Fixed into each request when it is sent, so changing the key never moves an existing request's expiry. An accepted request never expires |

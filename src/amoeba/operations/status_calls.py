@@ -14,7 +14,10 @@ from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.status_runs import MemberRun
 
 #: The classes where a missed hook is the question ``last_call`` answers.
-MISSED_HOOK_CLASSES = frozenset({PauseClass.UNHANDLED, PauseClass.CLAIM_STALE})
+#: A held run is in it too: a failed start or a failed child shows here (242 D9).
+MISSED_HOOK_CLASSES = frozenset(
+    {PauseClass.UNHANDLED, PauseClass.CLAIM_STALE, PauseClass.WAITING_ON_REQUEST}
+)
 
 
 @dataclass(frozen=True)

@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Final
 
+from amoeba.answering.passage_types import Passage, PassageKind
+from amoeba.answering.request_passage import add_request_passage
 from amoeba.answering.rule_dedup import RuleDeduper
 from amoeba.answering.values import GLOB_WILDCARD
 
@@ -24,37 +26,6 @@ _FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 _LINES = re.compile(r"[^\n]*\n|[^\n]+")
 #: Each section ends in a newline, so one more newline is the blank line between them.
 _SECTION_SEPARATOR = "\n"
-
-
-class PassageKind(StrEnum):
-    """The ``kind:`` words of 140's ``passages.md`` format."""
-
-    RULE = "rule"
-    PLAN = "plan"
-    PM_ANSWER = "pm_answer"
-    PROGRAM_CONCEPT = "program_concept"
-    PROGRAM_MEMBERS = "program_members"
-
-
-@dataclass(frozen=True)
-class Passage:
-    """One numbered, dated piece of source text."""
-
-    id: str
-    kind: PassageKind
-    #: Repo-relative path for a rule, plan or concept passage; the program id for the
-    #: member list (recorded, not rendered); ``None`` for a PM answer.
-    source: str | None
-    date: datetime
-    text: str
-    #: PM answers only: the question the PM answered.
-    question: str | None
-    #: PM answers only: the slice the question was about.
-    slice_label: str | None
-    #: PM answers only: the record it came from. Not rendered.
-    question_id: str | None
-    #: Program concept passages only: the project that holds the concept file.
-    member: str | None
 
 
 @dataclass(frozen=True)
@@ -360,6 +331,7 @@ def assemble(
     program_sources: ProgramSources,
     max_chars: int,
     source_commit: str,
+    request: Passage | None = None,
 ) -> PassageSet | SourcesProblem:
     """Number the passages and fit PM precedent into ``max_chars`` of rendered text.
 
@@ -367,9 +339,11 @@ def assemble(
     trimmed: if they alone exceed the limit the result is ``sources_too_large``. PM
     answers are added in priority order until one does not fit; that one and every
     later one are dropped, so a smaller, lower-priority answer never jumps a dropped
-    one.
+    one. A ``request`` passage (242 D5) follows the program passages, untrimmed.
     """
-    kept = _committed_passages((*committed, *program_sources.files))
+    kept = add_request_passage(
+        _committed_passages((*committed, *program_sources.files)), request
+    )
     size = _rendered_size(kept)
     if size > max_chars:
         return SourcesProblem(

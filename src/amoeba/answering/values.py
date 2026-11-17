@@ -48,6 +48,23 @@ class DeclineReason(StrEnum):
     UNCITED = "uncited"
     UNKNOWN_CITATION = "unknown_citation"
     CHECK_SAID_NO = "check_said_no"
+    # Slice 242, D4: a held question whose request ended without a result, or whose
+    # marker named no request this project sent.
+    REQUEST_DECLINED = "request_declined"
+    REQUEST_CANCELLED = "request_cancelled"
+    REQUEST_EXPIRED = "request_expired"
+    REQUEST_UNKNOWN = "request_unknown"
+
+
+#: The reasons a question waits on the PM because of its request (242 D4, D9).
+REQUEST_DECLINE_REASONS: Final = frozenset(
+    {
+        DeclineReason.REQUEST_DECLINED,
+        DeclineReason.REQUEST_CANCELLED,
+        DeclineReason.REQUEST_EXPIRED,
+        DeclineReason.REQUEST_UNKNOWN,
+    }
+)
 
 
 @dataclass(frozen=True)

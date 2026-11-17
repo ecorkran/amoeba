@@ -32,6 +32,8 @@ class QuestionState(StrEnum):
     WAITING_ON_PM = "waiting_on_pm"
     #: Ended without an answer to deliver (228 D3); ``answer`` reopens it.
     CLOSED = "closed"
+    #: Held on a request this repo sent (242 D2); ends when the request ends.
+    WAITING_ON_REQUEST = "waiting_on_request"
 
 
 class ClosedReason(StrEnum):

@@ -2,8 +2,13 @@
 
 Each operation's worst case is its ``cf`` lookups at their timeout plus its store waits
 at theirs. The lookup counts are checked against what the stub ``cf`` actually saw, so
-a lookup added to an operation without raising its constant fails here. 240 starts no
-runs, so there is no run-start term; slice 242 adds one to this test.
+a lookup added to an operation without raising its constant fails here. Slice 242
+adds the run-start term: ``send``, ``reply`` and ``cancel`` are followed by
+``start_ended_held``, whose worst case is ``START_BOUND_SECONDS``. ``add``, ``rm``,
+``status`` and ``list`` are followed by it too, but have no fixed worst case to add it
+to: they make one ``cf`` lookup per member or reference in the request (``add``,
+``rm``) or per run directory in the listing (``status``, ``list``), a count no constant
+bounds. ``MCP_CALL_DEADLINE_SECONDS`` is their cap (242 D6).
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ from amoeba.operations.deps import Deps
 from amoeba.operations.inbox import inbox
 from amoeba.operations.names import OperationName
 from amoeba.operations.reply import reply
+from amoeba.operations.request_release import MAX_STARTS_PER_CALL, START_BOUND_SECONDS
 from amoeba.operations.send import send
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.context_forge.project_of import CF_GET_TIMEOUT_SECONDS
@@ -38,6 +44,13 @@ from amoeba.wiring_messages import (
     MESSAGE_STORE_WAITS,
     MessageOperation,
     worst_case_seconds,
+)
+from amoeba.wiring_release import START_AFTER_OPERATIONS
+
+#: The start operations whose worst case scales with their input, so no fixed bound
+#: exists to check against the deadline (see the module docstring).
+UNBOUNDED_START_OPERATIONS = frozenset(
+    {OperationName.ADD, OperationName.RM, OperationName.STATUS, OperationName.LIST}
 )
 
 #: Each operation run with an explicit ``member``, so every lookup it can make happens.
@@ -133,3 +146,36 @@ def test_a_bound_that_reaches_the_deadline_fails_the_check() -> None:
         check_below_deadline(MCP_CALL_DEADLINE_SECONDS, MCP_CALL_DEADLINE_SECONDS)
     with pytest.raises(AssertionError, match="reaches"):
         check_below_deadline(MCP_CALL_DEADLINE_SECONDS + 1, MCP_CALL_DEADLINE_SECONDS)
+
+
+def _with_start(name: MessageOperation) -> float:
+    """The operation's worst case, plus the start trigger's when it runs after it."""
+    start = START_BOUND_SECONDS if name in START_AFTER_OPERATIONS else 0.0
+    return worst_case_seconds(name) + start
+
+
+def test_the_start_bound_is_one_read_and_one_write_per_start() -> None:
+    assert START_BOUND_SECONDS == BUSY_TIMEOUT_SECONDS * (1 + MAX_STARTS_PER_CALL)
+
+
+def test_send_reply_and_cancel_are_followed_by_the_start_and_inbox_is_not() -> None:
+    message_operations = set(RUNS)
+    assert message_operations & START_AFTER_OPERATIONS == {
+        OperationName.SEND,
+        OperationName.REPLY,
+        OperationName.CANCEL,
+    }
+
+
+@pytest.mark.parametrize("name", RUNS, ids=lambda name: name.value)
+def test_each_worst_case_with_the_start_is_below_the_mcp_call_deadline(
+    name: MessageOperation,
+) -> None:
+    check_below_deadline(_with_start(name), MCP_CALL_DEADLINE_SECONDS)
+
+
+def test_every_start_operation_is_either_bounded_here_or_named_unbounded() -> None:
+    bounded = START_AFTER_OPERATIONS & set(RUNS)
+
+    assert bounded | UNBOUNDED_START_OPERATIONS == START_AFTER_OPERATIONS
+    assert not bounded & UNBOUNDED_START_OPERATIONS

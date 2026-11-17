@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from amoeba.answering.values import DeclineReason, PassageRef
+from amoeba.store.held_questions import HeldQuestion, insert_held
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import NewQuestion
-from amoeba.store.store import Store
+from amoeba.store.store import Store, Transaction
 from store.seed import insert_member, insert_program
 
 NOW = datetime(2026, 11, 10, 12, 0, tzinfo=UTC)
@@ -77,3 +78,19 @@ def waiting_question(
         waiting_reason=DeclineReason.ANSWER_LIMIT_REACHED,
         waiting_detail="limit 3",
     )
+
+
+HELD_REQUEST_ID = "request-a"
+
+
+def insert_held_row(
+    transaction: Transaction,
+    key: QuestionKey = KEY,
+    *,
+    member_id: str = MEMBER_ID,
+    request_id: str = HELD_REQUEST_ID,
+    now: datetime = NOW,
+) -> None:
+    """A ``waiting_on_request`` row (slice 242), through its held insert."""
+    held = HeldQuestion(key, member_id, "What did the request add?", "/work/a")
+    assert insert_held(transaction, held, request_id, now)

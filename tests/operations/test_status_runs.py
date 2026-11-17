@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -16,9 +17,15 @@ from amoeba.operations.status_models import (
     RunFileUnreadable,
 )
 from amoeba.operations.status_placement import PlacedRun
-from amoeba.operations.status_runs import LatestRows, classify_runs
+from amoeba.operations.status_runs import LatestRows, RequestStates, classify_runs
+from amoeba.store.errors import StoreRowError
 from amoeba.store.models import Member, MemberSettings, QuestionKey
-from amoeba.store.vocabulary import QuestionState, ResumeOutcome, RulesFrom
+from amoeba.store.vocabulary import (
+    QuestionState,
+    RequestState,
+    ResumeOutcome,
+    RulesFrom,
+)
 from amoeba.upstream.squadron.run_list import ListedRun
 from operations.status_support import (
     RUN_NOW,
@@ -66,7 +73,7 @@ def _key(run: ListedRun) -> QuestionKey:
 def _entries(runs: list[ListedRun], rows: LatestRows, runs_dir: Path) -> list[RunEntry]:
     placed = tuple(PlacedRun(run, MEMBER) for run in runs)
     return [
-        item.entry for item in classify_runs(placed, rows, runs_dir, LIMIT, RUN_NOW)
+        item.entry for item in classify_runs(placed, rows, {}, runs_dir, LIMIT, RUN_NOW)
     ]
 
 
@@ -278,3 +285,70 @@ def test_the_run_file_is_not_read_for_a_run_that_has_a_row(
     rows = {PAUSED: (question_row(_key(run), QuestionState.WAITING_ON_PM), None)}
 
     assert _one(run, rows, runs_dir).pause is PauseClass.WAITING_ON_PM
+
+
+HELD_REQUEST = "request-held"
+START_ATTEMPT = RUN_NOW - timedelta(minutes=3)
+
+
+def _held_entry(
+    tmp_path: Path,
+    runs_dir: Path,
+    requests: RequestStates,
+    *,
+    attempted: datetime | None = None,
+) -> RunEntry:
+    """The entry of a run held on ``HELD_REQUEST`` (slice 242, D9)."""
+    run = _paused(tmp_path)
+    row = replace(
+        question_row(_key(run), QuestionState.WAITING_ON_REQUEST),
+        request_id=HELD_REQUEST,
+        start_attempted_at=attempted,
+    )
+    placed = (PlacedRun(run, MEMBER),)
+    (item,) = classify_runs(
+        placed, {PAUSED: (row, None)}, requests, runs_dir, LIMIT, RUN_NOW
+    )
+    return item.entry
+
+
+def test_a_held_run_shows_its_request_and_the_requests_state_with_no_next(
+    tmp_path: Path, runs_dir: Path
+) -> None:
+    entry = _held_entry(tmp_path, runs_dir, {HELD_REQUEST: RequestState.ACCEPTED})
+
+    assert entry.pause is PauseClass.WAITING_ON_REQUEST
+    assert entry.detail == f"waiting on request {HELD_REQUEST} (accepted)"
+    assert entry.next is None
+
+
+def test_a_held_run_shows_when_handle_pause_was_last_started(
+    tmp_path: Path, runs_dir: Path
+) -> None:
+    entry = _held_entry(
+        tmp_path,
+        runs_dir,
+        {HELD_REQUEST: RequestState.DONE},
+        attempted=START_ATTEMPT,
+    )
+
+    assert entry.detail == (
+        f"waiting on request {HELD_REQUEST} (done); handle_pause last started "
+        f"{START_ATTEMPT.isoformat()}"
+    )
+    assert entry.next is None
+
+
+def test_a_held_run_whose_request_is_gone_shows_gone(
+    tmp_path: Path, runs_dir: Path
+) -> None:
+    entry = _held_entry(tmp_path, runs_dir, {HELD_REQUEST: None})
+
+    assert entry.detail == f"waiting on request {HELD_REQUEST} (gone)"
+
+
+def test_a_held_run_whose_request_state_was_not_read_is_a_store_row_error(
+    tmp_path: Path, runs_dir: Path
+) -> None:
+    with pytest.raises(StoreRowError, match=HELD_REQUEST):
+        _held_entry(tmp_path, runs_dir, {})

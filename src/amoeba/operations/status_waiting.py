@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from amoeba.answering.values import REQUEST_DECLINE_REASONS
 from amoeba.operations.status_models import (
     NextAction,
     NextOperation,
@@ -64,6 +65,11 @@ def _entry(question: QuestionRecord, run: ListedRun | None) -> WaitingEntry:
         run_state=state,
         detail=detail,
         next=next_action,
+        request_id=(
+            question.request_id
+            if question.waiting_reason in REQUEST_DECLINE_REASONS
+            else None
+        ),
     )
 
 

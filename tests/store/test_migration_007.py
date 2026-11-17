@@ -50,6 +50,17 @@ def _version_six_store_with_mail(monkeypatch: pytest.MonkeyPatch) -> sqlite3.Con
     return connection
 
 
+def _migrate_to_seven(
+    connection: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> int:
+    """Run the first seven migrations only, so later ones do not change the check."""
+    with monkeypatch.context() as patch:
+        first_seven = migration_files()[:7]
+        patch.setattr(migrations, "migration_files", lambda: first_seven)
+        patch.setattr(migrations, "EXPECTED_SCHEMA_VERSION", 7)
+        return migrate(connection)
+
+
 def _snapshot(connection: sqlite3.Connection) -> list[list[tuple[object, ...]]]:
     return [connection.execute(query).fetchall() for query in ROWS_BEFORE]
 
@@ -60,7 +71,7 @@ def test_a_version_six_store_migrates_to_seven_with_rows_untouched(
     connection = _version_six_store_with_mail(monkeypatch)
     before = _snapshot(connection)
 
-    assert migrate(connection) == 7
+    assert _migrate_to_seven(connection, monkeypatch) == 7
 
     assert read_schema_version(connection) == 7
     assert _snapshot(connection) == before
@@ -88,12 +99,12 @@ def test_a_store_stamped_eight_is_refused_and_left_untouched(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     connection = _version_six_store_with_mail(monkeypatch)
-    migrate(connection)
+    _migrate_to_seven(connection, monkeypatch)
     connection.execute("UPDATE schema_meta SET version = 8")
     before = _snapshot(connection)
 
     with pytest.raises(StoreSchemaError):
-        migrate(connection)
+        _migrate_to_seven(connection, monkeypatch)
 
     assert read_schema_version(connection) == 8
     assert _snapshot(connection) == before

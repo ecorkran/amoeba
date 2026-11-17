@@ -102,3 +102,42 @@ def test_the_order_of_the_open_questions_is_kept() -> None:
     entries = _entries((first, second), [])
 
     assert [entry.run_id for entry in entries] == ["run-1", "run-2"]
+
+
+def test_a_question_waiting_because_of_its_request_carries_the_request_id() -> None:
+    run = recorded_run(PAUSED)
+    question = replace(
+        question_row(_paused_key(run), QuestionState.WAITING_ON_PM),
+        waiting_reason=DeclineReason.REQUEST_DECLINED,
+        waiting_detail="out of scope for this repo",
+        request_id="request-held",
+    )
+
+    (entry,) = _entries((question,), [run])
+
+    assert entry.request_id == "request-held"
+    assert entry.waiting_reason is DeclineReason.REQUEST_DECLINED
+    assert entry.next is not None
+    assert entry.next.operation is NextOperation.ANSWER
+
+
+def test_a_request_id_kept_on_a_row_whose_reason_is_not_the_requests_is_null() -> None:
+    run = recorded_run(PAUSED)
+    question = replace(
+        question_row(_paused_key(run), QuestionState.WAITING_ON_PM),
+        waiting_reason=DeclineReason.CHECK_SAID_NO,
+        request_id="request-held",
+    )
+
+    (entry,) = _entries((question,), [run])
+
+    assert entry.request_id is None
+
+
+def test_an_ordinary_waiting_question_has_a_null_request_id() -> None:
+    run = recorded_run(PAUSED)
+    question = question_row(_paused_key(run), QuestionState.WAITING_ON_PM)
+
+    (entry,) = _entries((question,), [run])
+
+    assert entry.request_id is None

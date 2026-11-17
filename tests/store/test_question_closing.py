@@ -21,18 +21,23 @@ from amoeba.store.question_closing import (
     close_question,
     dismiss_question,
     member_open_questions,
+    open_answering_run_ids,
     open_rows_of_run,
+    run_ids_with_open_question,
     sweep_candidates,
 )
 from amoeba.store.questions import get_question, insert_question
+from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ClosedReason, QuestionState, ResumeOutcome
 from store.question_support import (
+    HELD_REQUEST_ID,
     KEY,
     MEMBER_ID,
     NOW,
     OTHER_MEMBER_ID,
     claimed_question,
+    insert_held_row,
     seed_members,
     waiting_question,
 )
@@ -350,3 +355,52 @@ def test_a_pm_answer_on_a_closed_question_sets_answered_and_keeps_the_reason(
     assert row.state is QuestionState.ANSWERED
     assert row.closed_reason is ClosedReason.DISMISSED
     assert row.closed_detail == "not needed"
+
+
+def test_a_held_row_is_open_in_every_open_read(store: Store) -> None:
+    with store.write() as transaction:
+        insert_held_row(transaction)
+        transaction.execute(
+            "UPDATE questions SET answering_run_id = 'held-answering' WHERE run_id = ?",
+            (KEY.run_id,),
+        )
+
+    with store.read() as transaction:
+        of_run = open_rows_of_run(transaction, KEY.run_id)
+        of_member = member_open_questions(transaction, MEMBER_ID)
+        of_members = sweep_candidates(transaction, [MEMBER_ID])
+        answering_ids = open_answering_run_ids(transaction)
+        run_ids = run_ids_with_open_question(transaction)
+
+    for rows in (of_run, of_member, of_members):
+        assert [row.state for row in rows] == [QuestionState.WAITING_ON_REQUEST]
+    assert answering_ids == {"held-answering"}
+    assert run_ids == {KEY.run_id}
+
+
+def test_dismiss_closes_a_held_question(store: Store) -> None:
+    with store.write() as transaction:
+        insert_held_row(transaction)
+
+    assert _dismiss(store)
+
+    row = _row(store)
+    assert row.state is QuestionState.CLOSED
+    assert row.closed_reason is ClosedReason.DISMISSED
+    assert row.request_id == HELD_REQUEST_ID
+
+
+def test_dismiss_of_a_held_question_refuses_a_stale_updated_at(store: Store) -> None:
+    with store.write() as transaction:
+        insert_held_row(transaction)
+    stale = _row(store)
+    with store.write() as transaction:
+        transaction.execute(
+            "UPDATE questions SET updated_at = ? WHERE run_id = ?",
+            (encode_timestamp(LATER), KEY.run_id),
+        )
+
+    with store.write() as transaction:
+        assert not dismiss_question(transaction, stale, "not needed", now=LATER)
+
+    assert _row(store).state is QuestionState.WAITING_ON_REQUEST

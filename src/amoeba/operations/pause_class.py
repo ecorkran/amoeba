@@ -39,6 +39,8 @@ class PauseClass(StrEnum):
     SETTLED = "settled"
     #: The pause's question was closed (228 D3); the run is still paused.
     CLOSED = "closed"
+    #: The question is held on a request this repo sent (242 D9).
+    WAITING_ON_REQUEST = "waiting_on_request"
 
 
 #: Resume outcomes after which the answer needs no further delivery.
@@ -130,6 +132,8 @@ def classify_pause(  # noqa: PLR0913 - the D3 table's inputs, each a value
     match question_row.state:
         case QuestionState.WAITING_ON_PM:
             return PauseClass.WAITING_ON_PM
+        case QuestionState.WAITING_ON_REQUEST:
+            return PauseClass.WAITING_ON_REQUEST
         case QuestionState.CLAIMED:
             age = now - question_row.updated_at
             if age >= timedelta(seconds=claim_age_limit):

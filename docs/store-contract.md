@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: The Amoeba store contract: the home, every table and column of the schema with its vocabulary and the operation that writes it, and the migration rule.
 dateCreated: 20261109
-dateUpdated: 20261112
+dateUpdated: 20261116
 status: complete
 ---
 
@@ -70,7 +70,7 @@ file, pid file or read-only mode, and a missing store is created.
 ## Migrations
 
 - Numbered files in `src/amoeba/store/schema/` (`001_baseline.sql`, `002_pause_handling.sql`,
-  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (7).
+  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (8).
 - Opening applies the missing files in order inside one write transaction and stamps
   `schema_meta.version`. A store stamped higher than the code expects is refused
   (`StoreSchemaError`) and left untouched.
@@ -85,6 +85,11 @@ file, pid file or read-only mode, and a missing store is created.
   migration, runs `PRAGMA foreign_key_check` before commit (any row raises
   `StoreCorruptError` and rolls back) and turns them back on. A later migration that
   needs another rebuild needs the same justification in its slice design.
+- **`008` is the second rebuild, with that justification (slice 242, D2).** The
+  `waiting_on_request` state widens the same `CHECK` list, and a held flag beside an
+  unchanged `state` would split one state across two columns. `008` rebuilds
+  `questions` by the same procedure, copying every row and key, so `answers` keeps its
+  references; no index exists on `questions`, so none is recreated.
 - Times are UTC ISO-8601 text. Member ids are Context Forge project ids. Every closed
   vocabulary is a `StrEnum` (`store/vocabulary.py`, `answering/values.py`), and a test
   pins each `CHECK` list to its enum.
@@ -180,10 +185,10 @@ What a consumer sees follows its pair's `consumed`: `from_source` reads `reporte
 | `member_id` | The member whose run paused. |
 | `question` | The question text. |
 | `checkout` | The checkout the run paused in. |
-| `state` | `claimed`, `answered`, `waiting_on_pm` or `closed` (`QuestionState`; `closed` from migration `003`). |
+| `state` | `claimed`, `answered`, `waiting_on_pm`, `closed` or `waiting_on_request` (`QuestionState`; `closed` from migration `003`, `waiting_on_request` from `008`). A `CHECK` requires `request_id` on a `waiting_on_request` row. |
 | `answering_run_id` | The answering run, null before one starts. |
 | `waiting_reason` | Why the PM must answer, a `DeclineReason`; unconstrained in SQL, checked in code. Written with the `waiting_on_pm` insert or move; a PM answer does not clear it. |
-| `claimed_at`, `updated_at` | UTC times. |
+| `claimed_at`, `updated_at` | UTC times. A held row keeps the hold time in `claimed_at` while it waits; its claim (slice 242) resets both to the claim time, so the dead-claim rules age the claim from then. |
 | `slice_label` | Migration `002`. The slice label (`<index> <name>`, or `none`) the passages were gathered for; reused on precedent passages. Written with the claim insert by `handle_pause`; null when the question waited before context was gathered. |
 | `source_commit` | Migration `002`. The commit the passages were read at. Written with the claim insert. |
 | `passages` | Migration `002`. JSON array of passage references (`id`, `source`, `question_id`, `date`). Written with the claim insert; rewritten by `replace_claim` for a dead claim. |
@@ -193,6 +198,8 @@ What a consumer sees follows its pair's `consumed`: `from_source` reads `reporte
 | `closed_reason` | Migration `003`. Null, or `dismissed`, `run_moved_on` or `run_gone` (`ClosedReason`, a `CHECK`). Written with the move to `closed` by `dismiss`, `handle_pause` and `status`; kept as history if `answer` later reopens the question. |
 | `closed_detail` | Migration `003`. The dismissal reason, or the run's state when the sweep closed it. Written with `closed_reason`. |
 | `closed_at` | Migration `003`. UTC time the question was closed. Written with `closed_reason`. |
+| `request_id` | Migration `008`. The request a held question waits on; null for any other question. Written by `handle_pause` with the held insert and never changed, so the row keeps it through every later state. No foreign key to `messages`, because 240's sweep prunes terminal requests by age. |
+| `start_attempted_at` | Migration `008`. UTC time `start_ended_held` last started `handle_pause` for a held row; null before the first start. Written by `start_ended_held` as a compare-and-set on the value it read (and on the row still being held), so two concurrent callers never both start one row; it leaves `updated_at` alone, because `updated_at` is the close compare-and-set's guard. |
 
 ### `answers` (written by slice 223; counted by slice 224)
 
@@ -306,7 +313,7 @@ one of six things. `tests/store/test_schema_holds_no_mirrored_state.py` pins the
 columns under the same reasons, so a new column fails it until it is listed in both
 places and its reason is stated.
 
-- **record**: what happened, written once when it did and never updated to follow anything else. A column here is never read as current state: `questions.checkout` is where a pause ran and `questions.slice_label` the slice its passages were gathered for, not where the member is or what slice it is on. Columns: `answers.answer`, `answers.answered_by`, `answers.cited`, `answers.paused_at`, `answers.recorded_at`, `answers.resume_at`, `answers.resume_detail`, `answers.resume_log`, `answers.resume_outcome`, `answers.resume_started_at`, `answers.retract_reason`, `answers.retracted_at`, `answers.run_id`, `answers.seq`, `answers.via`, `questions.answering_run_id`, `questions.checkout`, `questions.claimed_at`, `questions.closed_at`, `questions.closed_detail`, `questions.closed_reason`, `questions.evidence`, `questions.member_id`, `questions.passages`, `questions.paused_at`, `questions.question`, `questions.run_id`, `questions.slice_label`, `questions.source_commit`, `questions.state`, `questions.updated_at`, `questions.waiting_detail`, `questions.waiting_reason`, `releases.changed`, `releases.commit_sha`, `releases.member_id`, `releases.reported_at`, `releases.seq`, `releases.touched`, `releases.version`, `releases.versioned_at`.
+- **record**: what happened, written once when it did and never updated to follow anything else. A column here is never read as current state: `questions.checkout` is where a pause ran and `questions.slice_label` the slice its passages were gathered for, not where the member is or what slice it is on. Columns: `answers.answer`, `answers.answered_by`, `answers.cited`, `answers.paused_at`, `answers.recorded_at`, `answers.resume_at`, `answers.resume_detail`, `answers.resume_log`, `answers.resume_outcome`, `answers.resume_started_at`, `answers.retract_reason`, `answers.retracted_at`, `answers.run_id`, `answers.seq`, `answers.via`, `questions.answering_run_id`, `questions.checkout`, `questions.claimed_at`, `questions.closed_at`, `questions.closed_detail`, `questions.closed_reason`, `questions.evidence`, `questions.member_id`, `questions.passages`, `questions.paused_at`, `questions.question`, `questions.request_id`, `questions.run_id`, `questions.slice_label`, `questions.source_commit`, `questions.start_attempted_at`, `questions.state`, `questions.updated_at`, `questions.waiting_detail`, `questions.waiting_reason`, `releases.changed`, `releases.commit_sha`, `releases.member_id`, `releases.reported_at`, `releases.seq`, `releases.touched`, `releases.version`, `releases.versioned_at`.
 
 - **membership**: who is in a program, the PM's registration and the one thing only Amoeba knows. Columns: `dependency_pairs.consumer_id`, `dependency_pairs.program_id`, `dependency_pairs.provider_id`, `dependency_pairs.registered_at`, `dependency_pairs.updated_at`, `members.program_id`, `members.project_id`, `members.registered_at`, `members.removed_at`, `members.updated_at`, `programs.program_id`, `programs.registered_at`, `programs.updated_at`.
 
@@ -321,26 +328,35 @@ places and its reason is stated.
 ## Question lifecycle and who writes it (slices 223 and 228)
 
 A question moves `claimed` to `answered` or `waiting_on_pm`; a PM answer moves it to
-`answered` from any state, `closed` included. It is **open** while it is `claimed`,
-`waiting_on_pm`, or `answered` with its latest answer unresumed (`resume_outcome` null
-or `refused`). Every move out of `claimed` names the claim it holds
+`answered` from any state, `closed` included. A question marked with a request its
+repo sent starts `waiting_on_request` instead (slice 242) and leaves it for `claimed`
+or `waiting_on_pm` by the request's state. It is **open** while it is `claimed`,
+`waiting_on_pm`, `waiting_on_request`, or `answered` with its latest answer unresumed
+(`resume_outcome` null or `refused`). Every move out of `claimed` names the claim it holds
 (`answering_run_id`), and every close, dismissal and retraction is a compare-and-set in
 one short write transaction, so a PM answer made meanwhile wins.
 
 | Operation | Writes |
 |---|---|
 | `handle_pause`, a new question | one `questions` row, inserted in one transaction: `claimed` with `answering_run_id`, `slice_label`, `source_commit` and `passages`, or `waiting_on_pm` with `waiting_reason` and `waiting_detail` (and the context columns when the failure came after the context was gathered) |
+| `handle_pause`, a new question marked with a request (slice 242) | `waiting_on_request` with `request_id`, through the held insert; a marker that names no request this member sent gives `waiting_on_pm` with `request_unknown` instead |
+| `handle_pause`, a held question | the request `done`: `claimed` through the held claim (`answering_run_id`, `passages` with the request's `request_result` passage, `slice_label`, `source_commit`, and `claimed_at` and `updated_at` reset to now), then settled as any claim. `declined`, `cancelled`, `expired` or no longer stored: `waiting_on_pm` with `request_declined`, `request_cancelled`, `request_expired` or `request_unknown` and the request's reason as `waiting_detail`. `open` or `accepted`: nothing |
+| `start_ended_held`, after `send`, `reply`, `cancel`, `add`, `rm`, `status`, `list` and `handle_pause` (slice 242) | `start_attempted_at` on each held row whose request has ended, at most `MAX_STARTS_PER_CALL` per call, then starts `handle_pause` for it; the move itself is that `handle_pause`'s |
 | `handle_pause`, settling an answering run | `answered`: `questions.evidence` and an `answerer` `answers` row with `cited`, in one transaction through the answer gate. Otherwise `waiting_on_pm`: `waiting_reason`, `waiting_detail`, `evidence` |
 | `handle_pause`, a dead claim | `replace_claim` (`answering_run_id` and `passages`, for a claimant that died before it started), or `waiting_on_pm` with `answering_run_stalled` |
 | `answer` | a `pm` `answers` row with `via` (the door that carried the call) and `answered`, in one transaction; `waiting_reason`, `waiting_detail` and any `closed_*` columns are not cleared |
 | the shared resume (both) | `answers.resume_started_at` just before every spawn, then `resume_outcome`, `resume_detail`, `resume_log`, `resume_at` |
-| `dismiss` | `closed` with `closed_reason` `dismissed`, `closed_detail` (the PM's reason) and `closed_at`, from `claimed`, `waiting_on_pm` or `answered` with an unresumed answer; that answer becomes `not_delivered` (`dismissed`) in the same transaction |
+| `dismiss` | `closed` with `closed_reason` `dismissed`, `closed_detail` (the PM's reason) and `closed_at`, from `claimed`, `waiting_on_pm`, `waiting_on_request` or `answered` with an unresumed answer; that answer becomes `not_delivered` (`dismissed`) in the same transaction |
 | `retract` | `answers.retracted_at` and `retract_reason` on a PM answer, once |
 | the close sweep: `handle_pause` (that run's rows at other pauses), `status` (open rows of the members in scope) | `closed` with `closed_reason` `run_moved_on` or `run_gone` and the run's state as `closed_detail`; a claim only once older than `answering_wait_seconds`; an unresumed answer past `resume_bound_seconds` becomes `not_delivered` |
 | `set_up` removal | `members.removed_at`; the member's `dependency_pairs` rows are deleted |
 
 How each state ends with nobody editing a file: `claimed` settles, or is replaced or
-swept; `waiting_on_pm` is answered, dismissed or swept; `answered` unresumed is resumed,
+swept; `waiting_on_pm` is answered, dismissed or swept; `waiting_on_request` is
+resumed (its request `done` and the answer passes), moves to `waiting_on_pm` (its
+request ended without a result, or the answer did not pass), or is answered by the PM,
+dismissed or swept, and `start_ended_held` starts its `handle_pause` once the request
+ends; `answered` unresumed is resumed,
 dismissed or swept; `closed` is terminal and `answer` reopens it; a retracted answer is
 terminal and a new PM answer replaces it as precedent. A PM answer resets the answer
 limit, which counts `answerer` answers after the run's newest `pm` answer (a retracted
@@ -363,7 +379,8 @@ constrain it. The values `handle_pause` writes: `answer_limit_reached`,
 `answering_launch_failed`, `answering_run_failed`, `answering_run_stalled`,
 `answering_cost_cap`, `answering_run_orphaned`, `artifact_missing`,
 `artifact_malformed`, `answerer_declined`, `uncited`, `unknown_citation`,
-`check_said_no`. The remaining members (`node_already_blocked`, `question_missing`,
+`check_said_no`, and for a held question (slice 242) `request_declined`,
+`request_cancelled`, `request_expired` and `request_unknown`. The remaining members (`node_already_blocked`, `question_missing`,
 `answerer_not_configured`, `no_answer_on_file`, `answer_discarded`) come from before the
 cut and are not written.
 

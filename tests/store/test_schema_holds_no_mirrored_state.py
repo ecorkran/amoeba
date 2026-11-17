@@ -65,6 +65,8 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "questions.closed_reason",
             "questions.closed_detail",
             "questions.closed_at",
+            "questions.request_id",
+            "questions.start_attempted_at",
         }
     ),
     # Who is in a program: the PM's registration, the one thing only Amoeba knows.

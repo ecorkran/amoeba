@@ -10,7 +10,6 @@ old files under ``logs/mcp/``, which ``prune`` removes by age.
 
 from __future__ import annotations
 
-import sys
 import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -23,21 +22,16 @@ import anyio.to_thread
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from amoeba import wiring
+
+# Re-exported: the server and its tests name them through this module.
+from amoeba.amoeba_script import AmoebaScriptMissing as AmoebaScriptMissing
+from amoeba.amoeba_script import handle_pause_argv, resolve_amoeba_script
 from amoeba.mcp.tools import RequestError
 from amoeba.operations.handle_pause_call import HandlePauseCall
 from amoeba.operations.names import OperationName
 from amoeba.wiring import LaunchError
 
-AMOEBA_SCRIPT_NAME: Final = "amoeba"
-#: Keeps the child's stdout log machine-readable (229 D1): the CLI's text is for people.
-JSON_FLAG: Final = "--json"
-#: Marks the end of options, so a run id that starts with ``-`` is not read as a flag.
-END_OF_OPTIONS: Final = "--"
 UNIQUE_LENGTH: Final = 8
-
-
-class AmoebaScriptMissing(Exception):
-    """The ``amoeba`` script is not beside the server's interpreter."""
 
 
 class HandlePauseNotStarted(Exception):
@@ -55,26 +49,6 @@ class StartedCall(BaseModel):
     started_at: datetime
     stdout_log: Path
     stderr_log: Path
-
-
-def resolve_amoeba_script() -> Path:
-    """The ``amoeba`` script installed beside this interpreter.
-
-    ``uv tool install`` puts ``amoeba`` and ``amoeba-mcp`` in one environment, so the
-    script is next to ``sys.executable`` (not resolved: a symlinked interpreter would
-    lead to another directory).
-
-    Raises:
-        AmoebaScriptMissing: There is no such file; the message names the path.
-    """
-    script = Path(sys.executable).parent / AMOEBA_SCRIPT_NAME
-    if not script.exists():
-        raise AmoebaScriptMissing(
-            f"the amoeba script is not at {script}; install with "
-            "`uv tool install --force <repo>` so amoeba and amoeba-mcp share one "
-            "environment"
-        )
-    return script
 
 
 def _validated(raw: Mapping[str, object] | None) -> HandlePauseCall:
@@ -96,13 +70,7 @@ def _start(call: HandlePauseCall) -> StartedCall:
     logs = wiring.detached_logs(
         OperationName.HANDLE_PAUSE, started_at, uuid.uuid4().hex[:UNIQUE_LENGTH]
     )
-    argv = [
-        str(script),
-        OperationName.HANDLE_PAUSE.cli_name,
-        JSON_FLAG,
-        END_OF_OPTIONS,
-        call.run_id,
-    ]
+    argv = handle_pause_argv(script, call.run_id)
     # The child's cwd is the run's checkout, which ``handle_pause`` reads as its
     # directory; never the server's own directory.
     child = wiring.start_child(argv, call.directory, logs)

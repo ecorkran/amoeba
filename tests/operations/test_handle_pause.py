@@ -8,20 +8,34 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+import pytest
+from cf_fixtures import DEFAULT_WORKTREE
 from store.question_support import NOW
 from user_configs import user_config
 
 from amoeba.answering.values import AnsweredBy, AnsweringEvidence, DeclineReason
 from amoeba.operations.answering_run import PAUSE_COMMAND_OPT_OUT_FLAG
+from amoeba.operations.deps import Deps
+from amoeba.operations.names import OperationName
 from amoeba.operations.pause_models import (
     HandlePauseOutcome,
     HandlePauseResult,
     SkipReason,
 )
+from amoeba.operations.processes import Spawner, WaitableChild
+from amoeba.operations.request_release import MAX_STARTS_PER_CALL
+from amoeba.operations.rm import rm
+from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.answers import add_pm_answer, answers_of, settle_answered
+from amoeba.store.held_questions import HeldQuestion, insert_held
+from amoeba.store.message_transitions import MEMBER_REMOVED_REASON
 from amoeba.store.models import AnswerRecord, QuestionKey, QuestionRecord
 from amoeba.store.questions import NewQuestion, get_question, insert_question
-from amoeba.store.vocabulary import QuestionState, ResumeOutcome
+from amoeba.store.vocabulary import QuestionState, RequestState, ResumeOutcome
+from amoeba.upstream.squadron.errors import SquadronError
+from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
+from amoeba.upstream.squadron.run_outcome import PollFailure
+from amoeba.wiring_release import start_after
 from operations.handle_rig import (
     ANSWER_TEXT,
     CHECK_NO,
@@ -29,12 +43,16 @@ from operations.handle_rig import (
     KEY,
     OTHER_PAUSE,
     PAUSE,
+    PAUSED_AT,
     PROJECT_ID,
     QUESTION,
     RUNNING_DOC,
     World,
     world,
 )
+from operations.held_support import ADDRESSEE, REQUEST_ID, add_addressee, seed_request
+from operations.pause_support import FakeChild, SpawnRecorder
+from operations.set_up_support import DIRECTORY, FakeCf
 
 
 def _record(w: World) -> QuestionRecord:
@@ -307,3 +325,132 @@ def test_a_second_call_after_a_resume_is_settled(tmp_path: Path) -> None:
         assert second.outcome is HandlePauseOutcome.SKIPPED
         assert second.skip_reason is SkipReason.SETTLED
         assert len(w.spawned.answering) == 1
+
+
+# Slice 242, 6.5: held questions started after an operation, and by handle_pause
+
+
+ADDRESSEE_NAME = "addressee-name"
+MARKED_PAUSE = PAUSE.model_copy(
+    update={
+        "checkpoint": PAUSE.checkpoint.model_copy(
+            update={"question": f"{QUESTION}\namoeba-request: {REQUEST_ID}"}
+        )
+        if PAUSE.checkpoint is not None
+        else None
+    }
+)
+
+
+def _child_runs_handle_pause(w: World) -> SpawnRecorder:
+    """A spawner that plays the detached child: it runs ``handle_pause`` in-process."""
+    played: list[HandlePauseResult] = []
+
+    def run_the_child() -> None:
+        played.append(w.handle())
+
+    recorder = SpawnRecorder([FakeChild(0)], on_spawn=run_the_child)
+    w.deps = replace(w.deps, amoeba_script=lambda: Path("/bin/amoeba"))
+    w.deps = replace(w.deps, spawn=_spawn_or_resume(w.deps, recorder))
+    return recorder
+
+
+def _spawn_or_resume(deps: Deps, recorder: SpawnRecorder) -> Spawner:
+    """Starts of ``handle-pause`` go to ``recorder``; everything else (answering runs
+    and resumes) to the world's own spawner."""
+    world_spawn = deps.spawn
+
+    def spawn(
+        argv: Sequence[str], cwd: Path, logs: LaunchLogs
+    ) -> WaitableChild | LaunchError:
+        if "handle-pause" in argv:
+            return recorder(argv, cwd, logs)
+        return world_spawn(argv, cwd, logs)
+
+    return spawn
+
+
+def test_rm_of_the_addressee_releases_the_held_question_to_the_pm(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path, paused_polls=(MARKED_PAUSE,)) as w:
+        add_addressee(w.store)
+        seed_request(w.store, RequestState.OPEN)
+        assert w.handle().outcome is HandlePauseOutcome.HELD
+        recorder = _child_runs_handle_pause(w)
+        removed = rm(
+            w.store,
+            w.config,
+            {"members": [ADDRESSEE_NAME]},
+            directory=DIRECTORY,
+            run=FakeCf(
+                directory_fixture=DEFAULT_WORKTREE,
+                projects=[(ADDRESSEE, ADDRESSEE_NAME)],
+            ),
+        )
+        assert removed.outcome is SetUpOutcome.APPLIED
+
+        start_after(OperationName.RM, w.store, lambda: w.config, lambda: w.deps)
+
+        assert len(recorder.calls) == 1
+        record = _record(w)
+        assert record.state is QuestionState.WAITING_ON_PM
+        assert record.waiting_reason is DeclineReason.REQUEST_CANCELLED
+        assert record.waiting_detail == MEMBER_REMOVED_REASON
+
+
+def test_handle_pause_starts_ended_held_questions_and_a_large_batch_drains(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path) as w:
+        add_addressee(w.store)
+        count = MAX_STARTS_PER_CALL + 2
+        for number in range(count):
+            request_id = f"ended-{number}"
+            seed_request(w.store, RequestState.DECLINED, request_id=request_id)
+            held = HeldQuestion(
+                QuestionKey(f"other-run-{number}", PAUSED_AT), PROJECT_ID, "q", "/c"
+            )
+            with w.store.write() as transaction:
+                insert_held(transaction, held, request_id, NOW)
+        recorder = SpawnRecorder([FakeChild(0)])
+        w.deps = replace(
+            w.deps,
+            amoeba_script=lambda: Path("/bin/amoeba"),
+            spawn=_spawn_or_resume(w.deps, recorder),
+        )
+
+        w.handle()
+        first_round = len(recorder.calls)
+        w.handle()
+
+        assert first_round == MAX_STARTS_PER_CALL
+        started = {call.argv[-1] for call in recorder.calls}
+        assert started == {f"other-run-{number}" for number in range(count)}
+
+
+def _sq_not_answering(run_id: str) -> PollFailure:
+    return PollFailure(f"sq is not answering for {run_id}")
+
+
+def test_a_handle_pause_that_raises_still_starts_ended_held_questions(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path) as w:
+        add_addressee(w.store)
+        seed_request(w.store, RequestState.DECLINED, request_id="ended")
+        held = HeldQuestion(QuestionKey("other-run", PAUSED_AT), PROJECT_ID, "q", "/c")
+        with w.store.write() as transaction:
+            insert_held(transaction, held, "ended", NOW)
+        recorder = SpawnRecorder([FakeChild(0)])
+        w.deps = replace(
+            w.deps,
+            amoeba_script=lambda: Path("/bin/amoeba"),
+            spawn=_spawn_or_resume(w.deps, recorder),
+            poll_run=_sq_not_answering,
+        )
+
+        with pytest.raises(SquadronError, match="sq is not answering"):
+            w.handle()
+
+        assert [call.argv[-1] for call in recorder.calls] == ["other-run"]

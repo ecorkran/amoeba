@@ -8,7 +8,12 @@ from typing import Any
 
 import pytest
 from cf_fixtures import DEFAULT_WORKTREE, OUTSIDE_ANY_PROJECT, fake_cf_run
-from store.question_support import NOW, claimed_question, waiting_question
+from store.question_support import (
+    NOW,
+    claimed_question,
+    insert_held_row,
+    waiting_question,
+)
 from store.seed import insert_member
 from user_configs import user_config
 
@@ -22,7 +27,7 @@ from amoeba.operations.set_up_models import (
 )
 from amoeba.store.models import QuestionKey
 from amoeba.store.programs import get_member_any, get_program
-from amoeba.store.questions import insert_question
+from amoeba.store.questions import dismiss_question, get_question, insert_question
 from amoeba.store.store import Store
 from operations.set_up_support import (
     DIRECTORY,
@@ -333,3 +338,22 @@ def test_a_removed_members_add_with_program_revives_it_in_that_one(
         member = get_member_any(transaction, "consumer-id")
     assert member is not None
     assert (member.program_id, member.removed_at) == ("second", None)
+
+
+def test_a_held_question_refuses_rm_until_it_is_dismissed(store: Store) -> None:
+    held = QuestionKey("run-held", "2026-11-10T11:10:00+00:00")
+    with store.write() as transaction:
+        insert_held_row(transaction, held, member_id="consumer-id")
+
+    refused = _rm(store, {"members": ["consumer"]})
+
+    assert _codes(refused) == [SetUpProblemCode.MEMBER_HAS_OPEN_QUESTIONS]
+    assert held.run_id in refused.problems[0].detail
+    assert not _removed(store, "consumer-id")
+    with store.write() as transaction:
+        row = get_question(transaction, held)
+        assert row is not None
+        assert dismiss_question(transaction, row, "not needed", now=NOW)
+
+    assert _rm(store, {"members": ["consumer"]}).outcome is SetUpOutcome.APPLIED
+    assert _removed(store, "consumer-id")

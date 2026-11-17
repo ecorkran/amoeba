@@ -84,8 +84,9 @@ class RunEntry(_Model):
     pause: PauseClass | RunFileUnreadable | None
     detail: str | None
     next: NextAction | None
-    #: For an ``unhandled`` or ``claim_stale`` run: the newest calls-log line for it,
-    #: which shows why a hook missed. Null when none was logged (D11).
+    #: For an ``unhandled``, ``claim_stale`` or ``waiting_on_request`` run: the newest
+    #: calls-log line for it, which shows why a hook or a start missed. Null when none
+    #: was logged (D11, 242 D9).
     last_call: CallEntry | None = None
 
 
@@ -104,6 +105,8 @@ class WaitingEntry(_Model):
     #: For ``moved_on``: the run's state now.
     detail: str | None
     next: NextAction | None
+    #: The request behind a ``request_*`` waiting reason; else null (242 D9).
+    request_id: str | None = None
 
 
 class RequestEntry(_Model):
@@ -206,8 +209,9 @@ class StatusResult(_Model):
 
     outcome: StatusOutcome
     rejection: RejectCode | None = None
-    #: Says request subjects and rejected-call recipients are other agents' text; set
-    #: when any member shows a request or a rejected call, else null (240 D11).
+    #: Says request subjects, rejected-call recipients and request reasons are other
+    #: agents' text; set when any member shows a request, a rejected call, a held run
+    #: or a waiting entry from a request, else null (240 D11, 242 D9).
     notice: str | None = None
     programs: tuple[ProgramStatus, ...] = ()
     unplaced_runs: tuple[UnplacedRunEntry, ...] = ()

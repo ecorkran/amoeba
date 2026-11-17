@@ -63,7 +63,7 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
    **Risk Level:** High. It rests on a research-preview client feature, a protocol pin and a new server structure.
    **Relative Effort:** 4
 
-3. [ ] **(242) Hold and Release** — A paused run waits on a request it sent. Migration 8 rebuilds the question table's state check to add `waiting_on_request`. `handle_pause` recognizes a question that names, by exact id, a request sent from this member. A request not yet terminal records the question as `waiting_on_request`. A `done` request, before or after the pause, makes its result the candidate answer. It goes through the check step and the answer screen, with the member's authorize list, and counts toward the per-run automatic-answer limit. A passing answer is recorded and 220's resume runs. A failing one moves the question to `waiting_on_pm` with the reason. A declined, cancelled or expired request moves it to `waiting_on_pm` with that reason. When a request reaches any terminal state (by `reply`, `cancel`, `rm` or the sweep's expiry), Amoeba starts `handle_pause` detached for each run waiting on it. A refused or dead resume is retried by calling `handle_pause` again with the recorded answer. 220's `run_moved_on` and `run_gone` closes apply. `dismiss` closes a `waiting_on_request` question. `status` and `decisions` show a run resumed by a request's result.
+3. [x] **(242) Hold and Release** — A paused run waits on a request it sent. Migration 8 rebuilds the question table's state check to add `waiting_on_request`. `handle_pause` recognizes a question that names, by exact id, a request sent from this member. A request not yet terminal records the question as `waiting_on_request`; a link that names no request this member sent moves it to `waiting_on_pm` with `request_unknown`. A `done` request, before or after the pause, gives its result to the answering pipeline as a passage. The answer written from it goes through the check step and the answer screen, with the member's authorize list, and counts toward the per-run automatic-answer limit. A passing answer is recorded and 220's resume runs. A failing one moves the question to `waiting_on_pm` with the reason. A declined, cancelled or expired request moves it to `waiting_on_pm` with that reason. When a request reaches any terminal state (by `reply`, `cancel`, `rm` or the sweep's expiry), Amoeba starts `handle_pause` detached for each run waiting on it. A refused or dead resume is retried by calling `handle_pause` again with the recorded answer. 220's `run_moved_on` and `run_gone` closes apply. `dismiss` closes a `waiting_on_request` question. `status` and `decisions` show a run resumed by a request's result.
    **Value:** User value. A run that stops because it needs another repo's change carries on by itself once that change is done.
    **Success Criteria:**
    - A fixture pipeline paused on a request resumes with the result after `done` is replied from another fixture repo, and the record shows the request, check, screen and resume outcome.
@@ -74,7 +74,7 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
    - A held question has every exit: resume, `waiting_on_pm`, `dismiss`, `run_moved_on` and `run_gone`.
    - A question that names a request only in its wording, without an exact id match, is not held.
    - The live store is backed up and migrated to 8.
-   **Dependencies:** 240. Independent of 241.
+   **Dependencies:** 240. Independent of 241 in code, but its migration 8 needs 241's migration 7 applied first.
    **Interfaces:** Provides `waiting_on_request` and the request-done trigger. Consumes 220's answering check, screen, resume and question record.
    **Risk Level:** High. A result from another repo's agent resumes a real run.
    **Relative Effort:** 3
@@ -111,7 +111,7 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
 
 `240 → 241 → 242 → 243 → 244`.
 
-- **Dependencies.** Everything builds on 240. 244 needs 241's live-session check. 242 and 243 need only 240.
+- **Dependencies.** Everything builds on 240. 244 needs 241's live-session check. 242 and 243 need only 240 in code; 242's migration 8 comes after 241's migration 7.
 - **Risk.** 241 rests on the least certain ground, so it comes right after 240. 242 is next because it resumes real runs.
 
 ## Notes
