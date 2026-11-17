@@ -1,10 +1,11 @@
 """The flags of ``send``, ``inbox``, ``reply`` and ``cancel`` and the requests they
-build (slice 240).
+build (slice 240; ``--note`` and ``--to-program`` are slice 243).
 
 No flag is ``required=True`` and no value is defaulted: a flag not given is left out of
 the document, so the operation rejects it with the same detail on both doors (and the
-rejection is recorded). The one parse-time check is argparse's own: ``--body`` and
-``--body-file`` exclude each other (exit 2).
+rejection is recorded). ``--note`` is a flag that leaves ``kind`` out when absent, so
+the document means a request. The one parse-time check is argparse's own: ``--body``
+and ``--body-file`` exclude each other (exit 2).
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from typing import Any
 
 from amoeba.operations.message_models import ReplyAction
 from amoeba.operations.names import OperationName
+from amoeba.store.vocabulary import MessageKind
 
 MEMBER_HELP = (
     "the sending member, when run from outside any member's checkout "
@@ -40,10 +42,22 @@ def register_messages(commands: Any, json_parent: argparse.ArgumentParser) -> No
         commands,
         json_parent,
         OperationName.SEND,
-        "ask another repo for work",
+        "ask another repo for work, or send it or a program a note",
     )
-    send.add_argument("--id", help="your id for the request; a retry reuses it")
+    send.add_argument(
+        "--note",
+        dest="kind",
+        action="store_const",
+        const=MessageKind.NOTE.value,
+        help="send information that needs no reply, not a request",
+    )
+    send.add_argument("--id", help="your id for the message; a retry reuses it")
     send.add_argument("--to", metavar="MEMBER", help="the addressee (name or id)")
+    send.add_argument(
+        "--to-program",
+        metavar="ID",
+        help="a note to every other member of this program (with --note)",
+    )
     send.add_argument("--subject", help="what the request is about")
     body = send.add_mutually_exclusive_group()
     body.add_argument("--body", help="what you need, in full")
@@ -109,8 +123,10 @@ def send_document(
         else arguments.body
     )
     return _given(
+        kind=arguments.kind,
         id=arguments.id,
         to=arguments.to,
+        to_program=arguments.to_program,
         subject=arguments.subject,
         body=body,
         parent=arguments.parent,

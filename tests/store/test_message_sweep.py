@@ -8,10 +8,12 @@ from pathlib import Path
 
 import pytest
 
+from amoeba.store import sql_messages
 from amoeba.store.message_rejections import record_rejection
 from amoeba.store.message_sweep import sweep, sweep_due
 from amoeba.store.message_transitions import StateFields, change_state
 from amoeba.store.messages import get_message
+from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, RequestState
 from store.message_support import (
@@ -21,7 +23,7 @@ from store.message_support import (
     TTL,
     count,
     delivery_rows,
-    insert_note,
+    insert_raw_note,
     seed_members,
     send_request,
 )
@@ -148,8 +150,9 @@ def test_old_rejection_rows_are_pruned_young_kept(store: Store) -> None:
 
 
 def test_the_request_prune_leaves_a_note_alone(store: Store) -> None:
+    # A young note: 243's note prune removes an aged one (tested below).
     with store.write() as transaction:
-        insert_note(transaction, "note-1", changed=NOW)
+        insert_raw_note(transaction, "note-1", changed=LONG_AFTER)
 
     _sweep(store, LONG_AFTER)
 
@@ -191,3 +194,71 @@ def test_sweep_due_is_true_for_each_due_kind(store: Store) -> None:
         )
     with store.read() as transaction:
         assert sweep_due(transaction, LONG_AFTER, RETENTION_DAYS)  # a rejection
+
+
+def _write_note(store: Store, message_id: str, when: datetime) -> None:
+    """A direct note from the sender to the addressee, with its delivery."""
+    note = NewNote(message_id, SENDER, ADDRESSEE, None, "subject", "body")
+    with store.write() as transaction:
+        insert_note(transaction, note, [ADDRESSEE], when)
+
+
+def test_an_aged_note_is_pruned_with_its_deliveries_read_or_not(store: Store) -> None:
+    _write_note(store, "old-note", NOW)
+    _write_note(store, "young-note", LONG_AFTER)
+
+    _sweep(store, LONG_AFTER)
+
+    assert _ids(store) == {"young-note"}
+    with store.read() as transaction:
+        assert [row[2] for row in delivery_rows(transaction)] == ["young-note"]
+        assert transaction.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_the_expire_step_never_changes_a_note(store: Store) -> None:
+    _write_note(store, "a-note", NOW)
+
+    _sweep(store, NOW + timedelta(days=RETENTION_DAYS - 1))
+
+    with store.read() as transaction:
+        note = get_message(transaction, "a-note")
+        assert note is not None and note.state is None
+        assert [row[3] for row in delivery_rows(transaction)] == ["sent"]
+
+
+def test_the_note_prune_leaves_open_and_accepted_requests_alone(store: Store) -> None:
+    _write_note(store, "old-note", NOW)
+    with store.write() as transaction:
+        send_request(transaction, "open-one", now=LONG_AFTER)
+        send_request(transaction, "accepted-one", now=LONG_AFTER)
+    _end(store, "accepted-one", RequestState.ACCEPTED, LONG_AFTER)
+
+    _sweep(store, LONG_AFTER)
+
+    assert _ids(store) == {"open-one", "accepted-one"}
+
+
+def test_sweep_due_is_true_for_an_aged_note_alone_and_false_for_a_young_one(
+    store: Store,
+) -> None:
+    _write_note(store, "a-note", NOW)
+    with store.read() as transaction:
+        assert not sweep_due(transaction, NOW + timedelta(days=1), RETENTION_DAYS)
+        assert sweep_due(transaction, LONG_AFTER, RETENTION_DAYS)
+
+
+def test_the_due_check_searches_an_index_and_never_scans_messages(
+    store: Store,
+) -> None:
+    """The note clause must use ``messages_state_expires`` (notes have a null state),
+    not walk every message, on each read-then-write path."""
+    with store.read() as transaction:
+        plan = " ".join(
+            str(row[3])
+            for row in transaction.execute(
+                f"EXPLAIN QUERY PLAN {sql_messages.SELECT_SWEEP_DUE}",
+                ("x", "x", "x", "x"),
+            )
+        )
+
+    assert "SCAN messages" not in plan

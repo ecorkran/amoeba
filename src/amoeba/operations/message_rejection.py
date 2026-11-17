@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from amoeba.operations.message_document import declared_text
+from amoeba.operations.message_document import declared_recipient, declared_text
 from amoeba.operations.message_member import Refusal
 from amoeba.operations.message_models import (
     MAX_RECORDED_LENGTH,
@@ -111,7 +111,7 @@ def record_declared(
         refusal.record_under,
         operation,
         now,
-        to_ref=declared_text(document, "to"),
+        to_ref=declared_recipient(document),
         message_id=declared_text(document, "id"),
         parent_id=declared_text(document, "parent"),
         code=refusal.code,

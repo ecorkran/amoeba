@@ -20,7 +20,7 @@ from store.message_support import (
     NOW,
     SENDER,
     delivery_rows,
-    insert_note,
+    insert_raw_note,
     seed_members,
     send_request,
 )
@@ -191,7 +191,7 @@ def test_a_failure_after_the_first_delivery_leaves_no_change_and_no_delivery(
 
 def test_a_note_has_no_state_to_change(store: Store) -> None:
     with store.write() as transaction:
-        insert_note(transaction, "note-1", changed=NOW)
+        insert_raw_note(transaction, "note-1", changed=NOW)
         note = get_message(transaction, "note-1")
         assert note is not None
         with pytest.raises(ValueError, match="not a request"):

@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from amoeba.store import sql_messages
+from amoeba.store.errors import StoreRowError
 from amoeba.store.models import Message
 from amoeba.store.row_values import (
     decode_timestamp,
@@ -57,10 +58,15 @@ def get_message(transaction: Transaction, message_id: str) -> Message | None:
     return None if row is None else message_from_row(row)
 
 
-def effective_state(message: Message, now: datetime) -> RequestState | None:
+def effective_state(message: Message, now: datetime) -> RequestState:
     """The state every read shows: an ``open`` request at or past ``expires_at`` is
-    ``expired`` before the sweep records it. A note has no state (``None``).
+    ``expired`` before the sweep records it.
+
+    Raises:
+        StoreRowError: The row is a note, which has no state; callers pass requests.
     """
+    if message.state is None:
+        raise StoreRowError(f"message {message.message_id!r} is a note, not a request")
     if message.state is RequestState.OPEN and message.expires_at is not None:
         if message.expires_at <= now:
             return RequestState.EXPIRED
@@ -121,17 +127,24 @@ def request_counts_from(transaction: Transaction, member_id: str) -> tuple[int, 
     return integer(row[0], "count"), integer(row[1], "live count")
 
 
+def delete_with_deliveries(
+    transaction: Transaction, select_ids: str, parameters: tuple[object, ...]
+) -> None:
+    """Delete the messages ``select_ids`` picks (a select of ids), each with its
+    deliveries first."""
+    for row in transaction.execute(select_ids, parameters).fetchall():
+        message_id = text(row[0], "messages.message_id")
+        transaction.execute(sql_messages.DELETE_DELIVERIES_OF, (message_id,))
+        transaction.execute(sql_messages.DELETE_MESSAGE, (message_id,))
+
+
 def prune_oldest_finished_from(
     transaction: Transaction, member_id: str, count: int
 ) -> None:
     """Delete the member's ``count`` oldest finished requests, deliveries first."""
-    rows = transaction.execute(
-        sql_messages.SELECT_OLDEST_TERMINAL_FROM, (member_id, count)
-    ).fetchall()
-    for row in rows:
-        message_id = text(row[0], "messages.message_id")
-        transaction.execute(sql_messages.DELETE_DELIVERIES_OF, (message_id,))
-        transaction.execute(sql_messages.DELETE_MESSAGE, (message_id,))
+    delete_with_deliveries(
+        transaction, sql_messages.SELECT_OLDEST_TERMINAL_FROM, (member_id, count)
+    )
 
 
 def insert_request(

@@ -72,7 +72,7 @@ def _request_entry(
     now: datetime,
 ) -> RequestEntry:
     state = effective_state(message, now)
-    if state is None or message.to_member is None:
+    if message.to_member is None:
         raise ValueError(f"{message.message_id!r} is not a request")
     sent = message.from_member == member
     other = message.to_member if sent else message.from_member

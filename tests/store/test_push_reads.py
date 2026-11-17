@@ -18,7 +18,7 @@ from store.message_support import (
     SENDER,
     THIRD,
     count,
-    insert_note,
+    insert_raw_note,
     seed_members,
     send_request,
 )
@@ -30,7 +30,7 @@ def store(tmp_path: Path) -> Iterator[Store]:
         with opened.write() as transaction:
             seed_members(transaction, SENDER, ADDRESSEE, THIRD)
             send_request(transaction, "req")
-            insert_note(transaction, "note", changed=NOW)
+            insert_raw_note(transaction, "note", changed=NOW)
         yield opened
 
 

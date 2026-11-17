@@ -45,6 +45,7 @@ from operations.message_support import (
     message_ids,
     open_message_store,
     rejection_rows,
+    send_note_as_sender,
 )
 from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY
@@ -540,3 +541,15 @@ def test_finishing_a_request_frees_its_slot_at_the_cap(
     _end(store, "a", RequestState.CANCELLED, deps)
 
     assert _send(store, deps, _document("c")).outcome is SendOutcome.SENT
+
+
+def test_a_parent_that_is_a_notes_id_is_parent_unknown_naming_a_note(
+    store: Store, deps: Deps
+) -> None:
+    send_note_as_sender(store, deps, "a-note")
+
+    result = _send(store, deps, _document(parent="a-note"))
+
+    assert result.rejection is RejectCode.PARENT_UNKNOWN
+    assert "note" in result.problems[0]
+    assert message_ids(store) == ["a-note"]

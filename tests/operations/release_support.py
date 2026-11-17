@@ -119,3 +119,19 @@ def database_dump(store: Store) -> list[str]:
     put into SQL here."""
     with closing(sqlite3.connect(store.path)) as connection:
         return list(connection.iterdump())
+
+
+def note_rows(store: Store) -> list[tuple[str, str, str, str, str]]:
+    """Every note as ``(message_id, from_member, to_member, subject, body)``, in the
+    order written (``rowid``; ids are random, times can tie) (slice 243)."""
+    with store.read() as transaction:
+        rows = transaction.execute(
+            "SELECT message_id, from_member, to_member, subject, body FROM messages "
+            "WHERE kind = 'note' ORDER BY rowid"
+        ).fetchall()
+    return [(str(a), str(b), str(c), str(d), str(e)) for a, b, c, d, e in rows]
+
+
+def notified(store: Store) -> list[str]:
+    """The ``to_member`` of every note, in the order the notes were written."""
+    return [row[2] for row in note_rows(store)]

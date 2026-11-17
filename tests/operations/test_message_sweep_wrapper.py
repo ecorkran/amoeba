@@ -7,14 +7,15 @@ import logging
 import sqlite3
 from collections.abc import Iterator
 from contextlib import closing
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from store.message_support import delivery_rows, seed_members
+from store.message_support import count, delivery_rows, seed_members
 
 from amoeba.operations.message_sweep import sweep_messages
 from amoeba.store.messages import get_message
+from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import RequestState
 from operations.message_support import (
@@ -113,3 +114,51 @@ def test_a_held_store_returns_the_problem_text_and_the_call_returns(
     with store.read() as transaction:
         request = get_message(transaction, "ask")
         assert request is not None and request.state is RequestState.EXPIRED
+
+
+def _write_note(store: Store, when: datetime) -> None:
+    note = NewNote("a-note", SENDER, RECIPIENT, None, "subject", "body")
+    with store.write() as transaction:
+        insert_note(transaction, note, [RECIPIENT], when)
+
+
+def _note_count(store: Store) -> int:
+    with store.read() as transaction:
+        return count(transaction, "messages")
+
+
+def test_a_store_holding_only_an_aged_note_is_swept_with_a_write(
+    store: Store, clock: SettableClock
+) -> None:
+    _write_note(store, clock.now)
+    clock.now += timedelta(days=CONFIG.prune_after_days + 1)
+
+    assert sweep_messages(store, CONFIG, clock.now) is None
+
+    assert _note_count(store) == 0
+
+
+def test_a_store_holding_only_a_young_note_opens_no_write_transaction(
+    store: Store, clock: SettableClock
+) -> None:
+    _write_note(store, clock.now)
+    clock.now += timedelta(days=CONFIG.prune_after_days - 1)
+
+    with closing(_hold_write_lock(store)):
+        assert sweep_messages(store, CONFIG, clock.now) is None
+
+    assert _note_count(store) == 1
+
+
+def test_the_expire_step_never_expires_a_note(
+    store: Store, clock: SettableClock
+) -> None:
+    _write_note(store, clock.now)
+    clock.now += TTL + timedelta(hours=1)
+
+    assert sweep_messages(store, CONFIG, clock.now) is None
+
+    with store.read() as transaction:
+        note = get_message(transaction, "a-note")
+        assert note is not None and note.state is None
+        assert [row[3] for row in delivery_rows(transaction)] == ["sent"]

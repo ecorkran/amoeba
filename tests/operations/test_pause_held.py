@@ -22,6 +22,7 @@ from amoeba.operations.pause_models import (
 )
 from amoeba.store.errors import StoreBusyError
 from amoeba.store.models import QuestionRecord
+from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.questions import get_question
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import QuestionState, RequestState
@@ -243,6 +244,24 @@ def test_a_marker_that_resolves_to_no_one_request_waits_as_unknown(
         record = _record(w)
         assert record.state is QuestionState.WAITING_ON_PM
         assert record.request_id is None
+        assert w.spawned.argvs == []
+
+
+def test_a_question_naming_a_note_the_members_own_agent_sent_waits_as_unknown(
+    tmp_path: Path,
+) -> None:
+    """243 D4: a note written by ``insert_note`` is not a request, so the marker
+    resolves to nothing even though the question's own member sent it."""
+    with world(tmp_path, paused_polls=(_pause_asking(_marked("a-note")),)) as w:
+        add_addressee(w.store)
+        note = NewNote("a-note", PROJECT_ID, ADDRESSEE, None, "subject", "body")
+        with w.store.write() as transaction:
+            insert_note(transaction, note, [ADDRESSEE], START)
+
+        result = w.handle()
+
+        _waiting(result, DeclineReason.REQUEST_UNKNOWN)
+        assert _record(w).state is QuestionState.WAITING_ON_PM
         assert w.spawned.argvs == []
 
 

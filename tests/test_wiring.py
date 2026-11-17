@@ -328,6 +328,7 @@ def test_the_report_release_document_has_the_designed_shape() -> None:
             "versioned_at": None,
         },
         "problems": [],
+        "sweep_problem": None,
     }
 
 
@@ -371,6 +372,7 @@ def _message_result(name: OperationName) -> wiring.OperationResult:
                 notice="n",
                 rejection=None,
                 request=None,
+                note=None,
                 problems=(),
             )
         case OperationName.INBOX:
@@ -382,6 +384,7 @@ def _message_result(name: OperationName) -> wiring.OperationResult:
                 since=None,
                 as_of_seq=0,
                 requests=(),
+                notes=(),
                 deliveries=(),
                 problems=(),
             )
@@ -454,6 +457,7 @@ def test_the_message_documents_are_json_with_enums_as_strings() -> None:
         "notice": "n",
         "rejection": None,
         "request": None,
+        "note": None,
         "problems": [],
     }
     assert set(listed) == {
@@ -464,6 +468,7 @@ def test_the_message_documents_are_json_with_enums_as_strings() -> None:
         "since",
         "as_of_seq",
         "requests",
+        "notes",
         "deliveries",
         "problems",
     }

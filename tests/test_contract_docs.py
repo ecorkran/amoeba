@@ -31,6 +31,7 @@ from amoeba.operations.mark_read import MarkReadOutcome
 from amoeba.operations.message_models import (
     MAX_BODY_LENGTH,
     MAX_ID_LENGTH,
+    MAX_NOTES_PER_SENDER,
     MAX_REASON_LENGTH,
     MAX_RECORDED_LENGTH,
     MAX_REJECTIONS_PER_MEMBER,
@@ -44,6 +45,10 @@ from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.release_fields import MAX_VERSION_LENGTH
+from amoeba.operations.release_notes import (
+    MAX_RELEASE_NOTE_BODY_LENGTH,
+    RELEASE_NOTE_ID_PREFIX,
+)
 from amoeba.operations.report_release_models import ReportMode, ReportOutcome
 from amoeba.operations.retract import RetractOutcome, RetractRejection
 from amoeba.operations.rm import RmRequest
@@ -373,6 +378,7 @@ def test_the_docs_state_each_retention_cap(doc: Path, start: str) -> None:
     for cap in (
         MAX_REJECTIONS_PER_MEMBER,
         MAX_REQUESTS_PER_SENDER,
+        MAX_NOTES_PER_SENDER,
         MAX_RECORDED_LENGTH,
     ):
         assert _mentions_number(paragraph, cap), (doc.name, cap)
@@ -412,3 +418,17 @@ def test_the_store_contract_states_the_request_rules() -> None:
 def test_the_number_check_does_not_take_a_prefix_for_a_number() -> None:
     assert not _mentions_number("limits 2000 and 40000", 200)
     assert _mentions_number("limits 2000 and 40000", 2000)
+
+
+def test_the_release_note_body_limit_and_id_prefix_are_stated_with_their_values() -> (
+    None
+):
+    text = CLI_CONTRACT.read_text(encoding="utf-8")
+
+    assert (
+        f"`MAX_RELEASE_NOTE_BODY_LENGTH`, {MAX_RELEASE_NOTE_BODY_LENGTH} characters"
+        in text
+    )
+    assert f"{MAX_RELEASE_NOTE_BODY_LENGTH} characters; see Release notes" in text
+    assert f"`{RELEASE_NOTE_ID_PREFIX}`" in text
+    assert RELEASE_NOTE_ID_PREFIX in STORE_CONTRACT.read_text(encoding="utf-8")

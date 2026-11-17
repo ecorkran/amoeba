@@ -1,5 +1,5 @@
-"""``inbox``: a member's requests, and what changed since a delivery number (slice 240,
-D7).
+"""``inbox``: a member's requests and notes, and what changed since a delivery number
+(slice 240, D7; slice 243, D4).
 
 One read transaction: no write, no read marker, no sweep. Every read applies
 ``effective_state``, so an open request past its expiry shows ``expired`` at once. The
@@ -21,6 +21,7 @@ from amoeba.operations.message_models import InboxOutcome, InboxRequest
 from amoeba.operations.message_results import (
     DeliveryView,
     InboxResult,
+    NoteView,
     RequestDirection,
     RequestView,
 )
@@ -29,6 +30,7 @@ from amoeba.operations.reject_codes import RejectCode, validation_problems
 from amoeba.store.deliveries import deliveries_since, highest_assigned_seq
 from amoeba.store.messages import requests_changed_since, requests_of
 from amoeba.store.models import Message
+from amoeba.store.notes import received_notes
 from amoeba.store.store import Store, Transaction
 
 __all__ = ["InboxResult", "inbox"]
@@ -78,6 +80,9 @@ def _read(
     else:
         held = requests_changed_since(transaction, member, since, now)
         deliveries = deliveries_since(transaction, member, since)
+    # Notes come through the member's own deliveries, so ``deliveries`` already holds
+    # each note's ``sent`` row when ``since`` is given.
+    notes = received_notes(transaction, member, since)
     return InboxResult(
         outcome=InboxOutcome.LISTED,
         notice=QUOTED_DATA_NOTICE,
@@ -86,6 +91,7 @@ def _read(
         since=since,
         as_of_seq=as_of_seq,
         requests=tuple(_view(message, member, now) for message in held),
+        notes=tuple(NoteView.from_message(item.note) for item in notes),
         deliveries=tuple(DeliveryView.from_delivery(item) for item in deliveries),
         problems=(),
     )

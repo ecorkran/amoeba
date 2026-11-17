@@ -18,6 +18,9 @@ _MESSAGE_COLUMNS: Final = (
     "accepted_at, created_at, state_changed_at, expires_at"
 )
 
+#: How many columns a ``messages`` select returns, for splitting a joined row.
+MESSAGE_COLUMN_COUNT: Final = len(_MESSAGE_COLUMNS.split(","))
+
 #: A new request: ``state_changed_at`` is its creation time, ``state`` is ``open``.
 INSERT_REQUEST: Final = (
     "INSERT INTO messages (message_id, kind, from_member, to_member, parent_id, "
@@ -39,6 +42,49 @@ LIVE_REQUEST: Final = f"kind = 'request' AND state NOT IN ({_TERMINAL})"
 #: A request old enough to prune; keyed on the terminal states, so a note never matches.
 PRUNABLE_REQUEST: Final = (
     f"kind = 'request' AND state IN ({_TERMINAL}) AND state_changed_at < ?"
+)
+
+#: A note, and a note old enough to prune (243 D6). Notes have no state, so the prune
+#: keys on ``created_at``. The one place the SQL spells the kind for notes. ``state IS
+#: NULL`` is true of every note (the table's ``CHECK``) and no request, and lets the
+#: due check search ``messages_state_expires`` instead of scanning the table.
+_NOTE: Final = f"kind = '{MessageKind.NOTE.value}'"
+PRUNABLE_NOTE: Final = f"{_NOTE} AND state IS NULL AND created_at < ?"
+
+# --- notes (slice 243) -----------------------------------------------------
+
+#: A new note: no state and no expiry; ``state_changed_at`` is its creation time.
+INSERT_NOTE: Final = (
+    "INSERT INTO messages (message_id, kind, from_member, to_member, to_program, "
+    "depth, subject, body, created_at, state_changed_at) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+)
+_DELIVERY_COLUMNS: Final = (
+    "delivery.seq, delivery.member_id, delivery.message_id, delivery.event, "
+    "delivery.created_at"
+)
+_QUALIFIED_MESSAGE_COLUMNS: Final = ", ".join(
+    f"message.{column.strip()}" for column in _MESSAGE_COLUMNS.split(",")
+)
+#: The notes a member has a ``sent`` delivery for after ``seq``, each with that
+#: delivery: message columns, then delivery columns. Parameters: member, seq.
+SELECT_RECEIVED_NOTES: Final = (
+    f"SELECT {_QUALIFIED_MESSAGE_COLUMNS}, {_DELIVERY_COLUMNS} "
+    "FROM deliveries AS delivery "
+    "JOIN messages AS message ON message.message_id = delivery.message_id "
+    f"WHERE message.{_NOTE} AND delivery.member_id = ? AND delivery.seq > ? "
+    "ORDER BY delivery.seq"
+)
+DELETE_PRUNABLE_NOTE_DELIVERIES: Final = (
+    "DELETE FROM deliveries WHERE message_id IN "
+    f"(SELECT message_id FROM messages WHERE {PRUNABLE_NOTE})"
+)
+DELETE_PRUNABLE_NOTES: Final = f"DELETE FROM messages WHERE {PRUNABLE_NOTE}"
+#: A sender's notes beyond its newest ones, as ids. Parameters: member, how many to
+#: keep (``LIMIT -1`` is SQLite's no limit, so the offset alone skips the kept ones).
+SELECT_NOTES_BEYOND_NEWEST_FROM: Final = (
+    f"SELECT message_id FROM messages WHERE {_NOTE} AND from_member = ? "
+    "ORDER BY created_at DESC, message_id DESC LIMIT -1 OFFSET ?"
 )
 
 # --- state changes ---------------------------------------------------------
@@ -89,7 +135,7 @@ INSERT_DELIVERY: Final = (
     "INSERT INTO deliveries (member_id, message_id, event, created_at) "
     "VALUES (?, ?, ?, ?)"
 )
-#: Select order: ``store.deliveries._delivery`` reads these positionally.
+#: Select order: ``store.deliveries.delivery_from_row`` reads these positionally.
 SELECT_DELIVERIES_SINCE: Final = (
     "SELECT seq, member_id, message_id, event, created_at FROM deliveries "
     "WHERE member_id = ? AND seq > ? ORDER BY seq"
@@ -147,11 +193,13 @@ SELECT_OLDEST_TERMINAL_FROM: Final = (
 )
 DELETE_DELIVERIES_OF: Final = "DELETE FROM deliveries WHERE message_id = ?"
 DELETE_MESSAGE: Final = "DELETE FROM messages WHERE message_id = ?"
-#: Parameters: now, request cutoff, rejection cutoff. Answers "is anything due".
+#: Parameters: now, request cutoff, note cutoff, rejection cutoff. Answers "is
+#: anything due".
 SELECT_SWEEP_DUE: Final = (
     "SELECT EXISTS (SELECT 1 FROM messages WHERE kind = 'request' "
     f"AND state = '{RequestState.OPEN.value}' AND expires_at <= ?) "
     f"OR EXISTS (SELECT 1 FROM messages WHERE {PRUNABLE_REQUEST}) "
+    f"OR EXISTS (SELECT 1 FROM messages WHERE {PRUNABLE_NOTE}) "
     "OR EXISTS (SELECT 1 FROM message_rejections WHERE created_at < ?)"
 )
 

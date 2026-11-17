@@ -11,8 +11,8 @@ dependencies:
 - 242
 interfaces: []
 dateCreated: 20261115
-dateUpdated: 20261115
-status: not_started
+dateUpdated: 20261117
+status: complete
 turns: 17
 promptTokens: 1215286
 cachedTokens: 1087634
@@ -202,6 +202,8 @@ Status: decided
 
 The sweep's prune step (240 D6) gains one statement: delete notes whose `created_at` is older than `prune_after_days`, deleting their `deliveries` first (the foreign key), in the same transaction, after the request statements. Read notes are pruned the same as unread: there is no read state.
 
+A sender also holds at most `MAX_NOTES_PER_SENDER` notes (200, as `MAX_REQUESTS_PER_SENDER` is for requests). `send` and `report_release` call one helper just before each note insert; it deletes all but the sender's newest `MAX - 1` notes, deliveries first, so one more fits. A note has no state, so the oldest always goes and nothing is refused. This bounds what `inbox` reads to the cap times the senders.
+
 The sweep's callers are 240's, plus one: `send`, `reply` and `cancel` in their write transactions, and `list`, `status`, `handle_pause` and now `report_release` through `sweep_messages`, which reads first and writes only when something is due. Its due check gains "a note older than the prune cutoff". Every write that adds a note therefore also sweeps: `send` in its transaction, and `report_release` through `sweep_messages`, so a store whose agents only run `inbox` (which writes nothing) and `report-release` still has its notes pruned, with nobody editing anything.
 
 - `report_release`'s call is made by its door wiring (`wiring_releases.place_release`), which loads the config as the other config-reading operations' wiring does, before `report_release` opens its own transaction. The operation's signature is unchanged, so 227's tests are unchanged. The sweep is due-checked, so a quiet store gains one read and no write.
@@ -281,29 +283,41 @@ The decisions above change what 240, the architecture and the plan say. The docs
 
 ### Verification Walkthrough
 
-This is the Phase 4 draft, refined when Phase 6 is complete. The note flags and the live test do not exist until the slice is built. Step 1 runs in the repo, and the rest use a throwaway home so the live store is untouched. The live test in Integration Requirements runs this flow through the real tools, and retention is shown by the unit tests.
+Verified at the end of Phase 6 (2026-11-17): step 1 in the repo, steps 2 to 6 by hand under a throwaway home and a throwaway Context Forge data directory with real `cf` and `git` (the outputs below are from that run), and steps 3, 5 and 6 again by `uv run pytest tests/live/notes`. Never run the steps against the live store or the installed `amoeba`: the installed tool is the previous build until the release skill updates it. Retention is shown by the unit tests (`tests/store/test_message_sweep.py`, `tests/test_report_release_sweep.py`).
 
 1. `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest`. Expected: all clean and passing.
-2. Set up four scratch repos in one program, with a throwaway home:
+2. Set up four scratch repos in one program, with a throwaway home and data directory, using this repo's build as `amoeba`:
    ```
-   export AMOEBA_HOME=$(mktemp -d)
-   # config.yaml in $AMOEBA_HOME from the config-contract example
+   WORK=$(mktemp -d); cd "$WORK"
+   export CONTEXT_FORGE_DATA_DIR="$WORK/cf-data" AMOEBA_HOME="$WORK/home"
+   mkdir -p "$CONTEXT_FORGE_DATA_DIR" "$AMOEBA_HOME"
+   amoeba() { /path/to/this/repo/.venv/bin/amoeba "$@"; }
+   # config.yaml: the yaml block under "## Example" in docs/config-contract.md, saved as $AMOEBA_HOME/config.yaml
    for n in prov-s src-s rel-s other-s; do mkdir $n && git -C $n init -q -b main && (cd $n && git commit -q --allow-empty -m seed && cf init --lite --name $n); done
    (cd prov-s && amoeba add --program toolchain)
    (cd src-s && amoeba add --program toolchain --depends-on prov-s:from_source)
    (cd rel-s && amoeba add --program toolchain --depends-on prov-s:from_release)
    (cd other-s && amoeba add --program toolchain)
    ```
-3. A note to the program. In `other-s`: `amoeba send --note --to-program toolchain --id n-1 --subject "Freeze on Friday" --body "Do not merge after noon."`. Expected: `sent`. In `prov-s`, `src-s` and `rel-s`: `amoeba inbox` shows the notice line, then the note from `other-s`. In `other-s`: `amoeba inbox` shows no note.
-4. Refusals, each exit 1: the same command with a changed body (`id_reused`); with `--parent n-1` (`malformed`); with `--to-program` naming no program (`unknown_recipient`). The same command unchanged is exit 0, `unchanged`, and `amoeba inbox -j --since 0` in `src-s` still shows one delivery for `n-1`. In `src-s`: `amoeba reply n-1 accept` is exit 1, `unknown_request`, saying the id is a note.
-5. A release note. In `prov-s`: `amoeba report-release --commit "$(git rev-parse HEAD)" --changed "adds the thing" --touched "the thing"`. Expected: `recorded`. `src-s`'s `inbox` shows a release note. `rel-s`'s shows none. Then the same command with `--version` and a tag name: `versioned`. `rel-s`'s `inbox` now shows a release note whose body has the commit, the version and the changed text, and `src-s` has no second note.
-6. Correct and withdraw. In `prov-s`: the same commit with `--correct` and new text: both consumers get a note. Then `amoeba report-release --commit "$(git rev-parse HEAD)" --withdraw`: both get a note saying to disregard the report.
+   Expected: each `add` exits 0.
+3. A note to the program. In `other-s`: `amoeba send --note --to-program toolchain --id n-1 --subject "Freeze on Friday" --body "Do not merge after noon."`. Expected, exit 0: the notice line, `sent: n-1`, then the note (`n-1 · from <other-s's project id> · to program toolchain · <1m`, `subject: Freeze on Friday`, `body: Do not merge after noon.`). In `prov-s`, `src-s` and `rel-s`: `amoeba inbox` prints the notice line, a `Notes` section with that note, and `as_of_seq: 3 (pass it as --since next time)`. In `other-s`: `amoeba inbox` prints `No requests.` and the same `as_of_seq` (no note: the sender has no delivery).
+4. Refusals. Each from `other-s`, with the exits shown:
+   - The same command with `--body "changed body"`: `rejected: id_reused: the id 'n-1' belongs to a different message; send this one under a new id`, exit 1.
+   - With `--parent n-1`: `rejected: malformed: document: Value error, parent is not allowed for kind note`, exit 1.
+   - With `--to-program no-such-program --id n-2`: `rejected: unknown_recipient: unknown program 'no-such-program'; known programs: toolchain`, exit 1.
+   - The first command unchanged: `unchanged: n-1`, exit 0; `amoeba inbox -j --since 0` in `src-s` still lists one delivery, `n-1` with event `sent`.
+   - In `src-s`: `amoeba reply n-1 accept`: `rejected: unknown_request: 'n-1' is a note, not a request: a note takes no reply, …` (cut to the line width in text; `-j` has it whole), exit 1.
+5. A release note. In `prov-s`, after `git commit --allow-empty -m feature` (call its hash `$C`): `amoeba report-release --commit "$C" --changed "adds the thing" --touched "the thing"`. Expected: `reported`. `src-s`'s `inbox -j` has one note with the subject `Release report recorded: $C` and an id starting `release:`; `rel-s`'s has none. Then the same command with `--version v-walk-1`: `reported` (outcome `versioned` in `-j`). `rel-s`'s `inbox` now has a note `Release report versioned: v-walk-1` whose body is the lines `A release report was versioned.`, `Commit: $C`, `Version: v-walk-1`, `Changed: adds the thing`, `Touched: the thing` and `` `changes` holds the full record. ``; `src-s` still has one release note.
+6. Correct and withdraw. In `prov-s`: the same commit with `--correct`, `--changed "new text"` and `--touched "the thing"`: both consumers get a note, `Release report corrected: v-walk-1` (two release notes in `src-s`, two in `rel-s`). Then `amoeba report-release --commit "$C" --withdraw`: both get `Release report withdrawn: v-walk-1`, whose body begins `A release report was withdrawn and is to be disregarded; do not rely on it.` and holds the commit and version and no changed text (three release notes each).
+
+Caveats found: a note's sender prints as the project id, not the name, because no message operation looks names up (240 D7); `report-release` now reads `config.yaml` for its sweep, so a missing config fails it with exit 3 like the other commands that read it; the text of a rejection is cut to 100 columns, `-j` has the whole detail.
 
 ## Risk Assessment
 
 ### Technical Risks
 - A 240 query that selects `messages` without a kind sees a note where it expects a request. D4's audit and one test per row cover it.
 - The recipient rule is calling 227's `visible_releases` at the right `since`. A wrong `since` makes the note set differ from `changes`. The matrix test (every consumed value, every outcome, compared with `changes` at the same `since` the rule uses) is the check, and its oracle is the `changes` operation, not the SQL the implementation calls.
+- Note volume inside the retention window is bounded by a per-sender cap, `MAX_NOTES_PER_SENDER` (200, as for requests): a note that would pass it first drops the sender's oldest notes with their deliveries, in the writing transaction, for both `send` and `report-release`. Nothing is refused, because a note has no state to wait on. `inbox` therefore reads at most that many notes per sender.
 
 ## Implementation Notes
 

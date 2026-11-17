@@ -28,6 +28,7 @@ __all__ = [
     "registered",
     "result_of",
     "run_amoeba",
+    "send_note",
     "send_request",
     "stored_rows",
 ]
@@ -54,6 +55,28 @@ def send_request(
         f"subject of {request_id}",
         "--body",
         f"body of {request_id}",
+        *extra,
+        as_json=as_json,
+    )
+
+
+def send_note(
+    tmp_path: Path, note_id: str, *extra: str, as_json: bool = True
+) -> subprocess.CompletedProcess[str]:
+    """``amoeba send --note`` to this checkout's own member (``--to``), or to whatever
+    ``extra`` names."""
+    recipient = () if "--to-program" in extra else ("--to", PROJECT_NAME)
+    return run_amoeba(
+        tmp_path,
+        "send",
+        "--note",
+        "--id",
+        note_id,
+        *recipient,
+        "--subject",
+        f"subject of {note_id}",
+        "--body",
+        f"body of {note_id}",
         *extra,
         as_json=as_json,
     )

@@ -1,4 +1,5 @@
-"""The tool rows of ``send``, ``inbox``, ``reply`` and ``cancel`` (slice 240, D11).
+"""The tool rows of ``send``, ``inbox``, ``reply`` and ``cancel`` (slice 240, D11; the
+note fields are slice 243).
 
 Appended to ``TOOLS``. Each description carries the quoted-data notice, and each write
 tool says what a rejection after a timeout means (the first call took effect, and
@@ -63,7 +64,10 @@ MESSAGE_TOOLS: Final = (
             "sending the same `id` with the same content again changes nothing, so a "
             f"retry is safe. `subject` (at most {MAX_SUBJECT_LENGTH} characters) and "
             f"`body` (at most {MAX_BODY_LENGTH}) say what you need; `parent` names "
-            "the request this one serves. The sender is the repo at `directory`; "
+            "the request this one serves. With `kind` `note` it sends information "
+            "instead, which needs no reply: give `to`, or `to_program` (a program id) "
+            "for every other member of that program, and no `parent`. "
+            "The sender is the repo at `directory`; "
             "from outside any repo, name it with `member`. "
             f"{QUOTED_DATA_NOTICE} {_after_timeout('send')} "
             f"{_wait(OperationName.SEND)} Same request and result as `amoeba send`."
@@ -76,9 +80,11 @@ MESSAGE_TOOLS: Final = (
         takes_directory=True,
         mode=RunMode.IN_PROCESS,
         description=(
-            "The requests the repo at `directory` has sent and received. Without "
+            "The requests the repo at `directory` has sent and received, and its "
+            "`notes`: information from other repos that needs no reply. Without "
             "`since`, every one still held. With `since`, what changed after that "
-            "delivery number: `deliveries` in order and the `requests` they concern. "
+            "delivery number: `deliveries` in order, the `requests` they concern and "
+            "the new `notes`. "
             "Keep `as_of_seq` and pass it as the next `since`. Writes nothing and "
             f"marks nothing read. {QUOTED_DATA_NOTICE} {_wait(OperationName.INBOX)} "
             "Same request and result as `amoeba inbox`."

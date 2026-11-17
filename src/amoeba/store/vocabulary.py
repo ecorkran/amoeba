@@ -70,7 +70,7 @@ class MessageKind(StrEnum):
     """What a ``messages`` row is (240 D1). Only requests are written in 240."""
 
     REQUEST = "request"
-    #: A one-way message with no state; 243 adds the writer.
+    #: A one-way message with no state, written by ``send`` and ``report_release``.
     NOTE = "note"
 
 

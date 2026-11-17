@@ -38,6 +38,7 @@ from amoeba.operations.message_results import (
 )
 from amoeba.operations.release_fields import MAX_VERSION_LENGTH
 from amoeba.store.deliveries import deliveries_since, write_delivery
+from amoeba.store.errors import StoreRowError
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, RequestState
 
@@ -267,7 +268,7 @@ def test_a_note_row_has_no_request_view(store: Store) -> None:
         message = send_request(transaction, "ask")
     note = replace(message, state=None, expires_at=None, to_member=None)
 
-    with pytest.raises(ValueError, match="not a request"):
+    with pytest.raises(StoreRowError, match="not a request"):
         RequestView.from_message(note, NOW, RequestDirection.SENT)
 
 

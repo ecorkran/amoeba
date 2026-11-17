@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -18,10 +19,13 @@ import mcp_types as types
 import pytest
 from cf_fixtures import DEFAULT_WORKTREE, write_fake_cf_with_projects
 from cli.cli_support import PROJECT_NAME, result_of, run_amoeba, write_config
+from store.seed import insert_member
 
 from amoeba.cli.exit_codes import EXIT_OK, EXIT_REJECTED
+from amoeba.config.home import store_path
 from amoeba.mcp import server
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
+from amoeba.store.store import Store
 from mcp_server.presence_rig import idle_presence
 
 #: Wall-clock fields; everything else in a result is deterministic.
@@ -59,11 +63,15 @@ def _use_home(
     home: Path,
     tmp_path: Path,
     before: Sequence[Sequence[str]],
+    seed: Callable[[], None] | None = None,
 ) -> None:
-    """A fresh Amoeba home with this repo registered and ``before`` run on the CLI."""
+    """A fresh Amoeba home with this repo registered, ``seed`` run on its store (a
+    second member, say) and ``before`` run on the CLI."""
     monkeypatch.setenv("AMOEBA_HOME", str(home))
     write_config()
     assert run_amoeba(tmp_path, "add").returncode == EXIT_OK
+    if seed is not None:
+        seed()
     for arguments in before:
         assert run_amoeba(tmp_path, *arguments).returncode == EXIT_OK
 
@@ -101,13 +109,14 @@ def _compare(
     tool: str,
     arguments: Mapping[str, object],
     exit_code: int,
+    seed: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Run ``cli`` in one fresh home and ``tool`` in another, each after ``before``,
     and return the (equal) result document."""
-    _use_home(monkeypatch, tmp_path / "home-cli", tmp_path, before)
+    _use_home(monkeypatch, tmp_path / "home-cli", tmp_path, before, seed)
     completed = run_amoeba(tmp_path, *cli, as_json=True)
     assert completed.returncode == exit_code, completed.stderr
-    _use_home(monkeypatch, tmp_path / "home-mcp", tmp_path, before)
+    _use_home(monkeypatch, tmp_path / "home-mcp", tmp_path, before, seed)
 
     document, is_error = _through_mcp(tool, {"directory": str(tmp_path), **arguments})
 
@@ -230,3 +239,97 @@ def test_a_message_tool_without_a_directory_is_an_error_naming_the_field(
         assert isinstance(block, types.TextContent)
         assert result.is_error, name
         assert "directory is required" in block.text
+
+
+# --- notes (slice 243) -------------------------------------------------------
+
+SEND_NOTE_CLI = ("send", "--note", *SEND_CLI[1:])
+SEND_NOTE_TOOL: dict[str, object] = {**SEND_TOOL, "kind": "note"}
+SECOND_MEMBER = "second-member-id"
+
+
+def _add_a_second_member() -> None:
+    """A second active member in the registered member's program, so a program note
+    has someone to reach."""
+    with Store.open(store_path()) as store, store.write() as transaction:
+        row = transaction.execute(
+            "SELECT program_id, registered_at FROM members"
+        ).fetchone()
+        assert row is not None
+        insert_member(
+            transaction,
+            project_id=SECOND_MEMBER,
+            program_id=row[0],
+            rules_paths=(),
+            authorize_allow=(),
+            authorize_deny=(),
+            registered_at=datetime.fromisoformat(row[1]),
+            updated_at=datetime.fromisoformat(row[1]),
+        )
+
+
+def _program_id() -> str:
+    with Store.open(store_path()) as store, store.read() as transaction:
+        row = transaction.execute("SELECT program_id FROM members").fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def test_a_direct_note_gives_equal_results_through_both_doors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    document = _compare(
+        tmp_path,
+        monkeypatch,
+        before=[],
+        cli=SEND_NOTE_CLI,
+        tool="send",
+        arguments=SEND_NOTE_TOOL,
+        exit_code=EXIT_OK,
+    )
+
+    assert document["outcome"] == "sent"
+    assert document["request"] is None
+    assert document["note"]["id"] == "ask-1"
+
+
+def test_a_program_note_gives_equal_results_through_both_doors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_home(monkeypatch, tmp_path / "probe", tmp_path, [])
+    program = _program_id()
+    without_to = [part for part in SEND_NOTE_CLI if part not in ("--to", PROJECT_NAME)]
+    tool_arguments = {
+        key: value for key, value in SEND_NOTE_TOOL.items() if key != "to"
+    }
+
+    document = _compare(
+        tmp_path,
+        monkeypatch,
+        before=[],
+        cli=(*without_to, "--to-program", program),
+        tool="send",
+        arguments={**tool_arguments, "to_program": program},
+        exit_code=EXIT_OK,
+        seed=_add_a_second_member,
+    )
+
+    assert document["note"]["to_program"] == program
+    assert document["note"]["to_member"] is None
+
+
+def test_an_inbox_with_notes_gives_equal_results_through_both_doors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    document = _compare(
+        tmp_path,
+        monkeypatch,
+        before=[SEND_NOTE_CLI],
+        cli=("inbox", "--since", "0"),
+        tool="inbox",
+        arguments={"since": 0},
+        exit_code=EXIT_OK,
+    )
+
+    assert [note["id"] for note in document["notes"]] == ["ask-1"]
+    assert document["requests"] == []

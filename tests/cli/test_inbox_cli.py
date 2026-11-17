@@ -11,6 +11,7 @@ from cli.message_cli_support import (
     registered,
     result_of,
     run_amoeba,
+    send_note,
     send_request,
 )
 
@@ -131,3 +132,52 @@ def test_a_cf_failure_is_exit_three(tmp_path: Path) -> None:
 
     assert completed.returncode == EXIT_ERROR
     assert completed.stderr.startswith("error: ContextForgeError")
+
+
+def test_notes_are_in_the_document_under_notes_and_not_among_the_requests(
+    tmp_path: Path,
+) -> None:
+    registered(tmp_path)
+    send_note(tmp_path, "news-1")
+
+    result = result_of(run_amoeba(tmp_path, "inbox", as_json=True))
+
+    assert [note["id"] for note in result["notes"]] == ["news-1"]
+    assert result["requests"] == []
+    assert result["notice"] == QUOTED_DATA_NOTICE
+
+
+def test_the_text_has_a_notes_section_below_the_notice(tmp_path: Path) -> None:
+    registered(tmp_path)
+    send_note(tmp_path, "news-1")
+
+    completed = run_amoeba(tmp_path, "inbox")
+
+    lines = completed.stdout.splitlines()
+    assert lines[0] == QUOTED_DATA_NOTICE
+    assert lines[1] == "Notes"
+    assert "news-1" in lines[2] and f"from {PROJECT_ID}" in lines[2]
+    assert "subject: subject of news-1" in completed.stdout
+    assert "body: body of news-1" in completed.stdout
+    assert "No requests." not in completed.stdout
+    assert lines[-1] == "as_of_seq: 1 (pass it as --since next time)"
+
+
+def test_a_note_cut_in_the_text_points_to_the_whole_in_json(tmp_path: Path) -> None:
+    registered(tmp_path)
+    long_body = " ".join(["word"] * 60)
+    send_note(tmp_path, "news-1", "--body", long_body)
+
+    cut = run_amoeba(tmp_path, "inbox").stdout
+    whole = result_of(run_amoeba(tmp_path, "inbox", as_json=True))
+
+    assert "A note cut with … is whole in:" in cut
+    assert cut.splitlines()[-2].strip() == "amoeba inbox -j"
+    assert whole["notes"][0]["body"] == long_body
+
+
+def test_notes_that_fit_the_line_have_no_pointer(tmp_path: Path) -> None:
+    registered(tmp_path)
+    send_note(tmp_path, "news-1")
+
+    assert "cut with" not in run_amoeba(tmp_path, "inbox").stdout

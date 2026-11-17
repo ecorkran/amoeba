@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from amoeba.store import sql
 from amoeba.store.errors import StoreIntegrityError
 from amoeba.store.models import DependencyPair, MemberSettings
 from amoeba.store.programs import (
@@ -18,10 +19,12 @@ from amoeba.store.programs import (
     member_settings,
     members_of,
     pairs_of,
+    pairs_provided_by,
     upsert_member,
     upsert_pair,
     upsert_program,
 )
+from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ConsumedMode, RulesFrom
 from store.seed import insert_member, insert_pair, insert_program
@@ -326,3 +329,77 @@ def test_seeded_state_reads_back_through_programs(store: Store) -> None:
     assert [(pair.provider_id, pair.consumer_id) for pair in pairs] == [
         ("provider", "consumer")
     ]
+
+
+def _seed_provider_graph(store: Store) -> None:
+    """Two providers; ``prov`` has consumers ``cons-b`` and ``cons-a`` of different
+    ``consumed`` modes, ``other-prov`` has ``cons-a``."""
+    with store.write() as transaction:
+        insert_program(
+            transaction,
+            program_id="demo",
+            concept_member=None,
+            concept_path=None,
+            registered_at=FIRST,
+            updated_at=FIRST,
+        )
+        for member in ("prov", "other-prov", "cons-a", "cons-b", "lonely"):
+            insert_member(
+                transaction,
+                project_id=member,
+                program_id="demo",
+                rules_paths=(),
+                authorize_allow=(),
+                authorize_deny=(),
+                registered_at=FIRST,
+                updated_at=FIRST,
+            )
+        for provider, consumer, mode in (
+            ("prov", "cons-b", ConsumedMode.FROM_SOURCE),
+            ("prov", "cons-a", ConsumedMode.FROM_RELEASE),
+            ("other-prov", "cons-a", ConsumedMode.FROM_SOURCE),
+        ):
+            insert_pair(
+                transaction,
+                program_id="demo",
+                provider_id=provider,
+                consumer_id=consumer,
+                consumed=mode,
+                registered_at=FIRST,
+                updated_at=FIRST,
+            )
+
+
+def test_pairs_provided_by_returns_the_providers_pairs_ordered_by_consumer(
+    store: Store,
+) -> None:
+    _seed_provider_graph(store)
+    with store.read() as transaction:
+        pairs = pairs_provided_by(transaction, "prov")
+    assert [(pair.consumer_id, pair.consumed) for pair in pairs] == [
+        ("cons-a", ConsumedMode.FROM_RELEASE),
+        ("cons-b", ConsumedMode.FROM_SOURCE),
+    ]
+    assert {pair.provider_id for pair in pairs} == {"prov"}
+
+
+def test_pairs_provided_by_skips_a_removed_consumer_or_provider(store: Store) -> None:
+    _seed_provider_graph(store)
+    stamp = encode_timestamp(LATER)
+    with store.write() as transaction:
+        # Only the member row: the active-end rule alone must hide the pair.
+        transaction.execute(sql.REMOVE_MEMBER, (stamp, stamp, "cons-b"))
+    with store.read() as transaction:
+        remaining = [p.consumer_id for p in pairs_provided_by(transaction, "prov")]
+    assert remaining == ["cons-a"]
+    with store.write() as transaction:
+        transaction.execute(sql.REMOVE_MEMBER, (stamp, stamp, "other-prov"))
+    with store.read() as transaction:
+        assert pairs_provided_by(transaction, "other-prov") == ()
+
+
+def test_a_provider_with_no_consumers_has_no_pairs(store: Store) -> None:
+    _seed_provider_graph(store)
+    with store.read() as transaction:
+        assert pairs_provided_by(transaction, "lonely") == ()
+        assert pairs_provided_by(transaction, "cons-a") == ()

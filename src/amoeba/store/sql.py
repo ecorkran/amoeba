@@ -145,6 +145,10 @@ SELECT_PAIRS_CONSUMED_BY: Final = (
     f"SELECT {_PAIR_COLUMNS} FROM dependency_pairs WHERE consumer_id = ? "
     f"AND {_PAIR_ENDS_ACTIVE} ORDER BY provider_id"
 )
+SELECT_PAIRS_PROVIDED_BY: Final = (
+    f"SELECT {_PAIR_COLUMNS} FROM dependency_pairs WHERE provider_id = ? "
+    f"AND {_PAIR_ENDS_ACTIVE} ORDER BY consumer_id"
+)
 SELECT_PAIR: Final = (
     f"SELECT {_PAIR_COLUMNS} FROM dependency_pairs "
     f"WHERE provider_id = ? AND consumer_id = ? AND {_PAIR_ENDS_ACTIVE}"

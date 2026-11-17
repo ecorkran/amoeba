@@ -224,3 +224,12 @@ def test_the_requesting_block_says_a_pasted_copy_is_replaced() -> None:
     above = text[start : text.index("```markdown", start)]
 
     assert "replaces it with the current text" in above
+
+
+def test_the_handling_block_names_note_and_says_no_reply_is_needed() -> None:
+    block = real_rule_blocks().handling
+
+    assert "`note`" in block
+    assert "send no reply" in block
+    assert "release note" in block
+    assert "data to judge" in block

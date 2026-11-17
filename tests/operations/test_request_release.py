@@ -26,7 +26,7 @@ from amoeba.operations.request_release import (
     START_FAILED_OUTCOME,
     start_ended_held,
 )
-from amoeba.store.errors import StoreBusyError
+from amoeba.store.errors import StoreBusyError, StoreRowError
 from amoeba.store.held_questions import mark_start_attempted
 from amoeba.store.models import QuestionKey, QuestionRecord
 from amoeba.store.questions import get_question
@@ -284,8 +284,9 @@ def test_a_held_row_naming_a_note_is_a_logged_row_error_not_a_silent_skip(
 ) -> None:
     _held(store, 1, RequestState.DONE)
 
-    def a_note(*_arguments: object) -> None:
+    def a_note(*_arguments: object) -> RequestState:
         """A note has no state; ``link_for`` never holds a question on one."""
+        raise StoreRowError("message 'n' is a note, not a request")
 
     monkeypatch.setattr(request_release, "effective_state", a_note)
     rig = _rig(tmp_path, store)
@@ -294,4 +295,4 @@ def test_a_held_row_naming_a_note_is_a_logged_row_error_not_a_silent_skip(
         start_ended_held(store, CONFIG, rig.deps)
 
     assert rig.spawner.calls == []
-    assert "names a note" in caplog.text
+    assert "is a note" in caplog.text
