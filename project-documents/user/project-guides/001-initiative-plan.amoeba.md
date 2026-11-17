@@ -46,7 +46,7 @@ Splitting it again (say, questions in one initiative and programs in another) wo
    - **Scenario A switched on 2026-11-12** (hook live at user level, `trading` program registered, sanity pass clean). The counted trial and verdict were dropped as needing PM-driven work; evidence comes from normal use of `amoeba decisions` and `amoeba status`.
 
    Out of scope: launching member pipelines, notification mechanics, chat, and any check on an answer that could be a Squadron step. Dependencies: [100, 120, 140]. Status: not_started
-8. [ ] **(240) Agent Messaging** — Messages between agents in different repos, for any agent and any UI, not only Claude Code sessions. Scenario D: one repo needs another to build something (squadron needs context-forge, which needs ai-project-guide). Architecture: `240-arch.agent-messaging.md`. Scope:
+8. [x] **(240) Agent Messaging** — Messages between agents in different repos, for any agent and any UI, not only Claude Code sessions. Scenario D: one repo needs another to build something (squadron needs context-forge, which needs ai-project-guide). Architecture: `240-arch.agent-messaging.md`. Scope:
    - **Durable messages** in the Amoeba store, addressed to a member repo or a program. Requests have states with an exit for each (open, accepted, done, declined, cancelled, expired), and notes are information only.
    - **Chains** as parent links between requests, shown but never walked, with a depth limit.
    - **Delivery by polling** at moments named in each repo's rules file, the floor for every agent. **Push** from `amoeba-mcp` on top: Claude Code channel events, plus a standard MCP resource update for clients that act on it. Also session presence.

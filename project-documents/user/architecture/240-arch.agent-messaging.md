@@ -12,8 +12,8 @@ riskLevel: medium
 audience: [human, ai]
 description: Architecture for messages between agents in different repos, for any agent and any UI. Messages are durable rows in the Amoeba store. Requests go to a member repo, and notes go to a member or a whole program. Every agent polls its repo's inbox at moments named in its rules file. Amoeba's MCP server also pushes new mail to clients that act on it. A run paused on a request resumes when the request is done, and a repo nobody is working in can be woken by a configured command. Revised 20261114 from the first architecture review.
 dateCreated: 20261114
-dateUpdated: 20261116
-status: in_progress
+dateUpdated: 20261117
+status: complete
 ---
 
 # Architecture: Agent Messaging
