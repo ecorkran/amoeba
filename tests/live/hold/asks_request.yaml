@@ -1,0 +1,28 @@
+# A pipeline whose one step ends on a question held on a request (slice 242, D1, D5).
+# The question asks what this repository should do now that the request it sent is
+# finished, which only the request's result can settle (the repository's rules do
+# not). Its last line is the marker: `amoeba-request: ` and the id the harness gives
+# as the `request` parameter, so the id is never written in this file.
+#
+# Squadron pauses a step as `agent_question` when the step declares an artifact, none
+# is written and the agent's reply has a line ending in a question mark (Squadron
+# #249).
+name: asks-request
+description: Stop on a question that waits on a request
+
+params:
+  model: required
+  request: required
+
+steps:
+  - dispatch:
+      name: ask
+      model: "{model}"
+      artifact: design
+      prompt: |
+        Do not edit any file and do not run any command. Reply with exactly the two
+        lines between the markers and no other words.
+        <<<
+        Now that the request for the release-notes section of the shared guide is finished, what should this repository do next?
+        amoeba-request: {request}
+        >>>

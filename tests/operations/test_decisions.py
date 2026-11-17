@@ -20,9 +20,19 @@ from store.decision_support import (
     seed_programs,
     waiting_then_pm,
 )
-from store.question_support import ANSWERING_RUN, claimed_question
+from store.question_support import (
+    ANSWERING_RUN,
+    PASSAGE,
+    claimed_question,
+    insert_held_row,
+)
 
-from amoeba.answering.values import AnsweredBy, AnsweringEvidence, DeclineReason
+from amoeba.answering.values import (
+    AnsweredBy,
+    AnsweringEvidence,
+    DeclineReason,
+    PassageRef,
+)
 from amoeba.operations.decisions import (
     DecisionsOutcome,
     DecisionsResult,
@@ -30,9 +40,11 @@ from amoeba.operations.decisions import (
 )
 from amoeba.operations.decisions_models import AnswererBasis, PmBasis
 from amoeba.operations.members import ContextForgeError
+from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.store.answers import Settled, add_pm_answer, record_resume, settle_answered
 from amoeba.store.decisions import advance_marker
+from amoeba.store.held_questions import claim_held
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
@@ -295,3 +307,72 @@ def test_citations_stored_as_written_are_matched_as_the_gate_read_them(
 
     assert isinstance(record.based_on, AnswererBasis)
     assert [passage.id for passage in record.based_on.cited] == ["r1"]
+
+
+HELD = QuestionKey("run-held", "2026-11-10T09:00:00+00:00")
+HELD_REQUEST = "request-held"
+REQUEST_PASSAGE = PassageRef(id="P4", source=HELD_REQUEST, question_id=None, date=at(4))
+
+
+def _answered_held(store: Store) -> int:
+    """A question held on ``HELD_REQUEST``, claimed with the request's passage and
+    answered citing it, then resumed (slice 242, D5)."""
+    with store.write() as transaction:
+        insert_held_row(transaction, HELD, member_id=CORE, request_id=HELD_REQUEST)
+        assert claim_held(
+            transaction,
+            HELD,
+            answering_run_id=ANSWERING_RUN,
+            passages=(PASSAGE, REQUEST_PASSAGE),
+            slice_label="242 hold-and-release",
+            source_commit="abc123",
+            now=at(4),
+        )
+    settled = settle_answered(
+        store,
+        HELD,
+        ANSWERING_RUN,
+        answer="The guide now says 300 lines.",
+        cited=("P4",),
+        evidence=AnsweringEvidence(verdict="yes", reason="the result says so"),
+        gate=lambda _prior: None,
+        now=at(5),
+    )
+    assert isinstance(settled, Settled)
+    with store.write() as transaction:
+        record_resume(
+            transaction,
+            settled.answer_seq,
+            ResumeOutcome.RESUMED,
+            detail=None,
+            log=None,
+            at=at(6),
+        )
+    return settled.answer_seq
+
+
+def test_an_answered_held_question_shows_its_request_citation_check_and_resume(
+    store: Store, tmp_path: Path
+) -> None:
+    seq = _answered_held(store)
+
+    result = _run(store, tmp_path)
+
+    (record,) = result.records
+    assert record.seq == seq
+    assert record.request_id == HELD_REQUEST
+    assert isinstance(record.based_on, AnswererBasis)
+    (cited,) = record.based_on.cited
+    assert (cited.id, cited.source, cited.kind) == ("P4", HELD_REQUEST, None)
+    assert record.based_on.check_verdict == "yes"
+    assert record.resume.outcome is ResumeOutcome.RESUMED
+    assert result.notice == QUOTED_DATA_NOTICE
+
+
+def test_an_ordinary_answer_has_no_request_id_and_no_notice(
+    store: Store, tmp_path: Path, seqs: list[int]
+) -> None:
+    result = _run(store, tmp_path)
+
+    assert [record.request_id for record in result.records] == [None, None, None]
+    assert result.notice is None

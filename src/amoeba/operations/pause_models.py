@@ -48,6 +48,8 @@ class HandlePauseOutcome(StrEnum):
     RESUMED = "resumed"
     REFUSED = "refused"
     NOT_DELIVERED = "not_delivered"
+    #: The question is held on a request that has not ended (242 D4); exit 0.
+    HELD = "held"
 
 
 @dataclass(frozen=True)
@@ -66,3 +68,5 @@ class HandlePauseResult:
     checkout: str | None = None
     answering_run_id: str | None = None
     answer_seq: int | None = None
+    #: The request a held question waits on, or came from (242 D10).
+    request_id: str | None = None

@@ -129,6 +129,10 @@ class QuestionRecord:
     #: The dismissal reason, or the run's outcome when the sweep closed it.
     closed_detail: str | None
     closed_at: datetime | None
+    #: The request a held question waits on (242 D2); kept through later states.
+    request_id: str | None
+    #: When ``start_ended_held`` last started ``handle_pause`` for the held row.
+    start_attempted_at: datetime | None
 
 
 @dataclass(frozen=True)

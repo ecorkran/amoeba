@@ -49,4 +49,6 @@ def question_from_row(row: Sequence[object]) -> QuestionRecord:
         ),
         closed_detail=optional_text(row[16], "questions.closed_detail"),
         closed_at=optional_timestamp(row[17], "questions.closed_at"),
+        request_id=optional_text(row[18], "questions.request_id"),
+        start_attempted_at=optional_timestamp(row[19], "questions.start_attempted_at"),
     )

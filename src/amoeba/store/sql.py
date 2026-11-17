@@ -222,7 +222,7 @@ VALUES (?, ?, ?, ?, ?, ?)
 QUESTION_COLUMNS: Final = """run_id, paused_at, member_id, question, checkout, state,
     answering_run_id, waiting_reason, waiting_detail, slice_label, source_commit,
     passages, evidence, claimed_at, updated_at, closed_reason, closed_detail,
-    closed_at"""
+    closed_at, request_id, start_attempted_at"""
 SELECT_QUESTION: Final = (
     f"SELECT {QUESTION_COLUMNS} FROM questions WHERE run_id = ? AND paused_at = ?"
 )
@@ -273,11 +273,11 @@ UPDATE questions SET state = ?, closed_reason = ?, closed_detail = ?,
     closed_at = ?, updated_at = ?
 WHERE run_id = ? AND paused_at = ? AND state = ? AND updated_at = ?
 """
-# A question is open when it is claimed or waiting on the PM, or answered with its
-# latest answer unresumed (resume outcome null or refused). Parameters: claimed,
-# waiting_on_pm, answered, refused.
+# A question is open when it is claimed, waiting on the PM or held on a request, or
+# answered with its latest answer unresumed (resume outcome null or refused).
+# Parameters: claimed, waiting_on_pm, waiting_on_request, answered, refused.
 _OPEN_QUESTION_CLAUSE: Final = """(
-    questions.state IN (?, ?)
+    questions.state IN (?, ?, ?)
     OR (questions.state = ?
         AND EXISTS (
             SELECT 1 FROM answers AS latest

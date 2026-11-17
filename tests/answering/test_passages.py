@@ -30,6 +30,7 @@ from amoeba.answering.passages import (
     render_passages,
     select_plan_files,
 )
+from amoeba.answering.request_passage import request_passage
 
 SOURCES = Path(__file__).parent / "fixtures" / "sources"
 
@@ -422,3 +423,51 @@ def test_unknown_ids_are_reported_once_each_in_cited_order() -> None:
     result = check_citations(["P9", "P3", "p7", "P9"], {"P3"})
 
     assert result == CitationProblem(CitationKind.UNKNOWN_IDS, ("P9", "P7"))
+
+
+# The request passage (slice 242, D5)
+
+REQUEST = request_passage(
+    "guide-change", "context-forge", FIXED, "The rule is added.", "abc1234", "v1.2"
+)
+
+
+def _assemble_with_request(
+    answers: list[PmAnswer], max_chars: int = 100_000
+) -> PassageSet | SourcesProblem:
+    committed = (
+        _file("r.md", "# A\none\n## B\ntwo\n"),
+        _file("p.md", "plan\n", PassageKind.PLAN),
+    )
+    return assemble(
+        committed, answers, program_sources=PROGRAM, max_chars=max_chars,
+        source_commit="c0ffee", request=REQUEST,
+    )  # fmt: skip
+
+
+def test_the_request_passage_follows_the_program_passages() -> None:
+    result = _set(_assemble_with_request([_pm("q1", SLICE, 1)]))
+
+    assert [(p.id, p.kind) for p in result.passages[LEADING_PASSAGES:]] == [
+        ("P6", PassageKind.REQUEST_RESULT),
+        ("P7", PassageKind.PM_ANSWER),
+    ]
+    assert result.passages[LEADING_PASSAGES].source == "guide-change"
+
+
+def test_the_request_passage_survives_when_pm_answers_are_trimmed() -> None:
+    no_answers = len(render_passages(_set(_assemble_with_request([]))))
+
+    result = _set(_assemble_with_request([_pm("q1", SLICE, 1)], no_answers + 1))
+
+    assert result.dropped_pm_answers == ("q1",)
+    assert result.passages[-1].kind is PassageKind.REQUEST_RESULT
+
+
+def test_a_set_too_large_with_the_request_passage_is_sources_too_large() -> None:
+    without = len(render_passages(_set(_assemble([]))))
+
+    result = _assemble_with_request([], without + 1)
+
+    assert isinstance(result, SourcesProblem)
+    assert result.kind is SourcesProblemKind.TOO_LARGE

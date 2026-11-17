@@ -181,7 +181,9 @@ def _judge(  # noqa: PLR0913 - one row of the D4 table and its outputs
     undelivered: list[UndeliveredAnswer],
 ) -> None:
     match row.state:
-        case QuestionState.WAITING_ON_PM:
+        # A held question has no claim to wait for, so it closes as a waiting one
+        # does (242 D8).
+        case QuestionState.WAITING_ON_PM | QuestionState.WAITING_ON_REQUEST:
             _close(transaction, row, fate, now, closed)
         case QuestionState.CLAIMED:
             # A young claim is left alone: its answering run may still settle.

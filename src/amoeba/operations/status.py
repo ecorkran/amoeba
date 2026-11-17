@@ -28,6 +28,7 @@ from amoeba.operations.members import (
     resolve_member,
 )
 from amoeba.operations.message_sweep import sweep_messages
+from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.question_sweep_scope import sweep_scope
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import (
@@ -46,7 +47,11 @@ from amoeba.operations.status_models import (
 )
 from amoeba.operations.status_placement import place_runs, scratch_roots
 from amoeba.operations.status_requests import MemberMessages, read_member_messages
-from amoeba.operations.status_runs import MemberRun, classify_runs
+from amoeba.operations.status_runs import (
+    MemberRun,
+    classify_runs,
+    held_request_states,
+)
 from amoeba.operations.status_sessions import read_member_sessions
 from amoeba.operations.status_waiting import MemberWaiting, waiting_entries
 from amoeba.store.errors import StoreRowError
@@ -162,6 +167,7 @@ def status(
     with store.read() as transaction:
         candidates = sweep_candidates(transaction, list(members))
         rows = latest_rows_by_run(transaction, list(members))
+        requests = held_request_states(transaction, rows, deps.clock())
     listed = deps.list_runs()
     if isinstance(listed, RunListProblem):
         raise SquadronError(
@@ -178,6 +184,7 @@ def status(
     runs = classify_runs(
         placement.placed,
         rows,
+        requests,
         deps.squadron_runs_dir,
         config.answering_wait_seconds,
         deps.clock(),
@@ -203,7 +210,9 @@ def status(
     pruned = deps.prune(store, now=deps.clock(), after_days=config.prune_after_days)
     return StatusResult(
         outcome=StatusOutcome.LISTED,
-        notice=QUOTED_DATA_NOTICE if _shows_message_text(messages) else None,
+        notice=QUOTED_DATA_NOTICE
+        if _shows_others_text(messages, runs, waiting)
+        else None,
         programs=tuple(
             _program_status(entry, names, runs, waiting, messages, sessions)
             for entry in scope
@@ -221,9 +230,18 @@ def _joined(*problems: str | None) -> str | None:
     return "; ".join(found) if found else None
 
 
-def _shows_message_text(messages: dict[str, MemberMessages]) -> bool:
-    """Whether any member shows a request or a rejected call (other agents' text)."""
-    return any(item.requests or item.rejected_calls for item in messages.values())
+def _shows_others_text(
+    messages: dict[str, MemberMessages],
+    runs: list[MemberRun],
+    waiting: list[MemberWaiting],
+) -> bool:
+    """Whether any entry shown came from another agent: a request, a rejected call,
+    a held run, or a waiting entry whose reason is its request's (242 D9)."""
+    if any(item.requests or item.rejected_calls for item in messages.values()):
+        return True
+    if any(item.entry.pause is PauseClass.WAITING_ON_REQUEST for item in runs):
+        return True
+    return any(item.entry.request_id is not None for item in waiting)
 
 
 def _rejected(code: RejectCode, problems: tuple[str, ...]) -> StatusResult:

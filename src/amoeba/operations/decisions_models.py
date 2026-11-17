@@ -87,6 +87,8 @@ class DecisionsRecord(_Model):
     #: but is no longer precedent.
     retracted_at: datetime | None
     retract_reason: str | None
+    #: The request a held question waited on (242 D9); null for any other question.
+    request_id: str | None = None
 
 
 class DecisionsOutcome(StrEnum):
@@ -99,6 +101,9 @@ class DecisionsResult(_Model):
 
     outcome: DecisionsOutcome
     rejection: RejectCode | None = None
+    #: The quoted-data notice when any record came from a request, whose result,
+    #: reason and cited passage are another repo's text (240 D11, 242 D9); else null.
+    notice: str | None = None
     records: tuple[DecisionsRecord, ...] = ()
     #: The last listed ``seq``, only when the listing started at the marker, was not
     #: narrowed and is not empty: what ``mark_read`` may safely be given.

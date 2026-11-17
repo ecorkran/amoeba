@@ -18,6 +18,7 @@ from amoeba.operations.answering_run import Claim, scratch_path
 from amoeba.operations.answering_settle import Superseded, settle
 from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
 from amoeba.store.answers import Settled, add_pm_answer, answers_of, record_resume
+from amoeba.store.held_questions import claim_held
 from amoeba.store.models import AnswerRecord, QuestionRecord
 from amoeba.store.questions import (
     NewQuestion,
@@ -26,7 +27,7 @@ from amoeba.store.questions import (
     settle_answered,
     settle_waiting,
 )
-from amoeba.store.vocabulary import QuestionState, ResumeOutcome
+from amoeba.store.vocabulary import QuestionState, RequestState, ResumeOutcome
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.run_outcome import (
     PollFailure,
@@ -45,6 +46,13 @@ from operations.handle_rig import (
     QUESTION,
     World,
     world,
+)
+from operations.held_support import (
+    REQUEST_ID,
+    RESULT,
+    add_addressee,
+    hold,
+    seed_request,
 )
 from operations.pause_support import START
 
@@ -380,3 +388,75 @@ def test_an_unreadable_answering_run_raises_and_writes_nothing(tmp_path: Path) -
             w.handle()
 
         assert _record(w).state is QuestionState.CLAIMED
+
+
+# Slice 242, 4.3: a dead claim that came from a held question
+
+
+def _held_claim_row(w: World, *, age_seconds: float) -> None:
+    """A held question claimed ``age_seconds`` ago under ``OLD_RUN``."""
+    claimed_at = START - timedelta(seconds=age_seconds)
+    hold(w, now=claimed_at)
+    with w.store.write() as transaction:
+        assert claim_held(
+            transaction,
+            KEY,
+            answering_run_id=OLD_RUN,
+            passages=(replace(PASSAGE, id="P1"),),
+            slice_label="none",
+            source_commit="abc123",
+            now=claimed_at,
+        )
+
+
+def _not_found_only_for_the_old_run(run_id: str) -> RunPoll:
+    outcome = RunOutcome.NOT_FOUND if run_id == OLD_RUN else RunOutcome.COMPLETED
+    return _ended(outcome, run_id)
+
+
+def test_a_dead_held_claim_restarts_with_its_request_passage(tmp_path: Path) -> None:
+    with world(tmp_path, answering_poll=_not_found_only_for_the_old_run) as w:
+        add_addressee(w.store)
+        seed_request(w.store, RequestState.DONE)
+        _held_claim_row(w, age_seconds=WAIT * 2)
+
+        result = w.handle()
+
+        assert result.outcome is HandlePauseOutcome.RESUMED, result
+        assert result.request_id == REQUEST_ID
+        record = _record(w)
+        assert record.answering_run_id not in (None, OLD_RUN)
+        assert record.request_id == REQUEST_ID
+        scratch = scratch_path(w.deps.answering_dir, str(record.answering_run_id))
+        passages = (scratch / "passages.md").read_text(encoding="utf-8")
+        assert "kind: request_result" in passages
+        assert RESULT in passages
+
+
+def test_a_dead_held_claim_whose_request_was_pruned_waits_as_request_unknown(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path, answering_poll=_not_found_only_for_the_old_run) as w:
+        _held_claim_row(w, age_seconds=WAIT * 2)
+
+        result = w.handle()
+
+        assert result.outcome is HandlePauseOutcome.WAITING_ON_PM, result
+        assert result.waiting_reason is DeclineReason.REQUEST_UNKNOWN
+        assert w.spawned.argvs == []
+        record = _record(w)
+        assert record.state is QuestionState.WAITING_ON_PM
+        assert record.waiting_reason is DeclineReason.REQUEST_UNKNOWN
+
+
+def test_a_young_held_claim_is_already_claimed(tmp_path: Path) -> None:
+    with world(tmp_path, answering_poll=_not_found_only_for_the_old_run) as w:
+        add_addressee(w.store)
+        seed_request(w.store, RequestState.DONE)
+        _held_claim_row(w, age_seconds=WAIT / 2)
+
+        result = w.handle()
+
+        assert result.outcome is HandlePauseOutcome.SKIPPED
+        assert result.skip_reason is SkipReason.ALREADY_CLAIMED
+        assert w.spawned.argvs == []

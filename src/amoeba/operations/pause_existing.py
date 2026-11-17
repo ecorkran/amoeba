@@ -22,6 +22,7 @@ from amoeba.operations.deps import Deps
 from amoeba.operations.member_answering import answering_for
 from amoeba.operations.pause_claim import restart_dead_claim
 from amoeba.operations.pause_class import PauseClass
+from amoeba.operations.pause_held import handle_held
 from amoeba.operations.pause_models import HandlePauseResult, SkipReason
 from amoeba.operations.pause_results import (
     PauseTarget,
@@ -87,6 +88,8 @@ def handle_existing(  # noqa: PLR0913 - the pieces of one classified pause
                 checkout,
                 None if reason is None else str(reason),
             )
+        case PauseClass.WAITING_ON_REQUEST:
+            return handle_held(store, config, deps, target, existing)
         case PauseClass.CLAIM_LIVE | PauseClass.CLAIM_STALE:
             old = pause_class is PauseClass.CLAIM_STALE
             return _claimed(store, config, deps, target, existing, old=old)
@@ -128,7 +131,9 @@ def _claimed(  # noqa: PLR0913 - the pieces of one D7 row
     if polled.outcome is RunOutcome.NOT_FOUND:
         if not old:
             return skipped(SkipReason.ALREADY_CLAIMED, target.key, str(target.checkout))
-        return restart_dead_claim(store, config, deps, target, answering_run_id)
+        return restart_dead_claim(
+            store, config, deps, target, answering_run_id, existing.request_id
+        )
     raise SquadronError(
         f"answering run {answering_run_id} reads as {polled.outcome.value}"
     )

@@ -18,6 +18,7 @@ from functools import partial
 from pathlib import Path
 from typing import Final
 
+from amoeba.amoeba_script import resolve_amoeba_script
 from amoeba.operations.processes import Spawner, start_child
 from amoeba.operations.prune_models import Prune
 from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
@@ -65,6 +66,9 @@ class Deps:
     list_runs: ListRuns
     #: Removes settled scratch and logs past ``prune_after_days`` (228 D9).
     prune: Prune
+    #: The installed ``amoeba`` script, for detached ``handle-pause`` starts (242 D7);
+    #: raises ``AmoebaScriptMissing``.
+    amoeba_script: Callable[[], Path]
 
 
 def _utc_now() -> datetime:
@@ -95,4 +99,5 @@ def production_deps(
         project_names=partial(project_names, subprocess.run),
         list_runs=partial(list_runs, timeout_seconds=RUN_POLL_TIMEOUT_SECONDS),
         prune=prune,
+        amoeba_script=resolve_amoeba_script,
     )

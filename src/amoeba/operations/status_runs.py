@@ -29,8 +29,10 @@ from amoeba.operations.status_models import (
 )
 from amoeba.operations.status_placement import PlacedRun
 from amoeba.store.errors import StoreRowError
+from amoeba.store.messages import effective_state, get_message
 from amoeba.store.models import AnswerRecord, QuestionRecord
-from amoeba.store.vocabulary import QuestionState
+from amoeba.store.store import Transaction
+from amoeba.store.vocabulary import QuestionState, RequestState
 from amoeba.upstream.squadron.run_file import RunFacts, RunFileProblem, read_run_facts
 from amoeba.upstream.squadron.run_list import ListedCheckpoint, ListedRun
 from amoeba.upstream.squadron.run_outcome import UnknownKind, parse_checkpoint_kind
@@ -48,8 +50,14 @@ HANDLED_BY_HANDLE_PAUSE = frozenset(
 #: Latest question row and its latest answer, by run id (``latest_rows_by_run``).
 type LatestRows = Mapping[str, tuple[QuestionRecord, AnswerRecord | None]]
 
+#: The effective state of each held question's request, by request id; ``None`` when
+#: the store no longer holds it (242 D9).
+type RequestStates = Mapping[str, RequestState | None]
+
 #: What an answer's resume outcome reads as before any attempt.
 _NOT_ATTEMPTED = "not attempted"
+#: How a held question's request reads when the store no longer holds it.
+_REQUEST_GONE = "gone"
 
 
 @dataclass(frozen=True)
@@ -60,9 +68,35 @@ class MemberRun:
     entry: RunEntry
 
 
+def held_request_states(
+    transaction: Transaction, rows: LatestRows, now: datetime
+) -> dict[str, RequestState | None]:
+    """The effective state of the request of each held row in ``rows``.
+
+    Raises:
+        StoreRowError: A held row has no ``request_id``, or names a note.
+    """
+    states: dict[str, RequestState | None] = {}
+    for row, _answer in rows.values():
+        if row.state is not QuestionState.WAITING_ON_REQUEST:
+            continue
+        if row.request_id is None:
+            raise StoreRowError(f"held question {row.key} has no request_id")
+        message = get_message(transaction, row.request_id)
+        if message is None:
+            states[row.request_id] = None
+            continue
+        state = effective_state(message, now)
+        if state is None:
+            raise StoreRowError(f"held question {row.key} names a note")
+        states[row.request_id] = state
+    return states
+
+
 def classify_runs(
     placed: tuple[PlacedRun, ...],
     rows: LatestRows,
+    requests: RequestStates,
     runs_dir: Path,
     claim_age_limit: float,
     now: datetime,
@@ -71,7 +105,7 @@ def classify_runs(
     return [
         MemberRun(
             item.member.project_id,
-            _entry(item.run, rows, runs_dir, claim_age_limit, now),
+            _entry(item.run, rows, requests, runs_dir, claim_age_limit, now),
         )
         for item in placed
     ]
@@ -80,6 +114,7 @@ def classify_runs(
 def _entry(
     run: ListedRun,
     rows: LatestRows,
+    requests: RequestStates,
     runs_dir: Path,
     claim_age_limit: float,
     now: datetime,
@@ -87,7 +122,7 @@ def _entry(
     directory = run.working_directory
     if directory is None:
         raise ValueError(f"run {run.run_id} was placed without a directory")
-    pause, detail = _pause_of(run, rows, runs_dir, claim_age_limit, now)
+    pause, detail = _pause_of(run, rows, requests, runs_dir, claim_age_limit, now)
     next_action = None
     if isinstance(pause, PauseClass) and pause in HANDLED_BY_HANDLE_PAUSE:
         checkpoint = run.checkpoint
@@ -122,6 +157,7 @@ def _checkpoint_entry(checkpoint: ListedCheckpoint | None) -> CheckpointEntry | 
 def _pause_of(
     run: ListedRun,
     rows: LatestRows,
+    requests: RequestStates,
     runs_dir: Path,
     claim_age_limit: float,
     now: datetime,
@@ -144,7 +180,7 @@ def _pause_of(
             return RunFileUnreadable.RUN_FILE_UNREADABLE, read.reason
         facts = read
     pause_class = classify_pause(observed, row, answer, facts, claim_age_limit, now)
-    return pause_class, _detail(pause_class, observed, answer, row)
+    return pause_class, _detail(pause_class, observed, answer, row, requests)
 
 
 def _row_for_pause(
@@ -166,6 +202,7 @@ def _detail(
     observed: ObservedPause,
     answer: AnswerRecord | None,
     row: QuestionRecord | None,
+    requests: RequestStates,
 ) -> str | None:
     match pause_class:
         case PauseClass.OTHER_CHECKPOINT:
@@ -177,6 +214,8 @@ def _detail(
             return _resume_text(answer)
         case PauseClass.CLOSED:
             return _closed_text(row)
+        case PauseClass.WAITING_ON_REQUEST:
+            return _held_text(row, requests)
         case _:
             return None
 
@@ -189,6 +228,21 @@ def _closed_text(row: QuestionRecord | None) -> str:
         f"closed ({row.closed_reason}{detail}). The run is still paused in Squadron; "
         "Amoeba does not resume or end it. `sq run --resume` continues it"
     )
+
+
+def _held_text(row: QuestionRecord | None, requests: RequestStates) -> str:
+    """``waiting on request <id> (<state>)``, and when ``start_ended_held`` last
+    started ``handle_pause`` for it (242 D9)."""
+    if row is None or row.request_id is None:
+        raise StoreRowError("a held question has no request_id")
+    if row.request_id not in requests:
+        raise StoreRowError(f"request {row.request_id} of a held question was not read")
+    state = requests[row.request_id]
+    shown = _REQUEST_GONE if state is None else state.value
+    text = f"waiting on request {row.request_id} ({shown})"
+    if row.start_attempted_at is None:
+        return text
+    return f"{text}; handle_pause last started {row.start_attempted_at.isoformat()}"
 
 
 def _kind_text(raw: str | None) -> str:

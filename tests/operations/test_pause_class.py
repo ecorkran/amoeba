@@ -156,3 +156,9 @@ def test_run_facts_are_needed_only_for_an_agent_question_with_no_row() -> None:
     assert not run_facts_needed(ASKING, _row(QuestionState.CLAIMED))
     assert not run_facts_needed(not_paused, None)
     assert not run_facts_needed(textless, None)
+
+
+def test_a_held_row_is_waiting_on_request() -> None:
+    assert _classify(row=_row(QuestionState.WAITING_ON_REQUEST)) is (
+        PauseClass.WAITING_ON_REQUEST
+    )

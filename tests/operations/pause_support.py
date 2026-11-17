@@ -125,6 +125,10 @@ def _unused_list_runs() -> list[ListedRun] | RunListProblem:
     raise AssertionError("this test gave no list_runs reader")
 
 
+def unused_amoeba_script() -> Path:
+    raise AssertionError("this test gave no amoeba script")
+
+
 def no_prune(store: Store, *, now: datetime, after_days: int) -> PruneReport:
     """A ``prune`` that removes nothing: a unit test of another operation."""
     return PruneReport(removed=0, problems=())
@@ -164,6 +168,7 @@ def build_deps(
         project_names=_unused_project_names,
         list_runs=_unused_list_runs,
         prune=no_prune,
+        amoeba_script=unused_amoeba_script,
     )
     return DepsRig(deps, clock, sleep, recorder, poller)
 

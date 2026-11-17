@@ -10,9 +10,11 @@ from pathlib import Path
 import pytest
 from fake_sq import COMPLETED, LOCK_BEFORE, PAUSED_AGENT_QUESTION, poll_result
 from store.question_support import (
+    HELD_REQUEST_ID,
     MEMBER_ID,
     NOW,
     claimed_question,
+    insert_held_row,
     seed_members,
     waiting_question,
 )
@@ -288,3 +290,37 @@ def test_fate_of_poll_covers_every_outcome() -> None:
     assert fate_of_poll(PAUSE) == RunFate(
         ClosedReason.RUN_MOVED_ON, f"paused at {CURRENT}", CURRENT
     )
+
+
+def _held(store: Store, key: QuestionKey) -> None:
+    with store.write() as transaction:
+        insert_held_row(transaction, key)
+
+
+def test_a_held_row_of_a_run_that_moved_on_closes_as_moved_on(store: Store) -> None:
+    _held(store, OLD)
+
+    result = _sweep(store, PAUSE, after=timedelta(minutes=1))
+
+    assert [c.key for c in result.closed] == [OLD]
+    closed = _row(store, OLD)
+    assert closed.closed_reason is ClosedReason.RUN_MOVED_ON
+    assert closed.request_id == HELD_REQUEST_ID
+
+
+def test_a_held_row_of_a_gone_run_closes_as_gone(store: Store) -> None:
+    _held(store, OLD)
+
+    (closed,) = _sweep(store, GONE, after=timedelta(minutes=1)).closed
+
+    assert closed.closed_reason is ClosedReason.RUN_GONE
+
+
+def test_a_held_row_of_a_run_still_at_its_pause_is_left(store: Store) -> None:
+    _held(store, NEW)
+    before = _row(store, NEW)
+
+    result = _sweep(store, PAUSE, after=timedelta(days=30))
+
+    assert not result.changed_anything
+    assert _row(store, NEW) == before

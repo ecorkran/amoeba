@@ -8,6 +8,7 @@ import re
 from typing import cast
 
 import pytest
+from request_marker_text import assert_marker_rule, ids_after_markers
 from rule_blocks import PROGRAM_RULES, real_rule_blocks, rule_blocks
 
 from amoeba.cli.parser import build_parser
@@ -199,3 +200,27 @@ def test_the_intro_covers_all_four_blocks() -> None:
     for name in ("Requesting", "Handling", "Consumer", "Provider"):
         assert name in intro, name
     assert "Every member carries the Handling block" in " ".join(intro.split())
+
+
+def test_the_requesting_block_gives_the_marker_line_with_a_placeholder_id() -> None:
+    block = real_rule_blocks().requesting
+
+    assert_marker_rule(block)
+    assert "`send --id`" in block
+    assert _flags_in(block) <= _parser_flags("send") | _parser_flags("cancel")
+
+
+def test_the_marker_line_is_the_only_marker_and_no_other_block_has_one() -> None:
+    blocks = real_rule_blocks()
+
+    assert len(ids_after_markers(blocks.requesting)) == 1
+    for which in ("handling", "consumer", "provider"):
+        assert ids_after_markers(getattr(blocks, which)) == [], which
+
+
+def test_the_requesting_block_says_a_pasted_copy_is_replaced() -> None:
+    text = PROGRAM_RULES.read_text(encoding="utf-8")
+    start = text.index("## Requesting block")
+    above = text[start : text.index("```markdown", start)]
+
+    assert "replaces it with the current text" in above

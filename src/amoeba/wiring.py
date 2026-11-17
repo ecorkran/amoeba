@@ -14,6 +14,7 @@ and ``state_home()``; the store is opened only through ``open_state_store``.
 from __future__ import annotations
 
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Final, assert_never
 
@@ -46,6 +47,7 @@ from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.wiring_messages import place_message
 from amoeba.wiring_registry import place_add, place_list, place_rm
+from amoeba.wiring_release import start_after
 from amoeba.wiring_releases import place_release
 from amoeba.wiring_results import OperationResult, is_rejected, result_document
 
@@ -163,75 +165,92 @@ def invoke(
     """
     layout = state_layout()
     with open_store(layout) as store:
-        match name:
-            case OperationName.ADD:
-                return place_add(
-                    store, load_config(), document, _required_directory(name, directory)
-                )
-            case OperationName.RM:
-                return place_rm(
-                    store, load_config(), document, _required_directory(name, directory)
-                )
-            case OperationName.LIST:
-                return place_list(
-                    store,
-                    load_config(),
-                    document,
-                    _required_directory(name, directory),
-                    default_deps(layout),
-                )
-            case OperationName.ANSWER:
-                return answer(
-                    store,
-                    load_config(),
-                    document,
-                    deps=default_deps(layout),
-                    via=door,
-                )
-            case OperationName.STATUS:
-                return status(
-                    store,
-                    load_config(),
-                    document,
-                    directory=_required_directory(name, directory),
-                    deps=default_deps(layout),
-                )
-            case OperationName.DECISIONS:
-                return decisions(store, document, deps=default_deps(layout))
-            case OperationName.MARK_READ:
-                return mark_read(store, document)
-            case OperationName.DISMISS:
-                return dismiss(store, document, clock=default_deps(layout).clock)
-            case OperationName.RETRACT:
-                return retract(store, document, clock=default_deps(layout).clock)
-            case OperationName.REPORT_RELEASE | OperationName.CHANGES:
-                return place_release(
-                    name,
-                    store,
-                    document,
-                    _required_directory(name, directory),
-                    default_deps(layout),
-                )
-            case (
-                OperationName.SEND
-                | OperationName.INBOX
-                | OperationName.REPLY
-                | OperationName.CANCEL
-            ):
-                return place_message(
-                    name,
-                    store,
-                    load_config(),
-                    document,
-                    _required_directory(name, directory),
-                    default_deps(layout),
-                )
-            case OperationName.HANDLE_PAUSE:
-                raise ValueError(
-                    f"{name.value} is not run in-process: it is the CLI's own body"
-                )
-            case _:
-                assert_never(name)
+        try:
+            return _dispatch(name, document, directory, door, store, layout)
+        finally:
+            # After the operation's own transactions closed, on every path, a raise
+            # included, as in ``handle_pause`` (242 D7); never raises.
+            start_after(name, store, load_config, partial(default_deps, layout))
+
+
+def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
+    name: OperationName,
+    document: object,
+    directory: Path | None,
+    door: Door,
+    store: Store,
+    layout: StateLayout,
+) -> OperationResult:
+    """``invoke``'s body: the operation ``name`` on ``document``."""
+    match name:
+        case OperationName.ADD:
+            return place_add(
+                store, load_config(), document, _required_directory(name, directory)
+            )
+        case OperationName.RM:
+            return place_rm(
+                store, load_config(), document, _required_directory(name, directory)
+            )
+        case OperationName.LIST:
+            return place_list(
+                store,
+                load_config(),
+                document,
+                _required_directory(name, directory),
+                default_deps(layout),
+            )
+        case OperationName.ANSWER:
+            return answer(
+                store,
+                load_config(),
+                document,
+                deps=default_deps(layout),
+                via=door,
+            )
+        case OperationName.STATUS:
+            return status(
+                store,
+                load_config(),
+                document,
+                directory=_required_directory(name, directory),
+                deps=default_deps(layout),
+            )
+        case OperationName.DECISIONS:
+            return decisions(store, document, deps=default_deps(layout))
+        case OperationName.MARK_READ:
+            return mark_read(store, document)
+        case OperationName.DISMISS:
+            return dismiss(store, document, clock=default_deps(layout).clock)
+        case OperationName.RETRACT:
+            return retract(store, document, clock=default_deps(layout).clock)
+        case OperationName.REPORT_RELEASE | OperationName.CHANGES:
+            return place_release(
+                name,
+                store,
+                document,
+                _required_directory(name, directory),
+                default_deps(layout),
+            )
+        case (
+            OperationName.SEND
+            | OperationName.INBOX
+            | OperationName.REPLY
+            | OperationName.CANCEL
+        ):
+            return place_message(
+                name,
+                store,
+                load_config(),
+                document,
+                _required_directory(name, directory),
+                default_deps(layout),
+            )
+        case OperationName.HANDLE_PAUSE:
+            raise ValueError(
+                f"{name.value} is not run in-process: it is the CLI's own body"
+            )
+        case _:
+            assert_never(name)
 
 
 #: Under the logs directory: the logs of operations the MCP server starts detached

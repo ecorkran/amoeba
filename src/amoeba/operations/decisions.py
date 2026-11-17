@@ -30,6 +30,7 @@ from amoeba.operations.decisions_models import (
 )
 from amoeba.operations.deps import Deps
 from amoeba.operations.members import ContextForgeError
+from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import (
     RejectCode,
     unknown_program_problem,
@@ -98,6 +99,11 @@ def decisions(store: Store, document: object, *, deps: Deps) -> DecisionsResult:
     started_at_marker = request.since is None and request.program is None
     return DecisionsResult(
         outcome=DecisionsOutcome.LISTED,
+        notice=(
+            QUOTED_DATA_NOTICE
+            if any(record.request_id is not None for record in records)
+            else None
+        ),
         records=records,
         read_through=records[-1].seq if records and started_at_marker else None,
         marker=marker,
@@ -150,6 +156,7 @@ def _record(row: DecisionRow, names: ProjectNames) -> DecisionsRecord:
         ),
         retracted_at=answer.retracted_at,
         retract_reason=answer.retract_reason,
+        request_id=question.request_id,
     )
 
 

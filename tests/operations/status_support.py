@@ -84,6 +84,8 @@ def question_row(
         closed_reason=None,
         closed_detail=None,
         closed_at=None,
+        request_id=None,
+        start_attempted_at=None,
     )
 
 

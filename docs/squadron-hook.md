@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: How Squadron's pause command is wired to amoeba handle-pause, and what the hook needs.
 dateCreated: 20261110
-dateUpdated: 20261114
+dateUpdated: 20261116
 status: complete
 ---
 
@@ -62,3 +62,8 @@ A hook that ran and did nothing, or failed, leaves a line: every `handle-pause` 
 appended to `<state home>/logs/calls/<UTC date>.jsonl`, an error exit and a `ConfigError`
 included (format in `cli-contract.md`). `status` shows the newest line for each
 `unhandled` or `claim_stale` run as `last_call`, which says why the hook missed.
+
+A held question (slice 242: the question's last line names a request this repo sent,
+and that request is still open) needs no further hook call. The hook's one call holds
+it, and Amoeba starts `handle-pause` for it itself once the request ends. `status`
+shows it as `waiting_on_request`, with the newest calls-log line for it as `last_call`.

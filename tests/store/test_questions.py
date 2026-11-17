@@ -16,17 +16,22 @@ from amoeba.store.questions import (
     get_question,
     insert_question,
     latest_question,
+    open_questions,
     replace_claim,
     settle_waiting,
 )
+from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import QuestionState
 from store.question_support import (
     ANSWERING_RUN,
+    HELD_REQUEST_ID,
     KEY,
+    MEMBER_ID,
     NOW,
     PASSAGE,
     claimed_question,
+    insert_held_row,
     seed_members,
     waiting_question,
 )
@@ -217,3 +222,34 @@ def test_replace_claim_fails_once_the_question_left_claimed(store: Store) -> Non
             passages=(),
             now=NOW,
         )
+
+
+def test_a_held_row_round_trips_its_request_fields(store: Store) -> None:
+    attempted = NOW + timedelta(minutes=3)
+    with store.write() as transaction:
+        insert_held_row(transaction)
+        transaction.execute(
+            "UPDATE questions SET start_attempted_at = ? WHERE run_id = ?",
+            (encode_timestamp(attempted), KEY.run_id),
+        )
+
+    with store.read() as transaction:
+        record = get_question(transaction, KEY)
+
+    assert record is not None
+    assert record.state is QuestionState.WAITING_ON_REQUEST
+    assert record.request_id == HELD_REQUEST_ID
+    assert record.start_attempted_at == attempted
+    assert record.answering_run_id is None
+
+
+def test_open_questions_lists_only_waiting_on_pm_never_a_held_row(
+    store: Store,
+) -> None:
+    """``open_questions`` is the "waiting on you" list (242 D9): a held question
+    waits on a request, not on the PM."""
+    with store.write() as transaction:
+        insert_held_row(transaction)
+
+    with store.read() as transaction:
+        assert open_questions(transaction, [MEMBER_ID]) == ()

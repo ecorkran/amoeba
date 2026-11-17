@@ -1,10 +1,11 @@
 """Closing questions and reading the open ones (slice 228, D4, D5).
 
-A question is *open* when it is ``claimed`` or ``waiting_on_pm``, or ``answered`` with
-its latest answer unresumed (``resume_outcome`` null or ``refused``). Every write here
-is a compare-and-set, so a concurrent ``answer``, ``dismiss`` or settle wins and the
-loser learns it from the return value. Every function takes an open transaction;
-none is held across a subprocess.
+A question is *open* when it is ``claimed``, ``waiting_on_pm`` or
+``waiting_on_request`` (slice 242), or ``answered`` with its latest answer unresumed
+(``resume_outcome`` null or ``refused``). Every write here is a compare-and-set, so a
+concurrent ``answer``, ``dismiss`` or settle wins and the loser learns it from the
+return value. Every function takes an open transaction; none is held across a
+subprocess.
 """
 
 from __future__ import annotations
@@ -21,10 +22,11 @@ from amoeba.store.row_values import encode_timestamp, text
 from amoeba.store.store import Transaction
 from amoeba.store.vocabulary import ClosedReason, QuestionState, ResumeOutcome
 
-#: The bound values of the open-row clause: claimed, waiting, answered, refused.
+#: The bound values of the open-row clause: claimed, waiting, held, answered, refused.
 _OPEN_PARAMETERS = (
     QuestionState.CLAIMED.value,
     QuestionState.WAITING_ON_PM.value,
+    QuestionState.WAITING_ON_REQUEST.value,
     QuestionState.ANSWERED.value,
     ResumeOutcome.REFUSED.value,
 )
@@ -71,17 +73,21 @@ def dismiss_question(
     """Close the question ``current`` as ``dismissed``, with ``detail`` as the reason
     given.
 
-    ``claimed`` and ``waiting_on_pm`` close. ``answered`` with an unresumed latest
-    answer closes too, and in the same transaction that answer becomes
-    ``not_delivered`` (detail ``dismissed``), unless its resume has started and not
-    ended. Anything else, including a delivered answer and a question already
-    ``closed``, is refused: False, nothing written.
+    ``claimed``, ``waiting_on_pm`` and ``waiting_on_request`` close. ``answered``
+    with an unresumed latest answer closes too, and in the same transaction that
+    answer becomes ``not_delivered`` (detail ``dismissed``), unless its resume has
+    started and not ended. Anything else, including a delivered answer and a question
+    already ``closed``, is refused: False, nothing written.
     ``current`` is the row as the caller read it in this transaction; the write is a
     compare-and-set against it.
     """
     key = current.key
     match current.state:
-        case QuestionState.CLAIMED | QuestionState.WAITING_ON_PM:
+        case (
+            QuestionState.CLAIMED
+            | QuestionState.WAITING_ON_PM
+            | QuestionState.WAITING_ON_REQUEST
+        ):
             return close_question(
                 transaction,
                 key,

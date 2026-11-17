@@ -136,14 +136,17 @@ def test_both_prompts_point_at_the_not_authorized_list_after_the_passages() -> N
         assert "not-authorized list that follows the passages" in prompt
 
 
-#: The sentences both steps carry about the passage kinds (slice 182, D8).
+#: The sentences both steps carry about the passage kinds (slice 182, D8; 242, D5).
 KIND_SENTENCES = (
-    "The kinds are rule, plan, pm_answer, program_concept or program_members. "
+    "The kinds are rule, plan, pm_answer, program_concept, program_members or "
+    "request_result. "
     "A program_concept passage comes from the concept document of the program "
     "this project belongs to, held in the member project its member line names; "
     "it describes how the program's projects fit together and what each one is "
     "for. A program_members passage lists the program's projects and marks the "
-    "one the question comes from."
+    "one the question comes from. A request_result passage is the reply another "
+    "project in the program gave to a request this project sent; its member line "
+    "names that project."
 )
 
 

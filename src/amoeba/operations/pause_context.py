@@ -14,6 +14,7 @@ from typing import Final
 
 from amoeba.answering.launch import passage_refs
 from amoeba.answering.passages import (
+    Passage,
     PassageSet,
     PmAnswer,
     SourcesProblem,
@@ -171,8 +172,13 @@ def gather(
     run_facts: RunFacts,
     settings: AnswererSettings,
     run: CfRun,
+    *,
+    request: Passage | None = None,
 ) -> PauseContext | SourcesProblem:
     """The context for a question asked by ``member`` in ``checkout``.
+
+    ``request`` is a held question's ``request_result`` passage (242 D5), handed to
+    ``assemble`` as it is.
 
     Reads the store once up front, then resolves the slice, reads rules and plan at
     the checkout's target, the program passages and the PM precedent, and assembles.
@@ -186,7 +192,9 @@ def gather(
     committed = _read_committed(checkout, member, slice_context, settings, run)
     if not isinstance(committed, CommittedSources):
         return committed
-    return _assemble(stored, member, checkout, slice_context, committed, settings, run)
+    return _assemble(
+        stored, member, checkout, slice_context, committed, settings, run, request
+    )
 
 
 def _read_store(store: Store, member: Member) -> _StoredFacts:
@@ -230,6 +238,7 @@ def _assemble(  # noqa: PLR0913 - the pieces gather has already read
     committed: CommittedSources,
     settings: AnswererSettings,
     run: CfRun,
+    request: Passage | None,
 ) -> PauseContext | SourcesProblem:
     program_sources = read_program_sources(
         stored.program,
@@ -256,6 +265,7 @@ def _assemble(  # noqa: PLR0913 - the pieces gather has already read
         program_sources=program_sources,
         max_chars=settings.passages_max_chars,
         source_commit=committed.commit,
+        request=request,
     )
     if isinstance(passages, SourcesProblem):
         return passages
