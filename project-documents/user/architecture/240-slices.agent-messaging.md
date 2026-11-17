@@ -79,7 +79,7 @@ Slice numbers are execution order. The first slice takes the plan's index (240).
    **Risk Level:** High. A result from another repo's agent resumes a real run.
    **Relative Effort:** 3
 
-4. [ ] **(243) Notes and Release Notes** — The `note` kind. `send` takes a note to a member, or to a program with one delivery per member, the sender excluded. Notes have no state and are pruned past `prune_after_days` by the sweep. `report_release` writes a note to each consumer the report is visible to under the pair's `consumed` value, in the same transaction. A `from_release` consumer gets none for a merge report and gets one when a version is added. A correction or withdrawal sends a new note to the consumers that see the report in `changes` at that moment. The rules blocks say notes are information and need no reply.
+4. [x] **(243) Notes and Release Notes** — The `note` kind. `send` takes a note to a member, or to a program with one delivery per member, the sender excluded. Notes have no state and are pruned past `prune_after_days` by the sweep. `report_release` writes a note to each consumer the report is visible to under the pair's `consumed` value, in the same transaction. A `from_release` consumer gets none for a merge report and gets one when a version is added. A correction or withdrawal sends a new note to the consumers that see the report in `changes` at that moment. The rules blocks say notes are information and need no reply.
    **Value:** User value. A repo hears about an upstream release and about program-wide news in the same inbox as its requests.
    **Success Criteria:**
    - A note to a program reaches every member except the sender, each as its own delivery.
