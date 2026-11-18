@@ -9,6 +9,7 @@ through one parent parser. A subparser records its operation as ``operation``.
 from __future__ import annotations
 
 import argparse
+from importlib.metadata import version
 from typing import Any
 
 from amoeba.cli.registration_arguments import (
@@ -19,6 +20,9 @@ from amoeba.cli.registration_arguments import (
 from amoeba.cli.registration_messages import register_messages
 from amoeba.cli.wake_command import register_wake_run
 from amoeba.operations.names import OperationName
+
+#: The distribution whose installed metadata ``--version`` reports.
+PACKAGE_NAME = "amoeba-ai"
 
 
 def _json_parent() -> argparse.ArgumentParser:
@@ -53,6 +57,13 @@ def build_parser() -> argparse.ArgumentParser:
     """The command's parser; one subcommand per ``OperationName``."""
     parser = argparse.ArgumentParser(
         prog="amoeba", description="Amoeba: the program tool."
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=version(PACKAGE_NAME),
+        help="print the installed version and exit",
     )
     commands = parser.add_subparsers(dest="command", required=True)
     parent = _json_parent()

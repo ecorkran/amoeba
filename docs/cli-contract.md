@@ -43,6 +43,10 @@ stay snake_case (`handle_pause`, `mark_read`), and so does the `operation` in JS
 `mark_read`): it is argparse's invalid-choice error, which lists the valid names, exit
 2. `set_up` is gone: `add` and `rm` replace it on both doors.
 
+`amoeba --version` (or `-v`) prints the installed `amoeba-ai` version, read from the
+package metadata, and exits 0 before any config or state is touched. `amoeba-mcp` has
+no flags; it is started by an MCP client, not by hand.
+
 The first command after an upgrade from a pre-228 install moves the old state out of
 `~/.config/amoeba/` into the state home before it does its own work, and writes one
 line to stderr (`amoeba: moved state from <old> to <new> ...`) only when something
