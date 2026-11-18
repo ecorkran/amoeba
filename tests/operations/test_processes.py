@@ -155,6 +155,24 @@ def test_terminate_group_on_an_exited_child_just_returns(tmp_path: Path) -> None
     assert child.poll() == 0
 
 
+def test_terminate_group_treats_a_group_of_only_exiting_members_as_gone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # macOS answers killpg with EPERM while the group's last members are exiting
+    # (zombies not yet reaped by launchd): nothing is left that a signal can reach.
+    child = _start([PYTHON, "-c", "pass"], tmp_path, _logs(tmp_path))
+    child.wait(timeout=WAIT_SECONDS)
+
+    def refuse(pgid: int, sending: int) -> None:
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(os, "killpg", refuse)
+
+    terminate_group(child)
+
+    assert child.poll() == 0
+
+
 def test_the_kept_stderr_tail_returns_the_last_lines_of_a_childs_stderr(
     tmp_path: Path,
 ) -> None:

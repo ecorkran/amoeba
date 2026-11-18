@@ -107,8 +107,10 @@ def terminate_group(child: WaitableChild) -> None:
     for sending in (signal.SIGTERM, signal.SIGKILL):
         try:
             os.killpg(child.pid, sending)
-        except ProcessLookupError:
+        except (ProcessLookupError, PermissionError):
             # Expected: the group is already gone, which is what was wanted.
+            # PermissionError is macOS's answer while the last members are
+            # exiting zombies: no member is left that a signal can reach.
             child.wait()
             return
         if _group_gone_within_grace(child):
@@ -135,6 +137,7 @@ def _group_gone_within_grace(child: WaitableChild) -> bool:
 def _group_exists(pgid: int) -> bool:
     try:
         os.killpg(pgid, 0)
-    except ProcessLookupError:
+    except (ProcessLookupError, PermissionError):
+        # Expected: no member left (PermissionError: macOS, only exiting zombies).
         return False
     return True
