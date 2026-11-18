@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-17
+
 ### Added
 
 - Slice 244: waking. A member can carry a `wake_command`, set from the CLI with `amoeba add --wake-command COMMAND` and cleared with `--no-wake-command` (also `wake_command` in a `--file` request; the MCP `add` tool does not take it). When `send` stores a request that is `open` for a member with a command, no push-confirmed live session, no wake running and fewer than `max_wakes_per_day` wakes in the last 24 hours, Amoeba starts the command detached in the member's checkout (Context Forge's `projectPath`) under the internal `amoeba wake-run`, with only the `WAKE_ENV_NAMES` environment variables and no message text, and stops it at `wake_timeout_seconds`. Each wake is a `wakes` row (migration 009, version 9, plus `members.wake_command`) recording `exited`, `timed_out`, `start_failed` or `wrapper_failed`; rows and `logs/wake/` files leave by `prune_after_days`. `list` and `status` gain a **Waking** section and a `wake` object per member (command, running or overdue with its pid and log, waking stopped, last problem); `send` gains `wake_problem`. A wake never changes a request. **Every wake command must carry its own cost or time cap:** it is the only bound if its wrapper is killed (`docs/cli-contract.md`, "The wake command"). `tests/live/waking` runs a fixture agent against real `cf`, with no model.

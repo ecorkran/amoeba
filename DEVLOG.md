@@ -12,6 +12,8 @@ dateUpdated: 20261117
 
 ## 20261117
 
+### Release 0.2.0
+Agent messaging: push and presence, hold and release, notes and release notes, waking (slices 241–244; store schema 9).
 
 **p6: devlog-4**
 - branch-0:branch-0: PASS
