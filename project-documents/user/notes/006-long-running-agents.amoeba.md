@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: Hand-off brief for a separate session. How to make long-running (always-on) agents easy to define, package and run, starting from what Amoeba 0.2.0 already provides. Problem statement, existing parts, gaps, a proposed shape and open questions; no design decided.
 dateCreated: 20261117
-dateUpdated: 20261117
+dateUpdated: 20261118
 status: in-progress
 ---
 
@@ -68,8 +68,8 @@ always-on agent means hand-writing a script and wiring it up yourself.
   replied"), no schedules (a nightly run), no re-wake after a timeout, and no outside
   events.
 - **No agent memory beyond the inbox.** Stored PM answers are the closest thing, and
-  the only way to clean them up is a manual `retract`. A curation pass is being looked
-  at separately inside Amoeba (stored-answer "dreaming").
+  the only way to clean them up is a manual `retract`. A curation pass over stored
+  answers ("dreaming") has been suggested for Amoeba, but no slice or design exists.
 - **No single definition.** An agent's setup is scattered across Context Forge
   registration, `amoeba add` flags, a script somewhere on disk, the repo's rules and
   config keys. You can't copy one file to make a second agent.
