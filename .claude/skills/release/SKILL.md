@@ -52,9 +52,10 @@ The `publish` job in `.github/workflows/ci.yml` runs only on the tag and needs `
 Start a loop via the `loop` skill with a 5 minute interval and this check:
 
 1. `gh run list --workflow ci.yml --branch vX.Y.Z --json databaseId,status,conclusion,headSha` — match `headSha` to the tagged commit. (`--commit` is unreliable right after a push.)
-2. Still running: report status and wait for the next tick.
-3. Failed: pull the log (`gh run view <id> --log-failed`), report the actual error, stop the loop.
-4. Passed: confirm with `curl -sf https://pypi.org/pypi/amoeba-ai/X.Y.Z/json`. If it returns, report "X.Y.Z live on PyPI" and stop the loop. If not yet, wait for the next tick.
+2. No run for the tag 5 minutes after the push: GitHub dropped the tag's push event (seen on v0.2.0). Re-send it once with `git push origin :refs/tags/vX.Y.Z && git push origin vX.Y.Z` (same tag, same commit; invoking this skill authorizes it) and wait for the next tick. If the second push gets no run either, report that and stop the loop.
+3. Still running: report status and wait for the next tick.
+4. Failed: pull the log (`gh run view <id> --log-failed`), report the actual error, stop the loop.
+5. Passed: confirm with `curl -sf https://pypi.org/pypi/amoeba-ai/X.Y.Z/json`. If it returns, report "X.Y.Z live on PyPI" and stop the loop. If not yet, wait for the next tick.
 
 Always stop the loop yourself when it resolves either way.
 
