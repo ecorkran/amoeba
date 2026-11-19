@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from amoeba.answering.values import AnsweredBy, DeclineReason
+from amoeba.cli.render.style import Painter, Tone
 from amoeba.cli.render.text import COLUMNS
 from amoeba.cli.render.waiting import (
     NOTHING_NEEDS_YOU,
@@ -33,6 +35,7 @@ from amoeba.operations.status_models import (
 )
 from amoeba.store.vocabulary import ClosedReason
 
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 NOW = datetime(2026, 11, 14, 12, 0, tzinfo=UTC)
 CHECKOUT = Path("/work/core")
 PAUSED_AT = "2026-11-14T06:48:00+00:00"
@@ -414,3 +417,21 @@ def test_the_notice_comes_first_when_a_waiting_reason_is_another_repos_text() ->
 
     assert text.startswith(f"{QUOTED_DATA_NOTICE}\n\nWaiting on you\n")
     assert text.count(QUOTED_DATA_NOTICE) == 1
+
+
+def test_the_waiting_view_paints_headings_and_keeps_the_text() -> None:
+    result = _status(waiting=(_waiting(),))
+    painter = Painter(enabled=True)
+
+    painted = render_waiting(result, now=NOW, paint=painter)
+    plain = render_waiting(result, now=NOW)
+
+    assert painted != plain
+    assert ANSI_ESCAPE.sub("", painted) == plain
+    assert painted.startswith("\x1b[")  # the heading is the first thing printed
+
+
+def test_nothing_needs_you_is_painted_as_ok() -> None:
+    painted = render_waiting(_status(), now=NOW, paint=Painter(enabled=True))
+
+    assert painted == Painter(enabled=True)(NOTHING_NEEDS_YOU, Tone.OK) + "\n"

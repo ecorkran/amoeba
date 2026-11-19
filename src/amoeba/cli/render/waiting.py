@@ -23,6 +23,7 @@ from amoeba.cli.render.commands import (
 )
 from amoeba.cli.render.messages import message_sections
 from amoeba.cli.render.sessions import sessions_section
+from amoeba.cli.render.style import PLAIN, Painter, Tone
 from amoeba.cli.render.text import (
     SEPARATOR,
     command_line,
@@ -97,33 +98,62 @@ def render_waiting(
     *,
     now: datetime,
     settled: tuple[SettledEntry, ...] | None = None,
+    paint: Painter = PLAIN,
 ) -> str:
-    """The text of a ``status`` result, and of ``list`` with ``settled`` for ``all``."""
+    """The text of a ``status`` result, and of ``list`` with ``settled`` for ``all``.
+
+    ``paint`` colors each section's heading (its first line); the plain text is
+    otherwise the same.
+    """
     if result.outcome is StatusOutcome.REJECTED:
         code = "" if result.rejection is None else result.rejection.value
         lines = [prose_line(f"rejected: {code}: ", p) for p in result.problems]
         return "\n".join(lines) + "\n"
     members = [member for entry in result.programs for member in entry.members]
-    needs = [
-        _waiting(members, now),
-        _paused(members),
-        _unplaced(result.unplaced_runs, expand=settled is not None),
-        _problems(result),
+    sections = _needs(result, members, now, expand=settled is not None)
+    sections.extend(_others(result, members, now, settled))
+    blocks = [
+        "\n".join([paint(section[0], tone), *section[1:]]) for section, tone in sections
     ]
-    sections = [section for section in needs if section]
-    if not sections:
-        sections.append([NOTHING_NEEDS_YOU])
-    sections.extend(section for section in [_closed_now(result)] if section)
-    sections.extend(message_sections(members, now))
-    sections.extend(section for section in [sessions_section(members, now)] if section)
-    sections.extend(section for section in [waking_section(members, now)] if section)
-    if settled is not None:
-        sections.extend(
-            section for section in (_other_runs(members), _settled(settled)) if section
-        )
     if result.notice is not None:
-        sections.insert(0, [result.notice])
-    return "\n\n".join("\n".join(section) for section in sections) + "\n"
+        blocks.insert(0, result.notice)
+    return "\n\n".join(blocks) + "\n"
+
+
+#: A section's lines, the first being its heading, and the tone that heading takes.
+Section = tuple[list[str], Tone]
+
+
+def _needs(
+    result: StatusResult, members: list[MemberStatus], now: datetime, *, expand: bool
+) -> list[Section]:
+    """What needs the PM; ``Nothing needs you.`` when there is none."""
+    needs = [
+        (_waiting(members, now), Tone.ATTENTION),
+        (_paused(members), Tone.ATTENTION),
+        (_unplaced(result.unplaced_runs, expand=expand), Tone.HEADING),
+        (_problems(result), Tone.ATTENTION),
+    ]
+    sections = [(section, tone) for section, tone in needs if section]
+    return sections or [([NOTHING_NEEDS_YOU], Tone.OK)]
+
+
+def _others(
+    result: StatusResult,
+    members: list[MemberStatus],
+    now: datetime,
+    settled: tuple[SettledEntry, ...] | None,
+) -> list[Section]:
+    """The sections after what needs the PM, in order."""
+    found = [
+        _closed_now(result),
+        *message_sections(members, now),
+        sessions_section(members, now),
+        waking_section(members, now),
+    ]
+    if settled is not None:
+        found.extend((_other_runs(members), _settled(settled)))
+    return [(section, Tone.HEADING) for section in found if section]
 
 
 def _waiting(members: list[MemberStatus], now: datetime) -> list[str]:

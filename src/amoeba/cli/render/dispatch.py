@@ -29,6 +29,7 @@ from amoeba.cli.render.simple import (
     render_mark_read,
     render_retract,
 )
+from amoeba.cli.render.style import PLAIN, Painter
 from amoeba.cli.render.waiting import render_waiting
 from amoeba.operations.answer import AnswerResult
 from amoeba.operations.changes_models import ChangesResult
@@ -61,12 +62,13 @@ def render_result(
     names: Mapping[str, str],
     default_rules: tuple[str, ...],
     removing: bool = False,
+    paint: Painter = PLAIN,
 ) -> str:
     """The text of ``result``.
 
     ``names``, ``default_rules`` and ``removing`` are for ``add`` and ``rm`` (Context
     Forge names by id, the config's default rules, and whether it was ``rm``); the
-    others ignore them.
+    others ignore them. ``paint`` colors the headings of ``list`` and ``status``.
     """
     match result:
         case SetUpResult():
@@ -74,9 +76,11 @@ def render_result(
                 result, names=names, default_rules=default_rules, removing=removing
             )
         case ListResult():
-            return render_waiting(result.status, now=now, settled=result.settled)
+            return render_waiting(
+                result.status, now=now, settled=result.settled, paint=paint
+            )
         case StatusResult():
-            return render_waiting(result, now=now)
+            return render_waiting(result, now=now, paint=paint)
         case ProgramsView():
             return render_programs(result)
         case MembersView():

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from dataclasses import asdict
@@ -29,6 +30,7 @@ from amoeba.cli.registration_messages import (
 )
 from amoeba.cli.render.dispatch import render_result
 from amoeba.cli.render.simple import render_handle_pause
+from amoeba.cli.render.style import painter_for
 from amoeba.config.home import StateLayout
 from amoeba.operations.calls_log import append_call, error_entry, result_entry
 from amoeba.operations.handle_pause import handle_pause
@@ -199,6 +201,7 @@ def _text_of(result: OperationResult, *, removing: bool) -> str:
         names=names,
         default_rules=default_rules,
         removing=removing,
+        paint=painter_for(sys.stdout, os.environ),
     )
 
 

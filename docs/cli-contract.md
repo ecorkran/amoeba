@@ -22,6 +22,10 @@ JSON** with `-j` (or `--json`), placed after the command name: `amoeba list -j`.
 JSON is the result document both doors give (the MCP tool returns the same document),
 and it is what the sections below describe field by field.
 
+`list` and `status` color their section headings (cyan; yellow for a section that
+needs you; green for `Nothing needs you.`) when stdout is a terminal. A pipe, a file
+and `-j` get plain text, and `NO_COLOR` or `TERM=dumb` turns color off.
+
 - The first line of the text says what happened: `added`, `removed`, `changed`,
   `unchanged`, `recorded`, `dismissed`..., or `rejected: <code>: <detail>`.
 - Prose (a question, an answer, a reason) is cut to 100 columns with `…` and kept on
