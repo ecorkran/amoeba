@@ -56,7 +56,7 @@ Splitting it again (say, questions in one initiative and programs in another) wo
    - **Waking:** a configured per-member command started when mail lands and nobody is working in that repo. This is the last slice.
    - **Release reports** also drop a note in each consumer's inbox.
 
-   Out of scope: ordering across a chain, and Amoeba deciding what work to do. Slice plan: `240-slices.agent-messaging.md` (240 requests, 241 push and presence, 242 hold and release, 243 notes, 244 waking). Dependencies: [220]. Status: in_progress
+   Out of scope: ordering across a chain, and Amoeba deciding what work to do. Slice plan: `240-slices.agent-messaging.md` (240 requests, 241 push and presence, 242 hold and release, 243 notes, 244 waking). Dependencies: [220]. Status: complete
 9. [ ] **(260) Cross-Machine Hub** — 240's messaging between repos on different machines, LAN first. Scenario E: trading-ui is worked on one machine and trading-data on another, in one program, and each needs to send the other requests, notes and release reports. Scope:
    - **A hub:** one machine holds the store and runs `amoeba serve`, an HTTP door over the existing operations beside the CLI and MCP doors. This is a process kept running, on the hub machine only and only when remote use is wanted.
    - **Client mode:** `amoeba` and `amoeba-mcp` on another machine point at the hub instead of a local store. A remote client only ever talks HTTP to the hub and never opens the store, so the hub can later move into its own service without clients changing.
@@ -96,7 +96,7 @@ Nothing new gets built before the audit, and slices 183 to 186 stay paused until
 
 Work 240 in this order: architecture and its review with the PM, scenario D added to the concept, then the slice plan.
 
-Work 260 after 240 is complete, in this order: scenario E added to the concept, architecture and its review, then the slice plan.
+Work 260 in this order: scenario E added to the concept, architecture and its review, then the slice plan.
 
 ## Notes
 
