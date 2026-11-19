@@ -4,7 +4,7 @@ layer: project
 project: amoeba
 source: user/project-guides/000-concept.amoeba.md
 dateCreated: 20260620
-dateUpdated: 20261114
+dateUpdated: 20261118
 status: in_progress
 ---
 
@@ -25,6 +25,8 @@ Initiatives 100 to 140 were built from the bottom up, and 160 to 200 were planne
 Splitting it again (say, questions in one initiative and programs in another) would give two architecture documents that have to agree on the same operations, the same store and the same answer to "does anything stay running?". Split later only if the work itself shows a reason to.
 
 240 is that later split. Messaging between agents is a new layer on top of 220's operations and store, with its own scenario (D), and it does not change what 220 built.
+
+260 is its own initiative for the same reason. It adds a kept-running hub and a network door, which 240's architecture rules out, and it has its own scenario (E).
 
 ## Initiatives
 
@@ -55,12 +57,24 @@ Splitting it again (say, questions in one initiative and programs in another) wo
    - **Release reports** also drop a note in each consumer's inbox.
 
    Out of scope: ordering across a chain, and Amoeba deciding what work to do. Slice plan: `240-slices.agent-messaging.md` (240 requests, 241 push and presence, 242 hold and release, 243 notes, 244 waking). Dependencies: [220]. Status: in_progress
+9. [ ] **(260) Cross-Machine Hub** — 240's messaging between repos on different machines, LAN first. Scenario E: trading-ui is worked on one machine and trading-data on another, in one program, and each needs to send the other requests, notes and release reports. Scope:
+   - **A hub:** one machine holds the store and runs `amoeba serve`, an HTTP door over the existing operations beside the CLI and MCP doors. This is a process kept running, on the hub machine only and only when remote use is wanted.
+   - **Client mode:** `amoeba` and `amoeba-mcp` on another machine point at the hub instead of a local store. A remote client only ever talks HTTP to the hub and never opens the store, so the hub can later move into its own service without clients changing.
+   - **Member identity without the hub's Context Forge:** project ids are minted per machine. The client resolves its own member with its local `cf`; the hub resolves a recipient by name from the store, which gains a member name. `add` for a remote repo is checked by the client's `cf`.
+   - **One repo, one machine, one member.** Two checkouts of a repo on two machines are two members.
+   - **A directory:** session rows record the host, so `list` shows who is working where across machines. Agents announce by heartbeat; the hub never pings agents.
+   - **Finding the hub:** the hub advertises itself on the LAN and a new machine's `amoeba` finds it without configuration.
+   - **Waking across machines:** mail for a repo on another machine starts that repo's wake command on its own machine.
+   - **Access:** a shared token from the first slice, since anyone who can post to the hub can put text in front of agents and start wake commands.
+
+   Out of scope: one member spanning machines, a request sent to more than one member, a claim queue ("whoever can do X"), the hub as a separately deployed service, and answering a paused run from another machine (answering reads the repo on disk, so each machine handles its own pauses against the shared store). Dependencies: [240]. Status: not_started
 
 ## Cross-Initiative Dependencies
 
 - **120 depends on 100, and 140 depends on 100 and 120.** These hold for the code as built. 220's audit may remove the dependencies along with the code.
 - **220 depends on 100, 120 and 140.** It inherits their code and is what cuts it down, so it can change or delete any of it. It also inherits slices 180 and 181 from retired 180.
 - **240 depends on 220.** It builds on 220's store, operations, MCP server, resume procedure and question record. It revises 220's "pull, never push" principle and decisions 5 and 6, as listed in `240-arch`.
+- **260 depends on 240.** It carries 240's messages, presence and waking across machines and changes none of their rules. It revises 240's "no new process kept running" for the hub machine, and 240's member lookup, which goes through the local `cf` for every call.
 
 ## External Dependencies
 
@@ -81,6 +95,8 @@ Work 220 in this order:
 Nothing new gets built before the audit, and slices 183 to 186 stay paused until the slice plan re-judges them.
 
 Work 240 in this order: architecture and its review with the PM, scenario D added to the concept, then the slice plan.
+
+Work 260 after 240 is complete, in this order: scenario E added to the concept, architecture and its review, then the slice plan.
 
 ## Notes
 
