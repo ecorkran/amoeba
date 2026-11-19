@@ -79,6 +79,15 @@ def test_a_newer_stamp_raises_and_rolls_back() -> None:
     assert read_schema_version(connection) == 50
 
 
+def test_a_newer_stamp_error_tells_the_operator_to_restart() -> None:
+    connection = _empty_database()
+    migrate(connection)
+    connection.execute("UPDATE schema_meta SET version = 50")
+
+    with pytest.raises(StoreSchemaError, match="restart the amoeba MCP server"):
+        migrate(connection)
+
+
 def test_split_statements_keeps_quoted_semicolons_and_comments() -> None:
     script = (
         "-- one\nCREATE TABLE a (x TEXT DEFAULT ';');\n\n"
