@@ -42,14 +42,19 @@ def render_programs(view: ProgramsView) -> str:
         if row.concept is not None:
             lines.append(
                 prose_line(
-                    indented("concept: "), f"{row.concept.member} ({row.concept.path})"
+                    indented("concept: "),
+                    f"{_end(row.names.get(row.concept.member), row.concept.member)}"
+                    f" ({row.concept.path})",
                 )
             )
         if not row.members:
             lines.append(indented(f"members: {NONE}"))
         else:
             lines.append(indented("members:"))
-            lines.extend(indented(member, 2) for member in row.members)
+            lines.extend(
+                indented(_end(row.names.get(member), member), 2)
+                for member in row.members
+            )
     return "\n".join(lines) + "\n"
 
 

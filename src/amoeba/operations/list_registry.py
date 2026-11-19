@@ -30,6 +30,9 @@ class ProgramRow(FrozenModel):
     concept: ConceptRow | None
     #: Context Forge project ids of the active members.
     members: tuple[str, ...]
+    #: Context Forge name of each member and of the concept's member; null for a
+    #: project Context Forge no longer lists.
+    names: dict[str, str | None]
 
 
 class ProgramsView(FrozenModel):
@@ -92,10 +95,20 @@ def _details(run: CfRun) -> ProjectDetails:
     return found
 
 
+def _name(details: ProjectDetails, project_id: str) -> str | None:
+    known = details.get(project_id)
+    return None if known is None else known.name
+
+
 def programs_view(
-    store: Store, *, program: str | None, show_empty: bool
+    store: Store, run: CfRun, *, program: str | None, show_empty: bool
 ) -> ProgramsView:
     """Each program with its active members; empty ones only with ``show_empty``."""
+    details = _details(run)
+
+    def name_of(project_id: str) -> str | None:
+        return _name(details, project_id)
+
     rows: list[ProgramRow] = []
     for entry in _programs(store, program):
         with store.read() as transaction:
@@ -107,11 +120,14 @@ def programs_view(
         )
         if not members and concept is None and not show_empty:
             continue
+        ids = tuple(member.project_id for member in members)
+        named = (*ids, *(() if concept is None else (concept.member,)))
         rows.append(
             ProgramRow(
                 program=entry.program_id,
                 concept=concept,
-                members=tuple(member.project_id for member in members),
+                members=ids,
+                names={project_id: name_of(project_id) for project_id in named},
             )
         )
     return ProgramsView(programs=tuple(rows))
@@ -166,8 +182,7 @@ def dependencies_view(
     details = _details(run)
 
     def name_of(project_id: str) -> str | None:
-        known = details.get(project_id)
-        return None if known is None else known.name
+        return _name(details, project_id)
 
     rows: list[DependencyRow] = []
     for entry in _programs(store, program):

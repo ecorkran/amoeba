@@ -172,8 +172,10 @@ gains one top-level `settled` (the questions answered or closed within
 and **Settled**. `--program ID` narrows the view.
 
 **`programs`**: `{programs: [{program, concept: {member, path} | null, members:
-[project_id]}]}`. A program with no active members and no concept is left out unless
-`--all` is given; the row cannot be deleted (it is the target of its removed members'
+[project_id], names: {project_id: name | null}}]}`; `names` covers the members and the
+concept's member, null for a project Context Forge no longer lists (the text shows the
+id and `(not in Context Forge)`). A program with no active members and no concept is
+left out unless `--all` is given; the row cannot be deleted (it is the target of its removed members'
 records), and `add --program` refills it.
 
 **`members`**: `{members: [{project_id, name, path, in_context_forge, program,

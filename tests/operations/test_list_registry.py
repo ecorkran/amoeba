@@ -186,8 +186,8 @@ def test_the_program_filter_narrows_members(store: Store) -> None:
 
 
 def test_a_program_with_no_members_is_hidden_then_shown_with_all(store: Store) -> None:
-    hidden = programs_view(store, program=None, show_empty=False)
-    shown = programs_view(store, program=None, show_empty=True)
+    hidden = programs_view(store, ListCf(PROJECTS), program=None, show_empty=False)
+    shown = programs_view(store, ListCf(PROJECTS), program=None, show_empty=True)
 
     assert [row.program for row in hidden.programs] == ["demo"]
     assert [row.program for row in shown.programs] == ["demo", "hollow"]
@@ -208,7 +208,7 @@ def test_a_hidden_program_is_refilled_by_a_member(store: Store) -> None:
             updated_at=NOW,
         )
 
-    view = programs_view(store, program=None, show_empty=False)
+    view = programs_view(store, ListCf(PROJECTS), program=None, show_empty=False)
 
     assert [row.program for row in view.programs] == ["demo", "hollow"]
 
@@ -216,7 +216,9 @@ def test_a_hidden_program_is_refilled_by_a_member(store: Store) -> None:
 def test_a_program_lists_its_concept_and_its_active_members_only(
     store: Store,
 ) -> None:
-    (demo,) = programs_view(store, program="demo", show_empty=False).programs
+    (demo,) = programs_view(
+        store, ListCf(PROJECTS), program="demo", show_empty=False
+    ).programs
 
     assert demo.concept is not None
     assert (demo.concept.member, demo.concept.path) == (
@@ -226,11 +228,24 @@ def test_a_program_lists_its_concept_and_its_active_members_only(
     assert demo.members == ("consumer-id", "forgotten-id", "no-path-id", "with-path-id")
 
 
+def test_a_program_names_its_members_and_marks_a_gone_one(store: Store) -> None:
+    (demo,) = programs_view(
+        store, ListCf(PROJECTS), program="demo", show_empty=False
+    ).programs
+
+    assert demo.names == {
+        "consumer-id": "consumer",
+        "forgotten-id": None,
+        "no-path-id": "no-path",
+        "with-path-id": "with-path",
+    }
+
+
 def test_a_program_with_only_a_concept_is_not_hidden(store: Store) -> None:
     with store.write() as tx:
         _program(tx, "conceptual", concept=("somebody", "docs/c.md"))
 
-    view = programs_view(store, program=None, show_empty=False)
+    view = programs_view(store, ListCf(PROJECTS), program=None, show_empty=False)
 
     assert "conceptual" in [row.program for row in view.programs]
 
@@ -260,12 +275,14 @@ def test_dependencies_name_both_ends_and_mark_a_gone_one(store: Store) -> None:
     assert (gone.provider_name, gone.consumer_name) == (None, "no-path")
 
 
-@pytest.mark.parametrize("view", ["members", "dependencies"])
+@pytest.mark.parametrize("view", ["programs", "members", "dependencies"])
 def test_cf_failing_raises_with_no_partial_view(store: Store, view: str) -> None:
     cf = ListCf(None)
 
     with pytest.raises(ContextForgeError):
-        if view == "members":
+        if view == "programs":
+            programs_view(store, cf, program=None, show_empty=False)
+        elif view == "members":
             _members(store, cf)
         else:
             dependencies_view(store, cf, program=None)
@@ -274,7 +291,7 @@ def test_cf_failing_raises_with_no_partial_view(store: Store, view: str) -> None
 def test_each_views_json_has_its_documented_shape(store: Store) -> None:
     cf = ListCf(PROJECTS)
 
-    programs = programs_view(store, program=None, show_empty=False)
+    programs = programs_view(store, ListCf(PROJECTS), program=None, show_empty=False)
     members = _members(store, cf)
     dependencies = dependencies_view(store, cf, program=None)
 
@@ -283,6 +300,7 @@ def test_each_views_json_has_its_documented_shape(store: Store) -> None:
         "program",
         "concept",
         "members",
+        "names",
     }
     assert set(members.model_dump(mode="json")["members"][0]) == {
         "project_id",

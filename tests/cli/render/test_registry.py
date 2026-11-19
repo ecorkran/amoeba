@@ -51,18 +51,20 @@ def test_programs_with_a_concept_and_without_members() -> None:
             ProgramRow(
                 program="trading",
                 concept=ConceptRow(member="id-core", path="docs/concept.md"),
-                members=("id-core", "id-lint"),
+                members=("id-core", "id-lint", "id-gone"),
+                names={"id-core": "core", "id-lint": "lint", "id-gone": None},
             ),
-            ProgramRow(program="hollow", concept=None, members=()),
+            ProgramRow(program="hollow", concept=None, members=(), names={}),
         )
     )
 
     assert render_programs(view) == (
         "trading\n"
-        "  concept: id-core (docs/concept.md)\n"
+        "  concept: core (docs/concept.md)\n"
         "  members:\n"
-        "    id-core\n"
-        "    id-lint\n"
+        "    core\n"
+        "    lint\n"
+        f"    id-gone {NOT_IN_CF}\n"
         "hollow\n"
         "  members: none\n"
     )

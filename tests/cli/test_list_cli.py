@@ -118,10 +118,15 @@ def test_list_programs_text_and_json(tmp_path: Path) -> None:
     text = run_amoeba(tmp_path, "list", "programs").stdout
     document = result_of(run_amoeba(tmp_path, "list", "programs", as_json=True))
 
-    assert text == f"{PROJECT_NAME}\n  members:\n    {PROJECT_ID}\n"
+    assert text == f"{PROJECT_NAME}\n  members:\n    {PROJECT_NAME}\n"
     assert document == {
         "programs": [
-            {"program": PROJECT_NAME, "concept": None, "members": [PROJECT_ID]}
+            {
+                "program": PROJECT_NAME,
+                "concept": None,
+                "members": [PROJECT_ID],
+                "names": {PROJECT_ID: PROJECT_NAME},
+            }
         ]
     }
 

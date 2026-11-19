@@ -149,7 +149,9 @@ def list_view(
             return _rejected(RejectCode.UNKNOWN_PROGRAM, (unknown,))
     match request.subject:
         case ListSubject.PROGRAMS:
-            return programs_view(store, program=request.program, show_empty=request.all)
+            return programs_view(
+                store, deps.cf_run, program=request.program, show_empty=request.all
+            )
         case ListSubject.MEMBERS:
             return members_view(store, config, deps.cf_run, program=request.program)
         case ListSubject.DEPENDENCIES:
