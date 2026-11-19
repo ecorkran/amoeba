@@ -160,7 +160,7 @@ sections, in order, each left out when empty: **Waiting on you** (member, run, h
 reason, the question on one line, and the `amoeba answer` and `amoeba dismiss`
 commands), **Paused, not handled** (runs the hook missed, each with `amoeba handle-pause
 RUN_ID` to run in the run's checkout and, for a missed hook or a dead claim, the newest
-calls-log line), **Unplaced runs** (each says how it clears), **Problems**, then what
+calls-log line), **Unplaced runs** (each says how it clears; runs Amoeba has no record of are one count, and `--all` lists each), **Problems**, then what
 this call closed. `Nothing needs you.` when nothing waits. With `--all` the document
 gains one top-level `settled` (the questions answered or closed within
 `prune_after_days`: `program`, `member_id`, `member_name`, `run_id`, `paused_at`,

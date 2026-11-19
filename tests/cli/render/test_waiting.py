@@ -226,7 +226,7 @@ def test_unplaced_runs_say_how_each_clears() -> None:
             checkpoint_kind=None,
         ),
     )
-    text = _text(_status(unplaced_runs=runs))
+    text = _text(_status(unplaced_runs=runs), settled=())
 
     assert text == (
         "Unplaced runs\n"
@@ -238,6 +238,42 @@ def test_unplaced_runs_say_how_each_clears() -> None:
         f"    {NO_RECORD}\n"
         "  run-c · directory_missing\n"
         f"    {NO_RECORD}\n"
+    )
+
+
+def test_unplaced_runs_with_no_record_collapse_to_a_count_by_default() -> None:
+    runs = (
+        UnplacedRunEntry(
+            run_id="run-a",
+            status="paused",
+            reason=UnplacedReason.LOOKUP_FAILED,
+            checkpoint_kind="agent_question",
+            detail="cf exited 1",
+        ),
+        *(
+            UnplacedRunEntry(
+                run_id=f"run-{index}",
+                status="paused",
+                reason=reason,
+                checkpoint_kind=None,
+            )
+            for index, reason in enumerate(
+                (UnplacedReason.NO_DIRECTORY, UnplacedReason.DIRECTORY_MISSING)
+            )
+        ),
+    )
+
+    text = _text(_status(unplaced_runs=runs))
+
+    assert text == (
+        "Unplaced runs\n"
+        "  run-a · lookup_failed\n"
+        "    detail: cf exited 1\n"
+        "    clears once `cf` answers; run this again:\n"
+        "      amoeba list\n"
+        "  2 runs Amoeba has no record of; each leaves when Squadron stops listing it\n"
+        "    to see each one:\n"
+        "      amoeba list --all\n"
     )
 
 

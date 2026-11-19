@@ -64,6 +64,10 @@ SHOWS_LAST_CALL: Final = frozenset({PauseClass.UNHANDLED, PauseClass.CLAIM_STALE
 NO_AMOEBA_RECORD: Final = (
     "Amoeba has no record of it; it leaves the list when Squadron stops listing it"
 )
+#: The count line for those runs in the default view.
+NO_RECORD_COUNT_TEXT: Final = (
+    "Amoeba has no record of; each leaves when Squadron stops listing it"
+)
 CLEARS_ON_LISTING: Final = {
     UnplacedReason.LOOKUP_FAILED: "clears once `cf` answers; run this again:",
     UnplacedReason.NO_DIRECTORY: NO_AMOEBA_RECORD,
@@ -103,7 +107,7 @@ def render_waiting(
     needs = [
         _waiting(members, now),
         _paused(members),
-        _unplaced(result.unplaced_runs),
+        _unplaced(result.unplaced_runs, expand=settled is not None),
         _problems(result),
     ]
     sections = [section for section in needs if section]
@@ -197,15 +201,26 @@ def _call_text(call: CallEntry) -> str:
     return " ".join(part for part in (when, what, call.detail) if part)
 
 
-def _unplaced(runs: tuple[UnplacedRunEntry, ...]) -> list[str]:
+def _unplaced(runs: tuple[UnplacedRunEntry, ...], *, expand: bool) -> list[str]:
+    """Each run on its own, except runs Amoeba has no record of: with ``expand`` false
+    (the default view) those are one count, as nothing can be done about them."""
     lines: list[str] = []
+    no_record = 0
     for run in runs:
+        if not expand and run.reason is not UnplacedReason.LOOKUP_FAILED:
+            no_record += 1
+            continue
         lines.append(indented(SEPARATOR.join((run.run_id, run.reason.value))))
         if run.detail:
             lines.append(prose_line(indented("detail: ", 2), run.detail))
         lines.append(prose_line(indented("", 2), CLEARS_ON_LISTING[run.reason]))
         if run.reason is UnplacedReason.LOOKUP_FAILED:
             lines.append(command_line(list_command(), 3))
+    if no_record:
+        noun = "run" if no_record == 1 else "runs"
+        lines.append(indented(f"{no_record} {noun} {NO_RECORD_COUNT_TEXT}"))
+        lines.append(indented("to see each one:", 2))
+        lines.append(command_line(list_command(show_all=True), 3))
     return ["Unplaced runs", *lines] if lines else []
 
 

@@ -68,8 +68,9 @@ def clear_concept_command() -> str:
     return _command(OperationName.RM, "--concept")
 
 
-def list_command(*, as_json: bool = False) -> str:
-    return _command(OperationName.LIST, *(["--json"] if as_json else []))
+def list_command(*, as_json: bool = False, show_all: bool = False) -> str:
+    flags = [*(["--json"] if as_json else []), *(["--all"] if show_all else [])]
+    return _command(OperationName.LIST, *flags)
 
 
 def mark_read_command(through: int) -> str:

@@ -83,6 +83,12 @@ def test_list_text_is_the_status_text(tmp_path: Path) -> None:
     assert not listed.stdout.lstrip().startswith("{")
 
 
+def _without_unplaced(text: str) -> str:
+    """``text`` minus its **Unplaced runs** section (blocks split by a blank line)."""
+    blocks = text.split("\n\n")
+    return "\n\n".join(b for b in blocks if not b.startswith("Unplaced runs\n"))
+
+
 def test_list_all_text_adds_the_other_runs_after_the_sections_of_plain_list(
     tmp_path: Path,
 ) -> None:
@@ -96,9 +102,12 @@ def test_list_all_text_adds_the_other_runs_after_the_sections_of_plain_list(
     plain = run_amoeba(tmp_path, "list", listing=listing).stdout
     everything = run_amoeba(tmp_path, "list", "--all", listing=listing).stdout
 
+    # --all lists each unplaced run that plain list counts, so compare without them.
+    plain = _without_unplaced(plain)
+    everything = _without_unplaced(everything)
     assert everything.startswith(plain)
     extra = everything.removeprefix(plain)
-    assert extra.startswith("\nOther runs\n")
+    assert extra.lstrip("\n").startswith("Other runs\n")
     assert f"  {PROJECT_NAME}\n    run-" in extra
     assert "Settled" not in extra  # nothing settled yet
 
