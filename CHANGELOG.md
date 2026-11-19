@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-19
+
+### Changed
+
+- `amoeba list` collapses unplaced runs with no Amoeba record into one count line pointing to `amoeba list --all`.
+- On a terminal, `list` and `status` color their section headings; output stays plain for pipes, `-j`, `NO_COLOR` and `TERM=dumb`.
+
 ## [0.2.2] - 2026-11-18
 
 ### Fixed

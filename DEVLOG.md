@@ -3,12 +3,17 @@ docType: devlog
 project: amoeba
 layer: project
 dateCreated: 20261009
-dateUpdated: 20261118
+dateUpdated: 20261119
 ---
 
 # Development Log
 
 ---
+
+## 20261119
+
+### Release 0.2.3
+Collapsed unplaced runs in `list`; colored section headings in `list` and `status`.
 
 ## 20261118
 
