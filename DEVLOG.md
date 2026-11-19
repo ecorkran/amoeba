@@ -12,6 +12,9 @@ dateUpdated: 20261118
 
 ## 20261118
 
+### Release 0.2.2
+Schema-too-new error says to restart the amoeba MCP server.
+
 ### Release 0.2.1
 `amoeba --version`.
 
