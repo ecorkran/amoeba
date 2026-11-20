@@ -68,7 +68,8 @@ The kit is last on purpose. It is extracted from two working agents, not designe
     - **First-level chaos first.** Needless questions get answered so the agent keeps working. Leftovers get finished, or the agent is sent back to finish them.
     - **Real questions,** answered from the code, the plans, the history, the repo's rules, other repos in the program and the PM's earlier decisions. It matches by meaning and decides by default.
     - **The case record.** The question record widens to a case: any hand-off, what Amoeba looked at, what it decided and why, and the commits it made.
-    - **Learning.** Past cases are read before deciding. An overrule from the PM is stored against its case and the newest word wins. Leftovers are cases too. Curation runs on 300's pass and extends a decision made in one repo to the others it fits.
+    - **Learning.** Past cases are read before deciding. An overrule from the PM is stored against its case and the newest word wins. Leftovers are cases too.
+    - **Dreaming,** carried over from dropped slice 232. With nobody asking, a scheduled pass on 300's curation goes over the PM's answers and Amoeba's cases in every repo. It finds a ruling that should hold beyond the repo it was given in and makes it a standing answer with the reach it fits: one repo, one program, or everything. It withdraws a standing answer that a later PM answer contradicts. It merges repeated cases into one general note. Each change takes effect at once and appears in the list of what was decided, where the PM can overrule it. The PM can also tell any agent that a given answer holds everywhere.
     - **What reaches the PM,** as the concept lists it, and how each waiting item ends.
     - **Deleting the answering pipeline** (about 2,700 lines) and the rules that decided which pauses could be answered.
 
