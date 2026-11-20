@@ -244,6 +244,9 @@ Provisional. Each slice leaves the PM's install working on its local store; the 
 - **Hub and door:** `amoeba hub serve`, the certificate, machines and tokens, invite and join, call ids and repeats, the door version, the owner, backups and the log, the container, and the whole-on-hub operations served through it.
 - **Members by name:** member names, checkouts, caller and recipient lookup, `rm` by name, and registration cut down.
 - **Local work through the hub:** `handle_pause`, the resume, the wake wrapper and wake commands on checkouts, work that belongs to a machine, and clean-up of local files.
+  Two checks belong to this slice's design and are not yet done. Both are stated here because the design will be written without this document's working context:
+  1. **Does the pause claim have a time limit?** Read `operations/pause_claim.py`, `operations/claim_waiting.py` and `operations/pause_existing.py`. If a claimed question whose holder never reports is not already taken again after a time limit, the slice adds that limit, on the hub's clock. The wake claim (`wake_timeout_seconds`) and the resume (`resume_bound_seconds`) already have one.
+  2. **Which transactions run a check or read a local value inside them?** List every one in the pause path and the answering settle before splitting anything. `settle_answered` in `store/answers.py`, which takes the answer-limit gate as a function, is the known case. Each moves to the hub with its values sent in the call.
 - **Sessions across machines:** `amoeba-mcp` as a client, the single tick, presence with machines, and the directory in `list` and `status`.
 - **Adoption:** `amoeba adopt`, the restore path, the hub's config, deleting the local-store way and the 228 state move, and the contract documents.
 
