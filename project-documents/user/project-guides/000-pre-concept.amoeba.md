@@ -1,4 +1,5 @@
 ---
+docType: notes
 layer: process
 phase: 1
 phaseName: concept

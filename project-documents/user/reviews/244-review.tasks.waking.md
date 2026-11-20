@@ -6,7 +6,7 @@ slice: waking
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: FAIL
+verdict: CONCERNS (reviewer stated FAIL; its one fail finding, F001, was fixed 20261115, see Resolution)
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/244-tasks.waking.md
 aiModel: claude-haiku-5-5

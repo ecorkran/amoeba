@@ -8,8 +8,8 @@ component: program-tool
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 220 — the code audit, the cut, the new store with config and set-up, pause handling through the CLI, status and decisions, switching on scenario A for real work, the MCP server, program dependencies (scenario B), and standing answers (scenario F).
 dateCreated: 20261107
-dateUpdated: 20261119
-status: in_progress
+dateUpdated: 20261120
+status: complete
 ---
 
 # Slice Plan: Program Tool
@@ -190,7 +190,11 @@ Added 20261119. A ruling the PM gives once is applied to every later pause it co
    **Risk Level:** Low. It adds one kind of passage to a pipeline that already cites passages.
    **Relative Effort:** 2
 
-12. [ ] **(231) Work, Then Resume** — **Dropped 20261120:** initiative 320 does this with an agent that decides. Kept as written for the record. Pauses that words cannot clear. `handle_pause` stops skipping an `awaits_human` pause. It reads what stopped the run from the run file (the failed action's own message, which `sq runs wait` does not print) and treats that text as the question. The answering run decides whether a standing answer covers it. When one does, Amoeba starts an agent in the run's checkout with the standing answer and the pause's text as its instruction, waits for it to end, and resumes the run. When none does, the pause waits on the PM like any question, and the PM's `answer` to it is carried out the same way. One attempt per pause: a run that pauses again at the same step afterwards waits on the PM, with what the agent did on the record. The agent has a time limit and is stopped at it. The instruction is the PM's text unchanged, so nothing in it is screened.
+### Dropped slices
+
+These two are not work items. They are listed without a checkbox so the plan counts as complete.
+
+- **(231) Work, Then Resume** — **Dropped 20261120:** initiative 320 does this with an agent that decides. Kept as written for the record. Pauses that words cannot clear. `handle_pause` stops skipping an `awaits_human` pause. It reads what stopped the run from the run file (the failed action's own message, which `sq runs wait` does not print) and treats that text as the question. The answering run decides whether a standing answer covers it. When one does, Amoeba starts an agent in the run's checkout with the standing answer and the pause's text as its instruction, waits for it to end, and resumes the run. When none does, the pause waits on the PM like any question, and the PM's `answer` to it is carried out the same way. One attempt per pause: a run that pauses again at the same step afterwards waits on the PM, with what the agent did on the record. The agent has a time limit and is stopped at it. The instruction is the PM's text unchanged, so nothing in it is screened.
    **Value:** User value. The merge pause on unchecked boxes clears with nobody present.
    **Success Criteria:**
    - The fixture: a p6-shaped fixture pipeline pauses at its merge on unchecked boxes whose work is done. With the standing answer above, the boxes are ticked and committed on the slice branch, the run is resumed and it merges, with no person involved.
@@ -203,7 +207,7 @@ Added 20261119. A ruling the PM gives once is applied to every later pause it co
    **Risk Level:** Medium. It is the first time Amoeba causes changes in a repo.
    **Relative Effort:** 3
 
-13. [ ] **(232) Dreaming** — **Dropped as a slice 20261120; the idea is kept.** It is in initiative 320's scope as Dreaming, run on initiative 300's curation pass. Kept as written for the record. Curation with nobody asking. A pass over the PM's stored answers in every member finds rulings that should hold beyond the repo they were given in, and makes each a standing answer with the reach it fits. A setting says whether a found ruling takes effect at once or waits for the PM's yes; one waiting for a yes expires after a configured time. The same pass withdraws a standing answer that a later PM answer contradicts. `promote` makes a chosen stored answer a standing answer by hand. The pass starts from calls Amoeba already receives, at most once per configured interval, so nothing new stays running.
+- **(232) Dreaming** — **Dropped as a slice 20261120; the idea is kept.** It is in initiative 320's scope as Dreaming, run on initiative 300's curation pass. Kept as written for the record. Curation with nobody asking. A pass over the PM's stored answers in every member finds rulings that should hold beyond the repo they were given in, and makes each a standing answer with the reach it fits. A setting says whether a found ruling takes effect at once or waits for the PM's yes; one waiting for a yes expires after a configured time. The same pass withdraws a standing answer that a later PM answer contradicts. `promote` makes a chosen stored answer a standing answer by hand. The pass starts from calls Amoeba already receives, at most once per configured interval, so nothing new stays running.
    **Value:** User value. What the PM said in one repo becomes known in the others without the PM repeating it.
    **Success Criteria:**
    - Fixture answers in two members that say the same thing become one standing answer that reaches both.
@@ -217,7 +221,7 @@ Added 20261119. A ruling the PM gives once is applied to every later pause it co
 
 ## Implementation Order
 
-`220 → 221 → 222 → 223 → 224 → 225 → 228 → 226 → 229 → 227 → 230 → 231 → 232`.
+`220 → 221 → 222 → 223 → 224 → 225 → 228 → 226 → 229 → 227 → 230`. 231 and 232 were dropped 20261120.
 
 - **Dependencies.** Each slice builds on the one before through 224. 226 needs the operations it wraps. 228 comes before 226 and 227 because they read the home layout and the question states it changes. 229 renames what 226 built and changes `set_up`, so it comes after 226 and before 227, which then uses the new names. 227 needs 226, 228 and 229. 230 to 232 are scenario F, in order: 231 and 232 each need 230's record, and 231 comes first because it clears the pause that started this.
 - **Risk.** 223 is the riskiest and the test of the design, so it comes right after the base it needs and before anything else new.
