@@ -10,7 +10,7 @@ dependencies: [240-arch.agent-messaging]
 relatedSlices: []
 riskLevel: high
 audience: [human, ai]
-description: Architecture for Amoeba as one always-up process on a LAN machine, with every machine the PM works on as a client. The hub is the only thing that opens the store. Clients reach it over an authenticated network door, resolve their own repo locally, and do the work that needs local files. Members get a name that holds across machines, sessions are listed across machines, every record names its owner, and the PM's live store moves to the hub. Revised 20261120 from the architecture review.
+description: Architecture for Amoeba as one always-up process on a LAN machine, with every machine the PM works on as a client. The hub is the only thing that opens the store. Clients reach it over an authenticated network door, resolve their own repo locally, and do the work that needs local files. Members get a name that holds across machines, sessions are listed across machines, every record names its owner, and the PM's live store moves to the hub. Revised 20261120 from two architecture reviews.
 dateCreated: 20261120
 dateUpdated: 20261120
 status: in_progress
@@ -49,18 +49,19 @@ The hub is Amoeba as one process that stays up on a LAN machine that does not sl
 | `wake_command` is a member setting, run in the member's one checkout (244) | A wake command belongs to a checkout, runs on the machine that has it, and can be set only from that machine. |
 | Identity is self-asserted, fine on one machine (240) | The machine is proven by a token. Which repo on that machine, and which door, are still self-asserted. |
 | `answer` resumes the run from wherever it is called (220) | The answer is recorded at once. The run's own machine does the resume. |
-| The config file is per user, on the machine (222) | One config, on the hub. A client's own file says only how to reach the hub. |
+| The resume's started mark can be written again while the outcome is open (228) | It becomes a real claim: one taker at a time. |
+| The config file is per user, on the machine (222) | One config, on the hub. A client's own file says how to reach the hub. |
 | A one-time move of state out of `~/.config` (228) | Deleted. The move to the hub replaces it. |
 
 ## Architectural Principles
 
 - **Only the hub opens the store.** Clients, hooks and `amoeba-mcp` never do. The one exception is the hub's own admin commands, run on the hub machine.
-- **One hub call is one whole transaction.** No transaction spans two network calls. Today's code already never holds a transaction across an outside call, and its claims are compare-and-set, so each existing transaction block becomes one hub call. A check that runs inside a transaction today, such as the answer limit in the answering settle, runs on the hub: the call carries the values and the hub applies the rule. The slice that moves the pause path lists every such transaction before it starts.
+- **One hub call is one whole transaction.** No transaction spans two network calls. Today's code already never holds a transaction across an outside call, so each existing transaction block becomes one hub call. A check that runs inside a transaction today, such as the answer limit in the answering settle, runs on the hub: the call carries the values and the hub applies the rule.
 - **One mode.** There is no hub-less mode and no local store to fall back to. A single-machine user runs the hub on that machine. Two modes would mean two sets of decisions the first time a setting was wrong. A local fallback may come back later, only if running the hub on a single machine proves painful (PM, 20261120). Nothing here is built for it.
 - **Same operations, three doors.** The network door serves the operations the CLI and MCP doors already have, with the same documents in and out. The CLI and `amoeba-mcp` become clients of it.
 - **A repeated call is safe.** Every call carries an id the client makes. The hub keeps each writing call's result for a short time and gives the same result to a repeat, so a lost reply never applies twice.
 - **A path means nothing without its machine.** Every stored path (a checkout, a run's directory, a session's directory, a log) is stored with the machine it is on, and is only ever opened there.
-- **The hub's clock is the clock.** Expiry, heartbeats, ages and ordering use the hub's time and the store's sequence numbers, never a client's clock.
+- **The hub's clock is the clock.** Expiry, heartbeats, ages and ordering use the hub's time and the store's sequence numbers. A hub call never takes the current time from the client, although the store functions take it from their caller today. A time read from a client's files, such as when Squadron says a run paused, is kept as an identifier and never compared with a hub time.
 - **Pending work is read, not queued.** What a machine should start next is worked out from records that already exist (an answered question, an ended request, an open request to a wakeable checkout). There is no new queue to drain or clean.
 - **An owner on every record.** Today it is always the PM. Nothing filters by it yet.
 
@@ -78,16 +79,17 @@ The hub is Amoeba as one process that stays up on a LAN machine that does not sl
 
 ### The hub
 
-One process, `amoeba hub serve`, in a container on the LAN machine. Amoeba ships the image definition. The container has one published port and two mounted directories:
+One process, `amoeba hub serve`, in a container on the LAN machine. Amoeba ships the image definition. The container has one published port and three mounted directories:
 
-- **config:** the config file, and nothing else.
-- **state:** the store, its backups, the hub's certificate and key, and the hub's log.
+- **config:** two files and nothing else. `hub.yaml` holds what only the serving process needs (its port, `backup_dir`, `backup_hours`, `backups_kept`, the log limits and `call_result_minutes`), each required, with no default in code. `config.yaml` is today's config file, unchanged in shape, and arrives at adoption. Before then the hub serves machines and invites only.
+- **state:** the store, the hub's certificate and key, and the hub's log.
+- **backups:** wherever `backup_dir` points. It has no default, and it should be on a different disk from the state directory, because a backup on the disk it protects is lost with it.
 
 The container runtime starts it at boot and restarts it on failure. The process keeps nothing in memory that matters.
 
 The hub contains Amoeba and nothing else: no `cf`, no Squadron, no agent runtime and no checkouts. Those arrive with 300's runner.
 
-**Backups.** The hub writes a consistent copy of the store when it starts and every `backup_hours` after that, and keeps the newest `backups_kept`. This is a plain timer inside the process, not 300's scheduler.
+**Backups.** A backup is a consistent copy of the store, made with SQLite's own backup call, together with the certificate and key. So a hub started from a backup on any box is the same hub: the same machines, tokens and certificate. The hub takes one when it starts and every `backup_hours` after that, and keeps the newest `backups_kept`. This is a plain timer inside the process, not 300's scheduler, and the copy runs in a worker thread.
 
 **The hub's log** is one file that rotates at `hub_log_max_bytes` and keeps `hub_logs_kept` files. Refused calls are lines in it, so a scanner hitting the port cannot fill the disk.
 
@@ -97,8 +99,8 @@ The hub contains Amoeba and nothing else: no `cf`, no Squadron, no agent runtime
 
 | Command | Does |
 |---|---|
-| `amoeba hub serve` | Runs the hub |
-| `amoeba hub invite <machine>` | Creates a machine and prints one join line for it |
+| `amoeba hub serve` | Runs the hub. With `--from-backup <path>` and an empty state directory, it starts from that backup |
+| `amoeba hub invite <machine>` | Prints one join line. For a new name it creates the machine. For an existing one it gives that machine a new token and ends the old one |
 | `amoeba hub machines` | Lists machines with when each last called and the client version it called with |
 | `amoeba hub rm-machine <machine>` | Removes a machine (see "Machines") |
 | `amoeba hub backup` | Takes a backup now |
@@ -107,7 +109,7 @@ The hub contains Amoeba and nothing else: no `cf`, no Squadron, no agent runtime
 
 The door is HTTPS with JSON, on the LAN. Each operation is one call that takes the operation's existing document plus who is calling.
 
-- **Encrypted, with a pinned certificate.** The hub makes its own certificate and key at first start, in the state directory. A client records the fingerprint when it joins and refuses any other. The fingerprint replaces hostname checking, and the certificate's end date is set far enough out that it is never a limit. The reason for encrypting is concrete: a token lets its holder set a wake command, so it must not cross the LAN in the clear.
+- **Encrypted, with a pinned certificate.** The hub makes its own certificate and key at first start, in the state directory, with an end date far enough out that it is never a limit. The join line carries the certificate's fingerprint. At join, the client fetches the certificate, checks it against that fingerprint and saves it. From then on the client trusts that one certificate and nothing else, and the check happens while the connection is being set up, before any part of a request is sent. Host names are not checked; the certificate is the identity. A test proves that a hub with the wrong certificate never receives a token. The reason for encrypting is concrete: a token lets its holder set a wake command, so it must not cross the LAN in the clear.
 - **One token per machine.** The hub stores only a hash. Every call carries the token; a call without a valid one is refused and logged. The token names the machine and, through it, the owner.
 - **A token reaches only its own machine's commands.** A checkout's wake command can be set or changed only by the machine that checkout is on. So a leaked token cannot plant a command that runs on another machine, and removing the machine removes its checkouts and every wake command with them.
 - **Otherwise all machines act as the PM.** There are no other per-machine rights.
@@ -117,24 +119,34 @@ The door is HTTPS with JSON, on the LAN. Each operation is one call that takes t
 ### Repeats and failures
 
 - **Retry.** A client that gets no reply repeats the same call, with the same call id, for `hub_retry_seconds`. If the hub applied the first one, the repeat returns that result.
-- **Three outcomes.** A call ends as done, as refused (the hub answered no), or as unknown: no reply inside the retry time. An unknown result says so in those words and tells the caller to read the state (`inbox`, `list`) before sending anything again.
+- **Three outcomes.** A call ends as done, as refused (the hub answered no), or as unknown: no reply inside the retry time.
+- **Unknown, for a person or an agent.** The result says so in those words and tells the caller to read the state (`inbox`, `list`) before sending anything again.
+- **Unknown, for a command that runs by itself** (the pause hook, a detached `handle-pause`, the resume, the wake wrapper). It stops at that step and exits with the error in its log. It never guesses and never carries on. Whatever it had claimed is handed out again once that claim's time limit has passed (see "Work that belongs to a machine"), and the next attempt starts from what the store says, as a repeated `handle-pause` does today.
 - **Kept results** are deleted after `call_result_minutes`, by the hub's existing sweep.
 
 ### Machines
 
 A machine is a name the PM chose, a token, a last-called time and the client version it last called with.
 
-- **Joining.** `amoeba hub invite laptop` on the hub prints one line holding the address, the certificate fingerprint, the token and the client's network settings. `amoeba join <line>` on the laptop writes the client file. That is the whole set-up for a machine. The address should be a name that stays put, not a number the router hands out.
-- **The client file** lives in the config directory with owner-only permissions and holds: the hub's address, the fingerprint, the machine's name, its token, and three values a client needs before it can reach the hub (`hub_connect_seconds`, `hub_read_seconds`, `hub_retry_seconds`). The invite fills those three from the hub's config, so they are still set in one place. A client with no client file fails and says to run `amoeba join`.
-- **A new address.** `amoeba join --address <address>` changes only the address in the client file. The token and fingerprint stay, so moving the hub or restoring it on a new box needs no new invites.
-- **Leaving.** `amoeba hub rm-machine` revokes the token and removes the machine's checkouts and session rows. Open questions from runs on that machine close as `machine_removed`. Its wake rows age out with the rest. The machine's next call is refused.
+- **Joining.** `amoeba hub invite desktop` on the hub prints one line holding the address, the certificate fingerprint and the token. `amoeba join <line>` on that machine writes the client file. That is the whole set-up for a machine with no Amoeba data of its own. The address should be a name that stays put, not a number the router hands out.
+- **A machine that already has a local store** is refused by `join`, which names the two ways on: `amoeba adopt <line>` to move that store to an empty hub (below), or `amoeba join <line> --set-aside-local` to rename the local store to a dated backup and join without it.
+- **The client file** lives in the config directory with owner-only permissions, beside the saved certificate. It holds the hub's address, the machine's name, its token, and three settings a client needs before it can reach the hub: `hub_connect_seconds`, `hub_read_seconds` and `hub_retry_seconds`. These three are this machine's own settings. `join` writes them from values in the join line and they are edited here afterwards; the hub's config does not reach them. A client with no client file fails and says to run `amoeba join`.
+- **A new address.** `amoeba join --address <address>` changes only the address in the client file. The token and certificate stay, so moving the hub or restoring it on a new box needs no new invites.
+- **A lost or leaked token.** `amoeba hub invite <machine>` for the existing machine gives it a new token and ends the old one. Its checkouts and records stay.
+- **Leaving.** `amoeba hub rm-machine` ends the token and, in one transaction:
+  - removes the machine's checkouts and session rows;
+  - closes every open question from a run on that machine as `machine_removed`. "Open" is today's meaning: claimed, waiting on the PM, held on a request, or answered with the resume not done. An answer waiting to be resumed there is marked not delivered with the same reason;
+  - ends any wake still running in one of its checkouts as `machine_removed`, so it does not hold off another wake for that member.
+
+  The machine's next call is refused. Bringing it back takes a new invite, a join, and `amoeba add` in each repo there.
 - **A machine that goes quiet** stays listed with its last-called time. It accumulates nothing: what waits on it has its own end (below).
 
 ### Members by name
 
-- **A member has a name,** unique in the store. It is what agents write in `send` and what `list` shows. It starts as the repo's Context Forge project name and can be set at `add`.
+- **A member has a name,** unique in the store. It is what agents write in `send` and what `list` shows. It starts as the repo's Context Forge project name and can be set with `amoeba add --name`.
 - **A checkout** ties a machine and that machine's Context Forge project id to a member, with the checkout's path and, optionally, its wake command.
-- **`amoeba add` on the first machine** creates the member and its checkout. **On a second machine** it finds the member by name and adds a checkout. The hub records the repo's remote address with the member, and refuses a checkout whose remote differs, so two repos that share a name are never merged by accident.
+- **`amoeba add` on the first machine** creates the member and its checkout. **On a second machine** it finds the member by name and adds a checkout, if the two are the same repo.
+- **Same repo means the same `origin`.** The client sends the address of the checkout's `origin` remote. The hub compares it with the member's after reducing both to host and path: lower case, with the scheme, any user name, a trailing `.git` and a trailing slash removed, so the SSH and HTTPS forms of one repo match. A different address is refused with both shown, so two repos that share a name are never merged by accident. A repo with no `origin` can have one checkout only; a second is refused and says why.
 - **Several agents in one repo are one member.** Agents on different machines, branches or worktrees of the same repo share the member and its inbox. Each sees the same mail, and the first `accept` of a request wins, as in 240. They cannot message each other, because an address is a member or a program, never a session. What a team would still need is per-person rights and lists, which is the owner seam and out of scope here.
 - **Who is calling.** The client asks its local `cf` which project the directory is in, as today, so worktrees and subdirectories still resolve to one project. It sends the machine and that project id. The hub maps them to the member. A project with no checkout on record is `not_a_member`, as today.
 - **Who is addressed.** The name is looked up in the store. No `cf` call is made for a recipient, on any machine.
@@ -149,7 +161,7 @@ A machine is a name the PM chose, a token, a last-called time and the client ver
 | Client gathers, hub writes | `add`, `rm`, `list`, `status`, `report_release` | The client reads what only it can (its `cf` project, the repo's remote, its machine's Squadron runs) and sends that with the document. |
 | Client runs, hub steps | `handle_pause`, the resume, the wake wrapper, presence and the push check, and the clean-up of local files | The command runs on the machine with the files. Each store step it makes today becomes one hub call. |
 
-The settings a client-run command needs (models, caps, timeouts) come from the hub with the first call, so the hub's config is the only one.
+The settings a client-run command needs (models, caps, timeouts) come from the hub with the first call, so the hub's config is the only one for everything except the three network settings in the client file.
 
 **Clean-up of local files.** Each machine keeps cleaning its own scratch and logs on today's trigger (at most once an hour, from any call). It asks the hub which runs are still open and deletes the rest past `prune_after_days`. The log of `handle-pause` calls stays on the machine whose hook made them. The hub cleans the store's rows and its own files.
 
@@ -158,12 +170,20 @@ The settings a client-run command needs (models, caps, timeouts) come from the h
 Some work can only be done on one machine: resuming a run whose files are there, starting `handle-pause` for a held question when its request ends, and starting a wake in a checkout there.
 
 - **A machine asks.** Each `amoeba` call that could have caused such work, and each `amoeba-mcp` tick, asks the hub what this machine should start, and starts it detached. This replaces today's "start after" step, which did the same on one machine.
-- **Each kind is claimed before it is started.** Several sessions on one machine ask at once, so the hub hands each piece of work to one asker only: a wake by its wake row, a resume by its started mark, a held question by the pause claim. All three are compare-and-set today.
-- **A claim that never starts is taken again.** If the reply carrying a claim is lost, nothing runs. Every claim has a time limit on the hub's clock, after which the next ask from that machine gets the work. The wake and the resume have such a limit today; the slice confirms the pause claim's or adds it.
-- **Same machine, no wait.** When the PM answers from the machine the run is on, the resume starts in that same call, as today.
-- **Another machine.** The answer is recorded at once and `answer` says which machine the run is on. That machine resumes it the next time anything there talks to the hub. `list` shows it as answered and waiting for that machine, with the machine's last-called time.
-- **Waking.** `send` checks presence across all machines. If nobody is live in the recipient, the wake goes to a checkout that has a wake command. The first machine with such a checkout to ask claims it, with today's limits and wrapper. If no such machine is calling, the request waits for the next agent or its expiry, exactly as a member without a wake command does today, and `list` says which machine the wake is waiting for.
-- **Every wait ends.** Pending work is never its own record. It ends when the machine does it, when the record behind it ends (the question is dismissed or closed, the request expires or is cancelled), or when the machine is removed.
+- **Each kind is claimed before it is started,** because several sessions on one machine ask at once. A claim goes to one asker. If the reply carrying it is lost, nothing runs, so every claim has a time limit on the hub's clock, after which the work is handed out again.
+
+  | Work | Claim | Handed out again after |
+  |---|---|---|
+  | A wake | The wake row, as today | `wake_timeout_seconds`, as today |
+  | A resume | New. The started mark is taken only when it is empty, or older than the limit with no outcome recorded | The resume's existing bound (`resume_bound_seconds`, worked out from `resume_wait_seconds`) |
+  | `handle-pause` for a held question | The pause claim, as today | The pause claim's limit (see the note under Anticipated Slices) |
+
+  Today's started mark is not a claim: it can be written again by any caller while the outcome is open. That was safe with one caller. It is not safe with every session on a machine asking, so the resume gets the claim above.
+- **A refused resume is not pending work.** Only an answer whose resume was never started, or whose claim ran out, is handed out. A resume that Squadron refused is recorded as refused and shown in `list` with the reason, and is tried again only the ways it is today: a new `answer`, or `handle-pause` for that run. So nothing retries on every tick.
+- **Same machine, no wait.** When the PM answers from the machine the run is on, the resume starts in that same call, as today. A `send` from the machine that has the recipient's wakeable checkout starts the wake in that same call, as today.
+- **Another machine, and what that needs.** Work for another machine starts the next time anything on that machine talks to the hub: any `amoeba` call or any open session, in any repo. If nothing is running there, it waits. This is stated plainly because it is a limit: a wake or a resume across machines needs the target machine to be awake with something of Amoeba's running. Nothing is installed on clients to poll in the background. The call that causes the wait says so: `answer` and `send` name the machine the work is waiting for and when it last called, and `list` shows the same.
+- **Waking.** `send` checks presence across all machines. If nobody is live in the recipient, the wake goes to a checkout that has a wake command. The first machine with such a checkout to ask claims it, with today's limits and wrapper. If none asks, the request waits for the next agent or its expiry, exactly as a member without a wake command does today. Waking a repo with no machine awake is what 300's runner on the hub is for, and it is in 300's scope in the plan.
+- **Every wait ends.** Pending work is never its own record. It ends when the machine does it, when the record behind it ends (the question is dismissed or closed, the request expires or is cancelled), or when the machine is removed, by the writes listed under "Leaving".
 
 ### Sessions across machines
 
@@ -184,52 +204,68 @@ The hub's side of every operation is today's operation code. During this initiat
 - **No client file:** the command runs the client part and the hub part in one process on the local store, as today. The PM's install stays this way until adoption.
 - **A client file:** everything goes to the hub. An operation the door does not serve yet fails and says so. Only test fixtures run this way before the last slice.
 
-Three rules keep this simple:
+Four rules keep this simple:
 
-- **One schema.** Every schema change in this initiative (member names, checkouts, machines, owner) is an ordinary migration that both ways run on. The local store gets one machine, standing for the install. Member names are filled from `cf` at the first call after the upgrade; a member `cf` no longer knows keeps its id as its name.
+- **Decided on every call,** never once per process. A session's `amoeba-mcp` that was started before the machine joined uses the hub from its next call.
+- **With a client file, no local store is ever opened or created.** The code that opens a local store is not reached, so a missing file can never be quietly recreated.
+- **One schema.** Every schema change in this initiative (member names, checkouts, machines, owner) is an ordinary migration that both ways run on. The local store gets one machine, standing for the install.
 - **One lookup.** Once members have names, both ways find a recipient in the store.
-- **It ends.** The last slice moves the PM's store to the hub and deletes the no-client-file way. After it there is one mode.
+
+**Naming the members that already exist.** The migration cannot ask `cf`, so the first `amoeba` call after the upgrade does, once, for every member in the store: it records each one's Context Forge name as its member name, its path as its checkout, and its `origin`. Two cases have a fixed answer. A member `cf` no longer knows keeps its id as its name. If two members have the same Context Forge name, the one registered first gets the name and the other keeps its id as its name. `list` shows any member still named by its id, and `amoeba add --name` renames it. Until this has run, every other call on that install runs it first, so no call ever sees a member without a name.
+
+The last slice moves the PM's store to the hub and deletes the no-client-file way. After it there is one mode.
 
 ### Moving the PM's live store
 
-The live store and config are designated for this move. By this point the laptop's store is already at the new schema, so the move is a copy. `amoeba adopt`, run once on the laptop after it has joined:
+The live store and config are designated for this move. By this point the laptop's store is already at the new schema and its members are named, so the move is a copy. It is one command, `amoeba adopt <join line>`, run once on the laptop in place of `join`. The client file is written last, so there is no time when the laptop points at a hub that does not yet have its data.
 
-1. Refuses unless the hub's store is empty.
-2. Sends the store file. The hub loads it, renames the install's one machine to the laptop's joined name, moves the laptop's token onto it, and checks the row counts against the file it was sent.
-3. Sends the config file. The hub validates it and writes it as the hub's config.
-4. Renames the laptop's store to a dated backup beside it and prints that path.
+1. **Checks.** It refuses unless the hub is empty, meaning it holds nothing but its owner and its invited machines. It refuses while any session row in the local store is live, and names those sessions, because their open connections could write after the copy. It refuses if any member is still unnamed by the step above.
+2. **Copy under lock.** It takes the local store's write lock and holds it until step 5, so no hook or command can write in between. It copies the store with SQLite's own backup call, which includes everything committed, and sends the copy.
+3. **Load.** The hub loads the copy, renames the install's one machine to the name in the join line, puts the join line's token on it, and checks its row counts against counts the laptop took under the lock.
+4. **Config.** The laptop sends its config file. The hub validates it and writes it as its `config.yaml`. `hub.yaml` is untouched.
+5. **Switch.** The laptop writes the client file, renames its store to a dated backup beside it, releases the lock and prints the backup's path.
+
+If any step fails, nothing on the laptop has changed and the hub is emptied back to its owner and machines, so the command can be run again.
 
 After this, no client reads a local store or a local `config.yaml`, and the 228 state-move code is deleted.
 
-**Restore path.** Start a hub on the laptop itself with the backup file as its store and the old config, and join it. Nothing in the backup was changed.
+### Moving or undoing the hub
+
+A hub is its backup. To run it somewhere else, the laptop included: `amoeba hub backup` on the old box, `amoeba hub serve --from-backup <path>` on the new one, and `amoeba join --address` on each machine. Machines, tokens, the certificate and every record carry over, so nothing is lost and nothing is re-invited. This is also how to stop using the LAN box.
+
+The laptop's dated backup from adoption is the fallback for one case only: adoption itself went wrong in a way found later. Starting a hub from it gives the store as it was at adoption, without anything recorded since. Its one machine has no token, so `amoeba hub invite <that machine's name>` issues one.
 
 ## Operator walkthrough
 
 Done as the PM running it.
 
-1. **Start.** On the LAN machine: start the container. `amoeba hub invite laptop` prints a join line. On the laptop: `amoeba join <line>`, then `amoeba adopt`. On each other machine: an invite, a join, and `amoeba add` in each repo there.
-2. **Normal path.** A session on the desktop sends a request to `context-forge`. A session open in context-forge on the laptop gets the push within a tick and handles it. `list` on either machine shows the same requests, questions and sessions.
-3. **A run pauses on the laptop; the PM answers from the desktop.** The answer is recorded and `answer` says the run is on the laptop. The laptop resumes it at its next call. If the laptop is asleep, it resumes when the PM next opens a session there.
-4. **The hub is down.** A call retries for `hub_retry_seconds`, then fails with the hub's address in the error. `amoeba-mcp` stays up, its tools return that error, and it recovers at its next tick. The container restarts the hub. A pause hook that fires meanwhile fails the same way. That run then shows on the laptop's `list` as a paused run Amoeba has no record of, as a missed hook does today, with the command to handle it.
-5. **A reply is lost.** The client repeats the call and gets the first result. If the hub stays unreachable, the result is unknown and says to check `inbox` or `list` first.
-6. **Changing a setting.** Edit the config file in the hub's config directory. The next call uses it. A bad edit fails every call with the file and key named, until it is fixed.
-7. **Upgrading.** The release updates the hub first, then each client. Most releases leave the door version alone and nothing else happens. When it does change:
-   - a one-shot `amoeba` call on a machine not yet upgraded refuses and prints the upgrade command;
-   - an open session's `amoeba-mcp` is still the old program, so its tools return the same message until that session is restarted. `list` and `hub machines` show which sessions and machines are behind;
-   - a pause hook on a machine not yet upgraded fails, and its run shows as a paused run with no record, as in step 4.
-8. **A token leaks or a machine is retired.** `amoeba hub rm-machine`. Its checkouts and their wake commands go with it. The other machines are untouched. To bring the machine back: a new invite.
-9. **The laptop never comes back.** `rm-machine` closes its open questions as `machine_removed` and drops its checkouts and sessions. Members that had a checkout elsewhere carry on. A member with no checkout left stays, with its mail, until `amoeba rm <name>` from any machine or a new `add`.
-10. **Two repos with one name.** The second `add` is refused with both remotes shown. The PM adds it under another name.
-11. **The hub's disk is lost.** Restore the newest backup, or the laptop's dated backup from adoption, and start the hub on it. If its address changed, `amoeba join --address` on each machine. Tokens are in the store, so no new invites.
-12. **Undo the whole thing.** The restore path above.
+1. **Start.** On the LAN machine: write `hub.yaml` in the config directory (the image ships an example) and start the container. A missing or bad key stops the start and names it. `amoeba hub invite laptop` prints a join line. On the laptop: close open sessions, then `amoeba adopt <line>`. On each other machine: an invite, a join, and `amoeba add` in each repo there.
+2. **Adoption is refused.** A session is still open: it is named; close it and run again. The hub is not empty: it says what it holds. A pause hook fires during the copy: it waits on the lock for the store's busy time and fails, and its run shows on `list` as a paused run with no record, with the command to handle it.
+3. **Normal path.** A session on the desktop sends a request to `context-forge`. A session open in context-forge on the laptop gets the push within a tick and handles it. `list` on either machine shows the same requests, questions and sessions.
+4. **A run pauses on the laptop; the PM answers from the desktop.** The answer is recorded and `answer` says the run is on the laptop and when the laptop last called. The laptop resumes it at its next call. If the laptop is asleep, it resumes when the PM next opens a session there. Three sessions open on the laptop ask at once; one gets the resume.
+5. **A request to a repo whose only wakeable checkout is on a machine that is off.** `send` says the wake is waiting for that machine. The request waits for an agent or its expiry.
+6. **The hub is down.** A call retries for `hub_retry_seconds`, then fails with the hub's address in the error. `amoeba-mcp` stays up, its tools return that error, and it recovers at its next tick. The container restarts the hub. A pause hook that fires meanwhile fails the same way, and its run shows on that machine's `list` as a paused run Amoeba has no record of, as a missed hook does today, with the command to handle it.
+7. **The hub restarts in the middle of a `handle-pause`.** The command gets unknown at one step, stops, and logs it. Its claim runs out, and the next ask from that machine starts `handle-pause` again from what the store holds.
+8. **A reply is lost.** The client repeats the call and gets the first result. If the hub stays unreachable, the result is unknown and says to check `inbox` or `list` first.
+9. **Changing a setting.** Edit the config file in the hub's config directory. The next call uses it. A bad edit fails every call with the file and key named, until it is fixed. The three network settings are edited in each machine's client file.
+10. **Upgrading.** The release updates the hub first, then each client. Most releases leave the door version alone and nothing else happens. When it does change:
+    - a one-shot `amoeba` call on a machine not yet upgraded refuses and prints the upgrade command;
+    - an open session's `amoeba-mcp` is still the old program, so its tools return the same message until that session is restarted. `list` and `hub machines` show which sessions and machines are behind;
+    - a pause hook on a machine not yet upgraded fails, and its run shows as a paused run with no record, as in step 6.
+11. **A token leaks.** `amoeba hub invite <machine>` gives it a new one and ends the old.
+12. **A machine is retired, or never comes back.** `amoeba hub rm-machine`. Its checkouts, wake commands and sessions go, its open questions close as `machine_removed`, and a wake running there is ended. Members that had a checkout elsewhere carry on. A member with no checkout left stays, with its mail, until `amoeba rm <name>` from any machine or a new `add`.
+13. **Two repos with one name.** The second `add` is refused with both remotes shown. The PM adds it with `--name`.
+14. **The hub's disk is lost.** Start a hub on a new box from the newest backup in `backup_dir`. If the address changed, `amoeba join --address` on each machine. The certificate and tokens came with the backup, so every client connects as before. What was recorded since that backup is lost; that is at most `backup_hours`.
+15. **Undo the whole thing.** Move the hub to the laptop, as under "Moving or undoing the hub".
 
-Dead ends found: none. One soft spot: work for a machine waits until something on that machine calls the hub. That is the same condition under which the work could run at all, and each such wait ends with its record.
+Dead ends found: none. One limit, stated in the design: work for a machine waits until something on that machine calls the hub, and the call that caused it says so. Each such wait ends with its record.
 
 ## Technical Considerations
 
 - **The pause path is the large change.** `handle_pause`, the resume and their sweeps make about twenty store transactions between reads of local run files. Each becomes a hub call. The answering pipeline is deleted by 320, so it is changed only where it touches the store: its reads, its final write, and the answer-limit check, which moves to the hub.
 - **Operations must be pulled apart.** Today one function reads local files, writes the store and starts commands. Each needs a clear line between what the client gathers, what the hub does and what the client then starts. The existing injected edges mark most of that line already.
-- **The server.** A small web app on the server library that `mcp` already installs, so the door adds no new server dependency. Making the certificate needs `cryptography` as a direct dependency. Each request does its store work in a worker thread on its own connection, so no store call runs on the event loop and SQLite orders the writers as it does today. The CLI calls the hub with a plain blocking call.
+- **The server.** A small web app on the server library that `mcp` already installs, so the door adds no new server dependency. Making the certificate needs `cryptography` as a direct dependency. Each request does its store work in a worker thread on its own connection, so no store call runs on the event loop and SQLite orders the writers as it does today. The backup copy runs the same way.
+- **The client's connection.** Python's standard library, with a TLS setting that trusts only the saved certificate and does not check the host name. That makes the certificate check part of setting up the connection, which is what keeps the token from being sent to the wrong hub. It is not done by turning checking off and comparing afterwards.
 - **Load test.** Required by the Python rules for network code. It runs many sessions ticking while CLI calls write, and asserts a bound on call time and that no tick is starved.
 - **Latency.** A CLI call is a `cf` call plus one round trip. The push tick is one small call per live session. How fast a turn-end answer must be is 320's question.
 - **What a token is worth.** It allows what the PM's own commands allow on that one machine, a wake command included, and everything in the store. That is why the door is encrypted, tokens are per machine, and a wake command can be set only from its own machine. Message text is still data written by other repos' agents, and is treated exactly as in 240.
@@ -242,13 +278,15 @@ Dead ends found: none. One soft spot: work for a machine waits until something o
 Provisional. Each slice leaves the PM's install working on its local store; the last one moves it.
 
 - **Hub and door:** `amoeba hub serve`, the certificate, machines and tokens, invite and join, call ids and repeats, the door version, the owner, backups and the log, the container, and the whole-on-hub operations served through it.
-- **Members by name:** member names, checkouts, caller and recipient lookup, `rm` by name, and registration cut down.
-- **Local work through the hub:** `handle_pause`, the resume, the wake wrapper and wake commands on checkouts, work that belongs to a machine, and clean-up of local files.
-  Two checks belong to this slice's design and are not yet done. Both are stated here because the design will be written without this document's working context:
-  1. **Does the pause claim have a time limit?** Read `operations/pause_claim.py`, `operations/claim_waiting.py` and `operations/pause_existing.py`. If a claimed question whose holder never reports is not already taken again after a time limit, the slice adds that limit, on the hub's clock. The wake claim (`wake_timeout_seconds`) and the resume (`resume_bound_seconds`) already have one.
+- **Members by name:** member names and naming the existing ones, checkouts, the `origin` rule, caller and recipient lookup, `rm` by name, and registration cut down.
+- **Local work through the hub:** `handle_pause`, the resume and its new claim, the wake wrapper and wake commands on checkouts, work that belongs to a machine, what each command does on unknown, and clean-up of local files.
+
+  Three checks belong to this slice's design and are not yet done. They are stated here because the design will be written without this document's working context:
+  1. **Does the pause claim have a time limit?** Read `operations/pause_claim.py`, `operations/claim_waiting.py` and `operations/pause_existing.py`. The second review says the held-question claim ages by `answering_wait_seconds`; confirm it. If a claimed question whose holder never reports is not already taken again after a time limit, the slice adds that limit, on the hub's clock.
   2. **Which transactions run a check or read a local value inside them?** List every one in the pause path and the answering settle before splitting anything. `settle_answered` in `store/answers.py`, which takes the answer-limit gate as a function, is the known case. Each moves to the hub with its values sent in the call.
+  3. **Which store functions take the current time from their caller, and which sweeps compare a client's time with a store time?** `mark_resume_started`, `claim_held` and `claim_wake` take it today, and `operations/question_sweep.py` compares answer times. On the hub every one uses the hub's time, and a run's paused time from Squadron is only ever an identifier.
 - **Sessions across machines:** `amoeba-mcp` as a client, the single tick, presence with machines, and the directory in `list` and `status`.
-- **Adoption:** `amoeba adopt`, the restore path, the hub's config, deleting the local-store way and the 228 state move, and the contract documents.
+- **Adoption:** `amoeba adopt`, starting a hub from a backup, the hub's config, deleting the local-store way and the 228 state move, and the contract documents.
 
 ## Related Work
 
@@ -257,6 +295,6 @@ Provisional. Each slice leaves the PM's install working on its local store; the 
 - `220-arch.program-tool`: the operations, the two doors, the pause entry and the resume.
 - `notes/008-code-sort.amoeba.md`: the line counts used above.
 - `notes/006-long-running-agents.amoeba.md`: the long-running agent this is the first step of.
-- `user/reviews/260-review.arch.the-hub.md`: the review of this document.
+- `user/reviews/260-review.arch.the-hub.md`: the latest review of this document. The first review is in git history.
 - Retired slice 109 (network API): an earlier door on the resident supervisor. Nothing of it is reused.
 - `docs/cli-contract.md`, `docs/config-contract.md`, `docs/store-contract.md`, `docs/mcp-server.md`, `docs/squadron-hook.md`: the contracts this changes.
