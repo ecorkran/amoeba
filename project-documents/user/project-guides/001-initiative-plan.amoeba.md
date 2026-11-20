@@ -4,7 +4,7 @@ layer: project
 project: amoeba
 source: user/project-guides/000-concept.amoeba.md
 dateCreated: 20260620
-dateUpdated: 20261119
+dateUpdated: 20261120
 status: in_progress
 ---
 
@@ -12,98 +12,102 @@ status: in_progress
 
 ## Source
 
-`000-concept.amoeba.md`, rewritten 20261106 from `notes/005-usage-scenarios.amoeba.md`. The earlier version of this plan is in git history.
+`000-concept.amoeba.md`, rewritten 20261120: Amoeba is an agent that stands in for the PM. The earlier versions of this plan are in git history. `notes/008-code-sort.amoeba.md` sorts today's code against the new concept.
 
 ## Index Convention
 
-**20-based** (100, 120, 140, ...), the guide default. Indices are tentative and may be reassigned. Retired indices stay listed so that existing documents keep their meaning.
+**20-based** (100, 120, 140, ...), the guide default. Indices are tentative and may be reassigned. Retired indices stay listed so that existing documents keep their meaning. 280 is left unused: it was briefly the working number for what became slices 230 to 232.
 
 ## Decomposition rationale
 
-Initiatives 100 to 140 were built from the bottom up, and 160 to 200 were planned the same way. The new concept starts from three scenarios and one job description, and that job is a single coherent system: a tool that knows the program, handles first-level questions and keeps the record. So all remaining work goes in **one initiative**, with one architecture document and one slice plan.
+The concept's build order is the decomposition. Each step is something that runs and is useful before the next one exists, and each later step builds on the one before:
 
-Splitting it again (say, questions in one initiative and programs in another) would give two architecture documents that have to agree on the same operations, the same store and the same answer to "does anything stay running?". Split later only if the work itself shows a reason to.
+1. Amoeba on a machine that never sleeps, reachable from every machine the PM works on (260).
+2. The parts any long-running agent needs (300).
+3. The stand-in agent, which is the product (320).
+4. A second, unrelated agent on the same parts (340).
+5. The kit, taken out of what the two agents share (360).
 
-240 is that later split. Messaging between agents is a new layer on top of 220's operations and store, with its own scenario (D), and it does not change what 220 built.
+Initiatives 100 to 240 are built. They are not redone. Each new initiative says what it keeps, changes and deletes from them, using the code sort.
 
-260 is its own initiative for the same reason. It adds a kept-running hub and a network door, which 240's architecture rules out, and it has its own scenario (E).
-
-Scenario F (standing answers, added 20261119) is not an initiative. It is three slices added to 220's slice plan (230 to 232), because it extends 220's pause handling and reuses 240's waking, and it needs no network. Each new case after that is one standing answer the PM gives, with no slice.
+The kit is last on purpose. It is extracted from two working agents, not designed first. The work prototype and its enterprise layer (single sign-on and per-person access for a team) are built on the kit in another project and are not in this plan.
 
 ## Initiatives
 
-1. [x] **(100) Substrate & Run-State Store** — Built: the SQLite store, resident process, inbox of submission files, network API and related contracts. The concept keeps the store, reduced to what the scenarios need; the rest has to be justified by a scenario. 220's audit decides what stays. Dependencies: None. Status: complete
-2. [x] **(120) Runner** — Built: launches and watches Squadron runs, resumes runs that stopped for a transient reason, hands paused runs to 140 and keeps the blocked list. The concept says Amoeba starts no work, so launching at least is in question. 220's audit decides what stays. Dependencies: [100]. Status: complete
-3. [x] **(140) Question Answerer** — Built: the question record, source passages and the two-step answering pipeline, plus a gate around the answer. The record and the pipeline are the core of the new concept. Checks on an answer belong in the pipeline as Squadron steps, so the gate is in question. 220's audit decides what stays. Dependencies: [100, 120]. Status: complete
-4. [ ] **(160) Translator & Notification** — Retired 20261106. The Translator is now the PM's separate chat agent app. The Discord bridge is dropped, because Amoeba notifies agents and agents already reach the PM. Status: deprecated
-5. [ ] **(180) Program Coordination** — Retired 20261106. Slices 180 (slice-writing pipeline) and 181 (program record) are merged. Slice 182 (program concept as a source) is parked on its branch, unmerged, and slices 183 to 186 are paused. Edges with hold and release, requests between members, and ordering are not in any scenario, and some of them walk the dependency graph, which the concept rules out. What programs still need moves to 220. Requests and hold-and-release come back in 240, rebuilt without a resident process. Status: deprecated
-6. [ ] **(200) Multi-Agent Chat** — Retired 20261106. Not Amoeba: the PM's chat and agent-to-agent talk live elsewhere. Brought back 20261114 as part of 240: agent-to-agent messages are Amoeba's, and a message to a program reaches every member. Status: deprecated
-7. [ ] **(220) Program Tool** — Everything the concept asks for, built by cutting down what exists before adding to it. Reopened 20261119 for scenario F (slices 230 to 232). Scope:
-   - **Scenarios A, B and C** from the concept: a question while the PM is away, a change in one member reaching another, and the PM asking where things stand. Scenario A, end to end on a real run the PM started, is the first proof.
-   - **One set of operations**, over MCP for agent sessions and a CLI for pipelines and scripts. No MCP server exists today.
-   - **Answering on runs Amoeba did not launch**, resuming only the run that asked.
-   - **The program model** at the size scenario B needs: members, what each depends on, and what each has released.
-   - **The record** of who asked what, which model answered, from what, and what the PM overrode.
-   - **An audit of today's code** against the scenarios, sorting about 34k lines in `src` and 69k in `tests` into keep, move to Squadron, or delete, and doing the deleting. Slices 182 to 186 are re-judged here.
-   - **The architecture document answers the concept's six open questions**, starting with who notices a paused run, since that decides whether a resident process exists at all.
+1. [x] **(100) Substrate & Run-State Store** — Built: the SQLite store and related contracts. Its store base is kept as agent core. Dependencies: None. Status: complete
+2. [x] **(120) Runner** — Built: launching and watching Squadron runs, resuming runs that stopped for a transient reason. Cut down by 220. Dependencies: [100]. Status: complete
+3. [x] **(140) Question Answerer** — Built: the question record, source passages and the two-step answering pipeline with no tools. The record is kept and widened by 320. The pipeline is deleted by 320. Dependencies: [100, 120]. Status: complete
+4. [ ] **(160) Translator & Notification** — Retired 20261106. Status: deprecated
+5. [ ] **(180) Program Coordination** — Retired 20261106. Slices 180 and 181 are merged. What programs still needed moved to 220 and 240. Status: deprecated
+6. [ ] **(200) Multi-Agent Chat** — Retired 20261106. Agent-to-agent messages came back as 240. Status: deprecated
+7. [x] **(220) Program Tool** — Built, slices 220 to 230: one set of operations over MCP and a CLI, answering on runs Amoeba did not launch, the program record, the decision record, and standing answers. Closed 20261120. Slices 231 (work, then resume) and 232 (dreaming) are dropped: 320 does the first with an agent that decides, and 300 does the second as memory curation. Dependencies: [100, 120, 140]. Status: complete
+8. [x] **(240) Agent Messaging** — Built: durable requests and notes between repos, push and presence, hold and release, waking, release notes. Kept. Its inbox and wake wrapper are the start of 300. Dependencies: [220]. Status: complete
+9. [ ] **(260) The Hub** — Amoeba on one machine on the PM's LAN that does not sleep, with every machine the PM works on as a client. Rewritten 20261120 and moved to the front: Amoeba loses most of its purpose on one machine. Scope:
+   - **One process that stays up,** in a container, holding the store. It starts at boot and restarts on failure.
+   - **A network door** over the existing operations, beside the CLI and MCP doors, with access control from the first slice.
+   - **Client mode.** `amoeba` and `amoeba-mcp` on any machine talk to the hub and never open a store. The hub's address is one config value.
+   - **Members known by name across machines.** A client resolves its own repo locally; the hub resolves a recipient from the store. Registration is cut down to fit (it is about 3,000 lines today).
+   - **A directory:** which sessions are working where, across machines.
+   - **An owner on every record,** which today is always the PM.
+   - **Moving the PM's live store to the hub,** with a backup and a stated restore path, and deleting the finished one-time state move.
 
-   - **Scenario F** (added 20261119): a ruling the PM gives once, applied to every later pause it covers, including pauses that need work done in the repo before the run can go on. A periodic pass finds answers given in one repo that should hold everywhere.
+   Out of scope: finding the hub automatically on the LAN, and more than one person using a hub. Dependencies: [240]. Status: not_started
+10. [ ] **(300) Agent Core** — The parts a long-running agent needs, built inside Amoeba. The model is Anthropic's "Building always-on agents" and `notes/006-long-running-agents.amoeba.md`. Scope:
+    - **Events.** The inbox widens from messages between repos to any event, with a dedup id and a status. One run per agent at a time; events that arrive during a run wait for the next.
+    - **Timers.** Follow-ups an agent sets for itself and schedules from its definition, each with an expiry. A scheduler pass in the hub's process turns a due timer into an event.
+    - **The runner.** It starts the command an agent's definition names (Claude Code or Codex without a window, or a Squadron pipeline), enforces a time cap and a cost cap itself, records the outcome and the session, and kills the whole process group at the limit. A run happens where its files are: on the hub from a clone, or on the client machine that has the working tree.
+    - **The definition file:** one per agent, naming its owner, command, model, caps, triggers, tools, what needs a person's approval, and its instructions.
+    - **Memory.** Instructions, an index, notes, progress per ongoing item, and what has already been reported. A scheduled curation pass merges repeats and replaces stale entries.
+    - **Outgoing messages,** stored and sent by a dispatcher, so a failed send is retried and nothing is sent twice.
+    - **Waiting on a person.** A run that needs approval ends with its session saved, and resumes when the answer arrives as an event. A waiting item expires.
+    - **A view of it all:** agents, their last runs, a run's log, and a cancel.
 
-   - **Scenario A switched on 2026-11-12** (hook live at user level, `trading` program registered, sanity pass clean). The counted trial and verdict were dropped as needing PM-driven work; evidence comes from normal use of `amoeba decisions` and `amoeba status`.
+    Out of scope: an agent loop, a model layer, a safety classifier and a credential proxy, for the reasons in the concept. Dependencies: [260]. Status: not_started
+11. [ ] **(320) The Stand-In** — The agent that takes everything another agent would hand to the PM. It is the product. Scope:
+    - **Entry points:** the end of each turn in an interactive session, a paused pipeline run, a finished pipeline run, and a direct ask. An entry point that cannot reach Amoeba fails loudly.
+    - **First-level chaos first.** Needless questions get answered so the agent keeps working. Leftovers get finished, or the agent is sent back to finish them.
+    - **Real questions,** answered from the code, the plans, the history, the repo's rules, other repos in the program and the PM's earlier decisions. It matches by meaning and decides by default.
+    - **The case record.** The question record widens to a case: any hand-off, what Amoeba looked at, what it decided and why, and the commits it made.
+    - **Learning.** Past cases are read before deciding. An overrule from the PM is stored against its case and the newest word wins. Leftovers are cases too. Curation runs on 300's pass and extends a decision made in one repo to the others it fits.
+    - **What reaches the PM,** as the concept lists it, and how each waiting item ends.
+    - **Deleting the answering pipeline** (about 2,700 lines) and the rules that decided which pauses could be answered.
 
-   Out of scope: launching member pipelines, notification mechanics, chat, and any check on an answer that could be a Squadron step. Dependencies: [100, 120, 140]. Status: not_started
-8. [x] **(240) Agent Messaging** — Messages between agents in different repos, for any agent and any UI, not only Claude Code sessions. Scenario D: one repo needs another to build something (squadron needs context-forge, which needs ai-project-guide). Architecture: `240-arch.agent-messaging.md`. Scope:
-   - **Durable messages** in the Amoeba store, addressed to a member repo or a program. Requests have states with an exit for each (open, accepted, done, declined, cancelled, expired), and notes are information only.
-   - **Chains** as parent links between requests, shown but never walked, with a depth limit.
-   - **Delivery by polling** at moments named in each repo's rules file, the floor for every agent. **Push** from `amoeba-mcp` on top: Claude Code channel events, plus a standard MCP resource update for clients that act on it. Also session presence.
-   - **Hold and release:** a run paused on a request resumes when the request is done.
-   - **Waking:** a configured per-member command started when mail lands and nobody is working in that repo. This is the last slice.
-   - **Release reports** also drop a note in each consumer's inbox.
+    Dependencies: [300]. Status: not_started
+12. [ ] **(340) Git Agent** — A second agent on the same core, for the PM's own repos, running on the hub. Scope:
+    - **Review responder.** It wakes when a review lands on one of the PM's pull requests, sorts real findings from noise, fixes the real ones, replies on each thread with what it did or why the finding does not hold, pushes, and asks for re-review.
+    - **Issue triage.** It labels and categorizes new issues, marks the ones an agent can resolve, and resolves those through a pull request.
+    - **Events from GitHub,** by polling through the PM's own login and by a webhook where the hub can be reached.
+    - **Its own memory:** which calls the PM overturned.
 
-   Out of scope: ordering across a chain, and Amoeba deciding what work to do. Slice plan: `240-slices.agent-messaging.md` (240 requests, 241 push and presence, 242 hold and release, 243 notes, 244 waking). Dependencies: [220]. Status: complete
-9. [ ] **(260) Cross-Machine Hub** — 240's messaging between repos on different machines, LAN first. Scenario E: trading-ui is worked on one machine and trading-data on another, in one program, and each needs to send the other requests, notes and release reports. Scope:
-   - **A hub:** one machine holds the store and runs `amoeba serve`, an HTTP door over the existing operations beside the CLI and MCP doors. This is a process kept running, on the hub machine only and only when remote use is wanted.
-   - **Client mode:** `amoeba` and `amoeba-mcp` on another machine point at the hub instead of a local store. A remote client only ever talks HTTP to the hub and never opens the store, so the hub can later move into its own service without clients changing.
-   - **Member identity without the hub's Context Forge:** project ids are minted per machine. The client resolves its own member with its local `cf`; the hub resolves a recipient by name from the store, which gains a member name. `add` for a remote repo is checked by the client's `cf`.
-   - **One repo, one machine, one member.** Two checkouts of a repo on two machines are two members.
-   - **A directory:** session rows record the host, so `list` shows who is working where across machines. Agents announce by heartbeat; the hub never pings agents.
-   - **Finding the hub:** the hub advertises itself on the LAN and a new machine's `amoeba` finds it without configuration.
-   - **Waking across machines:** mail for a repo on another machine starts that repo's wake command on its own machine.
-   - **Access:** a shared token from the first slice, since anyone who can post to the hub can put text in front of agents and start wake commands.
+    Its purpose beyond its own use is to show which parts of 300 are general. Whatever it cannot use as built gets fixed in 300. Dependencies: [300]. Status: not_started
+13. [ ] **(360) Kit Extraction** — Take what 320 and 340 both use out of Amoeba into its own package, with no dependence on Amoeba, Squadron or Context Forge. Amoeba and the git agent then depend on it. `notes/007-agent-kit-concept.amoeba.md` is the draft of where it is heading; it is rewritten from the working code when this starts. Out of scope: single sign-on, per-person access for a team, and the work prototype, which are built on the kit elsewhere. Dependencies: [320, 340]. Status: not_started
 
-   Out of scope: one member spanning machines, a request sent to more than one member, a claim queue ("whoever can do X"), the hub as a separately deployed service, and answering a paused run from another machine (answering reads the repo on disk, so each machine handles its own pauses against the shared store). Dependencies: [240]. Status: not_started
+<!-- Status takes only: not_started | in_progress | complete | deferred | deprecated -->
 
 ## Cross-Initiative Dependencies
 
-- **120 depends on 100, and 140 depends on 100 and 120.** These hold for the code as built. 220's audit may remove the dependencies along with the code.
-- **220 depends on 100, 120 and 140.** It inherits their code and is what cuts it down, so it can change or delete any of it. It also inherits slices 180 and 181 from retired 180.
-- **240 depends on 220.** It builds on 220's store, operations, MCP server, resume procedure and question record. It revises 220's "pull, never push" principle and decisions 5 and 6, as listed in `240-arch`.
-- **260 depends on 240.** It carries 240's messages, presence and waking across machines and changes none of their rules. It revises 240's "no new process kept running" for the hub machine, and 240's member lookup, which goes through the local `cf` for every call.
+- **260 depends on 240.** It carries 240's messages, presence and waking across machines. It reverses "no process kept running" and changes member lookup, which goes through the local Context Forge for every call today.
+- **300 depends on 260.** Timers need a process that stays up, and events from other machines need the hub's door. It grows out of 240's inbox and wake wrapper.
+- **320 depends on 300.** The stand-in is an agent defined and run by 300. It widens 140's question record, keeps 220's standing answers as the PM's instructions, keeps 220's pause entry, and deletes 140's answering pipeline.
+- **340 depends on 300.** It does not depend on 320, and the two can be built in either order. 320 goes first because it is the PM's larger cost.
+- **360 depends on 320 and 340.** Two working agents decide what is general.
 
 ## External Dependencies
 
-- **`ecorkran/squadron#299`:** closed. Answering steps' `allowed_tools: []` runs tool-less on Claude models.
-- **The PM's chat agent app:** not a dependency. Getting waiting questions to the PM belongs to chat and agent communication. From 240, Amoeba's MCP server pushes new mail to its own session, and pushes nothing else.
-- **Two more Squadron changes,** listed in `220-arch.program-tool`: a command started when a run pauses (`#302`), and the working directory in the run file with JSON from `sq runs list` (`#303`). A pipeline command step (`#304`) is on hold. All are general, off unless configured, and never make Squadron depend on Amoeba.
-- **Claude Code channels** (240's push): a research preview, observed 20261114. A custom server needs a launch flag, and the server has to negotiate a pre-2026-07-28 MCP revision. Polling still delivers without it.
+- **Claude Code**, read 20261120: without a window it takes a turn cap and a cost cap; a hook at the end of a turn can block the stop and give the agent text to continue with; a hook can defer a tool call so the run ends saved and resumes later. None of the runtimes checked has a wall-clock limit. Architecture re-checks each of these before depending on it.
+- **Squadron.** A pipeline step on a Claude model runs through the Agent SDK and loads the repo's settings, not the PM's user settings, unless `pipeline.user_settings` is on. So a turn-end hook reaches pipeline runs only through the repo's settings or that key. A run on any other provider has no hooks; for those, the entry points are the pause and the finished run.
+- **`ecorkran/squadron#302`** (a command started when a run pauses) and **`#303`** (working directory in the run file, JSON from `sq runs list`): closed, checked 20261120. **`#304`** (a pipeline step that runs a command): open, and nothing here needs it.
+- **Codex**, read 20261120: runs without a window and resumes a session. No turn, time or cost cap was found, so the runner enforces all three.
 
 ## Sequencing
 
-Work 220 in this order:
+`260 → 300 → 320 → 340 → 360`.
 
-1. **Architecture:** one new document, `220-arch`, answering the six open questions.
-2. **Audit:** sort the code against the scenarios and the architecture.
-3. **Slice plan:** rebuilt from the audit result.
-4. **Scenario A,** then whatever it shows is next. The slice plan sets the order of B and C.
-
-Nothing new gets built before the audit, and slices 183 to 186 stay paused until the slice plan re-judges them.
-
-Work 240 in this order: architecture and its review with the PM, scenario D added to the concept, then the slice plan.
-
-Work 260 in this order: scenario E added to the concept, architecture and its review, then the slice plan.
+Within each initiative: architecture and its review, then the slice plan, then slices. 260's architecture starts from this plan's scope, not from the earlier 260 entry.
 
 ## Notes
 
-- Until 220's architecture exists, the older architecture documents (`100-arch`, `120-arch`, `140-arch`, `180-arch`) describe what was built. Where they differ from the concept, the concept governs.
-- A new need starts as a new scenario in the concept, not as a new initiative here.
+- The older architecture documents (`100-arch` to `240-arch`) describe what was built. Where they differ from the concept, the concept governs.
+- A needless question or a leftover that still reaches the PM is a defect in Amoeba and is fixed there.
+- A design that handles one named case and sends the rest to the PM is rejected in review.
 - Check off initiatives as their architecture documents and slice plans are complete.
