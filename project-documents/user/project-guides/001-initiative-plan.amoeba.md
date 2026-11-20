@@ -4,7 +4,7 @@ layer: project
 project: amoeba
 source: user/project-guides/000-concept.amoeba.md
 dateCreated: 20260620
-dateUpdated: 20261118
+dateUpdated: 20261119
 status: in_progress
 ---
 
@@ -27,6 +27,8 @@ Splitting it again (say, questions in one initiative and programs in another) wo
 240 is that later split. Messaging between agents is a new layer on top of 220's operations and store, with its own scenario (D), and it does not change what 220 built.
 
 260 is its own initiative for the same reason. It adds a kept-running hub and a network door, which 240's architecture rules out, and it has its own scenario (E).
+
+280 is separate from 260 because it needs no hub and no network. It changes what 220 said an answer can do (resume only), so it gets its own architecture document, and it has its own scenario (F).
 
 ## Initiatives
 
@@ -68,12 +70,22 @@ Splitting it again (say, questions in one initiative and programs in another) wo
    - **Access:** a shared token from the first slice, since anyone who can post to the hub can put text in front of agents and start wake commands.
 
    Out of scope: one member spanning machines, a request sent to more than one member, a claim queue ("whoever can do X"), the hub as a separately deployed service, and answering a paused run from another machine (answering reads the repo on disk, so each machine handles its own pauses against the shared store). Dependencies: [240]. Status: not_started
+10. [ ] **(280) Standing Answers** — A ruling the PM gives once, applied to every later pause it covers. Scenario F: a p6 run pauses at its merge step on unchecked task boxes, and the PM's ruling is always the same (verify, finish what is small, tick, commit, merge). Scope:
+   - **The standing answer record,** in the store: the PM's words, the situation it covers, and its reach (every repo, one program, one member). Given through an agent, listed, and withdrawn; a withdrawn one stops applying at once.
+   - **Matching a pause to a standing answer.** Squadron already labels this pause in the run file (`unfinished_tasks` on the merge step), so a labelled pause matches on the label. A plain question matches through the answering pipeline, with standing answers supplied as passages.
+   - **Pauses that need work.** Amoeba starts an agent in the paused run's repo, on its branch, with the standing answer as the instruction, then resumes the run. One attempt per pause; a pause that survives it waits for the PM with what the agent did on the record.
+   - **The PM's authorization.** A standing answer is not stopped by the list of things an automatic answer may not authorize.
+   - **Curation.** Promote one of the PM's stored answers to a standing answer, or retract it.
+   - **Reach beyond a member** for ordinary questions: a standing answer counts in every repo it reaches, where a stored answer counts only in its own.
+
+   Out of scope: Amoeba choosing work nobody ruled on, and a standing answer written by anyone but the PM. Needs no network: it works on one machine, and 260's shared store carries it to the others. Dependencies: [220, 240]. Status: not_started
 
 ## Cross-Initiative Dependencies
 
 - **120 depends on 100, and 140 depends on 100 and 120.** These hold for the code as built. 220's audit may remove the dependencies along with the code.
 - **220 depends on 100, 120 and 140.** It inherits their code and is what cuts it down, so it can change or delete any of it. It also inherits slices 180 and 181 from retired 180.
 - **240 depends on 220.** It builds on 220's store, operations, MCP server, resume procedure and question record. It revises 220's "pull, never push" principle and decisions 5 and 6, as listed in `240-arch`.
+- **280 depends on 220 and 240.** It builds on 220's question record, answering pipeline and resume procedure, and on 240's way of starting an agent in a repo. It revises 220's rule that an answer can only resume the run that asked.
 - **260 depends on 240.** It carries 240's messages, presence and waking across machines and changes none of their rules. It revises 240's "no new process kept running" for the hub machine, and 240's member lookup, which goes through the local `cf` for every call.
 
 ## External Dependencies
@@ -97,6 +109,8 @@ Nothing new gets built before the audit, and slices 183 to 186 stay paused until
 Work 240 in this order: architecture and its review with the PM, scenario D added to the concept, then the slice plan.
 
 Work 260 in this order: scenario E added to the concept, architecture and its review, then the slice plan.
+
+Work 280 in this order: architecture and its review, then the slice plan. Scenario F is in the concept. 280 does not wait for 260.
 
 ## Notes
 
