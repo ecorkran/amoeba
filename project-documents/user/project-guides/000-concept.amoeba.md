@@ -224,8 +224,12 @@ These are built and stay. They are the stand-in's wiring and reach.
 
 ### How it runs
 
-- **One process stays running** on one machine. It holds the store, runs the scheduler and starts the worker. This reverses the earlier "nothing stays running": timers and a turn-end answer both need it.
-- **Other machines are clients of it.** Sessions and runs on another machine send their hand-offs to that process, so the PM's decisions are one store everywhere (the hub, initiative 260).
+- **One process stays running, on a machine on the PM's LAN that does not sleep.** It holds the store, inbox, timers, memory and the PM's decisions, and runs the scheduler. This reverses the earlier "nothing stays running": timers and a turn-end answer both need it. The PM's laptop sleeps and he works on several machines, so the process does not live on any of them.
+- **Every machine the PM works on is a client of it.** Sessions and runs send their hand-offs to that process, so the PM's decisions are one store everywhere (the hub, initiative 260).
+- **A run happens where its files are.** Work from a clone runs on the LAN machine. Work that needs a live working tree, uncommitted changes included, runs on the machine that has it, started by the session's own hook. That machine is awake whenever a session on it is asking.
+- **A wake starts a command.** The definition names it: Claude Code or Codex without a window, or a Squadron pipeline for any other provider and model. Amoeba builds no model layer of its own. It enforces the time cap for every command, because no runtime has one.
+- **Entry points do not depend on one vendor.** For any runtime, Amoeba reads what a run produced when it ends, and a paused pipeline run reports itself. Where a runtime offers more (Claude Code's turn-end hook, its pause-and-resume for approval, its cost cap), Amoeba uses it as the faster path.
+- **Every record names its owner.** Each agent, event, run and memory entry records whose it is. Today that is always the PM, through one stored login. It is the one seam kept for a later multi-person version.
 - **Config and state are separate.** What a person edits lives in the config directory. The store, memory, run records and logs live in the state directory.
 
 ### What this replaces
@@ -271,7 +275,13 @@ The architecture answers these itself.
 
 ### Development approach
 
-- **The stand-in first.** The first thing built is the agent on turn-ends and paused runs on this machine, with the case record. Then the leftover check, memory and curation, timers, the agent definition and runner, and other machines.
+- **Build order.**
+  1. The always-up process on the LAN machine, with the store, inbox and timers, and the laptop and other machines as its clients. Amoeba loses most of its purpose on one machine, so this comes first.
+  2. The first-level chaos: needless questions and leftovers, from sessions and from pipeline runs, with the case record.
+  3. Real questions answered from the repo and the PM's earlier decisions, then memory curation.
+  4. A second agent on the same core: the PM's own git agent (pull request review and issue triage).
+  5. The kit, extracted from what both agents use. What only Amoeba uses stays in Amoeba.
+- **The kit comes out of working agents.** It is not designed first. `notes/007-agent-kit-concept.amoeba.md` is the draft of where it is heading.
 - **Test with fixtures and live fixture runs.** No step waits on real use. Ship it, leave it on, and rework from what use shows.
 - **Each needless question or leftover that still reaches the PM is a defect in Amoeba,** and is fixed there.
 - **Resist narrowing.** A design that handles one named case and sends the rest to the PM is rejected in review.
