@@ -8,7 +8,7 @@ rulesSource: project
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: CONCERNS (reviewer stated FAIL; its three fail findings, F001 to F003, were checked, found valid and fixed 20261120, see Resolution)
+verdict: CONCERNS (all eleven findings were checked, found valid and fixed in the document 20261120, see Resolution)
 verdictSource: stated
 sourceDocument: project-documents/user/architecture/260-arch.the-hub.md
 aiModel: claude-opus-5-5
@@ -16,207 +16,190 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261120
 dateUpdated: 20261120
-reviewedSha: d01e60b464fbb74512460b896ac3ac375f0cb88f
+reviewedSha: d57913ed7e7fee8fe6efd0dde556415bb43c392f
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 17
 effort: high
 turns: 18
-promptTokens: 1123003
-cachedTokens: 1000346
-cacheWriteTokens: 122635
-completionTokens: 16109
-durationSeconds: 182.6
-costUsd: 1.504325
+promptTokens: 1045448
+cachedTokens: 929151
+cacheWriteTokens: 116275
+completionTokens: 17378
+durationSeconds: 186.5
+costUsd: 1.464586
 costBasis: provider
 squadronVersion: 0.24.34
 findings:
   - id: F001
-    severity: fail
-    category: feasibility
-    summary: "The resume has no claim, so several askers on one machine will each start a resume"
-    location: "project-documents/user/architecture/260-arch.the-hub.md:161-162"
-  - id: F002
-    severity: fail
-    category: completeness
-    summary: "Adoption has a window where the laptop splits into two stores, and the file copy can lose data"
-    location: "project-documents/user/architecture/260-arch.the-hub.md:182-204"
-  - id: F003
-    severity: fail
-    category: completeness
-    summary: "Restoring the hub on a new box ends with every client refusing to connect, and backups live on the disk they're meant to protect"
-    location: "project-documents/user/architecture/260-arch.the-hub.md:81-92"
-  - id: F004
     severity: concern
     category: feasibility
-    summary: "Work for a machine with no session open never starts, including the cross-machine wake"
-    location: "project-documents/user/architecture/260-arch.the-hub.md:158-166"
+    summary: "The resume claim's time limit ignores network retries, so a slow resume can be handed out a second time"
+    location: "project-documents/user/architecture/260-arch.the-hub.md:175-181"
+  - id: F002
+    severity: concern
+    category: completeness
+    summary: "A hook waiting on adoption's lock can write into the dated backup after the switch"
+    location: "project-documents/user/architecture/260-arch.the-hub.md:222-228"
+  - id: F003
+    severity: concern
+    category: completeness
+    summary: "Adoption has no exit when its outcome is unknown, or when a step after the load fails"
+    location: "project-documents/user/architecture/260-arch.the-hub.md:228"
+  - id: F004
+    severity: concern
+    category: consistency
+    summary: "On a second machine, `add` finds members by name, so a renamed member silently gets a duplicate"
+    location: "project-documents/user/architecture/260-arch.the-hub.md:146-149"
   - id: F005
     severity: concern
     category: completeness
-    summary: "Automated multi-call commands have no rule for an \"unknown\" result partway through"
-    location: "project-documents/user/architecture/260-arch.the-hub.md:117-121"
+    summary: "A hub started fresh, not by adoption, has no way to get its `config.yaml`"
+    location: "project-documents/user/architecture/260-arch.the-hub.md:84"
   - id: F006
     severity: concern
     category: feasibility
-    summary: "Matching checkouts by remote address, and back-filling member names, are both under-specified"
-    location: "project-documents/user/architecture/260-arch.the-hub.md:133-142"
+    summary: "Taking a backup at every start lets a crash loop rotate out the good backups"
+    location: "project-documents/user/architecture/260-arch.the-hub.md:92"
   - id: F007
     severity: concern
     category: consistency
-    summary: "The client file's copied timeouts go stale, so they are not \"set in one place\""
-    location: "project-documents/user/architecture/260-arch.the-hub.md:128"
+    summary: "When pending work is asked for is stated two different ways"
+    location: "project-documents/user/architecture/260-arch.the-hub.md:172"
   - id: F008
     severity: concern
-    category: technology
-    summary: "Certificate pinning, and the backup timer, are left to the implementer and easy to get wrong"
-    location: "project-documents/user/architecture/260-arch.the-hub.md:232"
-  - id: F009
-    severity: concern
     category: completeness
-    summary: "`rm-machine` doesn't end every state tied to that machine"
-    location: "project-documents/user/architecture/260-arch.the-hub.md:130"
-  - id: F010
+    summary: "Kept results need to be in the same transaction and keyed by machine, and their lifetime must cover client retries"
+    location: "project-documents/user/architecture/260-arch.the-hub.md:62"
+  - id: F009
     severity: note
     category: consistency
-    summary: "Store functions take `now` from the caller, which conflicts with \"the hub's clock is the clock\""
-    location: "project-documents/user/architecture/260-arch.the-hub.md:63"
+    summary: "\"Who is calling\" says the client sends the machine; that must come from the token"
+    location: "project-documents/user/architecture/260-arch.the-hub.md:151"
+  - id: F010
+    severity: note
+    category: completeness
+    summary: "Check 1 under Anticipated Slices can already be answered: the pause claim already has a time limit"
+    location: "project-documents/user/architecture/260-arch.the-hub.md:285"
+  - id: F011
+    severity: note
+    category: technology
+    summary: "`amoeba-mcp` tick and tool calls under a hub outage"
+    location: "project-documents/user/architecture/260-arch.the-hub.md:192"
 ---
 
 # Review: arch — initiative 260
 
-**Verdict:** FAIL
+**Verdict:** CONCERNS
 **Model:** claude-opus-5-5
 
 ## Findings
 
-### [FAIL] The resume has no claim, so several askers on one machine will each start a resume
+### [CONCERN] The resume claim's time limit ignores network retries, so a slow resume can be handed out a second time
 
-"Work that belongs to a machine" says each piece of work is claimed before it starts, "a resume by its started mark … All three are compare-and-set today". It also says "The wake and the resume have such a limit today." Neither is true for the resume.
+The claim table says a resume's claim is handed out again after `resume_bound_seconds`. That bound (`src/amoeba/operations/resume.py:50-64`) adds up the wait, the polls, the kill graces and **one `BUSY_TIMEOUT_SECONDS`** for the final store write. Under the hub, that final write is a hub call, and the client retries it for `hub_retry_seconds`. The design makes that value a per-machine setting the hub never sees (line 133).
 
-- **No claim exists.** `MARK_RESUME_STARTED` (`src/amoeba/store/sql.py:362-365`) is `UPDATE answers SET resume_started_at = ? WHERE seq = ? AND (resume_outcome IS NULL OR resume_outcome = 'refused')`. Nothing checks that `resume_started_at IS NULL`. So `mark_resume_started` returns True for every caller until the outcome is final.
-- **The run check doesn't close the gap.** `resume.py:128-141` only guards with "the run is still at the pause". Two askers can both poll before either one resumes.
-- **It was safe only because of how it's called today.** The one caller is `answer` in its own process. The design adds a caller on every `amoeba` call and every `amoeba-mcp` tick from every session on the machine. With three sessions open on the laptop, an answer from the desktop can start `squadron resume` up to three times for one pause.
-- **No time limit exists either.** A started mark has no age after which the work is handed out again.
-- **Refused resumes aren't placed.** The statement accepts `refused` as re-markable, so a refused resume counts as pending on every tick unless the design says otherwise. The document doesn't say whether a `refused` answer is pending work, or when it stops being retried.
+Here is the failure. The hub blips while a resume is recording its outcome. The resume process retries for `hub_retry_seconds`. On the hub's clock the claim reaches the limit with no outcome recorded. The next tick from another session on that machine takes the claim and starts `squadron resume` again for the same pause. That is the double resume the claim was added to stop.
 
-What the document needs:
-- name a real claim: a new compare-and-set on `resume_started_at IS NULL OR resume_started_at < hub_now - limit`
-- name the limit's config key
-- say what happens to a refused resume
+`answer_bound_seconds` and `check_deadline` (`src/amoeba/wiring.py:297-309`) have the same problem. They check that a same-machine `answer` fits inside the MCP call deadline using local store waits only. With the hub, `answer` also spends a round trip and up to `hub_retry_seconds` for each hub call. But the config check runs where the config is (the hub), and the retry setting lives on each client, so no single place can do the check.
 
-The earlier review accepted "the resume relies on `mark_resume_started` being compare-and-set". That premise is wrong.
+Fix this in the architecture. One option: the claim limit adds a retry allowance the hub knows, and the client caps its retries at it. Another: the hub sends its retry ceiling with the settings, and a client refuses a `hub_retry_seconds` above it. Either way, say where the MCP deadline check now runs.
 
-### [FAIL] Adoption has a window where the laptop splits into two stores, and the file copy can lose data
+### [CONCERN] A hook waiting on adoption's lock can write into the dated backup after the switch
 
-"How the build gets there" picks the mode by one thing: whether a client file exists. The walkthrough (step 1) runs `amoeba join` and then `amoeba adopt`. Stepping through that as the operator:
+Walkthrough step 2 says a pause hook that fires during the copy "waits on the lock for the store's busy time and fails". That is only true if adoption takes longer than the busy timeout, which is 5 seconds (`src/amoeba/store/store.py:28`). For a small store on a LAN, steps 2–5 can easily finish in under 5 seconds.
 
-1. **After `join`, before `adopt`.** Every new `amoeba` call on the laptop goes to the hub, whose store is empty. Then:
-   - `list` and `inbox` show nothing.
-   - Every caller is `not_a_member`.
-   - A Squadron pause hook that fires now fails, or it writes a row to the hub. If it writes a row, `adopt` step 1 ("Refuses unless the hub's store is empty") refuses from then on. No command clears that.
-   - "Empty" isn't defined either. The hub already holds the owner (created at first start) and the laptop's machine (created by `invite`).
-2. **Sessions that were already running.** An `amoeba-mcp` started before `join` may have picked its mode at startup. The document doesn't say whether the mode is read per call or per process. If per process:
-   - It keeps writing the laptop store through its open connection.
-   - After `adopt` renames the file, those writes land in the "dated backup" that the restore path says "was not changed".
-   - A process that reopens the store hits `Store.open`, which creates the store if it is missing (`src/amoeba/store/store.py:78`). That is a fresh empty local store, a silent local fallback the design goals forbid.
-3. **The copy can miss recent commits.** The store runs in WAL mode (`PRAGMA journal_mode=WAL`, `store.py:103`). Step 2's "Sends the store file" doesn't say whether the WAL is checkpointed first or the SQLite backup API is used. A raw file copy leaves out commits still in `-wal`. The row-count check is "against the file it was sent", so it passes on the short copy.
+When they do, step 5 renames the store and releases the lock. The waiting hook already holds an open connection to the old file, now renamed. It gets the lock and commits its question **into the dated backup**. The hub never sees that question, and the hook reports success. The mode is decided per call, but this call decided before the client file existed. This is a silent lost write on the PM's live store, during the one migration the design rules say must have a safe restore.
 
-What the document needs:
-- `adopt` refuses while any local session row is live
-- the mode is decided per call
-- the local store path is opened without auto-create once a client file exists
-- the copy is made with the backup API, or after a checkpoint taken under an exclusive lock
-- "empty" is defined as "no rows except the owner and invited machines"
-- alternatively, `join` and `adopt` become one command so the window doesn't exist
+Fix: before releasing the lock, commit a tombstone in the local store, in the same locked transaction. For example, set `user_version` to a sentinel or write an `adopted_to` row. Then every local write transaction checks for the tombstone and fails, naming the hub. Then change step 2 of the walkthrough to describe the actual behavior.
 
-### [FAIL] Restoring the hub on a new box ends with every client refusing to connect, and backups live on the disk they're meant to protect
+### [CONCERN] Adoption has no exit when its outcome is unknown, or when a step after the load fails
 
-Walkthrough step 11 ("The hub's disk is lost") and "A new address" (line 129) both say a restored hub needs no new invites. Stepping through it:
+The document says: "If any step fails, nothing on the laptop has changed and the hub is emptied back to its owner and machines, so the command can be run again." That only works when the hub is the side that notices the failure, as with a row-count mismatch.
 
-- **The backups go down with the disk.** "The hub" puts the store, its backups and the certificate and key all in the one state mount. If the disk is lost, so are the backups. The only copy left is the laptop's dated backup from adoption, which is missing everything since.
-- **The certificate isn't in the backup.** The backups are copies of the store. The certificate and key are separate files, so a hub restored from a backup makes a new certificate at first start. Every client pinned the old fingerprint and "refuses any other". `join --address` changes only the address and keeps the fingerprint. No command accepts a new fingerprint. The only way out is `rm-machine` plus a new invite on every machine, and re-`add` in every repo, because `rm-machine` drops checkouts.
-- **The undo path has the same shape of problem.** "Restore path" starts a hub on the laptop from the backup and then "join it". But the backup's single machine is the install machine, which has no token. A fresh `invite` creates a different machine, so every stored path and checkout belongs to a machine no client is. The document also doesn't say that undo throws away every record written to the hub since adoption.
+Two cases break it:
+- **The reply to step 3 or 4 is lost** and the retries run out. The result is "unknown". The hub may hold the loaded store and config, but the laptop has no client file. A new `adopt` uses a new call id, and step 1 refuses because "the hub is not empty". No command empties a hub: the admin table at lines 100-106 has none.
+- **Step 5 fails on the laptop**, for example the client file can't be written or the rename fails. The hub now holds the data, and "emptied back" needs another hub call that nobody makes.
 
-What the document needs:
-- the backup includes the certificate and key, or the key moves into the store
-- a `backup_dir` that can point at another volume
-- `adopt`'s restore names how the install machine gets a token, for example `hub invite --machine <existing>`
+Under "every state has an exit", that is a dead end. Either:
+- make `adopt` safe to repeat (the hub records an adoption id and the laptop's row counts, and accepts a repeat of the same adoption as already done), or
+- add an admin command that empties a hub holding only adopted data.
 
-### [CONCERN] Work for a machine with no session open never starts, including the cross-machine wake
+Then add the case to the walkthrough.
 
-Only a client process can pick up pending work, and only an `amoeba` call or an `amoeba-mcp` tick on that machine asks for it. A wake exists for the case where nobody is live in the recipient. If the recipient's wakeable checkout is on the desktop, and no session in any repo is open there, nothing on the desktop ever asks. The wake waits until the request expires.
+### [CONCERN] On a second machine, `add` finds members by name, so a renamed member silently gets a duplicate
 
-The same applies to a resume answered from another machine (step 3: "it resumes when the PM next opens a session there"). So across machines, waking works only if the target machine happens to have an unrelated live session.
+`add` on a second machine "finds the member by name". The name it looks up is the Context Forge project name, unless `--name` is given. The `origin` check applies only after a name has matched.
 
-The walkthrough calls this "one soft spot" and then reports "Dead ends found: none". Under the "Every state has an exit" and walkthrough rules, a feature that silently never runs is a dead end. It is also a regression: today `send` on one machine always reaches the wake.
+Two cases go wrong:
+- The PM renamed the member with `amoeba add --name`.
+- The member lost a name clash during "Naming the members that already exist" (line 214), so its name is its id.
 
-A small fix that fits the design: `amoeba join` installs a per-user launchd or systemd timer that runs `amoeba tick` every `notify_poll_seconds`, or something coarser. If the PM doesn't want that, the document should say outright that cross-machine wakes and resumes need a session open on the target machine, and `send` should report it.
+In both cases a plain `amoeba add` on the second machine finds no member with that name and **creates a new one**. The new member has the same `origin` and a separate inbox. Agents addressing the original never reach sessions on the second machine, and nothing reports it.
 
-### [CONCERN] Automated multi-call commands have no rule for an "unknown" result partway through
+Fix: look up the normalized `origin` first. If a member already has that `origin`, attach the checkout to it, or refuse with that member's name shown. Never create a second member whose `origin` matches an existing one.
 
-"Repeats and failures" gives three outcomes. For "unknown" it says to "tell the caller to read the state (`inbox`, `list`)". That works for a person or an agent. It doesn't work for the callers that aren't one:
+### [CONCERN] A hub started fresh, not by adoption, has no way to get its `config.yaml`
 
-- the pause hook
-- a detached `handle-pause`
-- the resume
-- the wake wrapper
+"`config.yaml` … arrives at adoption. Before then the hub serves machines and invites only." The config has required keys with no defaults, and no code writes a template (`src/amoeba/config/user_config.py:170-184` fails with "no config at …"). Adoption is the only path described, and it needs a local store.
 
-These make chains of hub calls; Technical Considerations puts the pause path at about twenty transactions. During a hub restart, the hook can succeed at `claim_held`, launch the answering run, and then get "unknown" on the settle.
+So these cases end at a hub that refuses every operation:
+- a new user;
+- a single-machine user, who the "One mode" principle says runs a hub;
+- the live test fixture with client files (line 273).
 
-What the document needs: for each client-run command, what it does on "unknown" at each step (stop and leave the claim to age out, or retry on the next ask) and which existing dead-claim rule recovers it. One example: the held-question claim ages by `answering_wait_seconds`. The walkthrough's step 4 covers only a hook that fails before its first call.
+The walkthrough never covers them. State the path: the PM writes `config.yaml` in the hub's config directory from the image's example, as with `hub.yaml`. Or `amoeba hub serve` refuses to start without it. Add it to the walkthrough.
 
-### [CONCERN] Matching checkouts by remote address, and back-filling member names, are both under-specified
+### [CONCERN] Taking a backup at every start lets a crash loop rotate out the good backups
 
-**Remote address.** "The hub records the repo's remote address with the member, and refuses a checkout whose remote differs." Three cases are missing:
-- **Same repo, different URL.** One clone may use `git@github.com:o/r.git` and another `https://github.com/o/r`. Without a normalization rule, the same repo is refused.
-- **No remote.** A repo with no remote, or with several, has no rule.
-- **Migrated members.** Members carried over in the migration have no remote recorded. The document doesn't say whether the first second-machine `add` accepts any remote or refuses.
+"The hub takes one when it starts and every `backup_hours` after that, and keeps the newest `backups_kept`." The container restarts the hub on failure (line 88).
 
-**Member names.** "One schema" says names "are filled from `cf` at the first call after the upgrade". Missing:
-- which call fills them, and whether it fills all members or only the caller
-- what happens when two local members share a Context Forge project name, which is the document's own step 10 case: the unique constraint can't be applied until the clash is settled
-- whether every name is guaranteed filled before `adopt`. The hub has no `cf`, so a member left unnamed has no exit once it is there.
+Suppose a release ships a bad migration, or a bug that crashes the hub after start. Each restart takes a fresh backup of the damaged store and deletes the oldest good one. After `backups_kept` restarts, which takes seconds, every backup is a copy of the bad state.
 
-Each of these needs a stated rule.
+The document also doesn't say whether the start backup comes before or after migrations run. The repo's migration rule needs a backup first, with a stated restore path.
 
-### [CONCERN] The client file's copied timeouts go stale, so they are not "set in one place"
+Fix:
+- The start backup runs before migrations.
+- Skip it when the newest backup is younger than `backup_hours`, or keep the backup taken before each migration outside the rotation.
+- Say that restoring from it is `serve --from-backup` with the previous image.
 
-The invite copies `hub_connect_seconds`, `hub_read_seconds` and `hub_retry_seconds` into the client file "so they are still set in one place". After the copy, editing them in the hub's config changes nothing on clients already joined. The only re-fill path is a new invite, which means a new token.
+### [CONCERN] When pending work is asked for is stated two different ways
 
-Either:
-- say each successful call returns the current values and the client rewrites its file, or
-- treat them as client-local settings that the PM edits on each machine, and drop the "one place" claim.
+Line 172: "Each `amoeba` call **that could have caused such work**, and each `amoeba-mcp` tick, asks the hub what this machine should start."
 
-### [CONCERN] Certificate pinning, and the backup timer, are left to the implementer and easy to get wrong
+Line 184: work for another machine "starts the next time **anything** on that machine talks to the hub: **any** `amoeba` call or any open session."
 
-"The CLI calls the hub with a plain blocking call," and the client "records the fingerprint … and refuses any other". Neither stdlib `http.client`/`ssl` nor `httpx` (in the lock through `mcp`) offers fingerprint pinning. Each needs verification turned off (`CERT_NONE`) and a manual check of `getpeercert(binary_form=True)` after the handshake.
+These conflict. For example, an `inbox` or `decisions` call can't cause a resume, so under line 172 it doesn't ask. Under line 184 it picks up the laptop's waiting resume.
 
-A naive version sends the request, token included, before comparing. That is exactly the leak the encryption is there to stop. The document should:
-- name the client library
-- require the fingerprint check to run in `connect()` before any bytes of the request are written
-- require a test that a wrong certificate gets no token
+Pick one. The cheap way to make "any call" true is to put the pending-work answer in every hub response, not to add a second round trip. Say which. The latency figure at line 270 ("a `cf` call plus one round trip") depends on it.
 
-Separately, the in-process backup timer runs inside the async server. A consistent copy of a large store (SQLite backup API or `VACUUM INTO`) must run in a worker thread, like other store work. Otherwise it breaks the "<1 ms sync in async" rule in `python.md`.
+### [CONCERN] Kept results need to be in the same transaction and keyed by machine, and their lifetime must cover client retries
 
-### [CONCERN] `rm-machine` doesn't end every state tied to that machine
+"The hub keeps each writing call's result for a short time and gives the same result to a repeat." Three things this depends on aren't stated:
+- **The same transaction.** The kept result must be written in the same transaction as the operation. Otherwise a crash between the commit and saving the result lets a repeat apply twice. "One hub call is one whole transaction" implies this, but say so.
+- **Keyed by machine.** Kept results must be keyed by the token's machine as well as the call id. Otherwise one machine's repeated id could return another machine's result.
+- **Two settings that must agree.** Retention is `call_result_minutes`, in `hub.yaml` on the hub. The retry window is `hub_retry_seconds`, in each client file. If a client's retry window is longer than the retention, a late repeat applies twice. Nothing checks this, because the two values never meet. Have the hub refuse, or have the client cap, a retry window longer than the retention, for example by sending its ceiling with the settings, as in the first finding.
 
-"Leaving" closes open questions as `machine_removed`, drops checkouts and sessions, and lets wake rows age out. It doesn't cover:
+### [NOTE] "Who is calling" says the client sends the machine; that must come from the token
 
-- **Answered, not yet resumed.** An answer whose run is on the removed machine is already answered, so it is not an open question. It needs `mark_not_delivered` with a reason, or `list` shows "waiting for <removed machine>" forever.
-- **Claimed held questions.** A held question that machine had claimed.
-- **Live wakes.** A live wake in one of its checkouts blocks every other wake for that member until `wake_timeout_seconds` (`_has_live_wake`, `src/amoeba/store/wakes.py:94-100`). It should be ended at removal.
+"It sends the machine and that project id. The hub maps them to the member." Line 113 says "the token names the machine". Line 114's guard, that a wake command can be set only from its own machine, holds only if the hub ignores any machine the client names and uses the token's machine. Otherwise machine A's token could claim to be machine B and set B's wake command. Change the wording to: the client sends the project id, and the hub takes the machine from the token.
 
-"Every wait ends … or when the machine is removed" (line 166) needs to name the write that ends each of these. Bringing a machine back (step 8) also needs `amoeba add` again in every repo, which the walkthrough doesn't mention.
+### [NOTE] Check 1 under Anticipated Slices can already be answered: the pause claim already has a time limit
 
-### [NOTE] Store functions take `now` from the caller, which conflicts with "the hub's clock is the clock"
+The held-question claim ages out by `answering_wait_seconds`:
+- `src/amoeba/operations/pause_class.py:117` ("`claim_age_limit` is `answering_wait_seconds`");
+- the sweep's `CLAIMED` branch, `src/amoeba/operations/question_sweep.py:190`.
 
-The store functions take `now` from the caller's `deps.clock()`. Examples are `mark_resume_started`, `claim_held` and `claim_wake`. `QuestionKey.paused_at` comes from the client's Squadron run file, on the client's clock.
+The third row of the claim table can name the limit directly, and the slice doesn't need to add one. One more thing worth saying: the sweep branch closes the question only with a run fate, and the fate is read from local run files. So on the hub, only the run's own machine can close a stale claimed question that way, which is the same limit stated at line 184.
 
-The hub-call layer has to drop any client-supplied `now`. It also has to keep client-clock values like `paused_at` as identifiers only, never comparing them with hub times in sweeps (`question_sweep.py:248` mixes answer timestamps). This is worth one line in the principle, so the slice that moves the pause path checks it.
+### [NOTE] `amoeba-mcp` tick and tool calls under a hub outage
+
+The tick is a blocking stdlib HTTPS call run off the event loop. During an outage, each call blocks its worker thread for up to `hub_retry_seconds`. The document doesn't say whether ticks run one after another or can overlap. If `notify_poll_seconds` is shorter than `hub_retry_seconds` and ticks overlap, blocked threads pile up until the hub returns.
+
+The tick also doesn't need the retry, because the next tick is the retry. State that ticks run one after another and skip the retry. Tool calls keep it, within the MCP deadline from the first finding.
 
 ### Run Digest
 
-- Response length: 13837 chars
+- Response length: 12292 chars
 - Response is newline-free: no
 - Tool calls made: 17
 - Tool calls failed: 0
@@ -224,30 +207,31 @@ The hub-call layer has to drop any client-supplied `now`. It also has to keep cl
 - Output budget: backend default
 - System prompt: preset+append
 - Settings sources: project
-- Reasoning characters: 143
+- Reasoning characters: 0
 - Effort: high
 - Turns: 18
-- Tokens — prompt / cached / cache write / completion / reasoning: 1123003 / 1000346 / 122635 / 16109 / not computed
-- Duration: 182.6 s
-- Cost: $1.50 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 1045448 / 929151 / 116275 / 17378 / not computed
+- Duration: 186.5 s
+- Cost: $1.46 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 10
+- Finding-shaped matches — whole response: 11
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 10
-- Finding-shaped matches — surviving validation: 10
+- Finding-shaped matches — in findings section: 11
+- Finding-shaped matches — surviving validation: 11
 
 ## Resolution
 
-Second review round. Each finding was checked against the code and the document before acting. All ten hold. Worked into `260-arch.the-hub.md` 20261120. The first round's review and resolution are in git history (`588353bc`).
+Third review round, no fail findings. Each finding was checked against the code and the document. All eleven hold. Worked into `260-arch.the-hub.md` 20261120. Earlier rounds are in `archive/` and git history.
 
-- F001 (valid, fixed): confirmed in `store/sql.py`: `MARK_RESUME_STARTED` does not check that the mark is empty, so it is not a claim. The resume gets a real claim, taken only when the mark is empty or older than `resume_bound_seconds` with no outcome. A refused resume is not pending work and is retried only as today.
-- F002 (valid, fixed): adoption is one command, `amoeba adopt <join line>`, with the client file written last, so there is no time between joining and adopting. It refuses while a local session is live, holds the local store's write lock from the copy to the switch, copies with SQLite's backup call, and defines an empty hub. The mode is decided on every call, and a machine with a client file never opens or creates a local store.
-- F003 (valid, fixed): a backup holds the store, the certificate and the key, and goes to a required `backup_dir` meant for another disk. A hub started from a backup is the same hub, so clients connect unchanged. `hub invite` for an existing machine issues a new token. Undo is moving the hub to the laptop from a current backup, which loses nothing; the adoption backup is only the fallback, and the document says what it lacks.
-- F004 (valid, limit stated): no background poller is installed on clients. The document states that work for another machine needs something of Amoeba's running there, `send` and `answer` report the machine being waited on, and the walkthrough lists it as a limit. A same-machine `send` still starts the wake in the same call. Waking with no machine awake is 300's runner on the hub.
-- F005 (valid, fixed): a command that runs by itself stops on unknown, and its claim's time limit hands the work out again. A table names each claim and its limit.
-- F006 (valid, fixed): `origin` is compared after reducing to host and path; a repo with no `origin` has one checkout only. Existing members are named, and their `origin` recorded, by the first call after the upgrade, for all members at once, with fixed answers for an unknown project and a name clash. Adoption refuses if any member is unnamed.
-- F007 (valid, fixed): the three network settings are each machine's own, written at join and edited there. The "one place" claim is dropped.
-- F008 (valid, fixed): the client saves the hub's certificate at join and trusts only it, so the check is part of setting up the connection. A test proves a wrong certificate gets no token. The backup copy runs in a worker thread.
-- F009 (valid in part, fixed): the sweep's meaning of "open" already includes an answer not yet resumed, so that case was covered, but the document did not say so. "Leaving" now lists each write, including ending a live wake, and says a returning machine needs `add` in each repo.
-- F010 (valid, fixed): the clock principle says a hub call never takes the time from the client and a client-file time is only an identifier. The local-work slice has a third stated check for it.
+- F001 (fixed): the connect, read and retry times are constants shared by the client and the hub, not per-machine settings. Every claim's limit allows for the retries of its last call, and the MCP deadline check runs on the hub with the network times added.
+- F002 (fixed): adoption marks the local store as adopted before releasing the lock, and every local write checks the mark, so a hook that was waiting on the lock fails and names the hub.
+- F003 (fixed): adoption carries an id written to the local store first. Running the command again is safe: a hub holding that adoption skips or redoes the load and carries on. A hub holding anything else refuses and says how to empty it.
+- F004 (fixed): `add` looks for the `origin` first, then the name, so a renamed member never gets a second copy from another machine.
+- F005 (fixed): on a fresh hub the person writes `config.yaml` from the image's example. The walkthrough has the case.
+- F006 (fixed): a timed backup is taken only when the newest is older than `backup_hours`, so a crash loop takes none. Backups before a migration are taken first and kept in their own rotation; undoing a bad release is the previous image started from that file.
+- F007 (fixed): every hub reply carries a flag that this machine has work waiting, at no extra call. A client that sees it makes one call to claim and start the work.
+- F008 (fixed): a kept result is written in the call's own transaction, under the machine and the call id, and its lifetime is worked out from the fixed retry time.
+- F009 (fixed): the client sends the project id; the hub takes the machine from the token.
+- F010 (fixed, verified in `pause_class.py` and `question_sweep.py`): the claim table names `answering_wait_seconds`, the slice's first check is removed as answered, and the document says only the run's own machine can clear a stale pause claim.
+- F011 (fixed): ticks run one after another and do not retry; tool calls keep the retry.
