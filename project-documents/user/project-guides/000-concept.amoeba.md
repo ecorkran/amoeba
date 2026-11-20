@@ -5,10 +5,10 @@ phase: 0
 phaseName: concept
 project: amoeba
 audience: [human, ai]
-description: Concept for Amoeba, rewritten 20261106. A tool that agents and pipelines call. It knows how a program's repos depend on each other, handles first-level questions by running a Squadron answering pipeline, and keeps the record of what was decided. Squadron does the work, and in normal use a human never types an Amoeba command.
-dependsOn: [000-pre-concept.amoeba.md, notes/005-usage-scenarios.amoeba.md]
+description: Concept for Amoeba, rewritten 20261120. An agent that stands in for the PM. Everything another agent would hand to the PM goes to it first. It answers needless questions, catches leftover work, answers real questions from the repo and the PM's earlier decisions, and learns from every case. Built as a long-running agent.
+dependsOn: [000-pre-concept.amoeba.md, notes/006-long-running-agents.amoeba.md]
 dateCreated: 20260618
-dateUpdated: 20261119
+dateUpdated: 20261120
 status: in_progress
 ---
 
@@ -16,7 +16,7 @@ status: in_progress
 
 ## Overview
 
-Amoeba is a tool that agents and pipelines call. It knows how a program's repos depend on each other, handles first-level questions by running a Squadron answering pipeline, and keeps the record of what was decided. Squadron does the work inside each repo, and humans reach Amoeba through an agent.
+Amoeba is an agent that stands in for the PM. Everything another agent would hand to the PM goes to Amoeba first: questions, leftover work, paused runs. It looks, decides and acts the way the PM would, and it learns from every case and every time the PM overrules it.
 
 The User-Provided Concept below is the original idea, kept as written. Amoeba has moved a long way from it. The Refined Concept is the current one.
 
@@ -105,109 +105,150 @@ On adoption into a CF project, save the finished concept as `001-concept.amoeba.
 
 ## Refined Concept
 
-> Rewritten 20261106 from `notes/005-usage-scenarios.amoeba.md`. It replaces the earlier Refined Concept, which is in git history. Where the User-Provided Concept above differs, this section governs.
+> Rewritten 20261120 at the PM's direction. It replaces the 20261106 Refined Concept and its scenarios A to F, which are in git history. Where the User-Provided Concept above differs, this section governs.
 
 ### Problem
 
-Squadron works inside one repo and one run at a time. Two things fall outside that:
+The PM runs many agents: interactive sessions and unattended pipeline runs, across several repos. They waste his time in three ways.
 
-1. **Programs.** Some repos only make sense together: `trading-data`, `trading-engine` and `trading-ui` are one product, and Squadron, Context Forge and ai-project-guide are one toolchain. Each usually waits on a release of another. Today only the PM holds that picture.
-2. **Questions.** A pipeline's agent stops to ask something. Most of these questions could be answered from the project's rules, the program's concept and the PM's earlier answers, but the run waits for the PM anyway.
+1. **Needless questions.** Agents ask things that are already decided, or that they could settle by looking at the repo.
+2. **Leftovers.** Agents stop with work undone: an unticked plan, a "remaining" list, a step skipped and handed over as an open item.
+3. **Real questions that have an answer.** Some questions need thought, and the answer can still be worked out from the code, the plans, the history and how the PM has decided before. They wait for the PM anyway.
 
-Amoeba had not been run by anyone as of 20261106. It was built from the bottom up (store, process, contracts, features), and no one could say who would start it or when. This concept starts from the people and agents who use it, and everything else has to justify itself against that use.
+Written rules do not fix this. Agents read a rule and then act from habit. On 20261120 a session had "do this after every merge, never ask" in front of it and listed the item for the PM anyway. Whatever fixes this has to sit outside the agent and act on what the agent actually produces.
+
+Earlier versions of Amoeba failed by narrowing:
+
+- **It acted in one situation only:** a Squadron pipeline run paused on a question. Interactive sessions and runs that finished with leftovers never reached it.
+- **Its answerer was built to refuse.** It had no tools, saw only text pasted into its prompt, and could answer only when that text already settled the question. Everything else waited for the PM.
+- **Each new case needed the PM to write a ruling first.** The PM still did the thinking, one case at a time.
+
+What that produced was a record-keeper and a few hooks.
 
 ### What Amoeba is
 
-A tool that agents and pipelines call. It does four things:
+Amoeba is an agent that stands in for the PM. It judges and interprets, and that is the product.
 
-- **Knows the program:** the members, what each is doing, what each depends on and what is blocked.
-- **Handles first-level questions:** it routes a question to the answering pipeline with the right context, then returns the answer or passes the question up.
-- **Keeps the record:** who asked what, which model answered, from what, and what the PM overrode.
-- **Carries messages between repos:** requests and notes from an agent in one member to another member or a whole program, for any agent and any UI (scenario D, added 20261114).
-- **Applies the PM's standing answers:** a ruling the PM gave once is applied to every later pause it covers, including pauses that need work done in the repo before the run can go on (scenario F, added 20261119).
+Everything an agent would hand to the PM goes to Amoeba first: a question, a "remaining" list, a pause, a run that finished with work left over. Amoeba looks at the repo with full tools, decides what the PM would decide, and either does the work or tells the agent what to do. It does three jobs and learns from each.
+
+1. **It answers needless questions,** so the agent keeps working and the PM never sees them.
+2. **It catches leftovers.** An agent's work is not finished until Amoeba has checked what it left. Amoeba finishes small leftovers itself or sends the agent back to finish them.
+3. **It answers real questions** from whatever settles them: the code, the plans, the git history, the repo's rules, other repos in the program, and the PM's earlier decisions.
+
+### Judgment
+
+- **The default is to decide.** Amoeba does not need an earlier ruling that covers the case. It works out the answer the way the PM would: by looking.
+- **It matches by meaning.** It never requires a question to match a stored situation exactly. Anything a script or a query could do is not what Amoeba is for.
+- **The record is exact.** Every decision is stored with the question, what Amoeba looked at, what it decided and why. Judgment is free; the record of it is not.
+- **Its work can be undone.** What Amoeba does in a repo lands as commits, and each decision names them.
+- **Little reaches the PM.** Four kinds of thing do:
+  - an action that cannot be undone and reaches outside the repo, such as publishing a release or destroying data;
+  - spending past the budget set in config;
+  - product direction: what to build and why;
+  - a question Amoeba worked and could not settle. It arrives with what Amoeba found and the answer it recommends.
+- **An item waiting for the PM always ends:** by his answer, by a dismiss, or by expiry after an age set in config. An expired item is closed and recorded, and the agent that asked is told to drop that line of work.
+
+### Learning
+
+Amoeba gets better from use. This is the part earlier versions lacked.
+
+- **Every answer is a case.** Before deciding, Amoeba reads the past cases that bear on the question and what the PM said about them.
+- **An overrule is a correction.** When the PM overrules a decision or says "don't ask me that" or "you should have told me", Amoeba stores it against the case. The newest word from the PM wins.
+- **Every leftover is a case too.** Amoeba records what was left, by which kind of work, and what finishing it took. Its check at the end of later work looks for the same thing.
+- **A curation pass keeps memory true.** On a schedule, Amoeba reviews recent cases, merges repeats into one general note, replaces entries that are stale or contradicted, and extends a decision made in one repo to the others it fits.
+- **The PM can still rule ahead of time.** A standing answer (slice 230) is his explicit instruction. Amoeba treats it as the strongest memory it has. It is one input to judgment, and no longer the only way Amoeba learns.
+
+### Getting in the path
+
+Amoeba only works if agents cannot go around it.
+
+- **Interactive sessions.** A hook at the end of each agent turn sends the agent's closing message to Amoeba. If it hands something to the PM that Amoeba can settle, the turn does not end: the agent gets the answer and keeps working.
+- **Pipeline runs that pause.** As today, a paused run goes to Amoeba. Amoeba now decides with tools and judgment.
+- **Pipeline runs that finish.** Amoeba checks a finished run for leftovers before the result reaches the PM.
+- **Direct asks.** Any agent can ask Amoeba a question over MCP or the CLI.
+- **A failure is loud.** If Amoeba cannot be reached, the hook reports an error. It never passes the question to the PM as if Amoeba had seen it.
+
+### A long-running agent
+
+Amoeba is built as a long-running agent: it wakes when there is work, does a bounded piece, remembers what it learned and sleeps. The model is Anthropic's article "Building always-on agents", read 20261120, and `notes/006-long-running-agents.amoeba.md`. This table covers every part the article names.
+
+| Article part | In Amoeba | Status |
+|---|---|---|
+| Event inbox | The store's inbox, with dedup ids, read cursors and one worker per inbox. Hand-offs from sessions and runs arrive as events. | Built for messages between repos. Hand-offs are new. |
+| Timers: follow-ups | Amoeba sets its own deadline, such as checking that an agent it sent back did finish. | To build |
+| Timers: schedules | Recurring work, such as the curation pass. Timers live in the store; a scheduler pass turns a due timer into an inbox event. | To build |
+| Memory: user instructions | The PM's standing answers | Built (slice 230) |
+| Memory: user notes | What Amoeba has learned about how the PM decides. An index loads on every wake; entries are read when needed. | To build |
+| Memory: past messages | What the PM has already been told, so nothing is told twice | Partly built (the decisions list and its read marker) |
+| Memory: task progress | Progress on each item Amoeba is still handling, so the next wake picks it up | To build |
+| Dreaming (memory curation) | The curation pass under Learning | To build |
+| Permissions: deferred tool calls | An item that needs the PM ends the run and is saved. His answer comes back as an inbox event and the work resumes. | Built for paused runs (hold and release). Extended to sessions. |
+| Permissions: auto mode | The safeguards of the runtime Amoeba's agent runs in. The architecture checks what each runtime offers. | Used, not built |
+| Permissions: credential proxy | None | Not built; reason below |
+| Outbox | The decisions list and the items that need the PM. It starts quiet. | Partly built |
+| Outbox: evals for how much to send | None | Not built; reason below |
+
+**Not built, and why:**
+
+- **Credential proxy.** The article puts credentials in a proxy outside the agent so an agent running somewhere the user does not control never holds them. Amoeba's agents run as the PM, on the PM's machines, with the same access as every session he already runs, and a wake command gets a cleaned environment and loads its own secrets. A proxy would guard against a case that does not exist here. It becomes necessary the day an agent runs on a machine that is not the PM's.
+- **A safety classifier of Amoeba's own.** The runtime already has one, and a second would be a worse copy.
+- **Evals for message volume.** The article tunes how much an agent says with an eval suite. Amoeba has one user, and his reaction is the measure: "don't tell me this" and "you should have told me" are corrections it learns from.
+
+**From the 006 note, beyond the article:**
+
+- **Bounded runs.** Every wake has a time cap and a cost cap, and one wake runs per inbox. When a cap is hit, the run ends and is recorded with what it found. The item is retried once on the next wake, then goes to the PM's list with the findings.
+- **Observability.** A row and a log per run, and a status view.
+- **One definition, one runner.** An agent is one definition file plus a generic runner, so a second long-running agent is a copied file, not a hand-written script. Amoeba's own stand-in is the first agent built this way.
+- **Runtime and model come from config.** There is no default in code.
+
+### What Amoeba also does
+
+These are built and stay. They are the stand-in's wiring and reach.
+
+- **Knows the program:** the member repos, what each depends on and what each has released. A program is a set of repos where members depend on each other, usually on a release.
+- **Carries messages between repos:** requests and notes between agents in different repos, with waking when nobody is working in the recipient.
+- **Keeps the record:** who asked what, what Amoeba looked at, what it decided, and what the PM overrode.
 
 ### What Amoeba is not
 
-- **A pipeline engine.** Squadron runs the work, including phases, reviews, thresholds and merges.
-- **A pile of gates.** Squadron has those. A check on an answer belongs in the answering pipeline, as a Squadron step.
-- **The PM's chat.** The PM's own conversation with agents lives elsewhere. Messages between agents in different repos are Amoeba's (scenario D, from 20261114).
-- **A graph runner.** The program graph is a dependency graph. Nobody walks it. Amoeba never launches member pipelines in order, because that would make it a workflow engine on top of a workflow engine.
-
-### On determinism
-
-Amoeba adds nondeterminism on purpose: it asks a model to answer in the PM's place. Wrapping that in more deterministic machinery doesn't change what it is. The part that must be exact is **the record**, and the part that must be bounded is **what the answer can do**. An automatic answer can only resume the run that asked. It never edits code, merges or changes a threshold. Work in a repo happens only under a standing answer the PM gave (scenario F, from 20261119): the PM's words are the instruction, the work is done by an agent in that repo, and Amoeba's part is to start it and resume the run.
-
-### Where it sits
-
-| Piece | Job | Graph |
-|---|---|---|
-| Squadron | Runs work inside one repo | Workflow graph: do A, then B, loop on review. Executed. |
-| Amoeba | Knows the program, handles first-level questions, keeps the record | Dependency graph between repos. Consulted, never executed. |
-| The chat agent (separate app) | The human front door: the coordinated agent the PM talks to | None |
-| Agent messaging (Amoeba, from 20261114) | Requests and notes between agents in different repos, for any agent and any UI | None. Each request names only its parent. |
+- **A pipeline engine.** Squadron runs planned work inside a repo: phases, reviews, merges.
+- **A rules engine.** It does not look up a matching rule and apply it. A design that could be replaced by a script or a query is the wrong design.
+- **An extension to Squadron.** Squadron is one source of hand-offs among several. A gap in what Amoeba handles is fixed in Amoeba.
+- **The PM's chat.** The PM talks to whatever agent he likes. Amoeba is what that agent's hand-offs go through.
 
 ### Users and how they reach it
 
-**In normal use, a human never types an `amoeba` command.** If someone has to stop and think "is that amoeba or squadron?", the design has failed.
-
-- **Agents and pipelines** use one set of operations, exposed over MCP for agent sessions and as a CLI for pipelines and scripts. Same operations, same names.
-- **The PM** reaches Amoeba through an agent: the chat agent, or a Claude or Codex session already open. "Where's trading at?" is a question to an agent, which calls Amoeba.
-- **Notifications go to agents.** Agents can already reach the PM by mobile push, macOS and so on, so Amoeba builds no notification mechanics for the PM. From 20261114 its MCP server tells its own agent session when new mail arrives, and nothing else.
-- **Set-up** is the one exception: register a program and its members once, ideally through an agent.
+- **Agents** reach Amoeba through the hooks above and through one set of operations, over MCP for sessions and a CLI for pipelines and scripts.
+- **The PM** types no `amoeba` command in normal use. He sees the result: fewer questions, and a short list of what was decided for him. He overrules by saying so to any agent.
+- **Set-up** is one command per repo.
 
 ### How it runs
 
-**Nothing stays running unless a scenario can't work without it.** By default Amoeba is a store, an MCP server started by whatever session uses it, and a CLI. A resident process is justified only by something that must happen when no run is active and nobody asked.
+- **One process stays running** on one machine. It holds the store, runs the scheduler and starts the worker. This reverses the earlier "nothing stays running": timers and a turn-end answer both need it.
+- **Other machines are clients of it.** Sessions and runs on another machine send their hand-offs to that process, so the PM's decisions are one store everywhere (the hub, initiative 260).
+- **Config and state are separate.** What a person edits lives in the config directory. The store, memory, run records and logs live in the state directory.
 
-Amoeba works on runs it did not launch. It does not start work. The only run it resumes is the one that asked. One exception from 240: a member may configure a wake command, which Amoeba starts when a request reaches a repo nobody is working in. The command decides what to do, not Amoeba. A second exception from scenario F: under a standing answer, Amoeba starts an agent in the repo of the run that paused, and the standing answer decides what it does.
+### What this replaces
 
-### What it has to do
+| Earlier piece | Now |
+|---|---|
+| Scenarios A to F as the unit of design | Dropped. The three jobs are the purpose, and they are not a closed list of cases. |
+| Answering pipeline: closed evidence, no tools, cite or decline | Replaced by the stand-in agent, which has tools and decides. |
+| "An automatic answer can only resume the run that asked" | Removed. Amoeba does work in the repo. |
+| "Amoeba does not start work" and "decides no work" | Removed for leftovers and for work a decision needs. Planned work is still Squadron's. |
+| Standing answers as the way Amoeba learns | Kept as the PM's explicit instructions. Learning comes from every case. |
+| "Nothing stays running" | Reversed. |
+| "If it could be a Squadron pipeline, it should be" | Removed. |
+| Store, decisions record, messaging, waking, hold and release, program record | Kept. |
 
-Full walkthroughs are in `notes/005-usage-scenarios.amoeba.md`.
-
-- **A: a question while the PM is away.** A `sq run` pauses on an agent's question. Amoeba gathers context and runs the answering pipeline. The run resumes with the answer, or an agent tells the PM. In the morning, the PM sees the finished run and a short list of what was decided on their behalf.
-- **B: a change in one member affects another.** A member's pipeline tells Amoeba what it released and what that touched. Another member's pipeline asks at the start of a slice whether anything it depends on has changed, then either picks the change up as context or stops with a reason.
-- **C: the PM asks where things stand.** An agent calls Amoeba and gets a short status per member: what's running, what's blocked and why, and what was answered since the PM last looked.
-- **D: one repo needs another to build something.** Added 20261114. An agent in squadron (any agent, any UI, or a pipeline run) sends a request to context-forge. The next agent working there sees it, by push or at its next inbox check, and accepts or declines it. If it needs a guide change, it sends its own request to ai-project-guide, naming squadron's as the parent. Each link is marked done with a result, and the sender hears about it. A run paused on the request resumes with the result once it passes the answering check. Nobody walks the chain: each agent handles only its own repo's requests. Details are in `240-arch.agent-messaging.md`.
-- **F: a pause the PM has already ruled on.** Added 20261119. (E is the cross-machine hub, initiative 260.) Some pauses are not questions. A p6 run stops at its merge step because task boxes are unchecked. The PM's ruling never changes: check the unchecked items against the work, finish any that are small and inside the slice, tick the boxes, commit, and let the merge go ahead. The PM gives that ruling once, through an agent, as a **standing answer**. From then on Amoeba handles the pause with nobody present, in two parts:
-  - **Words are not enough here.** The merge step runs no agent, so an answer handed to a resumed run changes nothing and the run pauses again. Amoeba starts an agent in that repo, on the run's branch, with the standing answer as its instruction. When the agent finishes, Amoeba resumes the run. If the merge check passes, the run goes on; if it does not, the pause waits for the PM as it does today, with what the agent did on the record. One attempt per pause.
-  - **A standing answer is the PM's decision, made ahead of time.** It names the situation it covers and how far it reaches: every repo, one program, or one member. It lives in the store, so a hub (260) makes it known on every machine with no further work. It is the PM's own authorization, so the list of things an automatic answer may not authorize (a merge to main among them) does not stop it. The PM can list standing answers and withdraw one, and a withdrawn one stops applying at once.
-
-  Standing answers also serve ordinary questions: one whose situation matches a standing answer is answered from it in any repo it reaches, where today the PM's earlier answers count only in the repo they were given in. Promoting a past answer to a standing answer, or retracting it, is how the PM curates what Amoeba knows.
-
-### Programs
-
-There is one kind of program: a set of repos where members depend on each other, usually on a **release** of another member. A toolchain and a product are the same concept.
-
-### Answering
-
-The answering run is a Squadron pipeline with two steps, each isolated:
-
-- **A closed set of evidence.** The answer step sees only the passages Amoeba supplies, and cites them.
-- **An independent check.** The check step sees the question, the passages and the reply, and shares no session with the answer step.
-- **No tools.** A passage that steers the model can at worst produce a wrong reply.
-
-These are properties of the step's configuration, not of a model vendor. Claude models work here (`ecorkran/squadron#299`, closed).
+The initiative plan and the 220 slice plan (slices 231 and 232) were written against the old concept and are redone from this one.
 
 ### Decisions
 
-- **A checkpoint is a persisted blocked-state, not a blocking call.** A paused run holds no process open, so the PM can answer whenever. Kept from the original concept.
-- **Amoeba owns the program and question state.** Context Forge persists only workflow pointers, and Squadron persists only per-run state. Kept, in SQLite.
+- **A waiting item is a saved state, not a blocking call.** Kept from the original concept.
+- **Amoeba owns its own state** (cases, memory, timers, messages, program record), in SQLite.
 - **Amoeba depends on upstream shapes, not version numbers.** Kept.
-- **"State is the interface; parts never call each other" no longer holds.** Agents and pipelines call Amoeba directly.
-
-### What happened to the original pieces
-
-| Piece | Now |
-|---|---|
-| Runner | No longer the centre. Whatever survives is decided by the audit below. |
-| Routing engine | Gone. Squadron owns routing. |
-| Judge | Became the answering pipeline. |
-| Translator | The separate chat agent app. |
-| Notification bridge (Discord) | Dropped. Amoeba notifies agents. |
-| Run-state store | Stays, reduced to what the scenarios need. |
-| Resident substrate | Justified only by a scenario. |
-| Multi-agent chat | Came back 20261114 as agent messaging (scenario D, initiative 240). |
+- **Amoeba adds judgment on purpose.** The record is what must be exact.
 
 ### Grounding that still holds
 
@@ -215,22 +256,22 @@ Squadron facts below were read from its source at the dates in the notes; re-che
 
 - Squadron pauses a run on an agent's question (`checkpoint.kind = agent_question`, read through `sq runs wait --json`), and `sq run --resume <id> --instructions "<answer>"` reruns the stopped step. See `notes/004-direction.amoeba.md`.
 - Squadron's daemon is frozen and is not used by its pipeline engine, and Squadron will not build a server or message layer.
-- Squadron persists per-pipeline run state with resumable run ids, and its pipelines own phases, thresholds, revisions and judges.
 - Context Forge persists workflow pointers and does not store findings or checkpoints.
 
 ### Open for architecture
 
-1. **Who notices a paused run?** A Squadron hook that calls Amoeba needs a Squadron change and no watcher. A watcher needs no Squadron change but puts something back in the background. This decides whether a resident process exists at all.
-2. **What the operations are** that MCP and the CLI share.
-3. **How a member declares what it depends on, and what counts as a release** for a repo that doesn't publish versions. The current program record may be too much or too little.
-4. **How a Squadron pipeline in one repo reaches a program's state**, so that scenario B needs no human.
-5. **Which agent gets told** when a question has to go to the PM, including when no session is open. The chat agent is the natural recipient, but it's a separate app and not finished.
-6. **Whether requests between members stay.** Initiative 180 planned for an agent to ask another member for a change, plus hold, release and ordering. None of that is in the scenarios, and some of it walks the graph.
+The architecture answers these itself.
+
+1. **The turn-end hook** in each runtime the PM uses: what it can see, how it holds a turn open, and how the answer gets back to the agent.
+2. **How Amoeba notices a finished run** and reads what it left.
+3. **How cases are stored and found by meaning,** and what the curation pass rewrites.
+4. **How the stand-in runs:** which runtime, how the time and cost caps are enforced, and how fast a turn-end answer has to be.
+5. **How the kept-running process starts and restarts,** and how it becomes the hub for other machines.
+6. **What the audit keeps.** Today's code is sorted against this concept into keep, change or delete.
 
 ### Development approach
 
-- **Scenarios first.** Nothing gets built unless a scenario needs it, and a new need starts as a new scenario.
-- **Audit before building.** Today's code (about 34k lines in `src`, 69k in `tests`, measured 20261106) gets sorted against scenarios A to C into keep, move to Squadron, or delete. The slice plan is rebuilt from that result, and slices 182 to 186 are re-judged there.
-- **First proof.** Scenario A, end to end, on a real run the PM started. The PM picks the unit of work from whatever is unstarted at the time.
-- **Build by inducing failure.** Point it at real work, and each wrong answer or needless escalation shows what to change next.
-- **Favor simplicity.** If it could be a Squadron pipeline, it should be.
+- **The stand-in first.** The first thing built is the agent on turn-ends and paused runs on this machine, with the case record. Then the leftover check, memory and curation, timers, the agent definition and runner, and other machines.
+- **Test with fixtures and live fixture runs.** No step waits on real use. Ship it, leave it on, and rework from what use shows.
+- **Each needless question or leftover that still reaches the PM is a defect in Amoeba,** and is fixed there.
+- **Resist narrowing.** A design that handles one named case and sends the rest to the PM is rejected in review.
