@@ -6,10 +6,10 @@ parent: user/architecture/220-arch.program-tool.md
 archIndex: 220
 component: program-tool
 audience: [human, ai]
-description: Slice plan for Amoeba initiative 220 — the code audit, the cut, the new store with config and set-up, pause handling through the CLI, status and decisions, switching on scenario A for real work, the MCP server, and program dependencies (scenario B).
+description: Slice plan for Amoeba initiative 220 — the code audit, the cut, the new store with config and set-up, pause handling through the CLI, status and decisions, switching on scenario A for real work, the MCP server, program dependencies (scenario B), and standing answers (scenario F).
 dateCreated: 20261107
-dateUpdated: 20261114
-status: complete
+dateUpdated: 20261119
+status: in_progress
 ---
 
 # Slice Plan: Program Tool
@@ -173,11 +173,53 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    **Risk Level:** Medium. Nothing forces an agent to follow a rule line.
    **Relative Effort:** 3
 
+## Scenario F
+
+Added 20261119. A ruling the PM gives once is applied to every later pause it covers. The first case, and the fixture for all three slices: a p6 run pauses at its merge step on unchecked task boxes (`run-20261119-p6-4d95f013`, skipped that day as `not_agent_question`), and the PM's ruling is always "check the unchecked items against the work, finish any that are small and inside the slice, tick the boxes, commit, and let the merge go ahead". A later case is one more standing answer, with no slice.
+
+11. [ ] **(230) Standing Answers** — The record and its use in answering. A standing answer is the PM's own text with a reach: every member, one program, or one member. Three operations on the CLI and MCP: give one, list them, withdraw one. Every answering run is sent the standing answers that reach the member, as passages the reply can cite, so a question in any repo in reach is answered from a ruling given once. A withdrawn standing answer is left out of the next answering run. Standing answers are never trimmed to fit the size cap; when they do not fit, the question waits with the existing too-large reason.
+   **Value:** User value. A ruling given once holds in every repo it reaches, where a stored answer counts only in the repo it was given in.
+   **Success Criteria:**
+   - A standing answer given with reach "everything" is cited in an automatic answer in a member that has no stored PM answers of its own.
+   - One with reach of one program or one member is not sent to an answering run outside it.
+   - A withdrawn one is not sent, and `list` shows it as withdrawn until it is pruned.
+   - The authorize list still applies to every automatic answer, whichever passage it cites.
+   - A live fixture pipeline in a fixture repo asks a question that only a standing answer settles, and is resumed with the answer.
+   **Dependencies:** 223, 228 and 229.
+   **Interfaces:** Provides the standing answer record, its three operations and the standing-answer passages. 231 and 232 use all three.
+   **Risk Level:** Low. It adds one kind of passage to a pipeline that already cites passages.
+   **Relative Effort:** 2
+
+12. [ ] **(231) Work, Then Resume** — Pauses that words cannot clear. `handle_pause` stops skipping an `awaits_human` pause. It reads what stopped the run from the run file (the failed action's own message, which `sq runs wait` does not print) and treats that text as the question. The answering run decides whether a standing answer covers it. When one does, Amoeba starts an agent in the run's checkout with the standing answer and the pause's text as its instruction, waits for it to end, and resumes the run. When none does, the pause waits on the PM like any question, and the PM's `answer` to it is carried out the same way. One attempt per pause: a run that pauses again at the same step afterwards waits on the PM, with what the agent did on the record. The agent has a time limit and is stopped at it. The instruction is the PM's text unchanged, so nothing in it is screened.
+   **Value:** User value. The merge pause on unchecked boxes clears with nobody present.
+   **Success Criteria:**
+   - The fixture: a p6-shaped fixture pipeline pauses at its merge on unchecked boxes whose work is done. With the standing answer above, the boxes are ticked and committed on the slice branch, the run is resumed and it merges, with no person involved.
+   - The same pause with no standing answer waits on the PM, and `amoeba answer` with the same text then clears it.
+   - An agent that changes nothing leaves the run paused again; Amoeba does not start a second agent and the pause waits on the PM.
+   - An agent that runs past its time limit is stopped, and the pause waits on the PM.
+   - `list` and `decisions` show what was done: the standing answer used, the agent's outcome and the resume.
+   **Dependencies:** 230 and 244 (the wrapper that starts and stops an unattended agent).
+   **Interfaces:** Uses 230's standing answers and 244's wake wrapper. Changes `handle_pause`'s skip list and the question record's sources.
+   **Risk Level:** Medium. It is the first time Amoeba causes changes in a repo.
+   **Relative Effort:** 3
+
+13. [ ] **(232) Dreaming** — Curation with nobody asking. A pass over the PM's stored answers in every member finds rulings that should hold beyond the repo they were given in, and makes each a standing answer with the reach it fits. A setting says whether a found ruling takes effect at once or waits for the PM's yes; one waiting for a yes expires after a configured time. The same pass withdraws a standing answer that a later PM answer contradicts. `promote` makes a chosen stored answer a standing answer by hand. The pass starts from calls Amoeba already receives, at most once per configured interval, so nothing new stays running.
+   **Value:** User value. What the PM said in one repo becomes known in the others without the PM repeating it.
+   **Success Criteria:**
+   - Fixture answers in two members that say the same thing become one standing answer that reaches both.
+   - With review on, a found ruling is not sent to any answering run until the PM accepts it, and one never accepted expires.
+   - A standing answer contradicted by a later PM answer is withdrawn, and the record says which answer did it.
+   - The pass runs at most once per interval however many calls arrive.
+   **Dependencies:** 230.
+   **Interfaces:** Uses 230's record and operations. Adds `promote` and two config keys (the interval and the review setting).
+   **Risk Level:** Medium. A model decides what generalizes, so a wrong promotion is possible; withdraw undoes it.
+   **Relative Effort:** 3
+
 ## Implementation Order
 
-`220 → 221 → 222 → 223 → 224 → 225 → 228 → 226 → 229 → 227`.
+`220 → 221 → 222 → 223 → 224 → 225 → 228 → 226 → 229 → 227 → 230 → 231 → 232`.
 
-- **Dependencies.** Each slice builds on the one before through 224. 226 needs the operations it wraps. 228 comes before 226 and 227 because they read the home layout and the question states it changes. 229 renames what 226 built and changes `set_up`, so it comes after 226 and before 227, which then uses the new names. 227 needs 226, 228 and 229.
+- **Dependencies.** Each slice builds on the one before through 224. 226 needs the operations it wraps. 228 comes before 226 and 227 because they read the home layout and the question states it changes. 229 renames what 226 built and changes `set_up`, so it comes after 226 and before 227, which then uses the new names. 227 needs 226, 228 and 229. 230 to 232 are scenario F, in order: 231 and 232 each need 230's record, and 231 comes first because it clears the pause that started this.
 - **Risk.** 223 is the riskiest and the test of the design, so it comes right after the base it needs and before anything else new.
 - **Parallel work.** 226 can run beside 225, since 225 is only setup and a sanity pass.
 
