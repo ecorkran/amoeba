@@ -31,8 +31,9 @@ class CitedPassage(_Model):
     """A passage an automatic answer cited, as recorded when it was offered."""
 
     id: str
-    #: ``pm_answer`` for a PM answer used as precedent. The store records no kind for
-    #: other passages, so it is null for them rather than guessed.
+    #: ``pm_answer`` for a PM answer used as precedent, ``standing_answer`` for a
+    #: standing answer (its ``source`` is ``standing:<id>``, 230). The store records no
+    #: kind for other passages, so it is null for them rather than guessed.
     kind: str | None
     source: str
     date: datetime

@@ -27,6 +27,7 @@ from store.question_support import (
     insert_held_row,
 )
 
+from amoeba.answering.standing_passages import STANDING_SOURCE_PREFIX
 from amoeba.answering.values import (
     AnsweredBy,
     AnsweringEvidence,
@@ -376,3 +377,34 @@ def test_an_ordinary_answer_has_no_request_id_and_no_notice(
 
     assert [record.request_id for record in result.records] == [None, None, None]
     assert result.notice is None
+
+
+def test_a_cited_standing_answer_shows_its_kind_and_source(
+    store: Store, tmp_path: Path
+) -> None:
+    key = QuestionKey("run-standing", "2026-11-10T12:00:00+00:00")
+    source = f"{STANDING_SOURCE_PREFIX}7"
+    ref = PassageRef(id="P1", source=source, question_id=None, date=at(0))
+    with store.write() as transaction:
+        insert_question(
+            transaction,
+            replace(claimed_question(key, member_id=CORE), passages=(ref,)),
+            now=at(1),
+        )
+    settled = settle_answered(
+        store,
+        key,
+        ANSWERING_RUN,
+        answer="No: fixture versions are never bumped.",
+        cited=("P1",),
+        evidence=AnsweringEvidence(verdict="yes", reason="the ruling covers it"),
+        gate=lambda _prior: None,
+        now=at(2),
+    )
+    assert isinstance(settled, Settled)
+
+    (record,) = _run(store, tmp_path).records
+
+    assert isinstance(record.based_on, AnswererBasis)
+    (cited,) = record.based_on.cited
+    assert (cited.kind, cited.source) == ("standing_answer", source)

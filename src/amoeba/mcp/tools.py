@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from amoeba.mcp.message_tools import MESSAGE_TOOLS
+from amoeba.mcp.standing_tools import STANDING_TOOLS
 from amoeba.mcp.tool_spec import READ_ADVICE, WRITE_ADVICE, RunMode, ToolSpec
 from amoeba.operations.add import AddRequest
 from amoeba.operations.answer import AnswerRequest
@@ -84,7 +85,8 @@ TOOLS: Final = (
         description=(
             "With no `subject`, what needs the PM: the same result as `status`, and "
             "with `all` also what settled recently. `programs`, `members` or "
-            "`dependencies` show what is registered. Requests and rejected calls "
+            "`dependencies` show what is registered; `standing` shows the standing "
+            "answers (with `all`, withdrawn ones too). Requests and rejected calls "
             f"appear under each member. {QUOTED_DATA_NOTICE} Same request and result "
             "as `amoeba list -j`."
         ),
@@ -203,6 +205,7 @@ TOOLS: Final = (
         timeout_advice=None,
     ),
     *MESSAGE_TOOLS,
+    *STANDING_TOOLS,
 )
 
 

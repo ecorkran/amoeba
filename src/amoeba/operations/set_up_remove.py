@@ -32,6 +32,7 @@ from amoeba.store.programs import (
     remove_pair,
 )
 from amoeba.store.question_closing import member_open_questions
+from amoeba.store.standing import withdraw_member_standing
 from amoeba.store.store import Transaction
 
 
@@ -158,6 +159,9 @@ def apply_removal(
             # surviving party (240 D10); inside this transaction, so it rolls back
             # with the removal.
             cancel_member_requests(transaction, item.reference.project_id, now)
+            # 230 D8: its member-reach standing answers end with it, in the same
+            # transaction; program and all reach are untouched.
+            withdraw_member_standing(transaction, item.reference.project_id, now)
             changes.append(
                 Change(
                     verb=ChangeVerb.REMOVED,

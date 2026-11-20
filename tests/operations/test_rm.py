@@ -29,7 +29,9 @@ from amoeba.operations.set_up_models import (
 from amoeba.store.models import QuestionKey
 from amoeba.store.programs import get_member_any, get_program
 from amoeba.store.questions import dismiss_question, get_question, insert_question
+from amoeba.store.standing import give_standing, list_standing, standing_reaching
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import MEMBER_REMOVED_REASON, StandingReach
 from operations.set_up_support import (
     DIRECTORY,
     RECORDED_ID,
@@ -359,3 +361,72 @@ def test_a_held_question_refuses_rm_until_it_is_dismissed(store: Store) -> None:
 
     assert _rm(store, {"members": ["consumer"]}).outcome is SetUpOutcome.APPLIED
     assert _removed(store, "consumer-id")
+
+
+# Standing answers (slice 230, D8)
+
+
+def _give_standing(store: Store) -> dict[str, int]:
+    """One standing answer of each reach, and one for another member, by label."""
+    with store.write() as transaction:
+        rows = {
+            "all": (StandingReach.ALL, None, None),
+            "program": (StandingReach.PROGRAM, "demo", None),
+            "consumer": (StandingReach.MEMBER, None, "consumer-id"),
+            "consumer too": (StandingReach.MEMBER, None, "consumer-id"),
+            "provider": (StandingReach.MEMBER, None, "provider-id"),
+        }
+        return {
+            label: give_standing(transaction, label, reach, program_id, member_id, NOW)[
+                0
+            ]
+            for label, (reach, program_id, member_id) in rows.items()
+        }
+
+
+def _withdrawn_reasons(store: Store) -> dict[str, str | None]:
+    with store.read() as transaction:
+        rows = list_standing(transaction, include_withdrawn=True)
+    return {row.text: row.withdraw_reason for row in rows}
+
+
+def test_removing_a_member_withdraws_only_its_member_reach_rows(store: Store) -> None:
+    _give_standing(store)
+
+    result = _rm(store, {"members": ["consumer"]})
+
+    assert result.outcome is SetUpOutcome.APPLIED
+    assert _withdrawn_reasons(store) == {
+        "all": None,
+        "program": None,
+        "consumer": MEMBER_REMOVED_REASON,
+        "consumer too": MEMBER_REMOVED_REASON,
+        "provider": None,
+    }
+
+
+def test_a_refused_removal_withdraws_nothing(store: Store) -> None:
+    _give_standing(store)
+    with store.write() as transaction:
+        insert_question(
+            transaction, claimed_question(OPEN, member_id="consumer-id"), now=NOW
+        )
+
+    result = _rm(store, {"members": ["consumer"]})
+
+    assert _codes(result) == [SetUpProblemCode.MEMBER_HAS_OPEN_QUESTIONS]
+    assert set(_withdrawn_reasons(store).values()) == {None}
+
+
+def test_registering_the_member_again_does_not_bring_its_rows_back(
+    store: Store,
+) -> None:
+    _give_standing(store)
+    _rm(store, {"members": ["consumer"]})
+
+    readded = _add(store, {"project": "consumer"})
+
+    assert readded.outcome is SetUpOutcome.APPLIED
+    with store.read() as transaction:
+        reaching = standing_reaching(transaction, "consumer-id", "demo")
+    assert [row.text for row in reaching] == ["all", "program"]

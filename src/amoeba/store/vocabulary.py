@@ -112,3 +112,19 @@ class WakeOutcome(StrEnum):
     START_FAILED = "start_failed"
     #: The wrapper hit an unexpected error after the command started.
     WRAPPER_FAILED = "wrapper_failed"
+
+
+class StandingReach(StrEnum):
+    """Which members a standing answer reaches (230 D1)."""
+
+    #: Every member.
+    ALL = "all"
+    #: Every member of one program.
+    PROGRAM = "program"
+    #: One member.
+    MEMBER = "member"
+
+
+#: The reason ``rm`` writes on what a removed member leaves: its cancelled requests
+#: (240 D10) and its withdrawn member-reach standing answers (230 D8).
+MEMBER_REMOVED_REASON = "member_removed"

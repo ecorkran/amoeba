@@ -12,7 +12,7 @@ interfaces:
 - 232
 dateCreated: 20261119
 dateUpdated: 20261120
-status: not_started
+status: complete
 ---
 
 # Slice Design: Standing Answers
@@ -73,12 +73,20 @@ Out, each in the slice named:
 | `operations/withdraw.py` | New: the `withdraw` operation |
 | `operations/list_registry.py`, `list_view.py` | The `standing` view |
 | `operations/names.py` | `STANDING`, `WITHDRAW` |
+| `operations/standing_models.py` | New: the request and result models, outcome and rejection enums of both operations |
 | `answering/passage_types.py` | `PassageKind.STANDING_ANSWER` |
-| `answering/passages.py` | `StandingAnswer` input, its passages, the size check |
-| `operations/pause_context.py` | Reads the standing answers reaching the member and passes them to `assemble` |
+| `answering/standing_passages.py` | New: `StandingAnswer` input, its passages, the `standing:` source prefix and the size-check detail text |
+| `answering/passages.py` | Gains only the `standing_answers` parameter, the call adding their passages and the second size reading |
+| `operations/standing_sources.py` | New: maps stored rows to `StandingAnswer` inputs |
+| `operations/pause_context.py` | Gains only a field holding the standing answers reaching the member, and passes them to `assemble` |
+| `operations/decisions.py` | Names a cited `standing:` passage's kind `standing_answer` |
 | `answering/answering.yaml` | Both prompts describe the kind |
 | `operations/set_up_remove.py` | Withdraws on member removal |
-| `wiring.py`, `cli/parser.py`, CLI renderers, `mcp/tools.py`, `mcp/server.py` | The two commands through `wiring.invoke`, the view, the two tools and the server instructions text |
+| `wiring_standing.py` | New: dispatches `standing` and `withdraw`; `wiring.py` gains only the match arm |
+| `mcp/standing_tools.py` | New: the two tool rows; `mcp/tools.py` gains only their join into `TOOLS` |
+| `cli/parser.py`, CLI renderers, `mcp/server.py` | The two commands, the view and the server instructions text |
+
+`answering/passages.py`, `wiring.py`, `mcp/tools.py` and `operations/pause_context.py` are at or near ~300 lines, so new logic goes in the new modules and those files gain only a call, a field or a row.
 
 ### Data Flow
 
@@ -89,7 +97,7 @@ Out, each in the slice named:
 
 ### State Management
 
-One table. A row is **active** until it is withdrawn, and then **withdrawn**, which is terminal. Rows are never deleted: a delivered answer cites a standing answer as `standing:<id>`, and the question's passage record holds the id, kind, source and date but not the text (223 D10), so the row is where that text stays readable. This matches the architecture: the question and answer rows are the record and are kept (228 D9). Bounded: each row exists because the PM gave a ruling, so they grow with the PM's rulings, as stored PM answers do. Which standing answers a question was sent is already in the question's stored passages, so nothing else is stored.
+One table. A row is **active** until it is withdrawn, and then **withdrawn**, which is terminal. Rows are never deleted: a delivered answer cites a standing answer as `standing:<id>`, and the question's passage record holds the id, source, question id and date but not the text or a kind (223 D10; `decisions` derives `standing_answer` from the `standing:` source prefix), so the row is where that text stays readable. This matches the architecture: the question and answer rows are the record and are kept (228 D9). Bounded: each row exists because the PM gave a ruling, so they grow with the PM's rulings, as stored PM answers do. Which standing answers a question was sent is already in the question's stored passages, so nothing else is stored.
 
 ## Technical Decisions
 
@@ -119,13 +127,13 @@ CREATE TABLE standing_answers (
 
 ### D2: `standing`
 
-`amoeba standing --text TEXT [--program ID | --member NAME]`, MCP tool `standing` with `text`, `program`, `member` and `directory`.
+`amoeba standing --text TEXT [--program ID | --member NAME]`, MCP tool `standing` with `text`, `program` and `member`, and no `directory`.
 
 - Neither flag: reach `all`. `--program`: that program, which must exist. `--member`: a Context Forge project name or id, resolved the way `add --project` resolves one, which must be an active member. Both flags together is a usage error.
-- Result: `outcome` (`given`, `unchanged` or `rejected`), `rejection` (`malformed`, `no_such_program`, `no_such_member`), `standing_id`, `reach`, `program`, `member`, `problems`. Exit 1 when rejected, else 0.
+- Result: `outcome` (`given`, `unchanged` or `rejected`), `rejection` (`malformed`, `no_such_program`, `no_such_member`, `too_long`: with it, the rendered standing answers reaching some member it reaches would pass `passages_max_chars`, so no run there could be sent them; the rules and plan they join are checked at each pause), `standing_id`, `reach`, `program`, `member`, `problems`. Exit 1 when rejected, else 0.
 - **A repeat is safe.** When an active row already has the same text, reach, program and member, no row is written and the outcome is `unchanged` with that row's id. The check and the insert are one write transaction. So a caller that never got its result (an MCP timeout or a dropped client, where 226's worker may still commit) repeats the call and gets the one row either way. Text that differs in any way is a new ruling and a new row.
 - **Who may call it.** Like `answer`, it is called by an agent, for the PM (architecture operations table). The MCP tool description carries the rule `answer` already carries: it takes only a ruling the PM actually gave, passed on as given, never one the agent composed. That is the same control `answer` has, and within this slice it is enough because a standing answer gains no power `answer` lacks: every automatic answer that cites one still passes the authorize list, the check step and the answer screen (D7). What changes in 231, where the text becomes an unscreened instruction, is the architecture's decision and 231's to build.
-- It can be called from anywhere. It needs a working directory only to resolve `--member` through `cf`.
+- It can be called from anywhere. `--member` is resolved through `cf` with no working directory.
 
 ### D3: `withdraw`
 
@@ -200,7 +208,7 @@ No new config key. The cap is `passages_max_chars`.
 
 Each is changed here, and the change is the whole of it:
 
-- **221/223 `assemble`:** gains `standing_answers: Sequence[StandingAnswer]`, keyword-only. The `StandingAnswer` type lives in `answering/passages.py`, so the library still imports nothing from the store.
+- **221/223 `assemble`:** gains `standing_answers: Sequence[StandingAnswer]`, keyword-only. The `StandingAnswer` type lives in `answering/standing_passages.py`, so the library still imports nothing from the store.
 - **223 `answering.yaml`:** both prompts gain the `standing_answer` kind (D6).
 - **223 `pause_context.gather`:** same signature; `_read_store` gains the reach query (D5).
 - **228/229 `rm`:** `apply_removal` withdraws member-reach standing answers in its transaction (D8).
@@ -233,13 +241,41 @@ Each is changed here, and the change is the whole of it:
 
 ### Verification Walkthrough
 
-In a fixture repo registered as a member, with the live fixture pipeline from 223:
+Checked 20261120. Steps 1, 2, 4 (the withdraw) and 5 need only a store and a config; steps 3 and 4 (the pipeline runs) need the live tier and are what `tests/live/pause/test_standing_answer_live.py` runs end to end.
 
-1. `amoeba standing --text "When an agent asks whether to bump the fixture version, the answer is no: fixture versions are never bumped."` prints the new id.
-2. `amoeba list standing` shows it with reach `everything`.
-3. Start the fixture pipeline with the question "Should I bump the fixture version?". After the pause, `amoeba list --all` shows the question answered and the run resumed, and `amoeba decisions -j` shows the answer citing a `standing_answer` passage with source `standing:<id>`.
-4. `amoeba withdraw <id> --reason "walkthrough"`, then run the pipeline again. `amoeba list` shows the question waiting on the PM.
-5. `amoeba list standing --all` shows the withdrawn row and its reason.
+**Setup (steps 1, 2, 5).** From the repo root, a throwaway home with the example config:
+
+```sh
+export AMOEBA_HOME=$(mktemp -d)
+uv run python -c "import sys; sys.path.insert(0, 'tests'); from user_configs import example_config_text; open('$AMOEBA_HOME/config.yaml', 'w').write(example_config_text())"
+```
+
+`standing`, `withdraw` and `list standing` take no working directory, so they run from anywhere; no member needs to be registered for reach `all`.
+
+1. Give the ruling:
+
+   ```sh
+   uv run amoeba standing --text "When an agent asks whether to bump the fixture version, the answer is no: fixture versions are never bumped."
+   ```
+
+   Exit 0, and:
+
+   ```
+   given: standing answer #1
+     reach: everything
+   ```
+
+   Running the same command again prints `unchanged: standing answer #1` and writes nothing.
+
+2. `uv run amoeba list standing` exits 0 and prints one block: `#1 · everything · <YYYY-MM-DD HH:MM>` (UTC), then the text indented on the next line.
+
+3. **Live (pipeline).** `uv run pytest tests/live/pause/test_standing_answer_live.py` (needs the three `AMOEBA_LIVE_*` variables; real models). In a throwaway member whose `CLAUDE.md` says nothing about fixture versions it gives the ruling, runs `tests/live/pause/asks_fixture_version.yaml` (the step replies "Should I bump the fixture version?" and pauses), and calls `amoeba handle-pause <run_id>`. It asserts the outcome is `resumed` and that `amoeba decisions -j --since 2026-01-01T00:00:00+00:00` shows that run's record with a `based_on.cited` entry whose `kind` is `standing_answer` and `source` is `standing:<id>`.
+
+4. The same test then runs `amoeba withdraw <id> --reason walkthrough` (outcome `withdrawn`), starts the pipeline again, and asserts `handle-pause` ends `waiting_on_pm`. By hand, after step 2: `uv run amoeba withdraw 1 --reason "walkthrough"` exits 0 and prints `withdrawn: standing answer #1`; repeating it prints `unchanged: standing answer #1`.
+
+5. `uv run amoeba list standing --all` exits 0 and shows the block from step 2 plus `  withdrawn <YYYY-MM-DD HH:MM>: walkthrough`. Without `--all` it prints `No standing answers.`
+
+Caveats: the dates are UTC. `list standing --program ID` is rejected as `malformed` (a reach `all` entry reaches every program). `--program` and `--member` together on `standing` is a usage error, exit 2.
 
 ## Risk Assessment
 
@@ -252,7 +288,7 @@ In a fixture repo registered as a member, with the live fixture pipeline from 22
 
 ### Development Approach
 
-Store first (migration, functions, reach query), then the two operations and the view through the CLI, then the passages and prompts, then `rm`, then MCP, then docs and the live test.
+Store first (migration, functions, reach query), then the two operations with their CLI commands and MCP tools together (an operation name needs both doors in one commit), then the view, then the passages and prompts, then `decisions`, then `rm`, then docs and the live test.
 
 ### Special Considerations
 
@@ -268,7 +304,7 @@ Walked as the person who runs it, by the designing agent.
 - **A waiting question the ruling would have settled.** Giving a standing answer does not go back and answer questions already waiting. The PM answers that one with `answer` as today. Its exit is unchanged: `answer`, `dismiss`, or the run moving on.
 - **A wrong ruling.** `withdraw` stops it from the next question. Answers already delivered are not undone; they are in `decisions`, and the runs that got them are the PM's to judge, as with any wrong answer today.
 - **A ruling that is too broad.** Withdraw it and give it again with `--program` or `--member`, or with more exact wording.
-- **Too many or too long.** This is a stop the slice adds, and the architecture accepts it. The question waits as `sources_too_large` with both shares in the detail. When the standing answers' share is what tips it over, `withdraw` is the exit and needs no file edit; the next question uses the result. When rules, plan and program alone are over, that question was already too large before this slice, and its exit is unchanged (raise `passages_max_chars` or shorten the rules). The waiting question exits as any waiting question does.
+- **Too many or too long.** This is a stop the slice adds, and the architecture accepts it. The question waits as `sources_too_large` with both shares in the detail. The question already waiting exits by `answer`, `dismiss` or the run moving on. `withdraw`, a raised cap or shorter rules change only later questions, because a `waiting_on_pm` row is skipped and never gathered again (`operations/pause_existing.py`). When the standing answers' share is what tips it over, `withdraw` keeps later questions under the cap and needs no file edit. When rules, plan and program alone are over, that question was already too large before this slice, and the fix is unchanged (raise `passages_max_chars` or shorten the rules).
 - **Store busy or `cf` failing.** Exit 3 with nothing written; the call is safe to repeat.
 - **A member is removed.** Its member-reach standing answers are withdrawn with `member_removed`. Program and `all` reach are untouched.
 - **End state and clearing.** Active rows stay until withdrawn. Withdrawn rows stay as the record of what delivered answers cited, and are bounded by the number of rulings the PM gives. To stop everything applying: `list standing`, then `withdraw` each. There is no state that needs a file edited.

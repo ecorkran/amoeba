@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import subprocess
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 import pytest
@@ -19,14 +20,23 @@ from amoeba.answering.values import AnsweringEvidence, DeclineReason
 from amoeba.operations.pause_context import NO_SLICE_LABEL, PauseContext
 from amoeba.store.answers import add_pm_answer, settle_answered
 from amoeba.store.models import QuestionKey
+from amoeba.store.programs import upsert_program
 from amoeba.store.questions import NewQuestion, insert_question
+from amoeba.store.standing import give_standing, withdraw_standing
+from amoeba.store.store import Store, Transaction
+from amoeba.store.vocabulary import StandingReach
 from operations.gather_rig import (
     NOW,
     SLICE_LABEL,
     SLICE_PARAM,
     gather_rig,
 )
-from operations.program_rig import ASKING_MEMBER, CONCEPT_MEMBER, CONCEPT_PATH
+from operations.program_rig import (
+    ASKING_MEMBER,
+    CONCEPT_MEMBER,
+    CONCEPT_PATH,
+    PROGRAM_ID,
+)
 
 
 def _context(result: PauseContext | SourcesProblem) -> PauseContext:
@@ -221,3 +231,102 @@ def test_over_the_limit_is_sources_too_large(tmp_path: Path) -> None:
 
     assert isinstance(result, SourcesProblem)
     assert result.kind is SourcesProblemKind.TOO_LARGE
+
+
+# Standing answers (slice 230, D5)
+
+
+def _give(
+    store: Store,
+    text: str,
+    reach: StandingReach = StandingReach.ALL,
+    program_id: str | None = None,
+    member_id: str | None = None,
+) -> int:
+    with store.write() as transaction:
+        standing_id, _ = give_standing(
+            transaction, text, reach, program_id, member_id, NOW
+        )
+    return standing_id
+
+
+def _standing_sources(context: PauseContext) -> list[str | None]:
+    return [
+        passage.source
+        for passage in context.passages.passages
+        if passage.kind is PassageKind.STANDING_ANSWER
+    ]
+
+
+def test_a_member_with_no_pm_answers_is_sent_an_all_reach_row(tmp_path: Path) -> None:
+    with gather_rig(tmp_path) as rig:
+        standing_id = _give(rig.store, "Fixture versions are never bumped.")
+        context = _context(rig.gather({}))
+
+    assert _standing_sources(context) == [f"standing:{standing_id}"]
+    assert PassageKind.PM_ANSWER not in _kinds(context)
+    assert "kind: standing_answer" in context.passages_markdown
+
+
+def test_only_rows_in_reach_and_active_are_sent(tmp_path: Path) -> None:
+    with gather_rig(tmp_path) as rig:
+        with rig.store.write() as transaction:
+            upsert_program(
+                transaction,
+                program_id="elsewhere",
+                concept_member=None,
+                concept_path=None,
+                now=NOW,
+            )
+        mine = _give(rig.store, "program", StandingReach.PROGRAM, PROGRAM_ID)
+        _give(rig.store, "other program", StandingReach.PROGRAM, "elsewhere")
+        _give(rig.store, "other member", StandingReach.MEMBER, None, CONCEPT_MEMBER)
+        me = _give(rig.store, "member", StandingReach.MEMBER, None, ASKING_MEMBER)
+        gone = _give(rig.store, "withdrawn")
+        with rig.store.write() as transaction:
+            withdraw_standing(transaction, gone, "old", NOW)
+        context = _context(rig.gather({}))
+
+    assert _standing_sources(context) == [f"standing:{mine}", f"standing:{me}"]
+
+
+def test_with_no_rows_the_passages_are_as_before(tmp_path: Path) -> None:
+    with gather_rig(tmp_path) as rig:
+        before = _context(rig.gather({}))
+        gone = _give(rig.store, "withdrawn")
+        with rig.store.write() as transaction:
+            withdraw_standing(transaction, gone, "old", NOW)
+        after = _context(rig.gather({}))
+
+    assert after.passages_markdown == before.passages_markdown
+    assert after.refs == before.refs
+
+
+def test_gather_reads_the_store_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with gather_rig(tmp_path) as rig:
+        _give(rig.store, "ruling")
+        entries: list[None] = []
+        original = Store.read
+
+        def counting(store: Store) -> AbstractContextManager[Transaction]:
+            entries.append(None)
+            return original(store)
+
+        monkeypatch.setattr(Store, "read", counting)
+        _context(rig.gather({}))
+
+    assert len(entries) == 1
+
+
+def test_standing_answers_that_tip_the_cap_give_both_shares(tmp_path: Path) -> None:
+    with gather_rig(tmp_path) as rig:
+        base = len(_context(rig.gather({})).passages_markdown)
+        _give(rig.store, "x" * 500)
+        result = rig.gather({}, max_chars=base + 100)
+
+    assert isinstance(result, SourcesProblem)
+    assert result.kind is SourcesProblemKind.TOO_LARGE
+    assert f"are {base} characters and standing answers " in result.detail
+    assert f"the limit is {base + 100}" in result.detail

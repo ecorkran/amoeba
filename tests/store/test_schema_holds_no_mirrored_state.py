@@ -160,6 +160,19 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
     ),
     # How far the PM has read the decisions.
     "marker": frozenset({"pm_marker.id", "pm_marker.last_seen_seq"}),
+    # Rulings the PM gave ahead of time and whether each still holds (230 D1).
+    "rulings": frozenset(
+        {
+            "standing_answers.id",
+            "standing_answers.text",
+            "standing_answers.reach",
+            "standing_answers.program_id",
+            "standing_answers.member_id",
+            "standing_answers.given_at",
+            "standing_answers.withdrawn_at",
+            "standing_answers.withdraw_reason",
+        }
+    ),
     # Which amoeba-mcp processes are serving now, as their own heartbeats say.
     "presence": frozenset(
         {

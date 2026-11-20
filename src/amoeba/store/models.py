@@ -24,6 +24,7 @@ from amoeba.store.vocabulary import (
     RequestState,
     ResumeOutcome,
     RulesFrom,
+    StandingReach,
     WakeOutcome,
 )
 
@@ -282,3 +283,20 @@ class Wake:
     exit_code: int | None
     #: Why, for a start failure or an error; never argv text.
     detail: str | None
+
+
+@dataclass(frozen=True)
+class StandingAnswerRow:
+    """One ``standing_answers`` row: a ruling the PM gave ahead of time (230 D1)."""
+
+    standing_id: int
+    #: The PM's words, situation and ruling together; never edited.
+    text: str
+    reach: StandingReach
+    #: Set only for reach ``program``.
+    program_id: str | None
+    #: Set only for reach ``member``: the member's project id.
+    member_id: str | None
+    given_at: datetime
+    withdrawn_at: datetime | None
+    withdraw_reason: str | None

@@ -16,6 +16,7 @@ from pydantic import (
 )
 
 from amoeba.answering.passages import PassageKind, normalized_citations
+from amoeba.answering.standing_passages import is_standing_source
 from amoeba.answering.values import AnsweredBy, PassageRef
 from amoeba.config.user_config import NonBlank
 from amoeba.operations.decisions_models import (
@@ -177,6 +178,19 @@ def _basis(row: DecisionRow) -> AnswererBasis | PmBasis | None:
     )
 
 
+def _cited_kind(ref: PassageRef) -> str | None:
+    """The kind a stored passage record shows, which holds no kind of its own.
+
+    A PM answer carries its question id; a standing answer's source is exactly
+    ``standing:<id>`` (230). Every other kind is null rather than guessed.
+    """
+    if ref.question_id is not None:
+        return PassageKind.PM_ANSWER.value
+    if is_standing_source(ref.source):
+        return PassageKind.STANDING_ANSWER.value
+    return None
+
+
 def _cited(row: DecisionRow) -> tuple[CitedPassage, ...]:
     # The gate accepted the ids as ``normalized_citations`` reads them, while the
     # answer row keeps them as written, so they are matched the same way.
@@ -194,7 +208,7 @@ def _cited(row: DecisionRow) -> tuple[CitedPassage, ...]:
         passages.append(
             CitedPassage(
                 id=ref.id,
-                kind=None if ref.question_id is None else PassageKind.PM_ANSWER.value,
+                kind=_cited_kind(ref),
                 source=ref.source,
                 date=ref.date,
             )

@@ -204,7 +204,10 @@ def register_list(
     parser.add_argument(
         "--all",
         action="store_true",
-        help="also show what settled recently, or programs with no members",
+        help=(
+            "also show what settled recently, programs with no members, or "
+            "withdrawn standing answers"
+        ),
     )
     parser.add_argument("--program", metavar="ID", help="only this program")
     return parser

@@ -31,6 +31,7 @@ from amoeba.answering.passages import (
     select_plan_files,
 )
 from amoeba.answering.request_passage import request_passage
+from amoeba.answering.standing_passages import StandingAnswer
 
 SOURCES = Path(__file__).parent / "fixtures" / "sources"
 
@@ -321,7 +322,7 @@ def _assemble(
         _file("p.md", "plan\n", PassageKind.PLAN),
     )
     return assemble(
-        committed, answers, program_sources=program,
+        committed, answers, program_sources=program, standing_answers=(),
         max_chars=max_chars, source_commit="c0ffee",
     )  # fmt: skip
 
@@ -440,8 +441,8 @@ def _assemble_with_request(
         _file("p.md", "plan\n", PassageKind.PLAN),
     )
     return assemble(
-        committed, answers, program_sources=PROGRAM, max_chars=max_chars,
-        source_commit="c0ffee", request=REQUEST,
+        committed, answers, program_sources=PROGRAM, standing_answers=(),
+        max_chars=max_chars, source_commit="c0ffee", request=REQUEST,
     )  # fmt: skip
 
 
@@ -471,3 +472,80 @@ def test_a_set_too_large_with_the_request_passage_is_sources_too_large() -> None
 
     assert isinstance(result, SourcesProblem)
     assert result.kind is SourcesProblemKind.TOO_LARGE
+
+
+# Standing answers (slice 230, D5)
+
+STANDING = (
+    StandingAnswer(standing_id=4, text="Second ruling.\n", given_at=FIXED),
+    StandingAnswer(standing_id=2, text="First ruling.\n", given_at=FIXED),
+)
+
+
+def _assemble_standing(
+    answers: list[PmAnswer],
+    standing: tuple[StandingAnswer, ...] = STANDING,
+    max_chars: int = 100_000,
+    *files: SourceFile,
+) -> PassageSet | SourcesProblem:
+    committed = files or (
+        _file("r.md", "# A\none\n## B\ntwo\n"),
+        _file("p.md", "plan\n", PassageKind.PLAN),
+    )
+    return assemble(
+        committed, answers, program_sources=PROGRAM, standing_answers=standing,
+        max_chars=max_chars, source_commit="c0ffee", request=REQUEST,
+    )  # fmt: skip
+
+
+def test_standing_answers_follow_the_request_and_precede_pm_answers() -> None:
+    result = _set(_assemble_standing([_pm("q1", SLICE, 1)]))
+
+    assert [(p.id, p.kind, p.source) for p in result.passages] == [
+        ("P1", PassageKind.RULE, "r.md"),
+        ("P2", PassageKind.RULE, "r.md"),
+        ("P3", PassageKind.PLAN, "p.md"),
+        ("P4", PassageKind.PROGRAM_CONCEPT, CONCEPT.path),
+        ("P5", PassageKind.PROGRAM_MEMBERS, MEMBER_LIST.path),
+        ("P6", PassageKind.REQUEST_RESULT, "guide-change"),
+        ("P7", PassageKind.STANDING_ANSWER, "standing:2"),
+        ("P8", PassageKind.STANDING_ANSWER, "standing:4"),
+        ("P9", PassageKind.PM_ANSWER, None),
+    ]
+
+
+def test_standing_answers_stay_while_pm_answers_after_them_are_trimmed() -> None:
+    full = _set(_assemble_standing([]))
+    room = len(render_passages(full))
+
+    result = _set(_assemble_standing([_pm("q1", SLICE, 1)], max_chars=room))
+
+    assert [p.kind for p in result.passages].count(PassageKind.STANDING_ANSWER) == 2
+    assert result.dropped_pm_answers == ("q1",)
+
+
+def test_rules_and_standing_answers_over_the_cap_give_both_shares() -> None:
+    without = len(render_passages(_set(_assemble_standing([], ()))))
+    with_standing = len(render_passages(_set(_assemble_standing([]))))
+
+    result = _assemble_standing([], max_chars=with_standing - 1)
+
+    assert isinstance(result, SourcesProblem)
+    assert result.kind is SourcesProblemKind.TOO_LARGE
+    assert f"are {without} characters" in result.detail
+    assert f"standing answers {with_standing - without}" in result.detail
+    assert f"the limit is {with_standing - 1}" in result.detail
+
+
+def test_standing_answers_alone_under_the_cap_fit_with_no_rules() -> None:
+    program = ProgramSources(concept=None, members=MEMBER_LIST)
+    result = assemble(
+        (), [], program_sources=program, standing_answers=STANDING,
+        max_chars=400, source_commit="c0ffee",
+    )  # fmt: skip
+
+    assert [p.kind for p in _set(result).passages] == [
+        PassageKind.PROGRAM_MEMBERS,
+        PassageKind.STANDING_ANSWER,
+        PassageKind.STANDING_ANSWER,
+    ]

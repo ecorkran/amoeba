@@ -77,6 +77,8 @@ INSTRUCTIONS: Final = (
     "decision the PM actually gave, passed on as given, never one you composed, "
     "because it becomes precedent for later questions. `retract` stops an answer "
     "being precedent; `dismiss` closes a question that has no answer to deliver.\n"
+    "- The PM gives a ruling for every later case: `standing`, under the same rule "
+    "as `answer`; `withdraw` takes one back.\n"
     "- What was decided while the PM was away: `decisions`, then `mark_read` with "
     "its `read_through`.\n"
     "- Register or unregister a repo: `add` and `rm`. `add` needs only the "

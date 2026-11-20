@@ -85,7 +85,7 @@ on the CLI; it is not an error.
 |---|---|
 | `add` | Registers a repo in a program. Takes `directory` (the caller's checkout, an absolute path) and the single-member fields (`program`, `project`, `rules_paths`, `rules_default`, `authorize_allow`, `authorize_deny`, `depends_on`, `concept`) or `bulk`, a whole multi-member request, never both. It does not take `wake_command` (the command Amoeba starts for a request when no agent is live in a repo): that is the PM's CLI setting, `amoeba add --wake-command`, and a call that passes it is rejected as an unknown field. |
 | `rm` | Removes members, pairs (`PROVIDER:CONSUMER`) or the concept (`concept: true`). Also takes `directory`; with nothing named it removes that repo. |
-| `list` | What needs the PM: with no `subject`, the same document as `status` (and `all` adds `settled`); `programs`, `members` and `dependencies` show what is registered. Also takes `directory`. Like `status`, it then starts `handle_pause` for each held question whose request has ended (slice 242). |
+| `list` | What needs the PM: with no `subject`, the same document as `status` (and `all` adds `settled`); `programs`, `members` and `dependencies` show what is registered, and `standing` the standing answers (`all` adds withdrawn ones). Also takes `directory`. Like `status`, it then starts `handle_pause` for each held question whose request has ended (slice 242). |
 | `status` | Also takes `directory`. Its listing gives each run's `run_id` and `directory` for `handle_pause`, and the question key for `answer`. After its listing it starts `handle_pause` for each held question whose request has ended (slice 242); the result does not change, and a held run (`waiting_on_request`) needs no call from you. A member with a wake command also has a `wake` object (slice 244: `command`, `running`, `stopped`, `last_problem`; `cli-contract.md`), shown in plain text. |
 | `decisions` | `read_through` goes to `mark_read`. Each record shows `via`, the door that carried a PM answer (`cli` or `mcp`). |
 | `mark_read` | |
@@ -97,6 +97,8 @@ on the CLI; it is not an error.
 | `inbox` | Takes `directory` and optional `since` and `member`. Writes nothing; pass its `as_of_seq` back as `since`. Returns `requests`, `notes` and `deliveries`. |
 | `reply` | Takes `directory`, `id`, `action` (`accept`, `decline` or `done`), `text`, `commit`, `version` and `member`. |
 | `cancel` | Takes `directory`, `id`, `reason` and `member`. |
+| `standing` | Records a standing answer (slice 230). Takes `text`, and `program` (a program id) or `member` (a Context Forge project name or id), never both; with neither it reaches every member. No `directory`. Like `answer`, `text` must be a ruling the PM actually gave, passed on as given. The same call again answers `unchanged` with the same id, so repeating a call that timed out is safe. |
+| `withdraw` | Withdraws a standing answer. Takes `standing_id` and `reason`; no `directory`. Under the same rule as `standing`. Repeating it answers `unchanged`. |
 | `handle_pause` | Takes `run_id` and `directory` (the run's checkout, from `status`). Starts the work detached and returns a receipt at once. |
 
 ### Requests between repos

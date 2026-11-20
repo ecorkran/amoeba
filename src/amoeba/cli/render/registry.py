@@ -1,4 +1,5 @@
-"""The text of ``list programs``, ``list members`` and ``list dependencies`` (229 D3).
+"""The text of ``list programs``, ``list members`` and ``list dependencies`` (229 D3),
+and ``list standing`` (230 D4).
 
 Blocks and lines, no table: a path is never cut, so it sits on its own line, and every
 other line is held to 100 columns. A member Context Forge gives no path says
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 from typing import Final
 
+from amoeba.cli.render.standing import reach_text
 from amoeba.cli.render.text import (
     NONE,
     SEPARATOR,
@@ -17,12 +19,16 @@ from amoeba.cli.render.text import (
     indented,
     prose_line,
     rules_text,
+    wrapped,
 )
+from amoeba.cli.render.waking import TIME_FORMAT
 from amoeba.operations.list_registry import (
     DependenciesView,
     MemberRow,
     MembersView,
     ProgramsView,
+    StandingRow,
+    StandingView,
 )
 from amoeba.store.vocabulary import RulesFrom
 
@@ -31,6 +37,7 @@ NOT_IN_CF: Final = "(not in Context Forge)"
 NO_PROGRAMS: Final = "No programs."
 NO_MEMBERS: Final = "No members."
 NO_DEPENDENCIES: Final = "No dependencies."
+NO_STANDING: Final = "No standing answers."
 
 
 def render_programs(view: ProgramsView) -> str:
@@ -110,6 +117,33 @@ def render_dependencies(view: DependenciesView) -> str:
         for row in view.dependencies
     ]
     return "\n".join(lines) + "\n"
+
+
+def render_standing_view(view: StandingView) -> str:
+    """One block per standing answer, newest first; the text is wrapped to the
+    width, never cut."""
+    if not view.standing:
+        return NO_STANDING + "\n"
+    blocks = ["\n".join(_standing_block(row)) for row in view.standing]
+    return "\n\n".join(blocks) + "\n"
+
+
+def _standing_block(row: StandingRow) -> list[str]:
+    member = None if row.member is None else _end(row.member_name, row.member)
+    reach = reach_text(row.reach, row.program, member)
+    given = row.given_at.strftime(TIME_FORMAT)
+    lines = [f"#{row.standing_id}{SEPARATOR}{reach}{SEPARATOR}{given}"]
+    lines.extend(wrapped(row.text))
+    if row.withdrawn_at is not None:
+        if row.withdraw_reason is None:
+            raise ValueError(
+                f"standing answer {row.standing_id} has no withdraw reason"
+            )
+        withdrawn = row.withdrawn_at.strftime(TIME_FORMAT)
+        lines.append(
+            prose_line(indented(f"withdrawn {withdrawn}: "), row.withdraw_reason)
+        )
+    return lines
 
 
 def _end(name: str | None, project_id: str) -> str:

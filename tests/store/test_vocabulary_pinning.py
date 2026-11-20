@@ -25,6 +25,7 @@ from amoeba.store.vocabulary import (
     RequestState,
     ResumeOutcome,
     RulesFrom,
+    StandingReach,
     WakeOutcome,
 )
 
@@ -55,6 +56,7 @@ ENUM_FOR_COLUMN: dict[str, type[StrEnum]] = {
     "messages.state": RequestState,
     "deliveries.event": DeliveryEvent,
     "wakes.outcome": WakeOutcome,
+    "standing_answers.reach": StandingReach,
 }
 
 

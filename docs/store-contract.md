@@ -70,7 +70,7 @@ file, pid file or read-only mode, and a missing store is created.
 ## Migrations
 
 - Numbered files in `src/amoeba/store/schema/` (`001_baseline.sql`, `002_pause_handling.sql`,
-  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`, `009_wakes.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (9).
+  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`, `009_wakes.sql`, `010_standing_answers.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (10).
 - Opening applies the missing files in order inside one write transaction and stamps
   `schema_meta.version`. A store stamped higher than the code expects is refused
   (`StoreSchemaError`) and left untouched.
@@ -329,6 +329,27 @@ retention.
 `ended_at` and `outcome` are both null or both set, and `exit_code` is set only for
 `exited` (table `CHECK`s). Indexes: `(member_id, started_at)` and `(started_at)`.
 
+### `standing_answers` (migration `010`, slice 230)
+
+One row per ruling the PM gave ahead of time, in the PM's own words, with the members it
+reaches. A row is active until it is withdrawn, and withdrawn is terminal. Rows are
+never deleted. See "Standing answers and who writes them" below.
+
+| Column | Meaning |
+|---|---|
+| `id` | Key; `AUTOINCREMENT`, so an id is never reused. A delivered answer cites the row as `standing:<id>`. |
+| `text` | The PM's words, situation and ruling in one field, so the agent never rewrites what the PM said. Never edited: a changed ruling is a withdraw and a new row. Not blank (a `CHECK`). |
+| `reach` | `StandingReach` (a `CHECK`): `all` (every member), `program` (every member of `program_id`), `member` (the one member `member_id`). |
+| `program_id` | The program reached; set only for reach `program`; references `programs`. |
+| `member_id` | The member reached, by project id; set only for reach `member`; references `members`. |
+| `given_at` | UTC time the ruling was given; the date of its passage, so a newer ruling wins under the prompts' "later date wins" rule. |
+| `withdrawn_at` | UTC time it was withdrawn; null while active. |
+| `withdraw_reason` | Why: the text given to `withdraw`, or `member_removed` when `rm` withdrew it. Null while active. |
+
+The reach `CHECK`s tie `program_id` and `member_id` to the reach, and `withdrawn_at` and
+`withdraw_reason` are both null or both set. No index: the table grows only with the
+PM's rulings.
+
 ### `pm_marker` (moved by slice 224)
 
 | Column | Meaning |
@@ -339,7 +360,7 @@ retention.
 ## Why each column exists
 
 The schema holds no state that Context Forge or Squadron already says; every column is
-one of seven things. `tests/store/test_schema_holds_no_mirrored_state.py` pins the same
+one of eight things. `tests/store/test_schema_holds_no_mirrored_state.py` pins the same
 columns under the same reasons, so a new column fails it until it is listed in both
 places and its reason is stated.
 
@@ -352,6 +373,8 @@ places and its reason is stated.
 - **messages**: what agents said to each other and where each request stands. Amoeba is the only place this exists, and a request's state is Amoeba's own, never read from Context Forge or Squadron. Columns: `deliveries.created_at`, `deliveries.event`, `deliveries.member_id`, `deliveries.message_id`, `deliveries.seq`, `message_rejections.code`, `message_rejections.created_at`, `message_rejections.detail`, `message_rejections.id`, `message_rejections.member_id`, `message_rejections.message_id`, `message_rejections.operation`, `message_rejections.parent_id`, `message_rejections.to_ref`, `messages.accepted_at`, `messages.body`, `messages.created_at`, `messages.depth`, `messages.expires_at`, `messages.from_member`, `messages.kind`, `messages.message_id`, `messages.parent_id`, `messages.reason`, `messages.result`, `messages.result_commit`, `messages.result_version`, `messages.state`, `messages.state_changed_at`, `messages.subject`, `messages.to_member`, `messages.to_program`.
 
 - **waking**: what Amoeba started with nobody present and how each start ended. Amoeba is the only place this exists, and a wake's end is what its own wrapper recorded. Columns: `wakes.command`, `wakes.command_pid`, `wakes.deadline_at`, `wakes.detail`, `wakes.directory`, `wakes.ended_at`, `wakes.exit_code`, `wakes.log_stem`, `wakes.member_id`, `wakes.outcome`, `wakes.started_at`, `wakes.wake_id`.
+
+- **rulings**: the rulings the PM gave ahead of time and whether each still holds. Amoeba is the only place they exist. Columns: `standing_answers.given_at`, `standing_answers.id`, `standing_answers.member_id`, `standing_answers.program_id`, `standing_answers.reach`, `standing_answers.text`, `standing_answers.withdraw_reason`, `standing_answers.withdrawn_at`.
 
 - **marker**: how far the PM has read the decisions. Columns: `pm_marker.id`, `pm_marker.last_seen_seq`.
 
@@ -533,6 +556,28 @@ heartbeat; `list` and `status` read it. Nothing else touches the table.
   deletes it. A held store skips a beat; the next beat retries.
 - A removed member's server keeps beating; its rows are never shown and never count for
   waking, because both reads keep active members only.
+
+## Standing answers and who writes them (slice 230)
+
+- **Give.** `standing` inserts a row with `given_at` now, after checking the program
+  exists or the member is active. When an active row already has the same text, reach,
+  program and member, nothing is written and that row's id is returned; the check and
+  the insert are one write transaction, so a repeated call never makes a second row.
+- **Withdraw.** `withdraw` sets `withdrawn_at` and `withdraw_reason` by compare-and-set
+  on `withdrawn_at IS NULL`, so a second call changes nothing. Withdrawn is terminal:
+  there is no un-withdraw, and giving the ruling again is a new row.
+- **Removal.** `rm` of a member withdraws, in its own transaction, the member's active
+  member-reach rows with reason `member_removed`. Program and `all` rows are untouched:
+  `rm` never deletes a program.
+- **The reach read.** Each question's context reads the active rows whose reach is
+  `all`, the member's program, or the member, by the member's `project_id` and
+  `program_id` bound as parameters, without reading `members`. It runs in the same read
+  transaction as the PM precedent, before any claim is written.
+- **Rows are kept.** No statement deletes from `standing_answers`. A delivered answer
+  cites a standing answer by its passage, and the question's stored passage record
+  keeps the `standing:<id>` source, its id and date, never the text, so the row is
+  where that text stays readable. The table is bounded by the number of rulings the PM
+  gives, as stored PM answers are.
 
 ## Wakes and who writes them (slice 244)
 

@@ -98,7 +98,7 @@ def _schema(tmp_path: Path) -> dict[str, list[str]]:
 def test_the_store_contract_names_every_table_and_column(tmp_path: Path) -> None:
     text = STORE_CONTRACT.read_text(encoding="utf-8")
     schema = _schema(tmp_path)
-    assert len(schema) == 13
+    assert len(schema) == 14
 
     missing = [
         f"{table}.{column}" if column else table

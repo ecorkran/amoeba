@@ -17,6 +17,11 @@ from typing import Final
 from amoeba.answering.passage_types import Passage, PassageKind
 from amoeba.answering.request_passage import add_request_passage
 from amoeba.answering.rule_dedup import RuleDeduper
+from amoeba.answering.standing_passages import (
+    StandingAnswer,
+    add_standing_passages,
+    too_large_detail,
+)
 from amoeba.answering.values import GLOB_WILDCARD
 
 _FRONT_MATTER_MARK: Final = "---"
@@ -331,6 +336,7 @@ def assemble(
     program_sources: ProgramSources,
     max_chars: int,
     source_commit: str,
+    standing_answers: Sequence[StandingAnswer],
     request: Passage | None = None,
 ) -> PassageSet | SourcesProblem:
     """Number the passages and fit PM precedent into ``max_chars`` of rendered text.
@@ -339,17 +345,20 @@ def assemble(
     trimmed: if they alone exceed the limit the result is ``sources_too_large``. PM
     answers are added in priority order until one does not fit; that one and every
     later one are dropped, so a smaller, lower-priority answer never jumps a dropped
-    one. A ``request`` passage (242 D5) follows the program passages, untrimmed.
+    one. A ``request`` passage (242 D5) follows the program passages, untrimmed. The
+    ``standing_answers`` (230 D5) follow it in id order and are never trimmed either:
+    they count in the size check, whose detail gives both shares.
     """
-    kept = add_request_passage(
+    base = add_request_passage(
         _committed_passages((*committed, *program_sources.files)), request
     )
+    kept = add_standing_passages(base, standing_answers)
     size = _rendered_size(kept)
     if size > max_chars:
+        base_size = _rendered_size(base)
         return SourcesProblem(
             SourcesProblemKind.TOO_LARGE,
-            f"rules, plan and program passages are {size} characters; "
-            f"the limit is {max_chars}",
+            too_large_detail(base_size, size - base_size, max_chars),
         )
     ordered = _pm_order(pm_answers)
     for position, answer in enumerate(ordered):
@@ -363,6 +372,12 @@ def assemble(
         kept.append(passage)
         size = grown
     return PassageSet(tuple(kept), source_commit, ())
+
+
+def standing_chars(answers: Sequence[StandingAnswer]) -> int:
+    """The rendered characters of ``answers`` as passages, as ``assemble`` counts
+    their share of the cap (230 D5)."""
+    return _rendered_size(add_standing_passages((), answers))
 
 
 def _rendered_size(kept: Sequence[Passage]) -> int:

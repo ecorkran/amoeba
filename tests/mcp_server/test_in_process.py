@@ -9,17 +9,19 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import anyio
 import pytest
 import yaml
+from store.question_support import seed_members
 from user_configs import example_config_text
 from wiring_support import is_closed, record_opened_stores
 
 from amoeba import wiring
 from amoeba.cli import commands
 from amoeba.cli import main as cli
-from amoeba.config.home import config_path
+from amoeba.config.home import config_path, store_path
 from amoeba.mcp import in_process
 from amoeba.mcp.in_process import CallTimedOut, run_in_process
 from amoeba.mcp.tools import (
@@ -30,6 +32,7 @@ from amoeba.mcp.tools import (
 )
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
 from amoeba.operations.names import Door, OperationName
+from amoeba.store.standing import list_standing
 from amoeba.store.store import Store
 from amoeba.upstream.squadron.errors import SquadronError
 
@@ -419,3 +422,68 @@ def test_an_add_tool_call_passing_wake_command_is_rejected_as_an_unknown_field(
     assert [problem["detail"] for problem in problems] == [
         f"{location}: Extra inputs are not permitted"
     ]
+
+
+def _seed_demo_program() -> None:
+    with Store.open(store_path()) as store:
+        seed_members(store)
+
+
+def test_a_standing_call_writes_one_row_and_a_repeat_is_unchanged() -> None:
+    _seed_demo_program()
+    arguments: dict[str, object] = {"text": "Never bump fixtures.", "program": "demo"}
+
+    first = _call(OperationName.STANDING, arguments, Path("/unused"))
+    second = _call(OperationName.STANDING, arguments, Path("/unused"))
+
+    assert (first["outcome"], first["reach"], first["program"]) == (
+        "given",
+        "program",
+        "demo",
+    )
+    assert (second["outcome"], second["standing_id"]) == (
+        "unchanged",
+        first["standing_id"],
+    )
+    with Store.open(store_path()) as store, store.read() as transaction:
+        assert list_standing(transaction, include_withdrawn=True)[0].program_id == (
+            "demo"
+        )
+        assert len(list_standing(transaction, include_withdrawn=True)) == 1
+
+
+def test_a_withdraw_call_withdraws() -> None:
+    given = _call(OperationName.STANDING, {"text": "Never."}, Path("/unused"))
+
+    withdrawn = _call(
+        OperationName.WITHDRAW,
+        {"standing_id": given["standing_id"], "reason": "wrong"},
+        Path("/unused"),
+    )
+
+    assert (withdrawn["outcome"], withdrawn["standing_id"]) == (
+        "withdrawn",
+        given["standing_id"],
+    )
+    with Store.open(store_path()) as store, store.read() as transaction:
+        (row,) = list_standing(transaction, include_withdrawn=True)
+    assert row.withdraw_reason == "wrong"
+
+
+def test_list_with_subject_standing_returns_the_rows(tmp_path: Path) -> None:
+    _call(OperationName.STANDING, {"text": "Never bump fixtures."}, tmp_path)
+
+    listed = _call(OperationName.LIST, {"subject": "standing"}, tmp_path)
+
+    (row,) = cast("list[dict[str, object]]", listed["standing"])
+    assert isinstance(row.pop("given_at"), str)
+    assert row == {
+        "standing_id": 1,
+        "reach": "all",
+        "program": None,
+        "member": None,
+        "member_name": None,
+        "text": "Never bump fixtures.",
+        "withdrawn_at": None,
+        "withdraw_reason": None,
+    }

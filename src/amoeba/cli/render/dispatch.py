@@ -20,6 +20,7 @@ from amoeba.cli.render.registry import (
     render_dependencies,
     render_members,
     render_programs,
+    render_standing_view,
 )
 from amoeba.cli.render.releases import render_changes, render_report_release
 from amoeba.cli.render.simple import (
@@ -29,6 +30,7 @@ from amoeba.cli.render.simple import (
     render_mark_read,
     render_retract,
 )
+from amoeba.cli.render.standing import render_standing, render_withdraw
 from amoeba.cli.render.style import PLAIN, Painter
 from amoeba.cli.render.waiting import render_waiting
 from amoeba.operations.answer import AnswerResult
@@ -39,6 +41,7 @@ from amoeba.operations.list_registry import (
     DependenciesView,
     MembersView,
     ProgramsView,
+    StandingView,
 )
 from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadResult
@@ -51,6 +54,7 @@ from amoeba.operations.message_results import (
 from amoeba.operations.report_release_models import ReportReleaseResult
 from amoeba.operations.retract import RetractResult
 from amoeba.operations.set_up_models import SetUpResult
+from amoeba.operations.standing_models import StandingResult, WithdrawResult
 from amoeba.operations.status_models import StatusResult
 from amoeba.wiring import OperationResult
 
@@ -87,6 +91,8 @@ def render_result(
             return render_members(result)
         case DependenciesView():
             return render_dependencies(result)
+        case StandingView():
+            return render_standing_view(result)
         case AnswerResult():
             return render_answer(result)
         case DecisionsResult():
@@ -109,3 +115,7 @@ def render_result(
             return render_reply(result, now=now)
         case CancelResult():
             return render_cancel(result, now=now)
+        case StandingResult():
+            return render_standing(result)
+        case WithdrawResult():
+            return render_withdraw(result)

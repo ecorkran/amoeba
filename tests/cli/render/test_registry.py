@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+import pytest
+
 from amoeba.cli.render.registry import (
     NO_DEPENDENCIES,
     NO_MEMBERS,
@@ -11,8 +15,9 @@ from amoeba.cli.render.registry import (
     render_dependencies,
     render_members,
     render_programs,
+    render_standing_view,
 )
-from amoeba.cli.render.text import COLUMNS
+from amoeba.cli.render.text import COLUMNS, ELLIPSIS
 from amoeba.operations.list_registry import (
     ConceptRow,
     DependenciesView,
@@ -22,8 +27,10 @@ from amoeba.operations.list_registry import (
     MembersView,
     ProgramRow,
     ProgramsView,
+    StandingRow,
+    StandingView,
 )
-from amoeba.store.vocabulary import ConsumedMode, RulesFrom
+from amoeba.store.vocabulary import ConsumedMode, RulesFrom, StandingReach
 
 LONG_PATH = "/Users/someone/" + "deeply/nested/" * 12 + "repo"
 
@@ -216,3 +223,38 @@ def test_a_wake_command_is_on_its_own_line_and_a_member_without_one_has_none() -
 
     assert "  wake command:\n    wake-agent --max-seconds 60\n" in text
     assert text.count("wake command") == 1
+
+
+def _standing_row(text: str) -> StandingRow:
+    return StandingRow(
+        standing_id=1,
+        reach=StandingReach.ALL,
+        program=None,
+        member=None,
+        member_name=None,
+        given_at=datetime(2026, 11, 20, 12, 0, tzinfo=UTC),
+        text=text,
+        withdrawn_at=None,
+        withdraw_reason=None,
+    )
+
+
+def test_a_long_ruling_is_wrapped_to_the_width_and_never_cut() -> None:
+    ruling = " ".join(["word"] * 60) + "\n\nSecond paragraph."
+
+    text = render_standing_view(StandingView(standing=(_standing_row(ruling),)))
+
+    body = text.splitlines()[1:]
+    assert all(len(line) <= COLUMNS for line in body)
+    assert " ".join(" ".join(body).split()) == " ".join(ruling.split())
+    assert "" in body
+    assert ELLIPSIS not in text
+
+
+def test_a_withdrawn_row_without_a_reason_is_an_error() -> None:
+    row = _standing_row("rule").model_copy(
+        update={"withdrawn_at": datetime(2026, 11, 20, 13, 0, tzinfo=UTC)}
+    )
+
+    with pytest.raises(ValueError, match="no withdraw reason"):
+        render_standing_view(StandingView(standing=(row,)))
