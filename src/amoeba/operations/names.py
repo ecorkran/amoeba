@@ -38,6 +38,8 @@ class OperationName(StrEnum):
     INBOX = "inbox"
     REPLY = "reply"
     CANCEL = "cancel"
+    STANDING = "standing"
+    WITHDRAW = "withdraw"
 
     @property
     def cli_name(self) -> str:

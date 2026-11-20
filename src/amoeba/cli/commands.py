@@ -168,6 +168,14 @@ def _document_for(name: OperationName, arguments: argparse.Namespace) -> object:
             return reply_document(arguments)
         case OperationName.CANCEL:
             return cancel_document(arguments)
+        case OperationName.STANDING:
+            return _with_optional(
+                {"text": arguments.text},
+                program=arguments.program,
+                member=arguments.member,
+            )
+        case OperationName.WITHDRAW:
+            return {"standing_id": arguments.standing_id, "reason": arguments.reason}
         case OperationName.HANDLE_PAUSE:
             raise ValueError(f"{name.value} has no request document")
 

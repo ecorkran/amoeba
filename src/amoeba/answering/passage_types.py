@@ -18,6 +18,8 @@ class PassageKind(StrEnum):
     PROGRAM_MEMBERS = "program_members"
     #: The reply another project gave to a request this one sent (242 D5).
     REQUEST_RESULT = "request_result"
+    #: A ruling the PM gave ahead of time, for every case it describes (230 D5).
+    STANDING_ANSWER = "standing_answer"
 
 
 @dataclass(frozen=True)

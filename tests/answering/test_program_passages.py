@@ -53,6 +53,7 @@ def _assemble(committed: tuple[SourceFile, ...], program: ProgramSources) -> Pas
         committed,
         [],
         program_sources=program,
+        standing_answers=(),
         max_chars=100_000,
         source_commit="c0ffee",
     )
@@ -110,6 +111,7 @@ def test_program_text_counts_toward_the_size_limit() -> None:
         (RULES,),
         [],
         program_sources=ProgramSources(CONCEPT, MEMBER_LIST),
+        standing_answers=(),
         max_chars=20,
         source_commit="c0ffee",
     )

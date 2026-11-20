@@ -50,6 +50,7 @@ from amoeba.wiring_registry import place_add, place_list, place_rm
 from amoeba.wiring_release import start_after
 from amoeba.wiring_releases import place_release
 from amoeba.wiring_results import OperationResult, is_rejected, result_document
+from amoeba.wiring_standing import place_standing
 
 __all__ = [
     "OPERATIONAL_ERRORS",
@@ -249,6 +250,10 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
                 document,
                 _required_directory(name, directory),
                 default_deps(layout),
+            )
+        case OperationName.STANDING | OperationName.WITHDRAW:
+            return place_standing(
+                name, store, load_config(), document, default_deps(layout)
             )
         case OperationName.HANDLE_PAUSE:
             raise ValueError(

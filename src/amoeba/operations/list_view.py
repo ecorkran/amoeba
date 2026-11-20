@@ -4,7 +4,8 @@ With no subject it is the ``status`` operation, same code and same sweep: the
 :class:`ListResult` holds ``status``'s result unchanged. ``all`` adds the questions
 that settled within ``prune_after_days`` (``settled``); the run lists the person's
 view also needs are already in the status document. The subjects ``programs``,
-``members`` and ``dependencies`` give the registered views of ``list_registry``.
+``members`` and ``dependencies`` give the registered views of ``list_registry``, and
+``standing`` the standing answers (slice 230, D4), with ``all`` adding withdrawn ones.
 """
 
 from __future__ import annotations
@@ -24,9 +25,11 @@ from amoeba.operations.list_registry import (
     DependenciesView,
     MembersView,
     ProgramsView,
+    StandingView,
     dependencies_view,
     members_view,
     programs_view,
+    standing_view,
 )
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.reject_codes import (
@@ -49,6 +52,7 @@ class ListSubject(StrEnum):
     PROGRAMS = "programs"
     MEMBERS = "members"
     DEPENDENCIES = "dependencies"
+    STANDING = "standing"
 
 
 #: The singular forms the CLI and the tool also take; each names one subject.
@@ -59,6 +63,9 @@ SUBJECT_ALIASES: Final[Mapping[str, ListSubject]] = {
 }
 #: The subjects ``all`` does not apply to.
 ALL_NOT_ACCEPTED: Final = frozenset({ListSubject.MEMBERS, ListSubject.DEPENDENCIES})
+#: The subjects ``program`` does not apply to: a standing answer of reach ``all``
+#: reaches every program, so no program narrows the list honestly.
+PROGRAM_NOT_ACCEPTED: Final = frozenset({ListSubject.STANDING})
 
 
 class ListRequest(FrozenModel):
@@ -105,7 +112,9 @@ class ListResult(FrozenModel):
         return document
 
 
-type ListOutcome = ListResult | ProgramsView | MembersView | DependenciesView
+type ListOutcome = (
+    ListResult | ProgramsView | MembersView | DependenciesView | StandingView
+)
 
 
 def _rejected(code: RejectCode, problems: tuple[str, ...]) -> ListResult:
@@ -142,6 +151,11 @@ def list_view(
             RejectCode.MALFORMED,
             (f"all does not apply to {request.subject.value}",),
         )
+    if request.program is not None and request.subject in PROGRAM_NOT_ACCEPTED:
+        return _rejected(
+            RejectCode.MALFORMED,
+            (f"program does not apply to {request.subject.value}",),
+        )
     if request.program is not None:
         with store.read() as transaction:
             unknown = unknown_program_problem(transaction, request.program)
@@ -156,6 +170,8 @@ def list_view(
             return members_view(store, config, deps.cf_run, program=request.program)
         case ListSubject.DEPENDENCIES:
             return dependencies_view(store, deps.cf_run, program=request.program)
+        case ListSubject.STANDING:
+            return standing_view(store, deps.cf_run, include_withdrawn=request.all)
 
 
 def _default_view(

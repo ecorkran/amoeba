@@ -35,6 +35,7 @@ TABLES = {
     "message_rejections",
     "sessions",
     "wakes",
+    "standing_answers",
 }
 
 

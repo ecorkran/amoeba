@@ -15,6 +15,7 @@ import pytest
 from amoeba.cli.parser import build_parser
 from amoeba.cli.wake_command import CLI_ONLY_COMMANDS
 from amoeba.mcp.message_tools import SEND_ADVICE, STATE_CHANGE_ADVICE
+from amoeba.mcp.standing_tools import PM_RULING_RULE
 from amoeba.mcp.tools import (
     READ_ADVICE,
     TOOLS,
@@ -278,3 +279,36 @@ def test_the_add_schema_has_no_wake_command_anywhere() -> None:
     schema = input_schema(_spec(OperationName.ADD))
 
     assert "wake_command" not in json.dumps(schema)
+
+
+STANDING_NAMES = (OperationName.STANDING, OperationName.WITHDRAW)
+
+
+@pytest.mark.parametrize("name", STANDING_NAMES, ids=lambda name: name.value)
+def test_the_standing_tools_take_their_models_and_no_directory(
+    name: OperationName,
+) -> None:
+    (spec,) = (tool for tool in TOOLS if tool.name is name)
+    schema = input_schema(spec)
+
+    assert not spec.takes_directory
+    assert spec.mode is RunMode.IN_PROCESS
+    assert "directory" not in schema["properties"]
+    assert schema == spec.request_model.model_json_schema()
+
+
+def test_the_standing_tool_schemas_name_their_arguments() -> None:
+    (standing,) = (tool for tool in TOOLS if tool.name is OperationName.STANDING)
+    (withdraw,) = (tool for tool in TOOLS if tool.name is OperationName.WITHDRAW)
+
+    assert set(input_schema(standing)["properties"]) == {"text", "program", "member"}
+    assert input_schema(standing)["required"] == ["text"]
+    assert set(input_schema(withdraw)["properties"]) == {"standing_id", "reason"}
+
+
+@pytest.mark.parametrize("name", STANDING_NAMES, ids=lambda name: name.value)
+def test_each_standing_tool_carries_the_pm_ruling_rule(name: OperationName) -> None:
+    (spec,) = (tool for tool in TOOLS if tool.name is name)
+
+    assert PM_RULING_RULE in spec.description
+    assert "the PM actually gave, passed on as given, never one" in spec.description

@@ -14,6 +14,7 @@ from store.question_support import NOW
 from user_configs import user_config
 
 from amoeba.answering.values import AnsweredBy, AnsweringEvidence, DeclineReason
+from amoeba.operations import pause_context
 from amoeba.operations.answering_run import PAUSE_COMMAND_OPT_OUT_FLAG
 from amoeba.operations.deps import Deps
 from amoeba.operations.names import OperationName
@@ -27,11 +28,23 @@ from amoeba.operations.request_release import MAX_STARTS_PER_CALL
 from amoeba.operations.rm import rm
 from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.answers import add_pm_answer, answers_of, settle_answered
+from amoeba.store.errors import StoreBusyError
 from amoeba.store.held_questions import HeldQuestion, insert_held
-from amoeba.store.message_transitions import MEMBER_REMOVED_REASON
-from amoeba.store.models import AnswerRecord, QuestionKey, QuestionRecord
+from amoeba.store.models import (
+    AnswerRecord,
+    QuestionKey,
+    QuestionRecord,
+    StandingAnswerRow,
+)
 from amoeba.store.questions import NewQuestion, get_question, insert_question
-from amoeba.store.vocabulary import QuestionState, RequestState, ResumeOutcome
+from amoeba.store.standing import give_standing
+from amoeba.store.vocabulary import (
+    MEMBER_REMOVED_REASON,
+    QuestionState,
+    RequestState,
+    ResumeOutcome,
+    StandingReach,
+)
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.upstream.squadron.run_outcome import PollFailure
@@ -454,3 +467,43 @@ def test_a_handle_pause_that_raises_still_starts_ended_held_questions(
             w.handle()
 
         assert [call.argv[-1] for call in recorder.calls] == ["other-run"]
+
+
+# Standing answers (slice 230, D5, D10)
+
+
+def test_standing_answers_over_the_cap_wait_with_both_shares_and_start_nothing(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path) as w:
+        cap = w.config.passages_max_chars
+        with w.store.write() as transaction:
+            give_standing(
+                transaction, "x" * (cap + 1), StandingReach.ALL, None, None, NOW
+            )
+
+        result = w.handle()
+
+        _waiting(result, DeclineReason.SOURCES_TOO_LARGE)
+        assert "and standing answers " in (result.detail or "")
+        assert f"the limit is {cap}" in (result.detail or "")
+        assert w.spawned.argvs == []
+        record = _record(w)
+        assert record.waiting_reason is DeclineReason.SOURCES_TOO_LARGE
+        assert record.answering_run_id is None
+
+
+def test_a_store_error_reading_standing_answers_propagates_with_no_question(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def busy(*_args: object) -> tuple[StandingAnswerRow, ...]:
+        raise StoreBusyError("store busy")
+
+    monkeypatch.setattr(pause_context, "standing_reaching", busy)
+    with world(tmp_path) as w:
+        with pytest.raises(StoreBusyError):
+            w.handle()
+
+        with w.store.read() as transaction:
+            assert get_question(transaction, KEY) is None
+        assert w.spawned.argvs == []

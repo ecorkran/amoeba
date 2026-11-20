@@ -7,6 +7,7 @@ they sit on their own indented line so they can be pasted.
 
 from __future__ import annotations
 
+import textwrap
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Final
@@ -54,6 +55,24 @@ def was_cut(prefix: str, text: str, columns: int = COLUMNS) -> bool:
 def command_line(text: str, depth: int = 2) -> str:
     """A command or path on its own line, indented ``depth`` levels, never cut."""
     return INDENT * depth + text.strip()
+
+
+def wrapped(text: str, depth: int = 1, columns: int = COLUMNS) -> list[str]:
+    """``text`` indented ``depth`` levels and wrapped to ``columns``, never cut.
+
+    Each line of ``text`` is wrapped on its own and a blank line stays blank. A word
+    longer than the width is broken across lines.
+    """
+    prefix = INDENT * depth
+    lines: list[str] = []
+    for line in text.splitlines():
+        lines.extend(
+            textwrap.wrap(
+                line, columns, initial_indent=prefix, subsequent_indent=prefix
+            )
+            or [""]
+        )
+    return lines
 
 
 def indented(line: str, depth: int = 1) -> str:

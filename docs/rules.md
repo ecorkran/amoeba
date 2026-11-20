@@ -111,3 +111,15 @@ size it, add the byte sizes of the rules files, the slice's concept, plan, desig
 task files, and the program concept, and leave room for a few dozen KB of earlier
 answers. This repo's two root rules files are about 24 KB and one slice's plan files
 about 143 KB, so 250000 leaves room for both and for precedent.
+
+## Standing answers
+
+The standing answers that reach the member (slice 230: `amoeba standing`) are read
+too, as `standing_answer` passages after the rules, plan, program and request passages
+and before earlier PM answers. Like rules they are never trimmed, because a ruling the
+PM gave must not be dropped quietly to make room, so they count against
+`passages_max_chars` with the rules. When the two together do not fit, the question
+waits as `sources_too_large`, and the detail gives both shares (the rules, plan,
+program and request passages' characters, and the standing answers') and the limit.
+When the standing answers' share tips it over, `amoeba withdraw` some of them, or raise
+the cap; either changes only later questions.

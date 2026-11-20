@@ -26,7 +26,7 @@ from amoeba.store.models import QuestionKey
 from amoeba.store.vocabulary import ResumeOutcome
 
 
-def _rejected(code: str | None, problems: Sequence[str]) -> str:
+def rejected_text(code: str | None, problems: Sequence[str]) -> str:
     label = code or "rejected"
     lines = [prose_line(f"rejected: {label}: ", problem) for problem in problems]
     return "\n".join(lines or [f"rejected: {label}"]) + "\n"
@@ -39,7 +39,7 @@ def _key_text(key: QuestionKey | None) -> str:
 def render_answer(result: AnswerResult) -> str:
     if result.outcome is AnswerOutcome.REJECTED:
         code = None if result.rejection is None else result.rejection.value
-        return _rejected(code, result.problems)
+        return rejected_text(code, result.problems)
     lines = ["recorded", indented(f"question: {_key_text(result.key)}")]
     if result.answer_seq is not None:
         lines.append(indented(f"answer: #{result.answer_seq}"))
@@ -53,7 +53,7 @@ def render_answer(result: AnswerResult) -> str:
 def render_dismiss(result: DismissResult) -> str:
     if result.outcome is DismissOutcome.REJECTED:
         code = None if result.rejection is None else result.rejection.value
-        return _rejected(code, result.problems)
+        return rejected_text(code, result.problems)
     lines = [f"{result.outcome.value}: {_key_text(result.key)}"]
     if result.closed_reason is not None:
         lines.append(indented(f"closed: {result.closed_reason.value}"))
@@ -65,7 +65,7 @@ def render_dismiss(result: DismissResult) -> str:
 def render_retract(result: RetractResult) -> str:
     if result.outcome is RetractOutcome.REJECTED:
         code = None if result.rejection is None else result.rejection.value
-        return _rejected(code, result.problems)
+        return rejected_text(code, result.problems)
     lines = [f"{result.outcome.value}: answer #{result.answer_seq}"]
     if result.key is not None:
         lines.append(indented(f"question: {_key_text(result.key)}"))
@@ -75,7 +75,7 @@ def render_retract(result: RetractResult) -> str:
 def render_mark_read(result: MarkReadResult) -> str:
     if result.outcome is MarkReadOutcome.REJECTED:
         code = None if result.rejection is None else result.rejection.value
-        return _rejected(code, result.problems)
+        return rejected_text(code, result.problems)
     if result.outcome is MarkReadOutcome.MOVED:
         return f"moved: marker {result.previous} -> {result.current}\n"
     return f"unchanged: marker at {result.current}\n"
@@ -84,7 +84,7 @@ def render_mark_read(result: MarkReadResult) -> str:
 def render_decisions(result: DecisionsResult) -> str:
     if result.outcome is DecisionsOutcome.REJECTED:
         code = None if result.rejection is None else result.rejection.value
-        return _rejected(code, result.problems)
+        return rejected_text(code, result.problems)
     if not result.records:
         return f"no answers to show (marker at {result.marker})\n"
     count = len(result.records)

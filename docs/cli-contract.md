@@ -41,7 +41,7 @@ and `-j` get plain text, and `NO_COLOR` or `TERM=dumb` turns color off.
 
 A command's name is its operation's name with `_` as `-`: `handle-pause`,
 `mark-read` and `report-release`; the others (`add`, `rm`, `list`, `answer`, `status`, `decisions`,
-`dismiss`, `retract`, `changes`) have no underscore. `rm` also answers to `remove`. MCP tool names
+`dismiss`, `retract`, `changes`, `standing`, `withdraw`) have no underscore. `rm` also answers to `remove`. MCP tool names
 stay snake_case (`handle_pause`, `mark_read`), and so does the `operation` in JSON
 `next` entries. There is no alias for an old command name (`set_up`, `handle_pause`,
 `mark_read`): it is argparse's invalid-choice error, which lists the valid names, exit
@@ -154,8 +154,8 @@ amoeba list [SUBJECT] [--all] [--program ID] [-j]
 ```
 
 One view of what needs the PM, and what is registered. `SUBJECT` is `programs`,
-`members` or `dependencies` (the singular forms work too); with none it is the default
-view. The MCP `list` tool takes the same as `subject`, `all` and `program`, plus
+`members` or `dependencies` (the singular forms work too), or `standing`; with none it
+is the default view. The MCP `list` tool takes the same as `subject`, `all` and `program`, plus
 `directory`.
 
 **The default view** runs `status` (same code, same sweep): `list -j` is the `status`
@@ -190,6 +190,18 @@ does not. A removed member is not listed.
 
 **`dependencies`**: `{dependencies: [{provider_id, provider_name, consumer_id,
 consumer_name, consumed}]}`.
+
+**`standing`**: `{standing: [{standing_id, reach, program, member, member_name,
+given_at, text, withdrawn_at, withdraw_reason}]}`, newest first (slice 230). Active
+standing answers only; `--all` adds withdrawn ones, whose `withdrawn_at` and
+`withdraw_reason` are set (null on an active one). `program` is set for reach
+`program`; `member` (the project id) and `member_name` (Context Forge's name, null for
+a project it no longer lists) for reach `member`. The text shows one block per entry:
+the id, the reach (`everything`, `program <id>` or `member <name>`) and the date, then
+the text, wrapped to 100 columns and never cut, and for a withdrawn one its date and reason; `No standing
+answers.` when there are none. Context Forge is read only when a member-reach entry
+needs its name. `--program` does not apply (a reach `all` entry reaches every program)
+and is `rejected`, `malformed`. It is not part of the default view.
 
 `--all` with `members` or `dependencies` is a usage error, exit 2 (as an operation it
 is `rejected`, `malformed`). The registered views read Context Forge once; `cf` failing
@@ -448,6 +460,66 @@ integer, the `seq` `decisions` prints. Result (`RetractResult`):
 A PM answer also resets the answer limit: `answer_limit` counts automatic answers since
 the run's last PM answer, a retracted one included. Exit 1 when `rejected`, else 0.
 
+## `amoeba standing --text TEXT [--program ID | --member NAME]`
+
+Records a standing answer: a ruling the PM gave ahead of time, in the PM's own words,
+for every later case it covers (slice 230). With neither flag it reaches every member
+(reach `all`); `--program` limits it to that program's members (reach `program`), and
+the program must exist; `--member` limits it to one member (reach `member`), a Context
+Forge project name or id that must be an active member. `--program` and `--member`
+together is a usage error (exit 2). It takes no working directory. Result
+(`StandingResult`):
+
+| Field | Meaning |
+|---|---|
+| `outcome` | `given`, `unchanged` (an active standing answer already has the same text and reach; nothing written) or `rejected` |
+| `rejection` | with `rejected`: `malformed` (blank text, both reaches, unknown field), `no_such_program`, `no_such_member` (Context Forge does not know the name, or the project is not an active member) or `too_long` (with it, the rendered standing answers reaching some member it reaches would pass `passages_max_chars`; nothing written. The rules, plan and program text they join is checked at each pause, as `sources_too_large`) |
+| `standing_id` | the standing answer given, or the matching active one; null when `rejected` |
+| `reach` | `all`, `program` or `member` |
+| `program` | the program, for reach `program` |
+| `member` | the member's Context Forge project id, for reach `member` |
+| `problems` | one line per problem when `rejected` |
+
+The text says `given` or `unchanged`, the id and the reach (`everything`,
+`program <id>` or `member <id>`). Exit 1 when `rejected`, exit 3 when the store or
+Context Forge fails (nothing written), else 0.
+
+An agent calls it for the PM, like `answer`: the text is a ruling the PM actually gave,
+passed on as given, never one the agent composed. From the next question on, every
+answering run for a member it reaches is sent it as a `standing_answer` passage, which
+still passes the not-authorized list, the check step and the answer screen like any
+other passage. It does not answer questions already waiting. A repeat is safe: the
+lookup and the insert are one write transaction, so a call whose result never arrived
+(an MCP timeout or a dropped client) can be made again and answers `unchanged` with the
+one row. The text is never edited: a changed ruling is `withdraw` and a new `standing`,
+and the newer date wins under the prompts' "later date wins" rule even before the old
+one is withdrawn.
+
+## `amoeba withdraw STANDING_ID --reason TEXT`
+
+Withdraws a standing answer, so no answering run that gathers context after it is sent
+it (slice 230). `STANDING_ID` is an integer, the id `list standing` prints. Result
+(`WithdrawResult`):
+
+| Field | Meaning |
+|---|---|
+| `outcome` | `withdrawn`, `unchanged` (already withdrawn; nothing changed) or `rejected` |
+| `rejection` | with `rejected`: `no_such_standing_answer` or `malformed` (blank reason, an id that is not a positive integer) |
+| `standing_id` | the standing answer |
+| `problems` | one line per problem when `rejected` |
+
+Exit 1 when `rejected`, exit 3 when the store fails (nothing written), else 0.
+
+An agent calls it for the PM, under the same rule as `standing`. Withdrawing changes
+only what later questions are sent: answers already delivered from it stay delivered
+and stay in `decisions`, and a question already waiting is not gathered again (it ends
+by `answer`, `dismiss` or the run moving on). There is no un-withdraw; giving the ruling
+again with `standing` is the undo, as a new row. Repeating a call is safe: a row already
+withdrawn answers `unchanged` and keeps its first date and reason. `rm` of a member
+withdraws the standing answers whose reach is that member, with reason
+`member_removed`, in the same transaction as the removal; reach `program` and `all`
+are untouched, and registering the member again does not bring them back.
+
 ## `amoeba status [--program ID]`
 
 What is running, paused and waiting on the PM. Needs the config (for
@@ -575,8 +647,10 @@ Result (`DecisionsResult`):
 
 `prior_answer_seq` is the newest earlier answer to the same question (a PM answer after
 an automatic one is an override). `based_on` is, for `answerer`, the cited passages
-(`id`, `kind`, `source`, `date`; `kind` is `pm_answer` for a PM precedent and null for
-the others, which the store records no kind for; a cited `request_result` passage, a
+(`id`, `kind`, `source`, `date`; `kind` is `pm_answer` for a PM precedent,
+`standing_answer` for a standing answer (its `source` is `standing:<id>`, the id
+`list standing` shows; slice 230), and null for the others, which the store records no
+kind for; a cited `request_result` passage, a
 held question's request result, has the request id as its `source` and a null `kind`,
 being a passage the store records no kind for) with `check_verdict` and
 `check_reason`; for `pm`, the question's `waiting_reason` and `waiting_detail`, or null

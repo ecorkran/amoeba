@@ -1,0 +1,20 @@
+# A pipeline whose one step ends on a question only a standing answer settles (slice
+# 230, task 9.1). The member's rules say nothing about fixture versions, so without the
+# PM's standing answer the question waits on the PM.
+#
+# Same shape as asks_question.yaml: the step declares an artifact and writes none, so
+# a reply ending in a question mark pauses the run as `agent_question`.
+name: asks-fixture-version
+description: Stop on a question about bumping the fixture version
+
+params:
+  model: required
+
+steps:
+  - dispatch:
+      name: ask
+      model: "{model}"
+      artifact: design
+      prompt: |
+        Do not edit any file and do not run any command. Reply with exactly this
+        sentence and nothing else, then stop: Should I bump the fixture version?

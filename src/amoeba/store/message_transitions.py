@@ -17,10 +17,12 @@ from amoeba.store.messages import get_message, message_from_row
 from amoeba.store.models import Message
 from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Transaction
-from amoeba.store.vocabulary import DeliveryEvent, MessageKind, RequestState
-
-#: ``reason`` written when a member's removal cancels its requests (240 D10).
-MEMBER_REMOVED_REASON = "member_removed"
+from amoeba.store.vocabulary import (
+    MEMBER_REMOVED_REASON,
+    DeliveryEvent,
+    MessageKind,
+    RequestState,
+)
 
 
 @dataclass(frozen=True)

@@ -17,6 +17,7 @@ from amoeba.operations.list_registry import (
     DependenciesView,
     MembersView,
     ProgramsView,
+    StandingView,
 )
 from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
@@ -38,6 +39,12 @@ from amoeba.operations.report_release_models import (
 )
 from amoeba.operations.retract import RetractOutcome, RetractResult
 from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
+from amoeba.operations.standing_models import (
+    StandingOutcome,
+    StandingResult,
+    WithdrawOutcome,
+    WithdrawResult,
+)
 from amoeba.operations.status import StatusOutcome, StatusResult
 
 __all__ = ["OperationResult", "is_rejected", "result_document"]
@@ -49,6 +56,7 @@ type OperationResult = (
     | ProgramsView
     | MembersView
     | DependenciesView
+    | StandingView
     | AnswerResult
     | StatusResult
     | DecisionsResult
@@ -61,6 +69,8 @@ type OperationResult = (
     | InboxResult
     | ReplyResult
     | CancelResult
+    | StandingResult
+    | WithdrawResult
 )
 
 
@@ -92,6 +102,8 @@ def is_rejected(result: OperationResult) -> bool:
             | InboxResult(outcome=InboxOutcome.REJECTED)
             | ReplyResult(outcome=ReplyOutcome.REJECTED)
             | CancelResult(outcome=CancelOutcome.REJECTED)
+            | StandingResult(outcome=StandingOutcome.REJECTED)
+            | WithdrawResult(outcome=WithdrawOutcome.REJECTED)
         ):
             return True
         case _:

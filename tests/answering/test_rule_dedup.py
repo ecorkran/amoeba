@@ -42,7 +42,12 @@ def _file(path: str, text: str, kind: PassageKind = PassageKind.RULE) -> SourceF
 
 def _assembled(*files: SourceFile) -> PassageSet:
     result = assemble(
-        files, [], program_sources=NO_PROGRAM, max_chars=1_000_000, source_commit="c0"
+        files,
+        [],
+        program_sources=NO_PROGRAM,
+        standing_answers=(),
+        max_chars=1_000_000,
+        source_commit="c0",
     )
     assert isinstance(result, PassageSet), result
     return result

@@ -227,3 +227,32 @@ def test_an_unknown_program_is_rejected_with_exit_one_and_the_known_ones_listed(
         )["rejection"]
         == "unknown_program"
     )
+
+
+def test_list_standing_shows_active_rows_and_all_adds_withdrawn(
+    tmp_path: Path,
+) -> None:
+    _registered(tmp_path)
+    first = run_amoeba(tmp_path, "standing", "--text", "Never bump fixtures.")
+    second = run_amoeba(tmp_path, "standing", "--text", "Merge on CONCERNS.")
+    assert first.returncode == second.returncode == EXIT_OK
+    run_amoeba(tmp_path, "withdraw", "1", "--reason", "too broad")
+
+    active = run_amoeba(tmp_path, "list", "standing")
+    every = run_amoeba(tmp_path, "list", "standing", "--all", as_json=True)
+
+    assert active.returncode == EXIT_OK
+    assert active.stdout.splitlines()[0].startswith("#2 · everything · ")
+    assert "Merge on CONCERNS." in active.stdout
+    assert "Never bump fixtures." not in active.stdout
+    rows = result_of(every)["standing"]
+    assert [row["standing_id"] for row in rows] == [2, 1]
+    assert (rows[1]["withdraw_reason"], rows[1]["reach"]) == ("too broad", "all")
+
+
+def test_list_standing_with_none_says_so(tmp_path: Path) -> None:
+    _registered(tmp_path)
+
+    listed = run_amoeba(tmp_path, "list", "standing")
+
+    assert (listed.returncode, listed.stdout) == (EXIT_OK, "No standing answers.\n")

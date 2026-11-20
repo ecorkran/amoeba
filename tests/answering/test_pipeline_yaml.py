@@ -137,16 +137,28 @@ def test_both_prompts_point_at_the_not_authorized_list_after_the_passages() -> N
 
 
 #: The sentences both steps carry about the passage kinds (slice 182, D8; 242, D5).
+#: 230 D6: what a standing_answer passage is, in both steps.
+STANDING_ANSWER_SENTENCE = (
+    "A standing_answer passage is a ruling the PM gave ahead of time. Its text "
+    "describes a situation and says what to do in it. It answers the question when "
+    "the question is that situation. It has no question line and no slice line, and "
+    "it holds for every slice unless its own text says otherwise."
+)
+#: 230 D6: the check step's matching condition.
+STANDING_ANSWER_CONDITION = (
+    "When a cited passage is a standing_answer, the question is the situation that "
+    "passage describes."
+)
 KIND_SENTENCES = (
-    "The kinds are rule, plan, pm_answer, program_concept, program_members or "
-    "request_result. "
+    "The kinds are rule, plan, pm_answer, program_concept, program_members, "
+    "request_result or standing_answer. "
     "A program_concept passage comes from the concept document of the program "
     "this project belongs to, held in the member project its member line names; "
     "it describes how the program's projects fit together and what each one is "
     "for. A program_members passage lists the program's projects and marks the "
     "one the question comes from. A request_result passage is the reply another "
     "project in the program gave to a request this project sent; its member line "
-    "names that project."
+    "names that project. " + STANDING_ANSWER_SENTENCE
 )
 
 
@@ -162,3 +174,17 @@ def test_the_kind_sentences_name_the_kinds_by_their_enum_values() -> None:
     listed = KIND_SENTENCES.split(".")[0].removeprefix("The kinds are ")
     names = listed.replace(" or ", ", ").split(", ")
     assert names == [kind.value for kind in PassageKind]
+
+
+def test_the_answer_step_says_what_a_standing_answer_passage_is() -> None:
+    prompt = " ".join(_steps()["answer"]["prompt"].split())
+
+    assert STANDING_ANSWER_SENTENCE in prompt
+
+
+def test_the_check_step_holds_the_standing_answer_condition() -> None:
+    check = " ".join(_steps()["check"]["prompt"].split())
+    answer = " ".join(_steps()["answer"]["prompt"].split())
+
+    assert f"- {STANDING_ANSWER_CONDITION}" in check
+    assert STANDING_ANSWER_CONDITION not in answer

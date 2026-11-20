@@ -36,9 +36,11 @@ from amoeba.operations.program_sources import (
     read_program_sources,
     without_path,
 )
+from amoeba.operations.standing_sources import standing_answers_of
 from amoeba.store.answers import pm_precedent
-from amoeba.store.models import Member, PmPrecedent, Program
+from amoeba.store.models import Member, PmPrecedent, Program, StandingAnswerRow
 from amoeba.store.programs import get_program, members_of
+from amoeba.store.standing import standing_reaching
 from amoeba.store.store import Store
 from amoeba.upstream.context_forge.cli_call import CfRun
 from amoeba.upstream.context_forge.plan import (
@@ -163,6 +165,8 @@ class _StoredFacts:
     program: Program
     members: tuple[Member, ...]
     precedent: tuple[PmPrecedent, ...]
+    #: The active standing answers reaching the member (230 D5).
+    standing: tuple[StandingAnswerRow, ...]
 
 
 def gather(
@@ -206,6 +210,9 @@ def _read_store(store: Store, member: Member) -> _StoredFacts:
             program=program,
             members=members_of(transaction, member.program_id),
             precedent=pm_precedent(transaction, member.project_id),
+            standing=standing_reaching(
+                transaction, member.project_id, member.program_id
+            ),
         )
 
 
@@ -263,6 +270,7 @@ def _assemble(  # noqa: PLR0913 - the pieces gather has already read
         files,
         [_pm_answer(item) for item in stored.precedent],
         program_sources=program_sources,
+        standing_answers=standing_answers_of(stored.standing),
         max_chars=settings.passages_max_chars,
         source_commit=committed.commit,
         request=request,

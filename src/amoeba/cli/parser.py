@@ -141,6 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
     retract_parser.add_argument("--reason", required=True, help="why it is retracted")
     _register_release_commands(commands, parent)
     register_messages(commands, parent)
+    _register_standing_commands(commands, parent)
     register_wake_run(commands)
     return parser
 
@@ -187,3 +188,31 @@ def _register_release_commands(commands: Any, parent: argparse.ArgumentParser) -
         metavar="ISO-8601",
         help="start at this time, with a UTC offset",
     )
+
+
+def _register_standing_commands(commands: Any, parent: argparse.ArgumentParser) -> None:
+    """``standing`` and ``withdraw`` (slice 230). Neither takes a working directory."""
+    standing_parser = _command(
+        commands,
+        parent,
+        OperationName.STANDING,
+        "record a ruling the PM gave for every later case it covers",
+    )
+    standing_parser.add_argument(
+        "--text", required=True, help="the PM's ruling, in the PM's own words"
+    )
+    reach = standing_parser.add_mutually_exclusive_group()
+    reach.add_argument("--program", metavar="ID", help="only this program's members")
+    reach.add_argument(
+        "--member", metavar="NAME", help="only this member (Context Forge name or id)"
+    )
+    withdraw_parser = _command(
+        commands,
+        parent,
+        OperationName.WITHDRAW,
+        "take back a standing answer; later questions are no longer sent it",
+    )
+    withdraw_parser.add_argument(
+        "standing_id", type=int, help="the standing answer's id, from `list standing`"
+    )
+    withdraw_parser.add_argument("--reason", required=True, help="why it is withdrawn")

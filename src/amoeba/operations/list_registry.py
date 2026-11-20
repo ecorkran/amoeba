@@ -1,4 +1,5 @@
-"""``list``'s registered views: programs, members and dependencies (slice 229, D3).
+"""``list``'s registered views: programs, members and dependencies (slice 229, D3),
+and the standing answers (slice 230, D4).
 
 Each reads the store and one ``cf list projects`` call, and fails with
 ``ContextForgeError`` (no partial view) when ``cf`` does not answer. A member whose
@@ -9,13 +10,16 @@ objects.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.set_up_models import FrozenModel
 from amoeba.store.models import DependencyPair, Member, Program
 from amoeba.store.programs import list_programs, members_of, pairs_of
+from amoeba.store.standing import list_standing
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import ConsumedMode, RulesFrom
+from amoeba.store.vocabulary import ConsumedMode, RulesFrom, StandingReach
 from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
 from amoeba.upstream.context_forge.projects import ProjectDetails, project_details
 
@@ -77,6 +81,27 @@ class DependencyRow(FrozenModel):
 
 class DependenciesView(FrozenModel):
     dependencies: tuple[DependencyRow, ...]
+
+
+class StandingRow(FrozenModel):
+    standing_id: int
+    reach: StandingReach
+    #: Set only for reach ``program``.
+    program: str | None
+    #: The member's project id; set only for reach ``member``.
+    member: str | None
+    #: Context Forge's name for ``member``; null for another reach, or a project
+    #: Context Forge no longer lists.
+    member_name: str | None
+    given_at: datetime
+    text: str
+    #: Null for an active row; only ``all`` lists withdrawn ones.
+    withdrawn_at: datetime | None
+    withdraw_reason: str | None
+
+
+class StandingView(FrozenModel):
+    standing: tuple[StandingRow, ...]
 
 
 def _programs(store: Store, program: str | None) -> list[Program]:
@@ -199,3 +224,32 @@ def dependencies_view(
             for pair in pairs
         )
     return DependenciesView(dependencies=tuple(rows))
+
+
+def standing_view(store: Store, run: CfRun, *, include_withdrawn: bool) -> StandingView:
+    """The standing answers, newest first; withdrawn ones with ``include_withdrawn``.
+
+    ``cf`` is read only when a member-reach row needs its member's name.
+    """
+    with store.read() as transaction:
+        rows = list_standing(transaction, include_withdrawn=include_withdrawn)
+    needs_names = any(row.member_id is not None for row in rows)
+    details: ProjectDetails = _details(run) if needs_names else {}
+    return StandingView(
+        standing=tuple(
+            StandingRow(
+                standing_id=row.standing_id,
+                reach=row.reach,
+                program=row.program_id,
+                member=row.member_id,
+                member_name=None
+                if row.member_id is None
+                else _name(details, row.member_id),
+                given_at=row.given_at,
+                text=row.text,
+                withdrawn_at=row.withdrawn_at,
+                withdraw_reason=row.withdraw_reason,
+            )
+            for row in rows
+        )
+    )

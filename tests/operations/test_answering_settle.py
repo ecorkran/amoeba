@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from user_configs import user_config
 
 from amoeba.answering.decide import Declined
 from amoeba.answering.settings import AnswererSettings, RulesChoice
+from amoeba.answering.standing_passages import STANDING_SOURCE_PREFIX
 from amoeba.answering.values import (
     AnsweredBy,
     AnsweringEvidence,
@@ -353,3 +355,26 @@ def test_answer_claim_starts_waits_and_settles_with_no_transaction_open(
     (call,) = rig.spawner.calls
     assert call.cwd == scratch_path(tmp_path / "answering", ANSWERING_RUN)
     assert rig.poller.calls == [ANSWERING_RUN]
+
+
+def test_an_answer_citing_a_standing_answer_that_authorizes_a_barred_item_declines(
+    store: Store, tmp_path: Path
+) -> None:
+    """230 D7: a standing answer gains no power over the not-authorized list."""
+    ruling = PassageRef(
+        id="P1", source=f"{STANDING_SOURCE_PREFIX}3", question_id=None, date=NOW
+    )
+    with store.write() as transaction:
+        insert_question(
+            transaction, replace(claimed_question(), passages=(ruling,)), now=NOW
+        )
+    _write_replies(
+        tmp_path, answer=_proposed("The standing ruling says: git push."), check=YES
+    )
+    rig = build_deps(tmp_path, polls={}, spawns=[])
+
+    result = settle(store, rig.deps, _claim(_settings_of(())), _completed())
+
+    assert isinstance(result, Waiting)
+    assert result.reason is DeclineReason.RESERVED_TERM
+    assert _state(store) == (QuestionState.WAITING_ON_PM, DeclineReason.RESERVED_TERM)
