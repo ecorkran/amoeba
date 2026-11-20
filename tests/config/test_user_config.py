@@ -64,7 +64,10 @@ def test_the_documented_example_loads(tmp_path: Path) -> None:
         "destructive_database_statement",
         "policy_change",
     ]
-    assert all(item.denied_by_default for item in config.authorize_items)
+    # A merge to main is the normal end of a run, so it alone is allowed by default.
+    assert [
+        item.key for item in config.authorize_items if not item.denied_by_default
+    ] == ["merge_to_main"]
     assert config.default_rules_paths == ("CLAUDE.md", "AGENTS.md")
     assert config.default_consumed == "from_source"
     assert config.passages_max_chars == 250000

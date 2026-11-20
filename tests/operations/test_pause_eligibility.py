@@ -32,12 +32,14 @@ from fake_sq import (
     write_fake_sq,
 )
 from store.question_support import NOW
+from user_configs import user_config
 
 from amoeba.operations.deps import Deps
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.pause_eligibility import Eligible, Skip, check_eligibility
 from amoeba.operations.pause_models import SkipReason
 from amoeba.store.models import QuestionKey
+from amoeba.store.programs import get_member
 from amoeba.store.questions import NewQuestion, insert_question
 from amoeba.store.store import Store
 from amoeba.upstream.squadron.errors import SquadronError
@@ -47,6 +49,7 @@ from operations.pause_support import DepsRig, build_deps, register_member
 RUN = "demo-run"
 DIRECTORY = Path("/work/checkout")
 PROJECT_ID: str = fixture_document(DEFAULT_WORKTREE)["id"]
+PROJECT_NAME: str = fixture_document(DEFAULT_WORKTREE)["name"]
 PAUSE = poll_result(PAUSED_AGENT_QUESTION, RUN)
 assert PAUSE.checkpoint is not None
 PAUSED_AT = PAUSE.checkpoint.paused_at_text or ""
@@ -80,7 +83,7 @@ def _check(store: Store, rig_or_deps: DepsRig | Deps) -> Eligible | Skip:
     deps = rig_or_deps.deps if isinstance(rig_or_deps, DepsRig) else rig_or_deps
     polled = deps.poll_run(RUN)
     assert not isinstance(polled, PollFailure), polled
-    return check_eligibility(store, RUN, DIRECTORY, deps, polled)
+    return check_eligibility(store, user_config(), RUN, DIRECTORY, deps, polled)
 
 
 def _skip(result: Eligible | Skip) -> Skip:
@@ -181,13 +184,19 @@ def test_a_directory_outside_every_project_is_not_a_project(
     assert result.reason is SkipReason.NOT_A_PROJECT
 
 
-def test_a_project_in_no_program_is_not_in_program_and_a_missing_run_file_is_no_error(
+def test_a_project_in_no_program_is_registered_with_the_defaults_and_handled(
     tmp_path: Path, store: Store
 ) -> None:
-    result = _skip(_check(store, _rig(tmp_path, PAUSE)))
+    _with_run_file(tmp_path)
 
-    assert result.reason is SkipReason.NOT_IN_PROGRAM
-    assert not (tmp_path / "runs").exists()
+    result = _check(store, _rig(tmp_path, PAUSE))
+
+    assert isinstance(result, Eligible), result
+    assert result.member.project_id == PROJECT_ID
+    # A one-member program named after the Context Forge project, as `amoeba add`.
+    assert result.member.program_id == PROJECT_NAME
+    with store.read() as transaction:
+        assert get_member(transaction, PROJECT_ID) == result.member
 
 
 def test_a_prompt_only_run_is_skipped(tmp_path: Path, store: Store) -> None:

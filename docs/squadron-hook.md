@@ -30,13 +30,17 @@ waiting on the PM. This file says what the wiring must satisfy. The CLI is in
   Squadron splits the value like a shell line and runs it without a shell, so `amoeba`
   must be on the `PATH` the pausing `sq run` has.
 - **User-level or per-project.** The line above writes the user-level config
-  (`~/.config/squadron/config.toml`), configured once. A pause in a repo outside any
-  program then skips as `not_a_project` or `not_in_program`. To hook only some repos,
+  (`~/.config/squadron/config.toml`), configured once. The first pause in a
+  Context Forge project that is in no program registers it, exactly as a bare
+  `amoeba add` in its checkout would (a one-member program named after the project,
+  the default rules), and is then handled. A pause outside every Context Forge project
+  skips as `not_a_project`. To hook only some repos,
   run `sq config set --project pipeline.on_pause_command "amoeba handle-pause"` from
   each one instead; that writes the repo's `.squadron.toml`.
-- **Which repos.** Only repos in a program need the hook. A repo that is not a Context
-  Forge project, or is in no program, is skipped by `handle-pause` itself
-  (`not_a_project`, `not_in_program`).
+- **Which repos.** Every Context Forge project the hook fires in becomes a member at
+  its first pause. To keep a repo out, give it no hook: set the hook per project
+  instead of at user level. `not_in_program` now appears only when that registration is
+  rejected, and its detail says why.
 - **The opt-out.** A run started with `sq run --no-pause-hook` does not start the
   command. A PM who watches a run and will answer it personally passes this flag. Amoeba's
   own answering runs always pass it (`PAUSE_COMMAND_OPT_OUT_FLAG` in

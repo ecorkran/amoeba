@@ -126,7 +126,7 @@ def _handle_polled(  # noqa: PLR0913 - the pieces of one call
     deps: Deps,
     polled: RunOutcomeDocument,
 ) -> HandlePauseResult:
-    checked = check_eligibility(store, run_id, directory, deps, polled)
+    checked = check_eligibility(store, config, run_id, directory, deps, polled)
     if isinstance(checked, Skip):
         return skipped(checked.reason, None, None, checked.detail)
     target = PauseTarget(

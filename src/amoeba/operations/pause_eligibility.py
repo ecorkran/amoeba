@@ -3,13 +3,20 @@
 The checks run in the D3 order and the first failure is a ``Skip`` with its reason.
 A Squadron or Context Forge failure is never a skip: "cannot tell" must not read as
 "not mine", so it raises (exit 3) before anything is written.
+
+A Context Forge project in no program is registered here with the defaults, as a bare
+``amoeba add`` in its checkout would, and then handled: the hook is set once for the
+whole machine, so the first pause in a repo is what makes it a member.
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from amoeba.config.user_config import UserConfig
+from amoeba.operations.add import add
 from amoeba.operations.deps import Deps
 from amoeba.operations.members import (
     NotAProject,
@@ -24,9 +31,11 @@ from amoeba.operations.pause_class import (
     observed_from_document,
 )
 from amoeba.operations.pause_models import SkipReason
+from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.models import Member, QuestionKey, QuestionRecord
 from amoeba.store.questions import any_answering_run_id, get_question
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import Door
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.run_file import (
     RunFacts,
@@ -39,6 +48,8 @@ from amoeba.upstream.squadron.run_outcome import (
     UnknownKind,
     parse_checkpoint_kind,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -64,8 +75,9 @@ class Eligible:
     existing: QuestionRecord | None
 
 
-def check_eligibility(
+def check_eligibility(  # noqa: PLR0913 - the pieces of one call
     store: Store,
+    config: UserConfig,
     run_id: str,
     directory: Path,
     deps: Deps,
@@ -91,7 +103,7 @@ def check_eligibility(
         if any_answering_run_id(transaction, run_id):
             return Skip(SkipReason.ANSWERING_RUN, None)
     key = QuestionKey(run_id, paused_at)
-    return _member_checks(store, key, question, observed, directory, deps)
+    return _member_checks(store, config, key, question, observed, directory, deps)
 
 
 def _run_only_skip(pause_class: PauseClass, polled: RunOutcomeDocument) -> Skip:
@@ -144,8 +156,30 @@ def _raw(kind: CheckpointKind | UnknownKind | None) -> str:
     return kind.raw if isinstance(kind, UnknownKind) else kind.value
 
 
-def _member_checks(
+def _registered(
+    store: Store, config: UserConfig, directory: Path, deps: Deps, cf_id: str
+) -> Member | Skip:
+    """Register the project in no program with ``add``'s defaults and resolve it again.
+    A registration that does not take is a skip that says why, never a member."""
+    result = add(store, config, {}, directory=directory, run=deps.cf_run, door=Door.CLI)
+    if result.outcome is SetUpOutcome.REJECTED:
+        problems = "; ".join(problem.detail for problem in result.problems)
+        return Skip(
+            SkipReason.NOT_IN_PROGRAM,
+            f"project {cf_id}; registering it was rejected: {problems}",
+        )
+    resolved = resolve_member(store, directory, deps.cf_run)
+    if not isinstance(resolved, Member):
+        return Skip(
+            SkipReason.NOT_IN_PROGRAM, f"project {cf_id}; still no member after add"
+        )
+    logger.info("registered %s in program %s", cf_id, resolved.program_id)
+    return resolved
+
+
+def _member_checks(  # noqa: PLR0913 - the pieces of one call
     store: Store,
+    config: UserConfig,
     key: QuestionKey,
     question: str,
     observed: ObservedPause,
@@ -156,7 +190,9 @@ def _member_checks(
     if isinstance(resolved, NotAProject):
         return Skip(SkipReason.NOT_A_PROJECT, resolved.message or None)
     if isinstance(resolved, NotInProgram):
-        return Skip(SkipReason.NOT_IN_PROGRAM, f"project {resolved.cf_id}")
+        resolved = _registered(store, config, directory, deps, resolved.cf_id)
+        if isinstance(resolved, Skip):
+            return resolved
     # Read only after membership: a run-file problem in a non-member repo is no error.
     facts = read_run_facts(deps.squadron_runs_dir, key.run_id)
     if isinstance(facts, RunFileProblem):
