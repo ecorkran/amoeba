@@ -122,8 +122,8 @@ CREATE TABLE standing_answers (
 `amoeba standing --text TEXT [--program ID | --member NAME]`, MCP tool `standing` with `text`, `program`, `member` and `directory`.
 
 - Neither flag: reach `all`. `--program`: that program, which must exist. `--member`: a Context Forge project name or id, resolved the way `add --project` resolves one, which must be an active member. Both flags together is a usage error.
-- Result: `outcome` (`given` or `rejected`), `rejection` (`malformed`, `no_such_program`, `no_such_member`), `standing_id`, `reach`, `program`, `member`, `problems`. Exit 1 when rejected, else 0.
-- A repeat with the same text and reach as an active row makes a second row. Nothing depends on uniqueness, and `withdraw` removes a duplicate.
+- Result: `outcome` (`given`, `unchanged` or `rejected`), `rejection` (`malformed`, `no_such_program`, `no_such_member`), `standing_id`, `reach`, `program`, `member`, `problems`. Exit 1 when rejected, else 0.
+- **A repeat is safe.** When an active row already has the same text, reach, program and member, no row is written and the outcome is `unchanged` with that row's id. The check and the insert are one write transaction. So a caller that never got its result (an MCP timeout or a dropped client, where 226's worker may still commit) repeats the call and gets the one row either way. Text that differs in any way is a new ruling and a new row.
 - **Who may call it.** Like `answer`, it is called by an agent, for the PM (architecture operations table). The MCP tool description carries the rule `answer` already carries: it takes only a ruling the PM actually gave, passed on as given, never one the agent composed. That is the same control `answer` has, and within this slice it is enough because a standing answer gains no power `answer` lacks: every automatic answer that cites one still passes the authorize list, the check step and the answer screen (D7). What changes in 231, where the text becomes an unscreened instruction, is the architecture's decision and 231's to build.
 - It can be called from anywhere. It needs a working directory only to resolve `--member` through `cf`.
 
@@ -181,6 +181,7 @@ No new config key. The cap is `passages_max_chars`.
 - **`--member` resolution.** A `cf` failure, timeout or unusable output is exit 3 with nothing written, as for `add` and every other operation that calls `cf`. A name `cf` resolves that is not an active member is `rejected / no_such_member`.
 - **`standing` and `withdraw` writes.** A busy store is exit 3 with nothing written, as for every other write. Each is one transaction, so there is no partial state.
 - **`rm`'s withdraw.** It is inside `rm`'s transaction, so it commits or fails with the removal.
+- **A result that never arrives.** Both MCP tools run under 226's existing deadline, and a write may commit after the caller has given up. Repeating the same call is the recovery for both: `standing` answers `unchanged` with the existing id (D2), and `withdraw` answers `unchanged` for a row already withdrawn (D3). A test commits a `standing` and a `withdraw`, drops the first result, repeats each call, and checks there is one active row (or one withdrawn row) and the second result names it.
 
 ## Implementation Details
 
