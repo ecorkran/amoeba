@@ -7,7 +7,7 @@ component: the-hub
 initiative: the-hub
 parent: ../project-guides/001-initiative-plan.amoeba.md
 dependencies: [240-arch.agent-messaging]
-relatedSlices: []
+relatedSlices: [260, 261, 262, 263, 264]
 riskLevel: high
 audience: [human, ai]
 description: Architecture for Amoeba as one always-up process on a LAN machine, with every machine the PM works on as a client. The hub is the only thing that opens the store. Clients reach it over an authenticated network door, resolve their own repo locally, and do the work that needs local files. Members get a name that holds across machines, sessions are listed across machines, every record names its owner, and the PM's live store moves to the hub. Revised 20261120 from three architecture reviews.

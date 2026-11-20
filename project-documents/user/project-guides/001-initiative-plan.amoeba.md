@@ -51,7 +51,7 @@ The kit is last on purpose. It is extracted from two working agents, not designe
    - **An owner on every record,** which today is always the PM.
    - **Moving the PM's live store to the hub,** with a backup and a stated restore path, and deleting the finished one-time state move.
 
-   Out of scope: finding the hub automatically on the LAN, and more than one person using a hub. Dependencies: [240]. Status: not_started
+   Out of scope: finding the hub automatically on the LAN, and more than one person using a hub. Dependencies: [240]. Status: in_progress
 10. [ ] **(300) Agent Core** — The parts a long-running agent needs, built inside Amoeba. The model is Anthropic's "Building always-on agents" and `notes/006-long-running-agents.amoeba.md`. Scope:
     - **Events.** The inbox widens from messages between repos to any event, with a dedup id and a status. One run per agent at a time; events that arrive during a run wait for the next.
     - **Timers.** Follow-ups an agent sets for itself and schedules from its definition, each with an expiry. A scheduler pass in the hub's process turns a due timer into an event.
