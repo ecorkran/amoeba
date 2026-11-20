@@ -12,7 +12,7 @@ riskLevel: medium
 audience: [human, ai]
 description: Architecture for Amoeba as a tool that agents and pipelines call. No Amoeba process stays running. Squadron optionally starts a short-lived Amoeba command when a run pauses; Amoeba answers through the answering pipeline and starts the resume, or records the question as waiting on the PM. Squadron never requires Amoeba. Members report their own releases through their agents, and run and slice state are read from Squadron and Context Forge rather than mirrored. Revised 20261106 and 20261107 from two architecture reviews and PM notes.
 dateCreated: 20261106
-dateUpdated: 20261114
+dateUpdated: 20261120
 status: in_progress
 ---
 
@@ -22,7 +22,7 @@ status: in_progress
 
 Amoeba today is a resident supervisor: a long-running process that launches and watches Squadron runs, with a large store, an inbox and a network API. The concept replaces that with a tool that agents and pipelines call. It knows the program, handles first-level questions and keeps the record.
 
-**Scope.** Scenarios A, B and C from the concept, the operations they share over MCP and a CLI, the store they need, and cutting today's code down to that.
+**Scope.** Scenarios A, B and C from the concept, the operations they share over MCP and a CLI, the store they need, and cutting today's code down to that. Scenario F (standing answers, added to the concept 20261119) is added here 20261120; see "Standing answers" below.
 
 **Motivation.** Nobody has run the current design, and nobody could say who would start it or when. This design has nothing to start.
 
@@ -98,7 +98,9 @@ The cost is that a missed hook leaves a question waiting (machine asleep, comman
 | `changes` | An agent | What this member's dependencies reported since a point the caller gives | B |
 | `add` | An agent or the PM | Registers a repo as a program member, with its settings, dependencies and concept; `bulk` registers several (slice 229, replaces `set_up`) | Set-up |
 | `rm` | An agent or the PM | Removes a member, a dependency pair or a program's concept (slice 229; the removal half of `set_up`) | Set-up |
-| `list` | The PM, an agent | The person's view: what needs the PM, with `--all` what is running and settled, and what is registered (programs, members, dependencies) (slice 229) | A, C |
+| `list` | The PM, an agent | The person's view: what needs the PM, with `--all` what is running and settled, and what is registered (programs, members, dependencies) (slice 229). The `standing` view lists standing answers (slice 230) | A, C, F |
+| `standing` | An agent, for the PM | Records a standing answer: the PM's own text and its reach (every member, one program, one member) (slice 230) | F |
+| `withdraw` | An agent, for the PM | Withdraws a standing answer, so later answering runs are not sent it. Answers already delivered from it stay delivered (slice 230) | F |
 
 **3. Dependencies and releases.** Set-up declares which members a member depends on, as member-to-member pairs. Each repo reports its own releases, because only the repo that made a change knows what it means. A report holds the commit, a version if there is one, what changed and what that touched.
 
@@ -153,7 +155,16 @@ A question is identified by run id and `paused_at`, so the same words asked at a
 
 A question can also be **closed**, with one of three reasons: `dismissed` (the PM or an agent for the PM closed it with `dismiss`), `run_moved_on` (the run left that pause, or finished, so nobody can answer it) or `run_gone` (Squadron no longer knows the run). A closed question is terminal, except that a later `answer` reopens it as answered. `handle_pause` closes a run's older open questions when the run pauses again, and `status` closes those whose run has moved on or gone, so every open question has an exit with nobody editing files.
 
-PM answers are kept per member as the precedent for repeats. Sharing them across a program waits until use shows the need. The per-run answer limit counts only automatic answers, never the PM's, and it counts those given since the PM's last answer on that run, so a PM answer resets it. A retracted PM answer is not precedent, and an older PM answer to the same question is not brought back. There is one PM, so the PM's `decisions` marker is a single one across all programs.
+PM answers are kept per member as the precedent for repeats. A stored answer is not shared with other members; a ruling meant to hold in other repos is a standing answer, which the PM gives on purpose with its reach (below). The per-run answer limit counts only automatic answers, never the PM's, and it counts those given since the PM's last answer on that run, so a PM answer resets it. A retracted PM answer is not precedent, and an older PM answer to the same question is not brought back. There is one PM, so the PM's `decisions` marker is a single one across all programs.
+
+### Standing answers
+
+Scenario F, slices 230 to 232. A standing answer is a ruling the PM gives once, ahead of time, in the PM's own words, with a reach: every member, one program, or one member. An agent records it for the PM with `standing`, under the same rule as `answer`: only a ruling the PM actually gave, passed on as given. Its text is never edited; a changed ruling is a `withdraw` and a new `standing`. Rows are kept after withdrawal, because delivered answers cite them by id and they are the record, like stored answers. Removing a member withdraws the standing answers that reach only it.
+
+- **In answering (230).** Every answering run is sent the active standing answers that reach the member, as passages it can cite. An answer that cites one is still written by a model that judged the situation to match, so the member's authorize list, the check step and the answer screen apply to it as to any automatic answer.
+- **The size cap: an accepted stop.** Standing answers count against `passages_max_chars` and are never trimmed, because a ruling the PM gave must not be dropped quietly. When they push a question's sources over the cap, the question waits as `sources_too_large`, with the standing answers' share in the detail. This is the one new reason to stop that scenario F adds, accepted against the first design goal because the alternative is ignoring the PM. Its exit is `withdraw`, or raising the cap. Rulings run to a few hundred characters against a cap set in the hundreds of thousands, so it needs a great many.
+- **Work in a repo (231).** For a pause that words cannot clear, the PM's text is used unchanged as the instruction to an agent in that repo. No model writes anything, so nothing is screened and the authorize list does not apply, as the concept says. The standing answer is the PM's authorization.
+- **Curation (232).** Finding rulings in stored answers and retiring contradicted ones.
 
 ### Where things live
 
@@ -200,6 +211,7 @@ Provisional. The audit and the slice plan decide.
 - **Pause handling:** `handle_pause`, `answer`, `status`, `decisions` and `mark_read`, through the CLI. This is the first proof, scenario A on a real run, measured by the test above.
 - **MCP:** the MCP server over those operations. This completes scenario C.
 - **Program dependencies:** dependency declarations, `report_release`, `changes` and the rule lines. Scenario B. It has no gate: the counted trial of scenario A was dropped (slice plan entry 6).
+- **Standing answers:** the record and its use in answering (230), work then resume (231), curation (232). Scenario F.
 
 ## Related Work
 

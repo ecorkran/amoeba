@@ -182,7 +182,7 @@ Added 20261119. A ruling the PM gives once is applied to every later pause it co
    **Success Criteria:**
    - A standing answer given with reach "everything" is cited in an automatic answer in a member that has no stored PM answers of its own.
    - One with reach of one program or one member is not sent to an answering run outside it.
-   - A withdrawn one is not sent, and `list` shows it as withdrawn until it is pruned.
+   - A withdrawn one is not sent, and `list` shows it as withdrawn, with its reason.
    - The authorize list still applies to every automatic answer, whichever passage it cites.
    - A live fixture pipeline in a fixture repo asks a question that only a standing answer settles, and is resumed with the answer.
    **Dependencies:** 223, 228 and 229.
