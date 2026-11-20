@@ -108,6 +108,7 @@ Within each initiative: architecture and its review, then the slice plan, then s
 ## Notes
 
 - The older architecture documents (`100-arch` to `240-arch`) describe what was built. Where they differ from the concept, the concept governs.
+- **Hooks and non-Claude runs get a closer look in 320's architecture** (PM, 20261120). The current answer is good enough to start: Claude Code's turn-end hook where it exists, the pause and the finished run everywhere else. 320's architecture checks what each runtime the PM uses offers at the end of a turn, Codex and Squadron's other providers included, and whether a run on those can be caught as early as a Claude one.
 - A needless question or a leftover that still reaches the PM is a defect in Amoeba and is fixed there.
 - A design that handles one named case and sends the rest to the PM is rejected in review.
 - Check off initiatives as their architecture documents and slice plans are complete.
