@@ -2,12 +2,15 @@
 
 ``wiring.invoke`` opens the store and builds the dependencies; this only picks the
 operation and hands it the store, the document and the clock, and ``standing`` also
-the passage cap and ``cf``. Neither takes the caller's directory: ``--member`` is
-resolved through ``cf`` with no working directory.
+the passage cap and ``cf``. Config is loaded only for ``standing``, so ``withdraw``,
+like ``dismiss`` and ``retract``, runs with a missing or broken config file. Neither
+takes the caller's directory: ``--member`` is resolved through ``cf`` with no working
+directory.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Literal, assert_never
 
 from amoeba.config.user_config import UserConfig
@@ -24,7 +27,7 @@ type StandingOperation = Literal[OperationName.STANDING, OperationName.WITHDRAW]
 def place_standing(
     name: StandingOperation,
     store: Store,
-    config: UserConfig,
+    load_config: Callable[[], UserConfig],
     document: object,
     deps: Deps,
 ) -> StandingResult | WithdrawResult:
@@ -33,7 +36,7 @@ def place_standing(
             return standing(
                 store,
                 document,
-                max_chars=config.passages_max_chars,
+                max_chars=load_config().passages_max_chars,
                 run=deps.cf_run,
                 now=deps.clock(),
             )

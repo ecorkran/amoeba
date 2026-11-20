@@ -253,7 +253,7 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
             )
         case OperationName.STANDING | OperationName.WITHDRAW:
             return place_standing(
-                name, store, load_config(), document, default_deps(layout)
+                name, store, load_config, document, default_deps(layout)
             )
         case OperationName.HANDLE_PAUSE:
             raise ValueError(

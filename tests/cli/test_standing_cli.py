@@ -113,6 +113,16 @@ def test_withdraw_then_unchanged_then_unknown(
     assert unknown[1].startswith("rejected: no_such_standing_answer: ")
 
 
+def test_withdraw_needs_no_config_file(capsys: pytest.CaptureFixture[str]) -> None:
+    _run(capsys, "standing", "--text", RULING)
+    config_path().unlink()
+
+    assert _run(capsys, "withdraw", "1", "--reason", "wrong") == (
+        EXIT_OK,
+        "withdrawn: standing answer #1\n",
+    )
+
+
 @pytest.mark.usefixtures("known_member")
 def test_json_carries_the_result_fields(capsys: pytest.CaptureFixture[str]) -> None:
     code, out = _run(capsys, "standing", "-j", "--text", RULING, "--member", "x")
