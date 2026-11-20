@@ -8,7 +8,7 @@ audience: [human, ai]
 description: Concept for Amoeba, rewritten 20261106. A tool that agents and pipelines call. It knows how a program's repos depend on each other, handles first-level questions by running a Squadron answering pipeline, and keeps the record of what was decided. Squadron does the work, and in normal use a human never types an Amoeba command.
 dependsOn: [000-pre-concept.amoeba.md, notes/005-usage-scenarios.amoeba.md]
 dateCreated: 20260618
-dateUpdated: 20261114
+dateUpdated: 20261119
 status: in_progress
 ---
 
@@ -124,6 +124,7 @@ A tool that agents and pipelines call. It does four things:
 - **Handles first-level questions:** it routes a question to the answering pipeline with the right context, then returns the answer or passes the question up.
 - **Keeps the record:** who asked what, which model answered, from what, and what the PM overrode.
 - **Carries messages between repos:** requests and notes from an agent in one member to another member or a whole program, for any agent and any UI (scenario D, added 20261114).
+- **Applies the PM's standing answers:** a ruling the PM gave once is applied to every later pause it covers, including pauses that need work done in the repo before the run can go on (scenario F, added 20261119).
 
 ### What Amoeba is not
 
@@ -134,7 +135,7 @@ A tool that agents and pipelines call. It does four things:
 
 ### On determinism
 
-Amoeba adds nondeterminism on purpose: it asks a model to answer in the PM's place. Wrapping that in more deterministic machinery doesn't change what it is. The part that must be exact is **the record**, and the part that must be bounded is **what the answer can do**. An answer can only resume the run that asked. It never edits code, merges or changes a threshold.
+Amoeba adds nondeterminism on purpose: it asks a model to answer in the PM's place. Wrapping that in more deterministic machinery doesn't change what it is. The part that must be exact is **the record**, and the part that must be bounded is **what the answer can do**. An automatic answer can only resume the run that asked. It never edits code, merges or changes a threshold. Work in a repo happens only under a standing answer the PM gave (scenario F, from 20261119): the PM's words are the instruction, the work is done by an agent in that repo, and Amoeba's part is to start it and resume the run.
 
 ### Where it sits
 
@@ -158,7 +159,7 @@ Amoeba adds nondeterminism on purpose: it asks a model to answer in the PM's pla
 
 **Nothing stays running unless a scenario can't work without it.** By default Amoeba is a store, an MCP server started by whatever session uses it, and a CLI. A resident process is justified only by something that must happen when no run is active and nobody asked.
 
-Amoeba works on runs it did not launch. It does not start work. The only run it resumes is the one that asked. One exception from 240: a member may configure a wake command, which Amoeba starts when a request reaches a repo nobody is working in. The command decides what to do, not Amoeba.
+Amoeba works on runs it did not launch. It does not start work. The only run it resumes is the one that asked. One exception from 240: a member may configure a wake command, which Amoeba starts when a request reaches a repo nobody is working in. The command decides what to do, not Amoeba. A second exception from scenario F: under a standing answer, Amoeba starts an agent in the repo of the run that paused, and the standing answer decides what it does.
 
 ### What it has to do
 
@@ -168,6 +169,11 @@ Full walkthroughs are in `notes/005-usage-scenarios.amoeba.md`.
 - **B: a change in one member affects another.** A member's pipeline tells Amoeba what it released and what that touched. Another member's pipeline asks at the start of a slice whether anything it depends on has changed, then either picks the change up as context or stops with a reason.
 - **C: the PM asks where things stand.** An agent calls Amoeba and gets a short status per member: what's running, what's blocked and why, and what was answered since the PM last looked.
 - **D: one repo needs another to build something.** Added 20261114. An agent in squadron (any agent, any UI, or a pipeline run) sends a request to context-forge. The next agent working there sees it, by push or at its next inbox check, and accepts or declines it. If it needs a guide change, it sends its own request to ai-project-guide, naming squadron's as the parent. Each link is marked done with a result, and the sender hears about it. A run paused on the request resumes with the result once it passes the answering check. Nobody walks the chain: each agent handles only its own repo's requests. Details are in `240-arch.agent-messaging.md`.
+- **F: a pause the PM has already ruled on.** Added 20261119. (E is the cross-machine hub, initiative 260.) Some pauses are not questions. A p6 run stops at its merge step because task boxes are unchecked. The PM's ruling never changes: check the unchecked items against the work, finish any that are small and inside the slice, tick the boxes, commit, and let the merge go ahead. The PM gives that ruling once, through an agent, as a **standing answer**. From then on Amoeba handles the pause with nobody present, in two parts:
+  - **Words are not enough here.** The merge step runs no agent, so an answer handed to a resumed run changes nothing and the run pauses again. Amoeba starts an agent in that repo, on the run's branch, with the standing answer as its instruction. When the agent finishes, Amoeba resumes the run. If the merge check passes, the run goes on; if it does not, the pause waits for the PM as it does today, with what the agent did on the record. One attempt per pause.
+  - **A standing answer is the PM's decision, made ahead of time.** It names the situation it covers and how far it reaches: every repo, one program, or one member. It lives in the store, so a hub (260) makes it known on every machine with no further work. It is the PM's own authorization, so the list of things an automatic answer may not authorize (a merge to main among them) does not stop it. The PM can list standing answers and withdraw one, and a withdrawn one stops applying at once.
+
+  Standing answers also serve ordinary questions: one whose situation matches a standing answer is answered from it in any repo it reaches, where today the PM's earlier answers count only in the repo they were given in. Promoting a past answer to a standing answer, or retracting it, is how the PM curates what Amoeba knows.
 
 ### Programs
 
