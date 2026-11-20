@@ -56,8 +56,11 @@ Each `authorize_items` entry has all four fields, and no others:
 
 ## Example
 
-The five items are the default list: an answer may not authorize a push, a merge to
-the main branch, a release, a destructive database statement or a policy change.
+The five items are the default list. Four are denied by default: an answer may not
+authorize a push, a release, a destructive database statement or a policy change. A
+merge to the main branch is allowed by default, because merging a finished slice into
+its target is the normal end of a run; a member that wants the extra protection denies
+it with `amoeba add --deny merge_to_main`.
 Replace the two model aliases with your own Squadron aliases.
 
 ```yaml
@@ -86,7 +89,7 @@ authorize_items:
   - key: merge_to_main
     description: Merging a branch into the main branch.
     screen_phrases: ["merge to main", "merge into main"]
-    denied_by_default: true
+    denied_by_default: false
   - key: release
     description: Cutting a release, tagging a version or publishing a package.
     screen_phrases: ["cut a release", "publish the package"]
