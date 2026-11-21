@@ -232,7 +232,7 @@ The adoption slice (264) moves the PM's store to the hub and deletes the no-clie
 
 ### Moving the PM's live store
 
-The live store and config are designated for this move. By this point the laptop's store is already at the new schema and its members are named, so the move is a copy. It is one command, `amoeba adopt <join line>`, run on the laptop in place of `join`, by the release that ships it (`scripts/update_live.py update`), after review and the merge. The client file is written last, so there is no time when the laptop points at a hub that does not yet have its data.
+The live store and config are designated for this move. `adopt` brings the laptop's store to the new schema and names its members first, so what is sent is a copy. It is one command, `amoeba adopt <join line>`, run on the laptop in place of `join`, by the release that ships it (`scripts/update_live.py update`), after review and the merge. The client file is written last, so there is no time when the laptop points at a hub that does not yet have its data.
 
 1. **Checks.** It refuses unless the hub is empty, meaning it holds no record: nothing but its owner, its machines, and what the hub writes for them by itself (sessions, last reported runs, kept call results). This check is made before anything on the laptop changes. It then backs the store up, migrates it, and lists each session still open on the laptop with whether it must be restarted; the migration has already stopped those sessions writing, so none has to be closed and none holds adoption up. It refuses if any member is still unnamed.
 2. **Name the adoption.** It writes an adoption id into the local store and commits it. Every later step carries that id.
@@ -251,13 +251,13 @@ After this, no client reads a local store or a local `config.yaml`, and the 228 
 
 A hub is its backup. To run it somewhere else, the laptop included: `amoeba hub backup` on the old box, `amoeba hub serve --from-backup <path>` on the new one, and `amoeba join --address` on each machine. Machines, tokens, the certificate and every record carry over, so nothing is lost and nothing is re-invited. This is also how to stop using the LAN box.
 
-If adoption went wrong in a way found later, there are two ways back. `amoeba leave`, empty the hub, and `amoeba adopt <line> --again` adopts the laptop's store, as it was at adoption, into the emptied hub. Or `scripts/update_live.py restore --local-store` puts the pre-migration backup and the config back under the previous release. Both need the handed-over store or its backup, which `amoeba discard-local` deletes.
+If adoption went wrong in a way found later, there are two ways back. `amoeba leave`, empty the hub, and `amoeba adopt <line> --again` adopts the laptop's store, as it was at adoption, into the emptied hub. Or `scripts/update_live.py restore --local-store` puts the pre-migration backup and the config back under the previous release when `adopt` had migrated the store (a store the previous release still opens is left as it is). Both need the handed-over store or its backup, which `amoeba discard-local` deletes.
 
 ## Operator walkthrough
 
 Done as the PM running it.
 
-1. **Start.** On the LAN machine: write `hub.yaml` in the config directory (the image ships an example) and start the container. A missing or bad key stops the start and names it. `amoeba hub invite laptop` prints a join line. On the laptop: `amoeba adopt <line>`, which the release runs. On each other machine: an invite, a join, and `amoeba add` in each repo there.
+1. **Start.** On the LAN machine: `docker/hub-update.sh --address <host:port> <commit>` writes `hub.yaml` from the example the image ships and starts the container; the release runs it. A missing or bad key stops the start and names it. `amoeba hub invite laptop` prints a join line. On the laptop: `amoeba adopt <line>`, which the release runs. On each other machine: an invite, a join, and `amoeba add` in each repo there.
 2. **Adoption is refused.** The hub is not empty: it says what it holds. A pause hook fires during the copy: it fails with the join message, and a command of an older release that was already running fails because the lock wait ran out or because it finds the store marked as adopted. Either way its run shows on `list` as a paused run with no record, with the command to handle it. A reply is lost or the switch fails: run the same command again.
    - **A fresh hub, with no store to adopt** (a new user, or one machine). Write `hub.yaml` and `config.yaml` from the image's examples, start the hub, then an invite, a join and `amoeba add` in each repo.
 3. **Normal path.** A session on the desktop sends a request to `context-forge`. A session open in context-forge on the laptop gets the push within a tick and handles it. `list` on either machine shows the same requests, questions and sessions.

@@ -287,7 +287,7 @@ If it stops partway, running it again finishes it. After step 1 alone the machin
 
 This is the exit from the joined state and the undo of `--set-aside-local`. The machine's row on the hub is ended separately by `amoeba hub rm-machine`.
 
-264 changes the set-aside, once no local way exists. A store that is set aside stays at the store path, at the current schema, with the closed mark and a dated backup beside it; it is not renamed. `leave` then deletes only the client file and the certificate and puts no store back, and the set-aside store is ended by `amoeba discard-local` or adopted with `amoeba adopt --again` (264 D5).
+264 changes the set-aside, once no local way exists. A store that is set aside stays at the store path, at the current schema, with the closed mark and a dated backup beside it; it is not renamed. `leave` then deletes only the client file and the certificate and puts no store back, and the set-aside store is ended by `amoeba discard-local` or adopted with `amoeba adopt --again` (264 D5). From 264 on, `join --set-aside-local` also deletes the store's adoption row with the mark, and a `set-aside-<UTC stamp>` store left by a release from 260 to 263 is ended by `amoeba discard-local --force` (264 D1, D5).
 
 - Rejected: leaving the joined state with no command. The only exit would be deleting files by hand.
 
@@ -604,7 +604,7 @@ A refused call is one line: the hub's time, the caller's address, the code, and 
 Status: decided
 
 - `docker/Dockerfile`: `python:3.13-slim`, installs Amoeba from the checkout, runs as a non-root user `amoeba`, declares the config, state and backup directories as volumes at that user's default config and state paths and at `/backups`, and has `amoeba hub serve` as its entry point. `AMOEBA_HOME` is not set.
-- `docker/compose.example.yaml`: the three mounts, the published port and `restart: always`, which is what starts the hub at boot and restarts it on failure.
+- `docker/compose.example.yaml`: the three mounts, the published port and `restart: always`, which is what starts the hub at boot and restarts it on failure. The host directories of the three mounts are under `~/amoeba-hub/`, never the user's own Amoeba config and state directories, so a hub run on a laptop does not turn the laptop's home into a hub home (D1).
 - Two examples in the image at `/usr/share/amoeba/`: `hub.yaml.example`, which is `src/amoeba/hub/hub.yaml.example` from the wheel, and `config-contract.md`, copied from `docs/`, whose example block is the `config.yaml` example. The contract stays the one source of that example. A test loads `hub.yaml.example` as a valid hub config.
 - 264 changes two of these. The config mount is writable, because adoption writes `config.yaml` there. And `config.yaml.example`, a file in the wheel beside `hub.yaml.example`, becomes the source of the `config.yaml` example, with the contract's block tested equal to it (264 D3, D10).
 

@@ -512,7 +512,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
 
 - [ ] **16.1 `docker/Dockerfile` and `docker/compose.example.yaml`**
   - [ ] Dockerfile per D17: `python:3.13-slim`, Amoeba installed from the checkout, non-root user `amoeba`, volumes at that user's default config and state paths and `/backups`, `AMOEBA_HOME` unset, `hub.yaml.example` and `docs/config-contract.md` copied to `/usr/share/amoeba/`, and an exec-form entry point `amoeba hub serve` so it runs as PID 1 and gets `docker stop`'s signal (`tool-guides/docker/02-entrypoint-and-process-model.md`)
-  - [ ] Compose example: one service named `hub`, the three mounts, the published port, `restart: always`. A comment above the service gives the two restore commands of D17 and says `--from-backup` is never added to this file
+  - [ ] Compose example: one service named `hub`, the three mounts with their host directories under `~/amoeba-hub/` (D17), the published port, `restart: always`. A comment above the service gives the two restore commands of D17 and says `--from-backup` is never added to this file
   - [ ] Success: files exist; checks pass
 
 **Commit**: `feat: add the hub container image and compose example`

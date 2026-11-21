@@ -24,7 +24,7 @@ Architecture-level. Initiatives 100 to 240 left a store, operations with two doo
 
 - **The PM's install keeps working on its local store until adoption (264).** Which way a machine runs is decided on every call by one thing: whether it has a client file (architecture, "How the build gets there"). The PM's laptop has none until the release that ships slice 264. Every slice before that is proven with fixtures: one hub and two client homes with different machine names on one computer.
 - **Each slice widens what the door serves.** With a client file, an operation the door does not serve yet fails and says so. 260 serves the operations that name no member, 261 the ones that do, 262 the ones that need local files, 263 the session's own calls.
-- **Schema changes reach the local store at each release.** Each is an ordinary migration. The release's last step runs `scripts/update_live.py update`, which backs up the live store and config first; `scripts/update_live.py restore` is the restore path. So adoption in 264 is a copy, not a migration.
+- **Schema changes reach the local store at each release.** Each is an ordinary migration. The release's last step runs `scripts/update_live.py update`, which backs up the live store and config first; `scripts/update_live.py restore` is the restore path. Adoption in 264 migrates the laptop's store itself and then copies it.
 - **The largest risk is third.** Pulling `handle_pause` and the resume apart needs machines and named members first, so it cannot go earlier.
 
 Slice numbers are execution order. The first slice takes the plan's index (260).
@@ -149,7 +149,7 @@ Slice numbers are execution order. The first slice takes the plan's index (260).
    - **Tests.** The unit tests that ran operations on a local store run against an in-process hub on a throwaway store.
    - **The release.** The release skill and `scripts/update_live.py` update the hub first, then the client they run on, and list the others. Three shell scripts on the hub machine update it, restore or empty it, and print a join line.
    - **Documents.** `docs/cli-contract.md`, `docs/config-contract.md`, `docs/store-contract.md`, `docs/mcp-server.md` and `docs/squadron-hook.md` are brought in line, with a set-up page for the hub: start, invite, join, adopt, move, undo.
-   - **The PM's install.** Not a task of the slice. The release that ships the slice sets the hub up on the LAN machine and adopts the laptop's store, through `update_live.py update`, which prints the dated backup's path. The slice rehearses this on a copy of the live store.
+   - **The PM's install.** Not a task of the slice. The release that ships the slice sets the hub up on the LAN machine and adopts the laptop's store, through `update_live.py update`, which prints the dated backup's path. `live-update.yaml` names the three hub commands and `hub_address`, the address clients reach the hub at. The slice rehearses this on a copy of the live store.
 
    **Value:** User value. The PM's decisions, messages and sessions are one store on every machine he works on.
    **Success Criteria:**

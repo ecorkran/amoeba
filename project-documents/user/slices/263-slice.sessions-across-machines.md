@@ -468,7 +468,7 @@ One migration, `014_sessions_across_machines.sql`, run by both ways. It only add
 
 **Rows from before the migration** have no door version. Their writers are programs that refuse the newer schema, so they can never beat again. There are two predicates in `store/sql_sessions.py`, each defined once:
 
-- **`LIVE_SESSION`,** used by `live_sessions` (display) and the prune, becomes "a fresh heartbeat and a door version". A behind session passes it, so it is shown.
+- **`LIVE_SESSION`,** used by `live_sessions` (display) and the prune, becomes "a fresh heartbeat and a door version". A behind session passes it, so it is shown. 264 names the heartbeat test inside it `FRESH_HEARTBEAT` and composes `LIVE_SESSION` from that, so the two predicates here become three (264 D2).
 - **The waking rule,** used by `live_member_ids`, is `LIVE_SESSION`, push confirmed, and a door version equal to the hub's, which is bound as a parameter (D6).
 
 A row from before the migration fails both. It is never shown and never holds off a wake, and the first refresh's prune deletes it. No reader has to handle a null.

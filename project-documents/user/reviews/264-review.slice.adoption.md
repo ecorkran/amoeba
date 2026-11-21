@@ -265,3 +265,57 @@ Resolved 20261120 in `user/slices/264-slice.adoption.md`. Each finding was check
 - [pass] The hub-side load follows the architecture's transaction rule: no change.
 - [pass] NFRs are restated with targets: no change.
 - [pass] Interfaces match what 260–263 decided: no change.
+
+## Full-text review, 20261121
+
+A second review read the whole design, start to finish, with the architecture, the slice plan, the 260 design in full, the cited sections of 261 to 263, and today's `scripts/update_live.py`, release skill, `store/store.py`, `store/migrations.py`, `store/sql_sessions.py`, `config/home.py` and the migration tests. It ran the design's two SQLite sequences in a scratch database, and both hold as written. It found 19 things: 8 important, 10 minor and 1 unverified. All 19 are resolved in the design the same day, together with what 260's revision of 20261121 (commit 9ee28aa5) changed under it. None ended as "no change". The parents were not edited; the sentences they still need are listed at the end.
+
+- [important] `restore --local-store` restored the oldest backup, which could be older than the laptop's records or a partial copy: changed (D5, D11). The command reads the store's schema first and leaves a store below 15 alone. A backup is taken only when the store is below 15, under a `.partial-` name, and a new whole one deletes the older ones, so the one kept is the store just before the migration that closed it.
+- [important] An `adopt` refused before its backup left the new release installed over a local store: changed (D10, D11). `update` runs `adopt` from the checkout before it installs, and the script's restore installs the previous commit whatever the store's state.
+- [important] `update` run again after a kill failed at its own `amoeba list -j`: changed (D10). The script writes `backups/adoption-run.json` before the adoption and uses it when it finds the store already migrated. D1's row 4 takes a new invite's token.
+- [important] The first-run `hub.yaml` could not hold the hub's address: changed (D10, D12). `live-update.yaml` gains the required key `hub_address`; `hub-update.sh --address` writes it on a first run and replaces it on a later one. D12 says what the localhost rehearsal proves about the address and what is first met at the release.
+- [important] A store set aside after a failed `adopt` was reported as `already_adopted`: changed (D1, D5). `join --set-aside-local` deletes the adoption row with the mark.
+- [important] Whether the laptop's `sessions` and `machine_runs` rows are carried was contradictory, and the count check could not pass on a second load: changed (D4, criteria). The load deletes the copy's `sessions`, `machine_runs` and `call_results` rows and compares counts only outside `HUB_OWN_TABLES`.
+- [important] `hub-restore.sh` did not say which pre-migration backup it restores or how its one start ends: changed (D10). `hub-update.sh` lists the backups before the new image starts; the restore uses only one not listed, makes 260's `docker compose run ... --from-backup` start, waits for the serving line for at most `RESTORE_START_SECONDS`, and then deletes the list.
+- [important] The digest, counts and emptiness check needed SQL built from table names read at run time: changed (D3). `STORE_TABLES` is a module constant pinned to the schema by a test, and header keys are checked against it.
+- [minor] "A second run takes no second copy" was false after a failure in step 4: changed (D5), by the schema rule above.
+- [minor] After a failed adoption the hub held the copy and every later `update` was refused until the hub was emptied by hand; the read-back compared two listings field by field: changed (D10, D11). The restore keeps the adoption id in `kept-adoption-id`, so the next attempt meets `holds_this`. The read-back compares the number of programs and members and prints the rest.
+- [minor] The earlier script's `backups/<stamp>/` was never removed: changed (D10). The first `update` that succeeds deletes it.
+- [minor] The mark and the id are read before the tables exist: changed (Data Flow, step 2). A missing table means none, read read-only.
+- [minor] Clearing the loading mark is itself a refused write, and the copy's side files were not named: changed (D4, Data Flow). The clear uses a plain connection, and "the copy" includes its two side files.
+- [minor] `--again` on a store cut off before its switch stranded it: changed (D1). It is rejected and names `adopt`.
+- [minor] Four small false statements about today's script and `legacy_state_home`: changed (D7, D10, D11, API Contracts). `--previous` is kept.
+- [minor] "At the current schema" did not hold for later releases: changed (D5). The read-only open makes no schema check.
+- [minor] Three parent sentences are stale: changed in the design's departures table (rows dated 20261121); the parents' text is listed below.
+- [minor] Two `adopt` runs at once had no rule: changed (D5). One hand-over command runs at a time, under a file lock.
+- [unverified] "Built by the seed helpers at schema 10": confirmed false and changed (D9). The seed helpers write the current schema; the fixture is built as `_migrate_to` in `tests/store/test_migration_010.py` does.
+
+From 260's revision: D5, D7 and the amendments table describe the set-aside from its copy form, and `discard-local --force` ends a `set-aside-<stamp>` store left by a release from 260 to 263. `--put-back` and `--discard` end every `replaced-<stamp>/`, including 260's own. `hub-restore.sh --empty` is checked against 260's start table and moves the store before the backups. The hub side of the load opens the store without creating it. `store.handover` keeps the `HubHomeError` check, and the example compose file's directories are under `~/amoeba-hub/`.
+
+Changes this needs outside the design, not made here:
+
+- `260-slices.the-hub.md`, Planning Context, third bullet: "So adoption in 264 is a copy, not a migration." should read "Adoption in 264 migrates the laptop's store itself and then copies it."
+- `260-slices.the-hub.md`, 264 entry, The PM's install: add "`live-update.yaml` names the three hub commands and `hub_address`."
+- `260-arch.the-hub.md`, Moving the PM's live store, first paragraph: "By this point the laptop's store is already at the new schema and its members are named, so the move is a copy." should read "`adopt` brings the laptop's store to the new schema and names its members first, so what is sent is a copy."
+- `260-arch.the-hub.md`, Operator walkthrough, step 1: "write `hub.yaml` in the config directory (the image ships an example) and start the container" should read "`docker/hub-update.sh --address <host:port> <commit>` writes `hub.yaml` from the example and starts the container; the release runs it".
+- `260-arch.the-hub.md`, Moving or undoing the hub: after "puts the pre-migration backup and the config back under the previous release" add "when `adopt` had migrated the store; a store the previous release still opens is left as it is".
+- `260-slice.hub-and-door.md`, D4, last paragraph on 264: add that `join --set-aside-local` also deletes the adoption row, and that a `set-aside-<stamp>` store left by this slice's form is ended by 264's `discard-local --force`. D17: the example compose file's host directories are under `~/amoeba-hub/`.
+
+### Second pass
+
+A second pass on 20261121 read the fixed design in full and walked the pieces the fixes above added: the record, the kept id, the handover lock, the hub's backup list. One sequence was tried in a scratch directory (SQLite's backup call onto a write-locked store). Each defect and what was done:
+
+- [important] `restore --local-store` wrote the store outside the handover lock, and a second `update` ran it under the first one's `adopt`: changed (D5, D10, D11). `update` and `restore` hold `update.lock`; the restore takes the handover lock; an `adopt` that meets `HandoverBusyError` is not followed by a restore; `leave` skips the copy while a hand-over command runs.
+- [important] A record left by a failed or killed `update` made a later `update` un-join a laptop whose store had been set aside by hand: changed (D10). A run that fails before `adopt` deletes its record, and a record beside a set-aside store or no store is deleted and the main list taken.
+- [important] A kept adoption id beside a set-aside store could be read as the store's id: changed (D1, D5, D11). D1's rows read the store's own row only, and `join --set-aside-local` deletes the file.
+- [important] `update` could not go on after its own restore was killed following the install, and "if another is installed" could not be decided: changed (D10, D11). A record beside a store below 15 makes `update` finish the restore first, and the record's commit is always installed again.
+- [important] A read-back after a skipped load compared the hub's members with an older listing and named `hub-restore.sh --empty`: changed (D10). On a `skipped` run the numbers are printed, not compared; the bullet is deleted.
+- [important] `update` run after a failed hub restore deleted `pre-update-backups`: changed (D10). `hub-update.sh` finishes a restore that did not finish before it deletes anything; `--empty` and `--put-back` delete the list before they move the store, so they never look like one.
+- [minor] `restore` and `restore --hub` after the adoption run installed the release before the hub: changed (D10). The adoption run leaves no `backups/previous-commit`, and both commands stop without one and name `restore --local-store`. `installed-commit` is written before the record is deleted.
+- [minor] `LIVE_SESSION` in 263 D13 leaves out rows with no door version, which `sessions_to_restart` must list: changed (D2, Interfaces Required, amendments table). This slice adds `FRESH_HEARTBEAT` and composes `LIVE_SESSION` from it.
+- [minor] `add-config-keys` both "first copies" and "writes nothing": changed (D10). It copies only when it has a key to add and no `config.yaml.before-keys` exists.
+- [minor] `backups/previous-commit` and `installed-commit` were not in State Management: changed.
+- [minor] "A missing `config.yaml` is written from `config.yaml.example`" had no subject: changed (D1). The message gives the copy command; `adopt` writes no local config.
+- [minor] `--again` "is already at this release's schema" did not hold for a later release: changed (D1, D5, D11). The rule stays "below 15", with the reason the records are safe: the backup from before the first migration holds every record, and "at 15" means 15 or above.
+- [minor] A machine that left with a set-aside store was told only `adopt` or `restore --local-store`: changed (D10). The message also names `amoeba join <line>`.
+- [minor] The adoption run had no step that added a required key to the laptop's `config.yaml`: changed (Data Flow step 3, D10). `adopt` completes the text in memory with the function behind `add-config-keys` and sends that; the laptop's file is not changed, so the previous release still loads it after a restore.
