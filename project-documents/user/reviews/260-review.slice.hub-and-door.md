@@ -211,3 +211,33 @@ Also changed in this revision, outside the findings:
 
 - 263's amendments to 260 are applied (D2, D6, D7, D8, D13), as forward statements of what 263 changes.
 - `amoeba hub machines` no longer claims to show which machines are behind. This slice stores no door version for a machine, so it could not; 263 adds the column and the display (263 D6), which is where the architecture puts it.
+
+## Full-text review, 20261121
+
+A second review, run outside the pipeline after the task review kept finding new defects. The reviewer read the whole design (739 lines), the architecture, the slice plan and CLAUDE.md, checked the design's claims about existing code against the source, and tested the SQLite sequences in a scratch database. It did not see the review above. It found 4 important defects, 13 minor ones and 1 it could not confirm. All 18 are resolved in `user/slices/260-slice.hub-and-door.md` and carried into `user/tasks/260-tasks.hub-and-door.md`. Nothing was deferred and no issue was filed.
+
+Important:
+
+- Setting a store aside checkpointed inside its own write transaction, which SQLite refuses, and then removed the side files, losing committed rows when another command was reading: changed. The store is marked, copied with SQLite's backup call, and the original deleted. D4 has a table of every stop point and what `join` and `leave` do from it. Confirmed in a scratch database.
+- A hub with a certificate and key and no store was in no row of the start rules and would have started empty: changed. D5 is now a table with a row for every combination, decided by whether a backup exists.
+- An admin command run before the first `hub serve` created a store that the start then refused for good: changed. `open_hub_store` never creates a store; only step 7 of a first start does (D12, D13).
+- A first start killed between its key and certificate, and a `--from-backup` killed partway, each left a state every later start refused: changed. The first is finished by the next start (D5). The restore is marked by `restore.partial/`, moves what it replaces into `replaced-<UTC stamp>/`, and is finished by the same command (D14).
+
+Minor:
+
+- `hello` had no stated place in the served check, no body and no result shape: changed (D6).
+- `join` and `leave` had no stated error type or exit code for four refusals: changed. All are `JoinError`, exit 3 (D4).
+- Two processes could take backups at once and delete each other's partial directory: changed. One file lock (D15).
+- Nothing stopped `join --set-aside-local` or an ordinary command in the hub's own home: changed. Both are refused in a home that holds `hub.yaml` (D1, D2, D4).
+- "Each of the twelve insert statements" was a wrong count (sixteen): changed, with a test that reads the statements (D12).
+- "`unchanged` means it was applied" is not what the operations say: changed (D10).
+- The departures table had no row for renaming the set-aside store: changed, with rows for `--from-backup` and the store-creation rule too.
+- "The state directory is empty" was undefined: changed. Only the store, certificate and key count (D5).
+- The fixture's seeding did not say which machine it acts as: changed (D12, D18).
+- A migration failing at every restart rotated out earlier versions' pre-migration backups: changed. One backup per schema version (D15).
+- The hub had no stated source for "today's operational errors": changed. `operations/errors.py`, as the task file already had it (D8).
+- `join --set-aside-local` on a store below schema 11 hit a missing table: changed. The store is opened, and so migrated, first (D4).
+- How `--from-backup` is run in the container was not stated, and a flag left in the compose file looped: changed (D14, D17).
+- (unconfirmed by the reviewer) The per-call store open might be a second lock wait: checked. It is not; an open under a held write lock returned at once. D7 says so and a test pins it.
+
+Also changed while fixing these: a store whose certificate is lost with no backup anywhere had no way on but deleting files. The hub now keeps the store, makes a new certificate and says every machine must join again (D5).
