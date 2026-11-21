@@ -25,6 +25,10 @@ from pathlib import Path
 from typing import Any, Final, cast
 
 from amoeba.config.home import claude_home, logs_dir, state_layout, user_home
+from amoeba.operations.answer_first import (
+    ANSWER_FIRST_PREFIX,
+    last_stop_block_reasons,
+)
 from amoeba.operations.stand_in import (
     CHILD_ENV_VAR,
     REASON_PREFIX,
@@ -221,9 +225,29 @@ def write_log(record: dict[str, Any]) -> None:
             old.unlink(missing_ok=True)
 
 
+def _kept_going_by_answer_first_alone(hook_input: dict[str, Any]) -> bool:
+    """Whether the turn was last kept going only so the PM could see a reply.
+
+    The answer-first hook keeps a turn going once after each PM message. That is not a
+    stand-in decision, so the end of the work that follows is still judged.
+    """
+    transcript_path = hook_input.get("transcript_path")
+    if not isinstance(transcript_path, str):
+        return False
+    lines = Path(transcript_path).read_text(encoding="utf-8").splitlines()
+    lines.reverse()
+    reasons = last_stop_block_reasons(lines)
+    return bool(reasons) and all(
+        reason.startswith(ANSWER_FIRST_PREFIX) and REASON_PREFIX not in reason
+        for reason in reasons
+    )
+
+
 def judge(hook_input: dict[str, Any]) -> Judgement | None:
     """The judgement for one turn's end, or ``None`` when there is nothing to judge."""
-    if hook_input.get("stop_hook_active"):
+    if hook_input.get("stop_hook_active") and not _kept_going_by_answer_first_alone(
+        hook_input
+    ):
         return None  # one stand-in decision per stop: the agent's next end goes through
     message = closing_message(hook_input)
     if not hands_off(message):

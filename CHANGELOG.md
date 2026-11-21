@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Answer first: `amoeba-answer-first`, a Claude Code hook installed under `PreToolUse` and `Stop`. After the PM sends a message, no tool runs until the agent has replied and ended its turn, so he sees the reply; the turn is then kept going once so the work continues. See `docs/answer-first.md`.
+- The stand-in settles "may I ask another session?" itself: the agent messages that session directly, and that session raises any sign-off its own action needs.
+
 - Slice 230: standing answers. `amoeba standing --text TEXT [--program ID | --member NAME]` (and the MCP `standing` tool) records a ruling the PM gave once, for every later case it covers; `amoeba withdraw STANDING_ID --reason TEXT` takes one back, and `amoeba list standing [--all]` shows them. Every answering run for a member a standing answer reaches is sent it as a `standing_answer` passage, never trimmed and counted against `passages_max_chars` (`sources_too_large` now gives both shares). Both calls are safe to repeat, `decisions` names a cited standing answer, and `rm` withdraws a removed member's own ones. Store migration 010 (version 10).
 
 ## [0.2.3] - 2026-11-19

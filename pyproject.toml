@@ -15,6 +15,7 @@ dependencies = [
 [project.scripts]
 amoeba = "amoeba.cli.main:main"
 amoeba-mcp = "amoeba.mcp.server:main"
+amoeba-answer-first = "amoeba.cli.answer_first_hook:main"
 
 [build-system]
 requires = ["hatchling"]
