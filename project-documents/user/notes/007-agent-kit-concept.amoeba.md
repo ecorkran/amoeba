@@ -3,7 +3,7 @@ docType: notes
 layer: project
 project: amoeba
 audience: [human, ai]
-description: Draft concept for a standalone kit for long-running agents, separate from Amoeba. What it is, what the PM requires of it, what agent runtimes already supply (checked 20261120), what the kit builds, the first agents, and what stays out. Input for a new project's concept stage.
+description: Draft concept for a standalone kit for long-running agents, separate from Amoeba. What it is, what the PM requires of it, what agent runtimes already supply (checked 20261120), what the kit builds, the first agents, and what stays out. Built now as its own project with the PR review responder as the first agent, ahead of Amoeba's own agent work. Input for a new project's concept stage.
 dependsOn: [notes/006-long-running-agents.amoeba.md]
 dateCreated: 20261120
 dateUpdated: 20261120
@@ -18,9 +18,19 @@ status: in-progress
 
 A small package that turns a definition file into a long-running agent. The agent wakes when there is work, does a bounded piece of it with real tools, remembers what it learned, and sleeps. Writing a new agent means writing one file and running one command.
 
-The kit knows nothing about Amoeba, Squadron or Context Forge. Amoeba's stand-in is one agent built on it. A PR review responder at work is another.
+The kit knows nothing about Amoeba, Squadron or Context Forge. The PR review responder is the first agent built on it. Amoeba's stand-in is the second.
 
 The pattern is Anthropic's article "Building always-on agents" (five parts: event inbox, timers, memory, permissions, outbox) plus the additions in `006-long-running-agents.amoeba.md` (bounded runs, observability, one definition file, an exit for every state).
+
+## Build order (decided 20261120)
+
+The kit starts now, as its own project. It does not wait for Amoeba to build an agent core and extract it.
+
+1. **The kit is built for one real agent: the PR review responder.** The first build is done when that agent runs unattended on the PM's own repos. Nothing in it needs Amoeba's hub, programs or messaging.
+2. **Amoeba's stand-in is the second agent.** Putting it on the kit is what shows which parts are general. Expect rework in the kit when it lands.
+3. **Amoeba does not build these parts itself.** Timers, memory curation, outgoing messages, runtime adapters and the cost cap are built in the kit and nowhere else.
+
+The kit is still not designed in the abstract: every part is built because the review responder needs it.
 
 ## What the PM requires
 
@@ -76,7 +86,7 @@ Other runtimes (opencode, Goose) fit the same adapter shape. Gemini's tool is no
 
 ## First agents
 
-1. **PR review responder (work).** Wakes when a review lands on the person's pull request, from Copilot or a human's AI review. It reads every finding, sorts real problems from noise (a rare edge case rated high is the usual noise), fixes the real ones on the branch, replies on each thread with what it did or why the finding does not hold, pushes, and asks for re-review. Its person hears about a finding that is a real design question and about a pull request that is ready to merge. Memory holds which calls people overturned, so its sorting improves. It uses whatever review-combing tools the person has installed.
+1. **PR review responder (the build target; the PM's own repos first, then work).** Wakes when a review lands on the person's pull request, from Copilot or a human's AI review. It reads every finding, sorts real problems from noise (a rare edge case rated high is the usual noise), fixes the real ones on the branch, replies on each thread with what it did or why the finding does not hold, pushes, and asks for re-review. Its person hears about a finding that is a real design question and about a pull request that is ready to merge. Memory holds which calls people overturned, so its sorting improves. It uses whatever review-combing tools the person has installed.
 2. **Issue triage (work and personal).** Labels and categorizes new issues, marks the ones an agent can resolve, resolves those through a pull request, and leaves the rest sorted for people.
 3. **Tracker sync.** Keeps issues and a project tool such as ClickUp in step in both directions.
 4. **Amoeba's stand-in (personal).** The agent described in `000-concept.amoeba.md`.
@@ -91,7 +101,9 @@ Other runtimes (opencode, Goose) fit the same adapter shape. Gemini's tool is no
 
 ## What moves from Amoeba
 
-Amoeba has proven several of these parts and they are lifted, not reinvented: the dedup inbox with read cursors, the wake wrapper with a time cap and process-group kill, the cleaned environment for a started command, run rows and logs, and pruning by age. Amoeba then depends on the kit for them and keeps what only it does: programs, messages between repos, and the record of the PM's decisions.
+Amoeba has proven several of these parts and they are copied into the kit at the start, not reinvented: the dedup inbox with read cursors, the wake wrapper with a time cap and process-group kill, the cleaned environment for a started command, run rows and logs, and pruning by age. `008-code-sort.amoeba.md` lists where they are.
+
+Amoeba keeps its own copies until the stand-in moves onto the kit. At that point Amoeba depends on the kit, deletes its copies, and keeps what only it does: the hub, programs, messages between repos, and the record of the PM's decisions.
 
 ## For the architecture to settle
 
@@ -101,3 +113,4 @@ Amoeba has proven several of these parts and they are lifted, not reinvented: th
 4. The polling sources in the first build (GitHub reviews and issues, mail) and the webhook handler's access control.
 5. How the staying-up process starts at login and restarts, on macOS and on a work Linux or Windows machine.
 6. How approval requests reach a person at work (the PM's chat tool there) and how the answer gets back as an event.
+7. On the machine that runs Amoeba's hub, whether the hub and the kit's staying-up process are one process or two. This is settled when the stand-in moves onto the kit and blocks nothing before then.
