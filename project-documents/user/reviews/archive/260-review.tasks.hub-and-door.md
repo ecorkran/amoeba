@@ -6,7 +6,7 @@ slice: hub-and-door
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: CONCERNS (reviewer stated FAIL; its one fail finding, F001, was fixed in the design and tasks 20261121; all fifteen findings were checked, see Resolution)
+verdict: CONCERNS (reviewer stated FAIL; its three fail findings, F001 to F003, were fixed in the design and tasks 20261121; all thirteen findings were checked, see Resolution)
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/260-tasks.hub-and-door.md
 aiModel: claude-haiku-5-5
@@ -14,111 +14,96 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261121
 dateUpdated: 20261121
-reviewedSha: 1be45d3a00c4eedc714216249b1a03600c267f62
+reviewedSha: abca38c7763ff5615335ad6eab6be1d5d7db5d42
 revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 17
+toolCallsMade: 19
 effort: xhigh
-turns: 18
-promptTokens: 894845
-cachedTokens: 692313
-cacheWriteTokens: 202520
-completionTokens: 97937
-durationSeconds: 425.0
-costUsd: 0.469071
+turns: 20
+promptTokens: 976024
+cachedTokens: 745199
+cacheWriteTokens: 230813
+completionTokens: 81990
+durationSeconds: 357.9
+costUsd: 0.460221
 costBasis: provider
 runId: run-20261121-p5-613fe239
 squadronVersion: 0.24.34
 findings:
   - id: F001
     severity: fail
-    category: design-rules
-    summary: "An interrupted `join --set-aside-local` leaves a state no command ends"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:348"
+    category: coverage
+    summary: "The \"261 can serve a new operation\" criterion is proven only by 261's own tests"
+    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:474"
   - id: F002
-    severity: concern
-    category: design-rules
-    summary: "A store beside a set-aside store can only be ended by moving files"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:349"
-  - id: F003
-    severity: concern
+    severity: fail
     category: sequencing
-    summary: "Import cycle: `wiring_door` needs `wiring`"
-    location: "src/amoeba/wiring.py:93"
+    summary: "Raw test inserts into the record tables will abort under the owner triggers and sit outside 3.2 and 3.4"
+    location: "tests/store/message_support.py:75"
+  - id: F003
+    severity: fail
+    category: rules
+    summary: "A local store beside a set-aside store has no command exit"
+    location: "project-documents/user/slices/260-slice.hub-and-door.md:229"
   - id: F004
     severity: concern
     category: sequencing
-    summary: "Import cycle: `trust.py` raises an error defined in `call.py`"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:324"
+    summary: "The table-count pin in test_contract_docs.py breaks at 2.1"
+    location: "tests/test_contract_docs.py:101"
   - id: F005
     severity: concern
-    category: design-rules
-    summary: "The backup directory sits outside the state directory, against the Amoeba rule"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:265"
+    category: consistency
+    summary: "Step 1.2's success line contradicts its own step"
+    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:90"
   - id: F006
     severity: concern
-    category: verification
-    summary: "The container walkthrough cannot reach the hub from the host"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:420"
+    category: consistency
+    summary: "17.3 omits client/errors.py, which the Context Summary says to record"
+    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:470"
   - id: F007
     severity: concern
-    category: sequencing
-    summary: "The container commit marker sits after a task that can BLOCK"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:423"
+    category: coverage
+    summary: "JoinError and NotServedError have no step that joins OPERATIONAL_ERRORS"
+    location: "src/amoeba/wiring.py:84"
   - id: F008
     severity: concern
-    category: sizing
-    summary: "Test bullets pack many behaviours into one checkbox"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:314"
+    category: rules
+    summary: "An example value sits beside the lock-version retrieval"
+    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:71"
   - id: F009
-    severity: note
-    category: verification
-    summary: "Load-test CI gate is explicit and verified; no separate task is needed"
-    location: ".github/workflows/ci.yml:40"
+    severity: concern
+    category: rules
+    summary: "Backups sit outside the state directory, against a rule that names no exception"
+    location: "project-documents/user/slices/260-slice.hub-and-door.md:148"
   - id: F010
     severity: note
-    category: coverage
-    summary: "The 261 seam criterion has no test in 260"
-    location: "project-documents/user/slices/260-slice.hub-and-door.md:663"
+    category: consistency
+    summary: "hub.yaml load errors are typed two ways"
+    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:314"
   - id: F011
     severity: note
     category: verification
-    summary: "17.4 says \"all pass\"; 0.2 allows baseline failures"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:438"
+    summary: "The load test's CI gate is the existing Tests step"
+    location: ".github/workflows/ci.yml:39"
   - id: F012
     severity: note
-    category: verification
-    summary: "The `uvicorn` upper bound \"below the next major\" is `<1`"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:71"
+    category: completeness
+    summary: "Certificate failure and connection failure are not distinguished"
+    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:351"
   - id: F013
     severity: note
-    category: clarity
-    summary: "11.2a names `open_store`; the opener is `open_hub_store` elsewhere"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:302"
+    category: sizing
+    summary: "The task file is large but does not need a split"
+    location: "project-documents/user/tasks/260-tasks.hub-and-door.md"
   - id: F014
-    severity: note
-    category: design-rules
-    summary: "The temp client file has no named cleanup"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:193"
-  - id: F015
-    severity: note
-    category: conventions
-    summary: "Boundary parsing is not named as Pydantic"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:241"
-  - id: F016
     severity: pass
     category: coverage
-    summary: "Success criteria are covered"
-    location: "project-documents/user/slices/260-slice.hub-and-door.md:625"
-  - id: F017
-    severity: pass
-    category: verification
-    summary: "Prerequisites and facts the task file names are present"
-    location: "project-documents/user/tasks/260-tasks.hub-and-door.md:63"
-  - id: F018
+    summary: "Success criteria trace to tasks, apart from the 261 item"
+    location: "project-documents/user/slices/260-slice.hub-and-door.md:627"
+  - id: F015
     severity: pass
     category: sequencing
-    summary: "Sequencing and the test-with-implementation pattern are sound"
+    summary: "Sequencing and commit cadence hold"
     location: "project-documents/user/tasks/260-tasks.hub-and-door.md:106"
 ---
 
@@ -129,88 +114,82 @@ findings:
 
 ## Findings
 
-### [FAIL] An interrupted `join --set-aside-local` leaves a state no command ends
+### [FAIL] The "261 can serve a new operation" criterion is proven only by 261's own tests
 
-Task 13.2 writes the closed mark, then checkpoints and renames. A kill between the mark and the rename leaves the store at `amoeba.sqlite3` carrying the mark, with no set-aside file and no client file (13.3b writes the client file last, line 355). From there:
-- Local writes fail with a message saying the store went to the hub (4.2, line 157), though nothing is joined. The guard passes because it checks only the client file (6.3, line 199).
-- `leave` (13.3b, line 355) finds no set-aside file, skips put-back, and leaves the mark in place.
-- Re-running `join --set-aside-local` writes the mark "under the write lock" (13.2). If that write goes through the normal write path, it fails on the mark it is trying to write. If it bypasses the check, it succeeds. Neither the task nor D4 says which. 13.5 (line 362) tests only a stop after the rename.
+The design's Integration Requirement (line 665) must be proven in this slice. Task 17.4 says it is "proven by 7.6 and 10.2 here and by 261's own tests." Neither 7.6 nor 10.2 adds a seventh name. Both exercise only the six existing operations, so nothing here shows that adding a name to `SERVED_OPERATIONS` and a `run_served` case works with no change to the call format. The Amoeba no-deferral rule makes this a rejection. Fix: add a test in 7.6 or 10.2 that patches a stub name into the served set and the dispatch that `run_served` uses, sends it through `handle_call`, and asserts the result with the door version unchanged. Remove "and by 261's own tests" from 17.4.
 
-The rule "every state has an exit" is not met. Fix: write the mark on a plain connection, as `put_back` does, so re-entry is idempotent. Have `leave` clear a mark on the store path when there is no client file and no set-aside store. Add a test that stops after the mark write.
+### [FAIL] Raw test inserts into the record tables will abort under the owner triggers and sit outside 3.2 and 3.4
 
-### [CONCERN] A store beside a set-aside store can only be ended by moving files
+D12's triggers abort any insert whose `owner_id` is null, whether or not an acting machine is set. Task 3.2 greps only `src/amoeba` (line 133). Task 3.4 (line 140) replaces only `Store.open(` calls. A grep of `tests/` finds raw SQL inserts into record tables that neither step reaches:
 
-13.2's refusal names both files and leaves the fix to whoever placed the extra file. The design says so itself (design line 736: "has no command that ends it"). The Amoeba rule requires an exit that needs no file edits, and "a person who has no command to act with is not an answer." The pair is reachable by restoring a state-directory backup over a joined home (D4). Fix: the design should name a command that ends the pair, such as moving the extra store aside to a dated name. That touches stored data, so it is a PM decision.
+- `tests/store/message_support.py:75` (messages, a shared helper)
+- `tests/mcp_server/test_inbox_watcher.py:205` and `:270` (messages, inside `Store.open` plus `store.write()`, which 3.4 converts but which still omits `owner_id`)
+- `tests/operations/test_pause_held.py:210` (messages)
+- `tests/store/test_member_removal.py:171` (releases)
+- `tests/store/test_settled.py:84` (answers)
+- `tests/live/waking/test_waking_live.py:193` (sessions, via `sqlite3.connect`; the default `addopts` skip `tests/live`, so this surfaces only on an explicit live run)
 
-### [CONCERN] Import cycle: `wiring_door` needs `wiring`
+`tests/store/test_migrations.py` and `tests/operations/test_state_move_directories.py` also insert raw rows, but at older schema versions. The implementer must confirm each one runs before migration 011.
 
-7.4 builds `local_served_edges(layout)` in `wiring_door.py` from "the config loader and today's cf-backed readers". The loader is `load_config` (wiring.py:93). The default edges are built in `default_deps` (wiring.py:128). 13.1 makes `wiring` import `wiring_door`, so `wiring_door` importing `wiring` is a cycle that fails at import. Fix: `local_served_edges` takes the loader and readers as arguments from `wiring._dispatch`, so `wiring_door` imports neither.
+So 3.4's success ("full suite back to the baseline") cannot be met as written. Line 55 says "If any other existing test fails, fix the new code, not the test." An implementer following that would weaken the triggers instead of fixing the inserts. Fix: 3.4 should also grep `tests/`, including `tests/live`, for `INSERT INTO` into the twelve tables and bind `owner_id` (and `machine_id` for sessions) in each raw insert. Line 55 should carve out this case: the test's insert changes, the trigger does not.
 
-### [CONCERN] Import cycle: `trust.py` raises an error defined in `call.py`
+### [FAIL] A local store beside a set-aside store has no command exit
 
-12.1 has `fetch_certificate` raise `HubUnreachableError`. The Context Summary (line 46) and 12.3 (lines 331-332) place that class in `client.call`. 12.3 also has `call` import `pinned_context` from `trust`, which makes `trust` → `call` → `trust`. Fix: put the four client errors in `client/errors.py`, imported by both, and say so in 12.1 and 12.3.
+The Amoeba rule "every state has an exit" requires each state to end with nobody editing files. D4 says this pair "comes only from files placed by hand" and that the refusal "names both files, so whoever placed the extra file can move it away." That is an exit by hand. The walkthrough lists it as resolved by the refusal (line 739), which does not meet the rule. Tasks 13.2 (lines 366–368) and 13.3b (line 374) implement only the refusal. Fix: the design must name a command that resolves the pair without deleting data. One option is for `leave` to rename the extra file to a timestamped name in the state directory and then put the set-aside store back. Add a task and a test for it.
 
-### [CONCERN] The backup directory sits outside the state directory, against the Amoeba rule
+### [CONCERN] The table-count pin in test_contract_docs.py breaks at 2.1
 
-9.1 puts timed and pre-migration backups under a required `backup_dir`, which is outside `~/.local/state/<app>`. The Amoeba rule says databases live in the state directory. The design justifies the departure (D1 at design line 148; departures table at line 576). That conflict is the PM's to accept or reject. The task file cites only the design's departure, so record the PM's decision before 8.1 and 9.1 are checked.
+`test_the_store_contract_names_every_table_and_column` asserts `len(schema) == 14`. Migration 011 adds four tables (`owners`, `machines`, `call_results`, `closed_mark`), so the count becomes 18 when 2.1 lands. Task 2.1 (line 115) says to change "only the version number" in failing tests, which does not cover this count. Fix: name this pin in 2.1 and give its new value, 18.
 
-### [CONCERN] The container walkthrough cannot reach the hub from the host
+### [CONCERN] Step 1.2's success line contradicts its own step
 
-8.1 makes the example's `address` a placeholder host. 16.2 starts the container and runs `amoeba join <line>` from a host home, but never says what `address` the copied `hub.yaml` must carry. The join would fail with `HubUnreachableError`. Fix: 16.2 should say to set `address` to a host that reaches the published port, reading that port from `docker/compose.example.yaml`.
+Step 1.2 (line 87) requires `parse_reply` to validate against two Pydantic models, but the success line says "imports only the standard library." An implementer will either fail the check or skip the Pydantic step. Fix: change the success line to "imports only the standard library and pydantic." `pydantic` 2.13.5 is in `uv.lock`.
 
-### [CONCERN] The container commit marker sits after a task that can BLOCK
+### [CONCERN] 17.3 omits client/errors.py, which the Context Summary says to record
 
-16.2 may write `BLOCKED: docker unavailable`. The marker for section 16 comes after it. If Docker is missing, the Dockerfile and compose files from 16.1 stay uncommitted, and 17's commit sweeps them in. Fix: move the marker to after 16.1 and let 16.2's note travel with 17.
+The Context Summary (line 46) says "Record the added `client/errors.py` in the design under 17.3." Task 17.3 (line 470) lists `hub/start.py`, `hub/call_refusals.py` and `operations/errors.py`, but not `client/errors.py`. Fix: add it.
 
-### [CONCERN] Test bullets pack many behaviours into one checkbox
+### [CONCERN] JoinError and NotServedError have no step that joins OPERATIONAL_ERRORS
 
-11.4's `test_start` bullet lists about ten refusal cases. 13.5 (line 362 and the join bullet above it) lists about fourteen join and leave scenarios. 10.2 (lines 287-289) is similar. A junior can tick the item with one case missing, and task-checker cannot see which. Fix: one sub-checkbox per case. The scope does not change.
+The Context Summary (line 44) says each named error joins `OPERATIONAL_ERRORS` when it is created. Only 6.2 (`ClientFileError`) and 12.3 (the three client errors) say so in a task. `JoinError` (created in 1.3, line 93) and `NotServedError` (13.1, line 363) have no such step. The CLI boundary catches only the tuple (`src/amoeba/cli/main.py:64`), so without the step a bad join line or a `NotServedError` on a joined machine would escape as a traceback instead of exiting 3 with one line. Fix: add the tuple join to 1.3 and to 13.1.
 
-### [NOTE] Load-test CI gate is explicit and verified; no separate task is needed
+### [CONCERN] An example value sits beside the lock-version retrieval
 
-The `check` job runs `uv run pytest` (ci.yml:13, 39-40), and `pyproject.toml` ignores only `tests/live`. So `tests/load/test_door_load.py` is gated by the existing step, and 15.6 names it. The rule asks for a CI wiring task. This is met in substance, but 15.6's `--collect-only` check proves collection, not a CI run. A green CI run on the branch is the real proof.
+Step 0.1 (line 64) says to read the uvicorn version from `uv.lock`. Step 0.3 (line 71) then gives "`<0.55` for 0.54" as the upper-bound example. This is the hallucination-trap pattern the repo's prompt rule forbids: if the read comes back empty, the nearest plausible token is the example. `uv.lock` currently says 0.54.0, so the example happens to match. Fix: remove the example and say "below the next minor of the version read in 0.1."
 
-### [NOTE] The 261 seam criterion has no test in 260
+### [CONCERN] Backups sit outside the state directory, against a rule that names no exception
 
-"261 can serve a new operation by adding to the served list and `run_served`" cannot be proven until 261 exists. The seam is covered only indirectly by 7.6 and 10.2. The 17.4 mapping note should say so, so the criterion is not later marked as a missing test.
+The Amoeba rule "config is config; state is state" puts databases in the state directory. D1 (line 148) and the departure table (line 578) put backups in a configured `backup_dir`, and task 9.1 (line 265) builds that. The design records the departure and its reason (another disk), but the rule has no exception. Either the rule is amended for backups (a rule change goes to the PM first), or the design keeps backups in the state directory and meets the other-disk need another way. Task 9.1 should be held until one of those is decided.
 
-### [NOTE] 17.4 says "all pass"; 0.2 allows baseline failures
+### [NOTE] hub.yaml load errors are typed two ways
 
-Fix: "all pass, or only the baseline failures listed in 0.2".
+Task 8.1 (line 241) says `load_hub_config` raises `HubConfigError`. Task 11.2a (line 314) says steps 2 to 7 "raise HubStartError with one line," and step 2 is the `hub.yaml` load. Both are operational, so exit 3 holds either way. Fix: state that step 2 re-raises `HubConfigError` and that `HubStartError` covers steps 3 to 7, so the 11.4 test asserts one type.
 
-### [NOTE] The `uvicorn` upper bound "below the next major" is `<1`
+### [NOTE] The load test's CI gate is the existing Tests step
 
-For a 0.x package, `<1` admits minor-version changes that D14's stall reasoning depends on. Use `<0.55` or the existing pin style. The locked version is 0.54.0 (uv.lock:849), so 0.1's recheck does not trigger.
+I checked that `ci.yml` line 40 runs bare `uv run pytest`, and that `pyproject.toml` line 64 ignores only `tests/live`. So `tests/load/test_door_load.py` is gated today. The Amoeba rule asks for a CI wiring task; 15.6 relies on the existing step and adds a collect-only check. That is explicit and acceptable. If the Tests step is ever narrowed, the gate disappears without notice.
 
-### [NOTE] 11.2a names `open_store`; the opener is `open_hub_store` elsewhere
+### [NOTE] Certificate failure and connection failure are not distinguished
 
-6.3 and 14.2 name it `open_hub_store`. Use that name in 11.2a, or a junior may create a second opener.
+`ssl.SSLCertVerificationError` is a subclass of `OSError`. A retry loop that catches `OSError` for "no reply" would retry a certificate failure, which line 351 forbids. Test 12.4 should catch this, but the step should name the exception to check before the retry branch.
 
-### [NOTE] The temp client file has no named cleanup
+### [NOTE] The task file is large but does not need a split
 
-6.2 writes a temporary file in the config directory and renames it. A crash leaves it behind, and nothing says it is bounded. Use one fixed temp name, which bounds it to one file, and say so.
+The file is 480 lines with 17 sections and roughly 80 checkboxes. The section-end commit markers keep the commit units workable. Sections 13 and 15 are the heaviest. I would not split the file.
 
-### [NOTE] Boundary parsing is not named as Pydantic
+### [PASS] Success criteria trace to tasks, apart from the 261 item
 
-The Python rules require Pydantic at external boundaries. `load_hub_config` (8.1), `load_client_file` (6.2), `parse_join_line` (1.3) and `parse_reply` (1.2) all read external input. Name Pydantic models with `extra="forbid"`. A model's `ValidationError` also gives the one-pass error report that 8.1 asks for.
+All 23 functional bullets trace to a task or a test: the cross-machine standing, withdraw and decisions behaviour (15.2), `no_such_member` (15.2), certificate and join failures (12.4, 13.5), `bad_token` (15.3), repeats and the kill test (12.4, 15.5), `hub_fault` (10.2), the outage path (12.4), the no-client-file path (3.4, 7.4), joined entry points (14.4), door version (15.3), restarts and `--from-backup` (15.4), start refusals (11.4), noise (15.5), backup failures (9.2, 11.4), keep counts (9.2, 15.4), set-aside and leave (13.5), the acting machine (10.2, 15.4) and `update_live` (17.2). The technical requirements map to 0.2, 15.6 and 17.4.
 
-### [PASS] Success criteria are covered
+### [PASS] Sequencing and commit cadence hold
 
-Traced: FR 1–4 to 15.2. FR 5 to 12.2, 12.4 and 13.5. FR 6 to 6.4 and 13.5. FR 7 to 15.3. FR 8 to 10.2, 12.4 and 15.5. FR 9 to 10.2. FR 10 to 12.4. FR 11 and 12 to 7.4 and 14.4. FR 13 to 12.4, 14.4 and 15.3. FR 14 to 15.4. FR 15 to 5.3, 10.2 and 15.3. FR 16 and 17 to 11.4. FR 18 to 15.5. FR 19 and 20 to 9.2, 11.4 and 15.4. FR 21 to 13.5. FR 22 to 3.5, 10.2 and 15.4. FR 23 to 17.2. Technical: import rules in 1.4, 6.2 and 8.4; load test in 15.6; contract docs in 17.1. I found no deferral and no task that traces to nothing.
-
-### [PASS] Prerequisites and facts the task file names are present
-
-Checked: `OPERATIONAL_ERRORS` holds the five named members (src/amoeba/wiring.py:84-90). `read_schema_version` exists (src/amoeba/store/migrations.py:80), and `restore` exists in the release script (scripts/update_live.py:195). The 16 record INSERT statements match 3.2's list across the six named files. `standing` takes a `CfRun` (src/amoeba/operations/standing.py:34) and `decisions` takes `Deps` (src/amoeba/operations/decisions.py:74), so 7.1 and 7.2 match the code. The locked versions are in uv.lock: cryptography 50.0.2, starlette 1.10.0, uvicorn 0.54.0. The test helpers, docs and `tests/load` directory exist.
-
-### [PASS] Sequencing and the test-with-implementation pattern are sound
-
-Each test block follows its implementation. I found no dependency on a later task beyond the two import cycles above. Sections 2 and 3 commit together, as the note at line 106 says. The other commit markers sit at tested points, except the section 16 marker above.
+There are no dependency cycles, and each test subsection follows its implementation. Sections 2 and 3 share one commit, which line 106 explains: migration 011 breaks inserts until 3.2. Commit markers sit at working points, not after every task. Apart from the findings above, the sequencing is sound.
 
 ### Run Digest
 
-- Response length: 11260 chars
+- Response length: 12130 chars
 - Response is newline-free: no
-- Tool calls made: 17
+- Tool calls made: 19
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -218,33 +197,30 @@ Each test block follows its implementation. I found no dependency on a later tas
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: xhigh
-- Turns: 18
-- Tokens — prompt / cached / cache write / completion / reasoning: 894845 / 692313 / 202520 / 97937 / not computed
-- Duration: 425.0 s
-- Cost: $0.47 (provider)
+- Turns: 20
+- Tokens — prompt / cached / cache write / completion / reasoning: 976024 / 745199 / 230813 / 81990 / not computed
+- Duration: 357.9 s
+- Cost: $0.46 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 18
+- Finding-shaped matches — whole response: 15
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 18
-- Finding-shaped matches — surviving validation: 18
+- Finding-shaped matches — in findings section: 15
+- Finding-shaped matches — surviving validation: 15
 
 ## Resolution
 
-Checked 20261121 against the task file, the design and the source. Fixed in the design (`260-slice.hub-and-door.md`, D4 and the walkthrough) and the task file.
+Checked 20261121 against the task file, the design and the source.
 
-- **F001 (fail), fixed.** Valid: the mark is committed before the rename, and a re-run `join` would fail its own mark write through the normal write path. `set_aside` now writes the mark on a plain connection holding `BEGIN IMMEDIATE`, replacing any mark, so a re-run goes on. `leave` clears a mark on the store path when no set-aside store exists. `LocalStoreClosedError` names both ways out when there is no client file. 13.5 tests a stop after the mark write.
-- **F002, dropped.** The pair comes only from files placed by hand, which Amoeba's commands never make, and the refusal names both files. A command for a state only a hand edit creates adds mechanism for a case that should not occur.
-- **F003, fixed.** `local_served_edges` takes the loader, readers and clock from `wiring` (7.4).
-- **F004, fixed.** The four client errors move to `client/errors.py`, imported by `trust` and `call` alike.
-- **F005, fixed by citation.** The architecture requires backups that can sit on another disk from the store they protect, and the design records the departure with that reason (D1, Departures). 9.1 now cites it. Backups stay out of the config directory, which is what the rule protects.
-- **F006, fixed.** 16.2 sets `address` to the host and the published port.
-- **F007, fixed.** The section 16 commit marker follows 16.1; 16.2's note commits with section 17.
-- **F008, fixed.** 10.2, 11.4 (`test_start`) and 13.5 now give each case its own checkbox; the scope is unchanged.
-- **F009, no action.** The reviewer agrees the CI gate is met.
-- **F010, fixed.** 17.4's mapping note says how the 261 seam criterion is proven.
-- **F011, fixed.** 17.4 allows the baseline failures from 0.2.
-- **F012, fixed.** 0.3 says a `0.x` package is bounded below the next minor.
-- **F013, fixed.** 11.2a names `open_hub_store`.
-- **F014, fixed.** The client file uses the fixed temp name `client.yaml.tmp`, so a crash leaves at most one file.
-- **F015, fixed.** `ClientFile`, `HubConfig` and the reply shapes are Pydantic models with `extra="forbid"`.
+- **F001 (fail), fixed.** 10.2 adds a stub seventh operation run through `handle_call` with the door version unchanged; 17.4 cites it and no longer leans on 261.
+- **F002 (fail), fixed.** Valid: six test files insert raw rows into record tables at schema 11, which the owner triggers abort. 3.4 now binds `owner_id` (and `machine_id` for sessions) in each, `tests/live` included, and confirms the pre-011 migration-test inserts stay. The Context Summary says the triggers are never weakened for a test.
+- **F003 (fail), fixed.** `leave` now ends the hand-placed pair: it moves the store at the store path and its side files to `amoeba.sqlite3.displaced-<UTC stamp>`, prints it, and puts the set-aside store back. Nothing is deleted. `join` refuses the pair and names `amoeba leave`. Design D4 and walkthrough, 13.2 and 13.5 updated.
+- **F004, fixed.** 2.1 names the table-count pin in `tests/test_contract_docs.py` and its new value, 18.
+- **F005, fixed.** 1.2's success line allows `pydantic`.
+- **F006, fixed.** 17.3 lists `client/errors.py`.
+- **F007, fixed.** 1.3 and 13.1 join `JoinError` and `NotServedError` to `OPERATIONAL_ERRORS`.
+- **F008, fixed.** 0.3's example version is gone; the bound is read from 0.1's version.
+- **F009, dropped.** Same finding as round 3's F005: the architecture requires backups that can sit on another disk, and the design records the departure. The rule keeps state out of the config directory, which this does.
+- **F010, fixed.** 11.2a: step 2 lets `HubConfigError` through; `HubStartError` covers steps 3 to 7.
+- **F011, F013, no action.** The reviewer accepts both.
+- **F012, fixed.** 12.3 checks `ssl.SSLCertVerificationError` before the `OSError` no-reply branch.

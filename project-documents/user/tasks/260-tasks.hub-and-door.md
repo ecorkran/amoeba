@@ -13,21 +13,21 @@ projectState: Slices 220 to 244 are merged on main. Store schema version 10 (mig
 dateCreated: 20261121
 dateUpdated: 20261121
 status: not_started
-turns: 62
-promptTokens: 6219683
-cachedTokens: 5982194
-cacheWriteTokens: 237373
-completionTokens: 84505
-durationSeconds: 818.9
-costUsd: 4.786523
-usageRounds: 4
-pricedRounds: 4
+turns: 75
+promptTokens: 6896383
+cachedTokens: 6596218
+cacheWriteTokens: 300027
+completionTokens: 91937
+durationSeconds: 902.1
+costUsd: 5.559529
+usageRounds: 5
+pricedRounds: 5
 usageByModel:
   claude-opus-5-5:
-    rounds: 4
-    costUsd: 4.786522000000001
-    completionTokens: 84505
-revision_number: 3
+    rounds: 5
+    costUsd: 5.559527600000001
+    completionTokens: 91937
+revision_number: 4
 ---
 
 # Tasks: Hub and Door
@@ -268,7 +268,12 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] `timed_backup_due(backup_dir, now, backup_hours)` and `newest_complete_backup(backup_dir)` (either kind, complete directories only, for D5)
   - [ ] Success: pyright clean
 - [ ] **9.2 Tests**
-  - [ ] `tests/hub/test_backups.py`: a backup holds the three files with the modes above and the store copy opens with the same rows; due when none exists or the newest is older than `backup_hours`, not otherwise; the pre-migration name carries the version; a failure partway (make the copy raise) leaves no partial directory and raises `BackupError`; a leftover partial from a "crash" is gone after the next attempt; after `backups_kept + 2` backups of each kind, each kind holds `backups_kept`; `newest_complete_backup` ignores partial directories; a backup taken while another connection holds a write transaction succeeds
+  - [ ] `tests/hub/test_backups.py`:
+    - [ ] A backup holds the three files with the modes above and the store copy opens with the same rows; the pre-migration name carries the version
+    - [ ] Due when none exists or the newest is older than `backup_hours`, not otherwise
+    - [ ] A failure partway (make the copy raise) leaves no partial directory and raises `BackupError`; a leftover partial from a "crash" is gone after the next attempt; `newest_complete_backup` ignores partial directories
+    - [ ] After `backups_kept + 2` backups of each kind, each kind holds `backups_kept`
+    - [ ] A backup taken while another connection holds a write transaction succeeds
   - [ ] Success: checks pass
 
 **Commit**: `feat: add hub backups with rotation`
@@ -354,7 +359,13 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] Join the three errors to `OPERATIONAL_ERRORS`
   - [ ] Success: pyright clean
 - [ ] **12.4 Tests (through the in-process hub, short `DoorTimes`)**
-  - [ ] `tests/hub/test_call.py`: a served call returns its result; a refusal raises `HubRefusedError` with its code; a hub with another certificate raises `HubCertificateError` on the first attempt; a stopped hub raises `HubUnreachableError` after the retry time, with "unknown" and the advice for `standing` and without them for `decisions`; a reply dropped by `after_commit`, then the server stopped and a new one started on the same store, and the call repeated with the same `call_id`, returns the first result and the store holds one standing answer; a client door version patched to differ gets both versions and the upgrade command; a reply header with another version raises the same; a hub answering non-reply bodies counts as no reply
+  - [ ] `tests/hub/test_call.py`:
+    - [ ] A served call returns its result; a refusal raises `HubRefusedError` with its code
+    - [ ] A hub with another certificate raises `HubCertificateError` on the first attempt
+    - [ ] A stopped hub raises `HubUnreachableError` after the retry time, with "unknown" and the advice for `standing` and without them for `decisions`
+    - [ ] A reply dropped by `after_commit`, then the server stopped and a new one started on the same store, and the call repeated with the same `call_id`, returns the first result and the store holds one standing answer
+    - [ ] A client door version patched to differ gets both versions and the upgrade command; a reply header with another version raises the same
+    - [ ] A hub answering non-reply bodies counts as no reply
   - [ ] Success: checks pass
 
 **Commit**: `feat: add the pinned client call with retry`
