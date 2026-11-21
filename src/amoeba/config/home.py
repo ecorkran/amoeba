@@ -36,6 +36,7 @@ LOGS_DIR_NAME: Final = "logs"
 CALLS_LOG_DIR_NAME: Final = "calls"
 #: Squadron's run files, relative to the user's home. Read only by ``run_file``.
 SQUADRON_RUNS_PARTS: Final = (".config", "squadron", "runs")
+CLAUDE_HOME_PARTS: Final = (".claude",)
 
 
 class AmoebaHomeError(Exception):
@@ -155,3 +156,13 @@ def state_layout() -> StateLayout:
 def squadron_runs_dir() -> Path:
     """Squadron's run-file directory, ``~/.config/squadron/runs``."""
     return Path.home().joinpath(*SQUADRON_RUNS_PARTS)
+
+
+def user_home() -> Path:
+    """The user's home directory: where the stand-in stops walking up for rules."""
+    return Path.home()
+
+
+def claude_home() -> Path:
+    """Claude Code's user directory, ``~/.claude``: global rules and session memory."""
+    return Path.home().joinpath(*CLAUDE_HOME_PARTS)

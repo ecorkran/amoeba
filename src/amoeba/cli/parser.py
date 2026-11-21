@@ -18,6 +18,7 @@ from amoeba.cli.registration_arguments import (
     register_rm,
 )
 from amoeba.cli.registration_messages import register_messages
+from amoeba.cli.stand_in_command import register_stand_in
 from amoeba.cli.wake_command import register_wake_run
 from amoeba.operations.names import OperationName
 
@@ -143,6 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_messages(commands, parent)
     _register_standing_commands(commands, parent)
     register_wake_run(commands)
+    register_stand_in(commands)
     return parser
 
 

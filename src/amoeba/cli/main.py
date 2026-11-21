@@ -25,6 +25,7 @@ from amoeba.cli.exit_codes import (
 )
 from amoeba.cli.parser import build_parser
 from amoeba.cli.registration_arguments import check_usage
+from amoeba.cli.stand_in_command import STAND_IN_COMMAND, run_stand_in
 from amoeba.cli.wake_command import run_wake_run
 from amoeba.config.home import StateLayout, state_layout
 from amoeba.operations.names import OperationName
@@ -49,6 +50,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     # A CLI-only command (``wake-run``) sets no operation.
     name: OperationName | None = getattr(arguments, "operation", None)
     try:
+        if getattr(arguments, "cli_only", None) == STAND_IN_COMMAND:
+            # The end-of-turn hook: never touches the calls log or an operation.
+            return run_stand_in()
         if getattr(arguments, "cli_only", None) == WAKE_RUN_COMMAND:
             # Before the operation lookup and before any config load (244 D6).
             return run_wake_run(state_layout(), arguments.wake_id)
