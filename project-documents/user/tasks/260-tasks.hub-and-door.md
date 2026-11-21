@@ -38,12 +38,12 @@ revision_number: 2
 - Order: sections 0 to 7 are the foundation, which needs no network (dependencies, the `wire` package, migration 011 and the acting machine, the call scope and closed mark, machine and kept-result store functions, paths and the guard, the six operations through `run_served`). Sections 8 to 17 build the hub, the client, the commands, the fixture tests, the container and the documents.
 - Test helpers: `tests/hub/in_process_hub.py` (11.3) runs the real app in a thread for unit and client tests; `tests/hub_fixture.py` (15.1) runs `amoeba hub serve` as a subprocess with two joined client homes, and later slices reuse it. Both listen only on `127.0.0.1` (D14 departure: no macOS firewall prompt). Client tests pass short `DoorTimes` so retries take well under a second.
 - Paths: a path with no prefix is under `src/amoeba/`. `tests/`, `docs/`, `docker/`, `scripts/` and `project-documents/` are from the repo root, and `user/` means `project-documents/user/`.
-- New packages and modules, from the design's Component Structure: `wire/` (`times`, `protocol`, `join_line`, `fingerprint`), `client/` (`client_file`, `trust`, `call`, `join`), `hub/` (`hub_config`, `certificate`, `backups`, `hub_log`, `calls`, `app`, `serve`, `admin`), `store/machines.py`, `store/sql_machines.py`, `store/call_results.py`, `operations/served.py`, `wiring_door.py`, `cli/hub_commands.py`, `cli/join_command.py`. Every new package gets an `__init__.py`.
+- New packages and modules, from the design's Component Structure: `wire/` (`times`, `protocol`, `join_line`, `fingerprint`), `client/` (`errors`, `client_file`, `trust`, `call`, `join`), `hub/` (`hub_config`, `certificate`, `backups`, `hub_log`, `calls`, `app`, `serve`, `admin`), `store/machines.py`, `store/sql_machines.py`, `store/call_results.py`, `operations/served.py`, `wiring_door.py`, `cli/hub_commands.py`, `cli/join_command.py`. Every new package gets an `__init__.py`.
 - Files already over ~300 lines take no new logic: `wiring.py` (325) gains only calls into `wiring_door.py`, and `store/sql.py` (488) only has existing insert statements edited (task 3.2); new SQL goes in `store/sql_machines.py`. `store/relocate.py` is 235 lines: if the set-aside code (task 13.2) takes it past ~300, put that code in `store/set_aside.py` and note it under the task. Any new module that passes ~300 lines is split by concern.
 - Closed values are defined once and imported: the `wire.times` constants, `DoorTimes`, `SERVED_OPERATIONS`, `WRITING_CALLS`, `HELLO_CALL`, `RefusalCode` and its HTTP status map, `MAX_CALL_BYTES`, the header names, `UNKNOWN_ADVICE`, the machine-name pattern and length (all in `wire.protocol`), `HUB_LOCK_WAITS_PER_CALL` (`hub.calls`), `BACKUP_CHECK_SECONDS` (`hub.backups`), the local machine's name `local` and the owner's name `pm` (`store.machines`), and every file name in D1 (`config/home.py`). No silent fallbacks, no default owner or machine.
 - New errors and where they live. Each one named here joins `OPERATIONAL_ERRORS` in `wiring.py` when it is created, unless it is already a subclass of a member. Task 10.1a moves today's five members into `operations/errors.py` as `OPERATION_ERRORS`, which the hub imports, and `wiring`'s tuple becomes those five plus the door's errors:
   - `JoinError` (`wire.join_line`): a malformed join line, and the fingerprint mismatch in `join`. Defined in `wire` so the parser and `client.join` share it.
-  - `ClientFileError` (`client.client_file`), `HubUnreachableError`, `HubCertificateError`, `HubRefusedError` (`client.call`).
+  - `ClientFileError`, `HubUnreachableError`, `HubCertificateError`, `HubRefusedError` (`client.errors`, imported by `client_file`, `trust`, `call` and `join`, so `trust` and `call` do not import each other). Record the added `client/errors.py` in the design under 17.3.
   - `NotServedError` (`wiring_door`).
   - `LocalStoreClosedError` and `NoActingMachineError` (`store/errors.py`): both `StoreError` subclasses, so already covered.
   - `HubConfigError` (`hub.hub_config`): a `ConfigError` subclass.
@@ -68,7 +68,7 @@ revision_number: 2
   - [ ] Run the checks once and note the baseline. Failures present before this slice are listed by test name and not fixed
   - [ ] Success: `git branch --show-current` prints `260-slice.hub-and-door`; a note under this task gives the baseline result
 - [ ] **0.3 Declare the three dependencies**
-  - [ ] `pyproject.toml`: add `cryptography`, `starlette` and `uvicorn` to `dependencies`, each with a lower bound at the locked version and an upper bound below the next major, in the style of the existing entries
+  - [ ] `pyproject.toml`: add `cryptography`, `starlette` and `uvicorn` to `dependencies`, each with a lower bound at the locked version and an upper bound below the next major (for a `0.x` package such as `uvicorn`, below the next minor: `<0.55` for 0.54), in the style of the existing entries
   - [ ] Run `uv lock`. It must add no new package (compare the package list before and after)
   - [ ] Success: `uv lock` changed only the root package's declared dependencies; checks pass
 
@@ -84,7 +84,7 @@ revision_number: 2
   - [ ] `SERVED_OPERATIONS`: the six names as plain strings (D11). `HELLO_CALL = "hello"`. `WRITING_CALLS`: the five writing names (D9)
   - [ ] `RefusalCode` enum with the seven codes of D6, and one mapping from code to HTTP status as D6's table gives it
   - [ ] `MAX_CALL_BYTES` (1 MiB). Header-name constants: `Authorization`, `Amoeba-Door-Version`, `Amoeba-Client-Version`, `Amoeba-Call-Id`. The request body key `document`
-  - [ ] The reply shapes: build a done reply and a refused reply, and `parse_reply(body: bytes)` that returns a typed done or refused reply, or `None` when the body is not a reply (D6: anything else counts as no reply; the status is never read)
+  - [ ] The reply shapes: build a done reply and a refused reply, and `parse_reply(body: bytes)` that validates the body against the two Pydantic reply models and returns a typed done or refused reply, or `None` when the body is not a reply (D6: anything else counts as no reply; the status is never read)
   - [ ] `UNKNOWN_ADVICE`: operation name to advice text, one entry per writing call, worded as D10's table
   - [ ] The machine-name rule (D3): pattern `[a-z0-9][a-z0-9._-]*`, at most 64 characters, and `is_machine_name(text)`
   - [ ] Success: pyright clean; imports only the standard library
@@ -153,7 +153,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] Entering `call_scope` inside a `call_scope` raises `RuntimeError` (a programming error). Outside a call scope, `write()` and `read()` behave as today apart from 4.2
   - [ ] Success: pyright clean
 - [ ] **4.2 The closed mark**
-  - [ ] `store/errors.py`: `LocalStoreClosedError(StoreError)`, whose message names the hub's address and where the store went
+  - [ ] `store/errors.py`: `LocalStoreClosedError(StoreError)`, whose message names the hub's address and where the store went. When no client file exists (a `join` stopped before the rename, D4) it also says to run `amoeba leave` or the same `join` again
   - [ ] Every write transaction, including `call_scope`, reads `closed_mark` right after `BEGIN IMMEDIATE`; if a row is there it rolls back and raises `LocalStoreClosedError` naming its `hub_address`
   - [ ] `write_closed_mark(transaction, hub_address, now)` in `store/machines.py`, and a SQL constant for deleting the row (used on a plain connection by task 13.2)
   - [ ] Success: pyright clean
@@ -190,7 +190,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] `StateLayout` gains `client_file`
   - [ ] Success: pyright clean; existing `tests/config` tests pass
 - [ ] **6.2 `client/client_file.py`**
-  - [ ] `ClientFile` (`address`, `machine`, `token`). `write_client_file(path, client_file)`: temporary file in the same directory, mode `0600`, then rename
+  - [ ] `ClientFile` (`address`, `machine`, `token`). a Pydantic model with `extra="forbid"`, as `config/user_config.py` does. `write_client_file(path, client_file)`: writes the fixed temporary name `client.yaml.tmp` in the same directory, mode `0600`, then renames; a crash leaves at most that one file, which the next write replaces
   - [ ] `load_client_file(path, pinned_cert_path)` raises `ClientFileError` naming the file when: the file is readable by anyone but the owner (message gives the `chmod 600` command); a key is missing or unknown (names the key); the saved certificate is missing or unreadable (says to run `amoeba join` again with a new line from `amoeba hub invite`)
   - [ ] `read_client_address(path)`: the `address` key alone, for messages that name the hub (6.3). It never fails on a missing certificate
   - [ ] Join `ClientFileError` to `OPERATIONAL_ERRORS`; add the `client` import rule to `tests/test_import_boundaries.py`
@@ -221,7 +221,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] `id_names(member_ids)` (each member named by its id) and `id_resolver(store)` (a reference that is an existing member id resolves to it; any other text is `None`): the hub's two readers until 261 (D11)
   - [ ] Success: pyright clean
 - [ ] **7.4 The local way goes through `run_served`**
-  - [ ] `wiring_door.py` (new): `local_served_edges(layout)` builds `ServedEdges` from today's `cf`-backed readers, the config loader and the clock
+  - [ ] `wiring_door.py` (new): `local_served_edges(layout, load_config, readers, clock)` builds `ServedEdges` from what `wiring` passes in: today's `cf`-backed readers, the config loader and the clock. `wiring_door` imports nothing from `wiring`, which imports it (13.1), so there is no import cycle
   - [ ] `wiring._dispatch`: the six cases become one call to `run_served` with those edges; `wiring.py` gains no other logic
   - [ ] Success: the full suite is at baseline; with no client file, behavior is unchanged
 - [ ] **7.5 `wiring_results.result_from_document(name, document)`**
@@ -238,7 +238,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
 ## 8. Hub config, certificate and log (D5, D14, D16; effort 2)
 
 - [ ] **8.1 `hub/hub_config.py` and the example**
-  - [ ] `HubConfig` with the eight keys of D14's table. `load_hub_config(path)`: every key required, no default in code, unknown keys refused, each value checked as the table says (`backup_dir` absolute, `backup_hours > 0`, `backups_kept >= 1`, `hub_log_max_bytes >= 1`, `hub_logs_kept >= 2`), every problem reported in one `HubConfigError(ConfigError)` naming the file and each key, as `load_user_config` does
+  - [ ] `HubConfig`, a Pydantic model with `extra="forbid"` as `config/user_config.py` does, with the eight keys of D14's table. `load_hub_config(path)`: every key required, no default in code, unknown keys refused, each value checked as the table says (`backup_dir` absolute, `backup_hours > 0`, `backups_kept >= 1`, `hub_log_max_bytes >= 1`, `hub_logs_kept >= 2`), every problem reported in one `HubConfigError(ConfigError)` naming the file and each key, as `load_user_config` does
   - [ ] `src/amoeba/hub/hub.yaml.example`: all eight keys, `bind` set for the container (all interfaces) and `backup_dir: /backups`, the address an obviously-placeholder host. Add it to the wheel `artifacts` in `pyproject.toml`
   - [ ] `docs/config-contract.md`: `hub.yaml` keys and the client file's three keys
   - [ ] Success: pyright clean; `tests/test_wheel_contents.py` passes with the example listed in it
@@ -299,7 +299,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] Success: pyright clean
 - [ ] **11.2a `hub/start.py`: prepare (D14 steps 2 to 8)**
   - [ ] Steps 2 to 8 of D14's start sequence (step 1, the guard, is the first line of every hub command, task 14.2), in their own module so tests run them without serving. It returns the bound socket and what serving needs. The design's Component Structure lists only `serve`; record the added `start` module in the design under 17.3
-  - [ ] Step 3 binds the socket before anything is written. Step 4 (`--from-backup`) refuses a state directory that holds a store, certificate or key, naming it, then copies the three files in. Step 5 makes the certificate only on a first start; refuses a partial state naming the missing file; refuses an empty state directory when `newest_complete_backup` finds one, naming it and giving both ways on (the `--from-backup` command and setting `backup_dir` to an empty directory). Step 7 reads the schema version without migrating (`read_schema_version` on a plain connection) and, if behind, takes a pre-migration backup, stopping on its failure with the store unmigrated; then `open_store`. Step 8 failures are logged at error level and the start goes on. Steps 2 to 7 failing raise `HubStartError` with one line
+  - [ ] Step 3 binds the socket before anything is written. Step 4 (`--from-backup`) refuses a state directory that holds a store, certificate or key, naming it, then copies the three files in. Step 5 makes the certificate only on a first start; refuses a partial state naming the missing file; refuses an empty state directory when `newest_complete_backup` finds one, naming it and giving both ways on (the `--from-backup` command and setting `backup_dir` to an empty directory). Step 7 reads the schema version without migrating (`read_schema_version` on a plain connection) and, if behind, takes a pre-migration backup, stopping on its failure with the store unmigrated; then `open_hub_store`. Step 8 failures are logged at error level and the start goes on. Steps 2 to 7 failing raise `HubStartError` with one line
   - [ ] Success: pyright clean
 - [ ] **11.2b `hub/serve.py`: serve and the backup loop (D14 step 9)**
   - [ ] `uvicorn` with the certificate and key, `access_log=False`, `log_config=None`, serving the socket from 11.2a's step 3; one line on stderr saying it is serving
@@ -321,7 +321,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
 
 - [ ] **12.1 `client/trust.py`**
   - [ ] `pinned_context(cert_path)`: `ssl.SSLContext(PROTOCOL_TLS_CLIENT)`, `check_hostname = False`, `verify_mode = CERT_REQUIRED`, only that certificate loaded, no system certificates (D5)
-  - [ ] `fetch_certificate(address, connect_seconds)`: the one unverified connection of D4 step 3. It sends no request bytes, reads the presented certificate and closes. Connection refused, timeout or no TLS raise `HubUnreachableError` naming the address and cause
+  - [ ] `fetch_certificate(address, connect_seconds)`: the one unverified connection of D4 step 3. It sends no request bytes, reads the presented certificate and closes. Connection refused, timeout or no TLS raise `HubUnreachableError` (from `client.errors`) naming the address and cause
   - [ ] Success: pyright clean
 - [ ] **12.2 `tests/hub/test_trust.py`**
   - [ ] A TLS listener in a thread that records every byte it reads: with the right certificate the handshake succeeds; with another certificate it fails and the listener read no application bytes; `fetch_certificate` returns the presented certificate and the listener read no application bytes; nothing listening raises `HubUnreachableError`
@@ -345,21 +345,21 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] `wiring.invoke`'s first line is one call into `wiring_door`, which returns the hub's result when joined, or `None` when not, and `invoke` returns a result at once. All branching is in `wiring_door`: when joined, a served operation goes through `client.call` and `result_from_document`, and any other raises `NotServedError`. With a client file nothing local is read or written first: no layout, config, store, state move, log line or `start_after`
   - [ ] Success: pyright clean; the full suite is at baseline
 - [ ] **13.2 Setting a store aside and putting it back (`store/relocate.py`, or `store/set_aside.py` per the size rule in the Context Summary)**
-  - [ ] `set_aside(store, hub_address, now)`: under the write lock write the closed mark, checkpoint the write-ahead log, rename to `amoeba.sqlite3.set-aside-<UTC stamp>`, remove the two side files, return the new path. Refuses when a set-aside store already exists, naming both files and saying, as D4 does, that Amoeba's commands never make that pair
+  - [ ] `set_aside(store_path, hub_address, now)`: on a plain SQLite connection holding `BEGIN IMMEDIATE`, write the closed mark, replacing any mark already there (so a re-run after a stop before the rename passes, D4), commit, checkpoint the write-ahead log, rename to `amoeba.sqlite3.set-aside-<UTC stamp>`, remove the two side files, return the new path. Refuses when a set-aside store already exists, naming both files and saying, as D4 does, that Amoeba's commands never make that pair
   - [ ] `put_back(store_path)`: open the set-aside file by its path on a plain SQLite connection, delete the `closed_mark` row in one transaction, close, rename to the store path. Refuses when the store path is taken, changing nothing, naming both files and saying, as D4 does, that Amoeba's commands never make that pair. Each step is skipped when already done
   - [ ] Success: pyright clean
 - [ ] **13.3a `client/join.py`: the network and file steps**
   - [ ] `client.join`: fetch the certificate, compare its fingerprint with the line's (mismatch is `JoinError` with both fingerprints), save it, make one `hello` call, write the client file. On a `hello` failure remove the saved certificate or put the previous one back, then re-raise. `change_address(path, address)` and the three file steps of `leave`
   - [ ] Success: pyright clean
 - [ ] **13.3b `wiring_door`: `join` and `leave` in order, with D4's branches**
-  - [ ] `wiring_door.join(line, set_aside_local)`: D4's steps in order. With no client file run `prepare_state_home` first; refuse when a local store exists without `--set-aside-local`, naming the flag; with the flag, set the store aside between `hello` and writing the client file and return its path. With the flag, no store at the store path and a set-aside store present (a `join` stopped after the rename), skip the set-aside and return the existing path, so the re-run finishes by writing the client file (D4). `join --address` needs an existing client file and makes no hub call. `wiring_door.leave()`: put back, delete the client file, delete the certificate, each skipped when nothing is there, making no hub call
+  - [ ] `wiring_door.join(line, set_aside_local)`: D4's steps in order. With no client file run `prepare_state_home` first; refuse when a local store exists without `--set-aside-local`, naming the flag; with the flag, set the store aside between `hello` and writing the client file and return its path. With the flag, no store at the store path and a set-aside store present (a `join` stopped after the rename), skip the set-aside and return the existing path, so the re-run finishes by writing the client file (D4). `join --address` needs an existing client file and makes no hub call. `wiring_door.leave()`: put back, delete the client file, delete the certificate, each skipped when nothing is there, making no hub call. With no set-aside store and a store at the store path holding the closed mark, put-back instead clears that mark on a plain connection (D4 step 1)
   - [ ] Success: pyright clean
 - [ ] **13.4 `cli/join_command.py` and the parser**
   - [ ] `amoeba join <line> [--set-aside-local] [-j]`, `amoeba join --address <host:port> [-j]`, `amoeba leave [-j]`, registered as CLI-only commands; exit codes as today. `docs/cli-contract.md`: the commands, flags and new errors
   - [ ] Success: `amoeba join --help` and `amoeba leave --help` work
 - [ ] **13.5 Tests (in-process hub)**
   - [ ] `tests/hub/test_join.py`: join writes a `0600` client file with the name from `hello` and the certificate; a wrong fingerprint raises `JoinError` naming both, saves nothing, and the hub read no application bytes; nothing listening raises `HubUnreachableError` and saves nothing; a refused `hello` saves nothing and a re-join that fails puts the previous certificate back; a re-join replaces the token; a local store without the flag is refused naming it; `--address` changes only the address with the hub stopped
-  - [ ] `tests/hub/test_set_aside.py`: join with the flag prints the path, the store path is free and the file holds the mark; a connection opened before the join fails its next write with `LocalStoreClosedError` naming the hub; `leave` puts the store back with its rows, removes the set-aside file, and the next local command writes to it; `leave` stopped after each step (simulated by running the step functions partway) is finished by a second `leave`; a `join --set-aside-local` stopped after the rename (its steps run up to the rename) is finished by a second identical `join`, which writes the client file and leaves one set-aside store; a taken store path makes `leave` refuse changing nothing; a client file with no certificate fails a served call with `ClientFileError` and `leave` still works
+  - [ ] `tests/hub/test_set_aside.py`: join with the flag prints the path, the store path is free and the file holds the mark; a connection opened before the join fails its next write with `LocalStoreClosedError` naming the hub; `leave` puts the store back with its rows, removes the set-aside file, and the next local command writes to it; `leave` stopped after each step (simulated by running the step functions partway) is finished by a second `leave`; a `join --set-aside-local` stopped after the rename (its steps run up to the rename) is finished by a second identical `join`, which writes the client file and leaves one set-aside store; a `join --set-aside-local` stopped after the mark is written and before the rename leaves local writes failing with `LocalStoreClosedError` that names `amoeba leave`; from that state a second identical `join` finishes, and separately `leave` clears the mark so the next local command writes; a taken store path makes `leave` refuse changing nothing; a client file with no certificate fails a served call with `ClientFileError` and `leave` still works
   - [ ] Success: checks pass
 
 **Commit**: `feat: add the mode switch, join and leave`
@@ -415,12 +415,13 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] Dockerfile per D17: `python:3.13-slim`, Amoeba installed from the checkout, non-root user `amoeba`, volumes at that user's default config and state paths and `/backups`, `AMOEBA_HOME` unset, `hub.yaml.example` and `docs/config-contract.md` copied to `/usr/share/amoeba/`, and an exec-form entry point `amoeba hub serve` so it runs as PID 1 and gets `docker stop`'s signal (`tool-guides/docker/02-entrypoint-and-process-model.md`)
   - [ ] Compose example: the three mounts, the published port, `restart: always`
   - [ ] Success: files exist; the `hub.yaml.example` test from 8.4 still passes
-- [ ] **16.2 Build and try it once**
-  - [ ] `docker version` succeeds. If it does not, write `BLOCKED: docker unavailable` under this task and stop this task. 17.3 waits on it; 17.1, 17.2 and 17.4 go on
-  - [ ] Run the Verification Walkthrough's container steps from the design: build, start with the compose mounts and the two example-derived files, `docker exec <container> amoeba hub invite alpha`, `amoeba join <line>` in a throwaway home, `amoeba standing --text "<any text>" -j` from it answering `given`. Stop and remove the container
-  - [ ] Success: a note under this task holds the commands and their output, with the join line's token removed
 
 **Commit**: `feat: add the hub container image and compose example`
+
+- [ ] **16.2 Build and try it once**
+  - [ ] `docker version` succeeds. If it does not, write `BLOCKED: docker unavailable` under this task and stop this task. 17.3 waits on it; 17.1, 17.2 and 17.4 go on
+  - [ ] Run the Verification Walkthrough's container steps from the design: build, start with the compose mounts and the two example-derived files, `docker exec <container> amoeba hub invite alpha`, set `address` in the copied `hub.yaml` to `127.0.0.1:<the published port in docker/compose.example.yaml>` so the host reaches it, `amoeba join <line>` in a throwaway home, `amoeba standing --text "<any text>" -j` from it answering `given`. Stop and remove the container
+  - [ ] Success: a note under this task holds the commands and their output, with the join line's token removed. The note is committed with section 17
 
 ## 17. Documents, the release script and final validation (D19; effort 2)
 
@@ -435,8 +436,8 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] `user/slices/260-slice.hub-and-door.md`: in Verification Walkthrough, drop "Draft" and "None of these commands exist yet" and make the steps match what was built; add an Implementation Notes entry with the load figures (15.6), the container output summary (16.2), the restore command `uv run python scripts/update_live.py restore` and the backup directory `~/.local/state/amoeba/backups/<stamp>/`, the modules added beyond Component Structure (`hub/start.py` from 11.2a, `hub/call_refusals.py` from 10.1a, `operations/errors.py` from 10.1a), and any design text changed under the small-conflict rule
   - [ ] Success: the notes are in the design
 - [ ] **17.4 Final validation**
-  - [ ] Run the checks once; all pass
-  - [ ] Map each Functional Requirement in the design to the test that proves it, as a note under this task; a requirement with no test gets one before this task is checked
+  - [ ] Run the checks once; all pass, or only the baseline failures listed in 0.2
+  - [ ] Map each Functional Requirement in the design to the test that proves it, as a note under this task; a requirement with no test gets one before this task is checked. The criterion that 261 can serve a new operation by adding to the served list and `run_served` is proven by 7.6 and 10.2 here and by 261's own tests; the note says so
   - [ ] `wc -l` every new source file; any well over ~300 lines is split by concern
   - [ ] `git status` shows only this slice's files
   - [ ] Success: checks pass; the mapping note is complete

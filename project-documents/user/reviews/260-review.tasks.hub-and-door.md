@@ -6,7 +6,7 @@ slice: hub-and-door
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: FAIL
+verdict: CONCERNS (reviewer stated FAIL; its one fail finding, F001, was fixed in the design and tasks 20261121; all fifteen findings were checked, see Resolution)
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/260-tasks.hub-and-door.md
 aiModel: claude-haiku-5-5
@@ -228,3 +228,23 @@ Each test block follows its implementation. I found no dependency on a later tas
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 18
 - Finding-shaped matches — surviving validation: 18
+
+## Resolution
+
+Checked 20261121 against the task file, the design and the source. Fixed in the design (`260-slice.hub-and-door.md`, D4 and the walkthrough) and the task file.
+
+- **F001 (fail), fixed.** Valid: the mark is committed before the rename, and a re-run `join` would fail its own mark write through the normal write path. `set_aside` now writes the mark on a plain connection holding `BEGIN IMMEDIATE`, replacing any mark, so a re-run goes on. `leave` clears a mark on the store path when no set-aside store exists. `LocalStoreClosedError` names both ways out when there is no client file. 13.5 tests a stop after the mark write.
+- **F002, dropped.** The pair comes only from files placed by hand, which Amoeba's commands never make, and the refusal names both files. A command for a state only a hand edit creates adds mechanism for a case that should not occur.
+- **F003, fixed.** `local_served_edges` takes the loader, readers and clock from `wiring` (7.4).
+- **F004, fixed.** The four client errors move to `client/errors.py`, imported by `trust` and `call` alike.
+- **F005, dropped.** The architecture requires backups that can sit on another disk from the store they protect, and the design records the departure with that reason. Backups stay out of the config directory, which is what the rule protects.
+- **F006, fixed.** 16.2 sets `address` to the host and the published port.
+- **F007, fixed.** The section 16 commit marker follows 16.1; 16.2's note commits with section 17.
+- **F008, dropped.** Sizing only; each bullet is one test file's cases and the scope is clear.
+- **F009, no action.** The reviewer agrees the CI gate is met.
+- **F010, fixed.** 17.4's mapping note says how the 261 seam criterion is proven.
+- **F011, fixed.** 17.4 allows the baseline failures from 0.2.
+- **F012, fixed.** 0.3 says a `0.x` package is bounded below the next minor.
+- **F013, fixed.** 11.2a names `open_hub_store`.
+- **F014, fixed.** The client file uses the fixed temp name `client.yaml.tmp`, so a crash leaves at most one file.
+- **F015, fixed.** `ClientFile`, `HubConfig` and the reply shapes are Pydantic models with `extra="forbid"`.

@@ -11,7 +11,7 @@ interfaces:
 - 263
 - 264
 dateCreated: 20261120
-dateUpdated: 20261120
+dateUpdated: 20261121
 status: not_started
 turns: 28
 promptTokens: 2058924
@@ -222,17 +222,19 @@ What can fail, and what is left behind. None of these is retried by `join`, apar
 
 Run on a machine that is already joined, it replaces the client file and certificate after a successful `hello`. That is how a re-invited machine gets its new token.
 
-**Setting a store aside.** `amoeba join <line> --set-aside-local` does the same, and between steps 4 and 5 sets the local store aside. Under the store's write lock it writes the closed mark, naming the hub's address, then checkpoints the write-ahead log, renames the store to `amoeba.sqlite3.set-aside-<UTC stamp>` and removes the two side files. It prints the new path.
+**Setting a store aside.** `amoeba join <line> --set-aside-local` does the same, and between steps 4 and 5 sets the local store aside. On a plain SQLite connection holding the store's write lock (`BEGIN IMMEDIATE`) it writes the closed mark, naming the hub's address and replacing any mark already there, then checkpoints the write-ahead log, renames the store to `amoeba.sqlite3.set-aside-<UTC stamp>` and removes the two side files. It prints the new path.
 
 The closed mark is one row in a `closed_mark` table (D12). Every write transaction checks it right after taking the lock and, if it is set, rolls back and raises `LocalStoreClosedError` naming the hub. So a command that was already running during the join, and still holds a connection, cannot write into the set-aside file: its next write fails and says where the store went. 264's adopted mark is this same row.
 
 At most one set-aside store exists. If one is already there beside a local store, the command refuses and names both. Amoeba's commands never make that pair: while a set-aside store exists the machine is joined or mid-join, and the guard and the local opener refuse to create a store at the store path. So it comes only from files placed by hand, such as a state-directory backup restored over a joined home. The refusal, here and in `leave`, says so and names both files, so whoever placed the extra file can move it away. If the command stops after the rename and before the client file is written, the machine has a set-aside store and no store. The local store opener refuses to create a new store in that state and says to run `amoeba leave`. Running the same `join` again also finishes it.
 
+If the command stops after the mark is written and before the rename, the store is still at the store path with the mark, and there is no client file. Local writes fail with `LocalStoreClosedError`, whose message says to run `amoeba leave` or the same `join` again. Either ends it. The mark is written on a plain connection, which does not make the mark check that store writes make, so the re-run `join` rewrites it and goes on. `leave` clears it (step 1).
+
 **`amoeba join --address <address>`** needs an existing client file and changes only the address in it. It makes no hub call.
 
 **`amoeba leave`** makes no hub call, so it works with the hub down. Its steps, each skipped when there is nothing to do:
 
-1. Put the set-aside store back: clear its closed mark and rename it to the store path. If the store path is already taken, refuse, name both files and change nothing.
+1. Put the set-aside store back: clear its closed mark and rename it to the store path. If the store path is already taken, refuse, name both files and change nothing. With no set-aside store and a store at the store path that holds the closed mark (a `join` stopped before the rename), clear the mark on a plain connection instead.
 2. Delete the client file.
 3. Delete the saved certificate.
 
@@ -727,10 +729,11 @@ Done as the person running it. Before 264 the PM's own install is not joined; th
 - **Starting a new, empty hub on purpose where an old hub's backups are.** Refused, as a lost state directory is. Set `backup_dir` in `hub.yaml` to an empty directory and start again. The old backups stay where they were.
 - **A scanner or a stalled peer.** Refused calls and malformed requests are lines in the hub log, which rotates; nothing goes to stderr. A peer that holds connections open costs one socket each. If the open-file limit is ever hit, clients fail with the hub's address after the retry time and the hub log says why; restarting the hub clears it.
 - **The hub moves to a new address.** `join --address` on each machine.
-- **`leave` or `join --set-aside-local` stops partway.** Run the same command again. Until then no command creates a second store.
+- **`leave` or `join --set-aside-local` stops partway.** Run the same command again. A `join` stopped before the rename can also be ended with `leave`. Until then no command creates a second store.
 - **Undo.** On a client, `amoeba leave`. On the hub, stop the container; its directories are everything it wrote.
 
 Dead ends found by the task review, and how each is resolved:
 
 - A `join --set-aside-local` re-run after a stop between the rename and the client file was refused by the task text. It now skips the set-aside and finishes (D4), as this walkthrough says.
+- A `join --set-aside-local` stopped after the closed mark and before the rename left a marked store that neither `leave` nor a re-run `join` ended. The mark is now written on a plain connection, so the re-run goes on, and `leave` clears a mark on the store path (D4).
 - A local store beside a set-aside store has no command that ends it. Amoeba's commands never make that pair. It comes only from files placed by hand, and the refusal names both files (D4).
