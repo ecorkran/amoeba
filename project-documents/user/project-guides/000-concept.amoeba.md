@@ -14,6 +14,8 @@ status: in_progress
 
 # Amoeba
 
+**THE DEFINING PURPOSE OF AMOEBA IS TAKING QUESTIONS OFF THE PM'S PLATE. EVERY INITIATIVE, SLICE AND DESIGN IS JUDGED BY ONE MEASURE: HOW MANY QUESTIONS STILL REACH THE PM. ZERO IS THE GOAL. ONE EVERY TWO DAYS IS ACCEPTABLE. FIVE IN A SESSION IS FAILURE. WORK THAT DOES NOT REDUCE THAT NUMBER IS NOT AMOEBA'S PURPOSE, HOWEVER WELL IT IS BUILT.**
+
 ## Overview
 
 Amoeba is an agent that stands in for the PM. Everything another agent would hand to the PM goes to Amoeba first: questions, leftover work, paused runs. It looks, decides and acts the way the PM would, and it learns from every case and every time the PM overrules it.
