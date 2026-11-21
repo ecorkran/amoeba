@@ -41,7 +41,7 @@ revision_number: 1
 - New packages and modules, from the design's Component Structure: `wire/` (`times`, `protocol`, `join_line`, `fingerprint`), `client/` (`client_file`, `trust`, `call`, `join`), `hub/` (`hub_config`, `certificate`, `backups`, `hub_log`, `calls`, `app`, `serve`, `admin`), `store/machines.py`, `store/sql_machines.py`, `store/call_results.py`, `operations/served.py`, `wiring_door.py`, `cli/hub_commands.py`, `cli/join_command.py`. Every new package gets an `__init__.py`.
 - Files already over ~300 lines take no new logic: `wiring.py` (325) gains only calls into `wiring_door.py`, and `store/sql.py` (488) only has existing insert statements edited (task 3.2); new SQL goes in `store/sql_machines.py`. `store/relocate.py` is 235 lines: if the set-aside code (task 13.2) takes it past ~300, put that code in `store/set_aside.py` and note it under the task. Any new module that passes ~300 lines is split by concern.
 - Closed values are defined once and imported: the `wire.times` constants, `DoorTimes`, `SERVED_OPERATIONS`, `WRITING_CALLS`, `HELLO_CALL`, `RefusalCode` and its HTTP status map, `MAX_CALL_BYTES`, the header names, `UNKNOWN_ADVICE`, the machine-name pattern and length (all in `wire.protocol`), `HUB_LOCK_WAITS_PER_CALL` (`hub.calls`), `BACKUP_CHECK_SECONDS` (`hub.backups`), the local machine's name `local` and the owner's name `pm` (`store.machines`), and every file name in D1 (`config/home.py`). No silent fallbacks, no default owner or machine.
-- New errors and where they live. Each one named here joins `OPERATIONAL_ERRORS` in `wiring.py` when it is created, unless it is already a subclass of a member:
+- New errors and where they live. Each one named here joins `OPERATIONAL_ERRORS` in `wiring.py` when it is created, unless it is already a subclass of a member. Task 10.1a moves today's five members into `operations/errors.py` as `OPERATION_ERRORS`, which the hub imports, and `wiring`'s tuple becomes those five plus the door's errors:
   - `JoinError` (`wire.join_line`): a malformed join line, and the fingerprint mismatch in `join`. Defined in `wire` so the parser and `client.join` share it.
   - `ClientFileError` (`client.client_file`), `HubUnreachableError`, `HubCertificateError`, `HubRefusedError` (`client.call`).
   - `NotServedError` (`wiring_door`).
@@ -124,12 +124,12 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
 - [ ] **3.1 `store/machines.py` and `store/sql_machines.py`, first part**
   - [ ] `LOCAL_MACHINE_NAME = "local"` and the owner name constant. `ActingMachine` (frozen: `machine_id`, `owner_id`)
   - [ ] `the_owner(transaction)`: the owner id; raises `StoreError` unless `owners` holds exactly one row
+  - [ ] `store/errors.py`: `NoActingMachineError(StoreError)`, saying the store has no acting machine set and which table the insert was for
+  - [ ] `Store.act_as(machine: ActingMachine)` stores it; each `Transaction` the store opens carries it; `Transaction.acting()` returns it or raises `NoActingMachineError`
   - [ ] `act_as_local(store)`: in one write, find the machine named `local` or create it with the one owner and no token, then `store.act_as(...)` it. This is the helper `open_state_store` and the test fixtures share
   - [ ] SQL as module constants in `store/sql_machines.py`; values bind with `?`
   - [ ] Success: pyright clean
 - [ ] **3.2 Bind the owner and the machine on every record insert**
-  - [ ] `store/errors.py`: `NoActingMachineError(StoreError)`, saying the store has no acting machine set and which table the insert was for
-  - [ ] `Store.act_as(machine: ActingMachine)` stores it; each `Transaction` the store opens carries it; `Transaction.acting()` returns it or raises `NoActingMachineError`
   - [ ] Every insert into the twelve tables binds `owner_id` from `transaction.acting()`, and the session insert also binds `machine_id`. Find them with `grep -rnE "INSERT INTO (programs|members|dependency_pairs|releases|questions|answers|standing_answers|messages|deliveries|message_rejections|sessions|wakes)\b" src/amoeba` (16 statements at design time, in `store/sql.py`, `sql_messages.py`, `sql_held.py`, `sql_sessions.py`, `sql_standing.py`, `sql_wakes.py`). No operation's signature changes (D12)
   - [ ] Success: pyright clean
 - [ ] **3.3 `open_state_store` acts as `local`**
@@ -137,7 +137,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] Success: `tests/test_store_opened_only_by_state_move.py` passes
 - [ ] **3.4 Store fixtures set the acting machine (mechanical)**
   - [ ] Add `tests/store_open.py` with `open_local_store(path)`: `Store.open(path)` then `act_as_local(store)`
-  - [ ] Replace `Store.open(` with `open_local_store(` in every test module that calls it (`grep -rl --include='*.py' "Store.open" tests` lists 114 files at design time), except `tests/store/test_store.py`, `tests/store/test_schema.py`, `tests/store/test_schema_holds_no_mirrored_state.py` and `tests/store/relocate_support.py`, which test opening, the schema and copying and keep `Store.open`. No assertion changes
+  - [ ] Replace `Store.open(` with `open_local_store(` in every test module that calls it (`grep -rl --include='*.py' "Store.open" tests` lists 114 files at design time), except `tests/store/test_schema_holds_no_mirrored_state.py`, which inserts no records and keeps `Store.open` (D12: every test that opens a store and inserts records sets the acting machine with the shared helper). No assertion changes
   - [ ] Success: the full suite is back to the baseline from 0.2
 - [ ] **3.5 Acting-machine tests**
   - [ ] `tests/store/test_acting_machine.py`: with no acting machine, an insert into each of the twelve tables through its store function raises `NoActingMachineError` and writes nothing; `open_state_store` creates `local` once (a second open adds no row) with the one owner and no token; records written through it carry that owner, and a session row carries `local`'s `machine_id`; `the_owner` fails with zero rows and with two
@@ -274,17 +274,19 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
 
 ## 10. One call: `hub.calls.handle_call` (D6, D8, D9, D11, D16, D18; effort 4)
 
-- [ ] **10.1 `hub/calls.py`**
+- [ ] **10.1a `hub/call_refusals.py`: the refusal and logging path**
+  - [ ] Move today's five operational error types (`AmoebaHomeError`, `ConfigError`, `ContextForgeError`, `SquadronError`, `StoreError`) out of `wiring.OPERATIONAL_ERRORS` into `operations/errors.py` as `OPERATION_ERRORS`. `wiring.OPERATIONAL_ERRORS` becomes `(*OPERATION_ERRORS, <the door's errors added so far>)`, so every existing user of the `wiring` name is unchanged
+  - [ ] Building a refused reply for a code and message; mapping a raised exception: an `OPERATION_ERRORS` member is `hub_error` with `<ErrorName>: <text>` and one `refusal_line`; anything else is logged with `logger.exception` and refused as `hub_fault` naming the type and the hub log
+  - [ ] Success: pyright clean; the full suite is at baseline
+- [ ] **10.1b `hub/calls.py`: one call's steps**
   - [ ] `HUB_LOCK_WAITS_PER_CALL = 1`. `DoorHooks` (frozen; `after_commit`, default none) as the fault seam, like `MoveHooks`. A call request value (name, headers, body bytes, peer address) and the reply it returns (status and body bytes)
   - [ ] `handle_call(request, *, open_store, clock, load_config, hooks)` follows D8's steps in order: the token lookup as a plain read (miss is `bad_token`); the checks that need no store (door version, headers, body, served list with `hello` allowed, config for `standing`), remembered; then one `call_scope`: touch by token hash (no row is `bad_token`), commit the touch and refuse if a check failed, `delete_expired`, for a writing call look up the kept result (same operation and request hash returns it; otherwise `call_id_reused`), `act_as` the machine, run the operation in a nested `write()` (`hello` returns the machine's name), for a writing call `keep` the reply, commit; then `hooks.after_commit`
-  - [ ] Its handler never raises to the caller: roll back the operation's savepoint, commit the touch, keep nothing; an `OPERATIONAL_ERRORS`-type failure (the store and config error types, imported from their packages, not from `wiring`) is `hub_error` with `<ErrorName>: <text>`; anything else is logged with `logger.exception` and refused as `hub_fault` naming the type and the hub log. A failure before the scope (the store not opening) goes through the same handler without the touch
-  - [ ] Every refusal writes one `refusal_line` to the log. The run uses `id_names` and `id_resolver` from `operations.served`, the hub's clock and its `config.yaml` loader
-  - [ ] If the module passes ~300 lines, move the steps into `hub/call_steps.py`
+  - [ ] It never raises to the caller: on a raise it rolls back the operation's savepoint, commits the touch, keeps nothing and refuses through 10.1a's mapping. A failure before the scope (the store not opening) goes through the same mapping without the touch. Every refusal writes one `refusal_line`. The run uses `id_names` and `id_resolver` from `operations.served`, the hub's clock and its `config.yaml` loader
   - [ ] Success: pyright clean
 - [ ] **10.2 Tests (no network)**
   - [ ] `tests/hub/test_handle_call.py`, on a throwaway hub store with an invited machine: `hello` returns the name; each of the six runs and returns its result document; each refusal code from its cause (no token, unknown token, wrong door version, bad JSON, oversized body, unserved name, reused call id with another body and with another operation, a missing `config.yaml` for `standing` as `hub_error`); a version refusal still sets `client_version` and `last_called_at`; a repeated writing call returns the stored reply and applies once; the same call id from a second machine runs as a new call; a kept result older than the lifetime is deleted by the next call; `decisions` keeps nothing
   - [ ] `hub_fault`: monkeypatch `run_served` to raise `RuntimeError`; the reply names the type, the traceback is in the log, nothing is stored, and the next call succeeds
-  - [ ] A token removed between the read and the scope (`remove_machine` called from a monkeypatched token read) is `bad_token`; a run with `act_as` skipped fails the first insert with `NoActingMachineError`, refused as `hub_error`; no log line holds the token
+  - [ ] A token removed between the read and the scope (`remove_machine` called from a monkeypatched token read) is `bad_token`; a run with `act_as` skipped fails the first insert with `NoActingMachineError`, refused as `hub_error`; an `open_store` that raises `StoreError` is `hub_error` and one that raises `RuntimeError` is `hub_fault`, each with the machine's `last_called_at` unchanged; no log line holds the token
   - [ ] `tests/wire/test_times.py` gains: `READ_SECONDS > HUB_LOCK_WAITS_PER_CALL * BUSY_TIMEOUT_SECONDS`
   - [ ] Success: checks pass
 
@@ -346,8 +348,10 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] `set_aside(store, hub_address, now)`: under the write lock write the closed mark, checkpoint the write-ahead log, rename to `amoeba.sqlite3.set-aside-<UTC stamp>`, remove the two side files, return the new path. Refuses when a set-aside store already exists, naming both files and saying, as D4 does, that Amoeba's commands never make that pair
   - [ ] `put_back(store_path)`: open the set-aside file by its path on a plain SQLite connection, delete the `closed_mark` row in one transaction, close, rename to the store path. Refuses when the store path is taken, changing nothing, naming both files and saying, as D4 does, that Amoeba's commands never make that pair. Each step is skipped when already done
   - [ ] Success: pyright clean
-- [ ] **13.3 `client/join.py` and the steps in `wiring_door`**
+- [ ] **13.3a `client/join.py`: the network and file steps**
   - [ ] `client.join`: fetch the certificate, compare its fingerprint with the line's (mismatch is `JoinError` with both fingerprints), save it, make one `hello` call, write the client file. On a `hello` failure remove the saved certificate or put the previous one back, then re-raise. `change_address(path, address)` and the three file steps of `leave`
+  - [ ] Success: pyright clean
+- [ ] **13.3b `wiring_door`: `join` and `leave` in order, with D4's branches**
   - [ ] `wiring_door.join(line, set_aside_local)`: D4's steps in order. With no client file run `prepare_state_home` first; refuse when a local store exists without `--set-aside-local`, naming the flag; with the flag, set the store aside between `hello` and writing the client file and return its path. With the flag, no store at the store path and a set-aside store present (a `join` stopped after the rename), skip the set-aside and return the existing path, so the re-run finishes by writing the client file (D4). `join --address` needs an existing client file and makes no hub call. `wiring_door.leave()`: put back, delete the client file, delete the certificate, each skipped when nothing is there, making no hub call
   - [ ] Success: pyright clean
 - [ ] **13.4 `cli/join_command.py` and the parser**
@@ -400,7 +404,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] Success: checks pass
 - [ ] **15.6 `tests/load/test_door_load.py`**
   - [ ] 16 client threads against the fixture hub, half `decisions` over 500 seeded answers, half `standing`, `withdraw` and `mark_read`: no call refused or unknown, each within 2 seconds. 100 calls from one thread on the idle hub: median under 200 ms. Record both measured figures in a note under this task
-  - [ ] The file runs in the bare `uv run pytest`, and so in CI, like the other `tests/load` files (`pyproject.toml` ignores only `tests/live`). Confirm with `uv run pytest --collect-only -q tests/load/test_door_load.py`. The bounds are named constants in the test. If CI fails a bound that passes locally, get the CI figures from its log before changing anything, and record them under this task
+  - [ ] The file runs in the bare `uv run pytest`, and so in CI, like the other `tests/load` files (`pyproject.toml` ignores only `tests/live`). The gate is the `Tests` step of the `check` job in `.github/workflows/ci.yml`, which runs the bare `uv run pytest`; confirm with `uv run pytest --collect-only -q tests/load/test_door_load.py` and note that the file is in that collection. The bounds are named constants in the test. If CI fails a bound that passes locally, get the CI figures from its log before changing anything, and record them under this task
   - [ ] Success: both bounds pass; the note gives the figures
 
 **Commit**: `test: add the two-machine hub fixture, kill, noise and load tests`
@@ -412,7 +416,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] Compose example: the three mounts, the published port, `restart: always`
   - [ ] Success: files exist; the `hub.yaml.example` test from 8.4 still passes
 - [ ] **16.2 Build and try it once**
-  - [ ] `docker version` succeeds. If it does not, write `BLOCKED: docker unavailable` under this task and stop. No earlier section depends on Docker
+  - [ ] `docker version` succeeds. If it does not, write `BLOCKED: docker unavailable` under this task and stop this task. 17.3 waits on it; 17.1, 17.2 and 17.4 go on
   - [ ] Run the Verification Walkthrough's container steps from the design: build, start with the compose mounts and the two example-derived files, `docker exec <container> amoeba hub invite alpha`, `amoeba join <line>` in a throwaway home, `amoeba standing --text "<any text>" -j` from it answering `given`. Stop and remove the container
   - [ ] Success: a note under this task holds the commands and their output, with the join line's token removed
 
@@ -428,7 +432,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] `tests/scripts/test_update_live.py`: call `update()` and `restore()` directly with the file's `FakeSteps`, never `PRODUCTION` or `main()` (they reinstall the tool and inspect the checkout), with `AMOEBA_HOME` the autouse fixture's throwaway home. `FakeSteps._migrate` opens the store through `open_state_store(state_layout())`, as `amoeba list` does, so the schema-11 and `local`-row checks can pass. Run against a copy of a schema-10 store (built as in 2.2); `update` passes both new checks; `restore` puts the schema-10 store back
   - [ ] Success: checks pass
 - [ ] **17.3 Slice design notes**
-  - [ ] `user/slices/260-slice.hub-and-door.md`: in Verification Walkthrough, drop "Draft" and "None of these commands exist yet" and make the steps match what was built; add an Implementation Notes entry with the load figures (15.6), the container output summary (16.2), the restore command `uv run python scripts/update_live.py restore` and the backup directory `~/.local/state/amoeba/backups/<stamp>/`, and any design text changed under the small-conflict rule
+  - [ ] `user/slices/260-slice.hub-and-door.md`: in Verification Walkthrough, drop "Draft" and "None of these commands exist yet" and make the steps match what was built; add an Implementation Notes entry with the load figures (15.6), the container output summary (16.2), the restore command `uv run python scripts/update_live.py restore` and the backup directory `~/.local/state/amoeba/backups/<stamp>/`, the modules added beyond Component Structure (`hub/start.py` from 11.2a, `hub/call_refusals.py` from 10.1a, `operations/errors.py` from 10.1a), and any design text changed under the small-conflict rule
   - [ ] Success: the notes are in the design
 - [ ] **17.4 Final validation**
   - [ ] Run the checks once; all pass
