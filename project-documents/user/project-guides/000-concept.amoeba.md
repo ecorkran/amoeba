@@ -172,18 +172,18 @@ Amoeba only works if agents cannot go around it.
 
 ### A long-running agent
 
-Amoeba is built as a long-running agent: it wakes when there is work, does a bounded piece, remembers what it learned and sleeps. The model is Anthropic's article "Building always-on agents", read 20261120, and `notes/006-long-running-agents.amoeba.md`. Since 20261120 the general parts come from the agent kit, built in its own project (`notes/007-agent-kit-concept.amoeba.md`); Amoeba does not build them. This table covers every part the article names.
+Amoeba is built as a long-running agent: it wakes when there is work, does a bounded piece, remembers what it learned and sleeps. The model is Anthropic's article "Building always-on agents", read 20261120, and `notes/006-long-running-agents.amoeba.md`. Amoeba builds these parts itself, each when a step first needs it (20261121; the earlier plan to take them from an outside kit is retired). This table covers every part the article names.
 
 | Article part | In Amoeba | Status |
 |---|---|---|
 | Event inbox | The store's inbox, with dedup ids, read cursors and one worker per inbox. Hand-offs from sessions and runs arrive as events. | Built for messages between repos. Hand-offs are new. |
-| Timers: follow-ups | Amoeba sets its own deadline, such as checking that an agent it sent back did finish. | In the kit |
-| Timers: schedules | Recurring work, such as the curation pass. Timers live in the store; a scheduler pass turns a due timer into an inbox event. | In the kit |
+| Timers: follow-ups | Amoeba sets its own deadline, such as checking that an agent it sent back did finish. | Built by Amoeba when a step needs it |
+| Timers: schedules | Recurring work, such as the curation pass. Timers live in the store; a scheduler pass turns a due timer into an inbox event. | Built by Amoeba when a step needs it |
 | Memory: user instructions | The PM's standing answers | Built (slice 230) |
-| Memory: user notes | What Amoeba has learned about how the PM decides. An index loads on every wake; entries are read when needed. | In the kit |
+| Memory: user notes | What Amoeba has learned about how the PM decides. An index loads on every wake; entries are read when needed. | Built by Amoeba when a step needs it |
 | Memory: past messages | What the PM has already been told, so nothing is told twice | Partly built (the decisions list and its read marker) |
-| Memory: task progress | Progress on each item Amoeba is still handling, so the next wake picks it up | In the kit |
-| Dreaming (memory curation) | The curation pass under Learning | In the kit |
+| Memory: task progress | Progress on each item Amoeba is still handling, so the next wake picks it up | Built by Amoeba when a step needs it |
+| Dreaming (memory curation) | The curation pass under Learning | Built by Amoeba when a step needs it |
 | Permissions: deferred tool calls | An item that needs the PM ends the run and is saved. His answer comes back as an inbox event and the work resumes. | Built for paused runs (hold and release). Extended to sessions. |
 | Permissions: auto mode | The safeguards of the runtime Amoeba's agent runs in. The architecture checks what each runtime offers. | Used, not built |
 | Permissions: credential proxy | None | Not built; reason below |
@@ -200,7 +200,7 @@ Amoeba is built as a long-running agent: it wakes when there is work, does a bou
 
 - **Bounded runs.** Every wake has a time cap and a cost cap, and one wake runs per inbox. When a cap is hit, the run ends and is recorded with what it found. The item is retried once on the next wake, then goes to the PM's list with the findings.
 - **Observability.** A row and a log per run, and a status view.
-- **One definition, one runner.** An agent is one definition file plus a generic runner, so a second long-running agent is a copied file, not a hand-written script. The kit's first agent is the PR review responder; Amoeba's stand-in is the second.
+- **One definition, one runner.** An agent is one definition file plus a generic runner, so a second long-running agent is a copied file, not a hand-written script.
 - **Runtime and model come from config.** There is no default in code.
 
 ### What Amoeba also does
@@ -277,12 +277,11 @@ The architecture answers these itself.
 
 ### Development approach
 
-- **Build order.**
-  1. The always-up process on the LAN machine, with the store, and the laptop and other machines as its clients. Amoeba loses most of its purpose on one machine, so this comes first.
-  2. Amoeba on the agent kit: the kit's inbox, timers, runner and memory in place of Amoeba's own, and Amoeba's copies deleted.
-  3. The first-level chaos: needless questions and leftovers, from sessions and from pipeline runs, with the case record.
-  4. Real questions answered from the repo and the PM's earlier decisions, with the kit's memory curation.
-- **The kit is built first, in its own project** (decided 20261120), for one real agent: the PR review responder, proven on the PM's own repos. Amoeba's stand-in is its second agent. Every kit part is built because an agent needs it, not designed in the abstract. `notes/007-agent-kit-concept.amoeba.md` holds the order.
+- **Build order** (reordered 20261121 by the PM: the order is set by how many questions each step takes off his plate).
+  1. The first-level chaos, on today's local Amoeba: needless questions and leftovers, from sessions and from pipeline runs, with the case record. Its first piece, the turn-end hook, was built 20261121.
+  2. Real questions answered from the repo and the PM's earlier decisions, with memory curation.
+  3. The always-up process on the LAN machine, with the store, and the laptop and other machines as its clients, so every machine reaches one stand-in.
+- **There is no outside kit** (decided 20261121, replacing the kit-first order of 20261120). Each long-running-agent part in the table above is built inside Amoeba by the step that first needs it, not before.
 - **Test with fixtures and live fixture runs.** No step waits on real use. Ship it, leave it on, and rework from what use shows.
 - **Each needless question or leftover that still reaches the PM is a defect in Amoeba,** and is fixed there.
 - **Resist narrowing.** A design that handles one named case and sends the rest to the PM is rejected in review.
