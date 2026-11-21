@@ -6,7 +6,7 @@ slice: hub-and-door
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: CONCERNS
+verdict: CONCERNS (all twenty findings checked 20261121; F001 to F011, F013 and F015 fixed, the rest no action or rejected, see Resolution)
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/260-tasks.hub-and-door.md
 aiModel: claude-haiku-5-5
@@ -241,3 +241,25 @@ The `Tests` step runs bare `uv run pytest` (`ci.yml:39-40`), and `addopts` ignor
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 20
 - Finding-shaped matches — surviving validation: 20
+
+## Resolution
+
+Checked 20261121 against the task file, the design and the source.
+
+- **F001, fixed.** 2.1 takes only the failures whose assertion compares the schema version, and leaves insert failures from the triggers for 3.2 to 3.4.
+- **F002, fixed.** 10.1b calls `after_commit` outside the never-raise guarantee. The test's hook raises its own exception, `hub.app` does not catch it, and the client gets no body it accepts, so it counts no reply (D6). Design D18 now says the same.
+- **F003, fixed.** 11.2a step 8 and 11.2b's backup loop catch `BackupError` only, log with `logger.exception`, and comment why the swallow is right. 9.1's `timed_backup_due` raises `BackupError` too, so that one catch covers every backup failure.
+- **F004, fixed.** 13.3b is split into 13.3b (`join`) and 13.3c (`leave`). 13.2 already has one item per function, so it stays as it is.
+- **F005, fixed.** 6.3's set-aside refusal runs before `open_state_store` calls `prepare_state_home`. 6.4 also checks that a legacy store stays unmoved.
+- **F006, fixed.** Design D4 step 1 now says the bound is the displaced store's exit: nothing waits on it and no command refuses because of it. No command added.
+- **F007, fixed.** 6.2 creates `client/errors.py` with the four client errors.
+- **F008, fixed.** 17.3 records the `operations` → `client.client_file` import edge in the design's import rules.
+- **F009, fixed.** 16.1's success line is "checks pass".
+- **F010, fixed.** 12.3's `HubUnreachableError` text names `amoeba join --address <host:port>` for a changed address. Design D7 updated to match.
+- **F011, fixed.** 3.5's no-acting-machine test opens its store with plain `Store.open`.
+- **F012, no action.** Ordering only. The planning commit lands when this review loop ends, before 0.1 runs.
+- **F013, fixed.** 14.4 adds a test: an `amoeba-mcp` already running when a client file appears hits `LocalStoreClosedError` on its next inbox-watcher tick, logs it, and creates no file. The accepted state is the design's own (D2) and covers only fixtures in 260.
+- **F014, rejected.** Raised in rounds 3, 4 and 5. The architecture requires backups that can sit on another disk, and the design records the departure. Whether the state-directory rule needs an exception for this is the PM's call, and the PM has been told.
+- **F015, fixed.** 3.2 and 3.4 no longer list expected counts or file names. Each grep stops and reports when it finds nothing.
+- **F016, no action.** Both cheap tests stay. They check D9's index and D15's concurrent backup.
+- **F017 to F020, no action.** Pass findings.
