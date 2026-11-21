@@ -345,7 +345,7 @@ Refusal codes, a `RefusalCode` enum in `wire.protocol`:
 | `bad_token` | No token, an unknown token, or a removed or re-invited machine's old token | 401 |
 | `door_version` | The client's door version is not the hub's. The message holds both | 426 |
 | `malformed_call` | Bad headers, body or size | 400 |
-| `not_served` | The name is not in the served list | 404 |
+| `not_served` | The name is not in the served list. Slice 261 also gives it to a `send` that would start a wake, which the door does not do until 262; the message says which | 404 |
 | `call_id_reused` | The call id was kept for a different operation or a different body | 409 |
 | `hub_error` | The operation raised one of today's operational errors on the hub, such as a missing `config.yaml` or a busy store. The message is `<ErrorName>: <text>` | 500 |
 | `hub_fault` | Anything else was raised on the hub (D8). The message is the exception's type name and says the traceback is in the hub log | 500 |
