@@ -118,7 +118,7 @@ findings:
 
 # Review: tasks — slice 260
 
-**Verdict:** FAIL
+**Verdict:** FAIL (all findings resolved 20261121 in the task file and design; the two concerns aimed at the design are resolved there: D4 and the Departures table)
 **Model:** claude-haiku-5-5
 
 ## Findings

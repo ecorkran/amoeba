@@ -226,7 +226,7 @@ Run on a machine that is already joined, it replaces the client file and certifi
 
 The closed mark is one row in a `closed_mark` table (D12). Every write transaction checks it right after taking the lock and, if it is set, rolls back and raises `LocalStoreClosedError` naming the hub. So a command that was already running during the join, and still holds a connection, cannot write into the set-aside file: its next write fails and says where the store went. 264's adopted mark is this same row.
 
-At most one set-aside store exists. If one is already there beside a local store, the command refuses and names both. If the command stops after the rename and before the client file is written, the machine has a set-aside store and no store. The local store opener refuses to create a new store in that state and says to run `amoeba leave`. Running the same `join` again also finishes it.
+At most one set-aside store exists. If one is already there beside a local store, the command refuses and names both. Amoeba's commands never make that pair: while a set-aside store exists the machine is joined or mid-join, and the guard and the local opener refuse to create a store at the store path. So it comes only from files placed by hand, such as a state-directory backup restored over a joined home. The refusal, here and in `leave`, says so and names both files, so whoever placed the extra file can move it away. If the command stops after the rename and before the client file is written, the machine has a set-aside store and no store. The local store opener refuses to create a new store in that state and says to run `amoeba leave`. Running the same `join` again also finishes it.
 
 **`amoeba join --address <address>`** needs an existing client file and changes only the address in it. It makes no hub call.
 
@@ -573,6 +573,7 @@ This slice changes the script in three small ways. It adds two read-back checks:
 | `docs/mcp-server.md` and `docs/squadron-hook.md` are brought in line in 264 | Their joined-machine behavior is documented here | This slice changes it |
 | Criterion: the hub is killed between the commit and the reply | Tested two ways (D18): a dropped reply and a new server on the same store, and a real hub process killed once the kept result is on disk | The first hits the exact moment every time. The second is a real kill, which cannot be aimed at that moment |
 | Architecture, Owner: eight kinds of record hold their owner (programs, members, questions, answers, standing answers, messages, sessions, wakes) | Twelve tables do: those eight and `dependency_pairs`, `releases`, `deliveries`, `message_rejections` (D12) | The architecture's description and the plan both say every record, and these four tables hold records |
+| Amoeba rule: databases and run records live in the state directory | Hub backups live in `backup_dir`, a required `hub.yaml` key with no default, outside the state directory (D1) | The architecture requires backups to be able to sit on another disk from the store they protect. A backup on the store's own disk is lost with it |
 | The certificate is made at first start | A start on an empty state directory is refused when `backup_dir` holds a backup (D5) | That is a lost state directory. A new certificate would lock out every client while the backup that restores the hub sits unused |
 ## Implementation Details
 
@@ -729,4 +730,7 @@ Done as the person running it. Before 264 the PM's own install is not joined; th
 - **`leave` or `join --set-aside-local` stops partway.** Run the same command again. Until then no command creates a second store.
 - **Undo.** On a client, `amoeba leave`. On the hub, stop the container; its directories are everything it wrote.
 
-Dead ends found: none.
+Dead ends found by the task review, and how each is resolved:
+
+- A `join --set-aside-local` re-run after a stop between the rename and the client file was refused by the task text. It now skips the set-aside and finishes (D4), as this walkthrough says.
+- A local store beside a set-aside store has no command that ends it. Amoeba's commands never make that pair. It comes only from files placed by hand, and the refusal names both files (D4).
