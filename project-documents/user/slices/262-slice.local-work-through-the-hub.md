@@ -60,7 +60,7 @@ Included:
 - The work flag, the claim call and the detached starts. This replaces the "start after" step (D10).
 - What each command does when a step gets no reply (D11).
 - `amoeba hub rm-machine` closing what waits on the machine (D13).
-- Migration 013: the machine on question and wake rows, the resume claim id, and two new reasons (D14).
+- Migration 013: six columns (the machine on question and wake rows, the resume claim id, the two start counts, the wake mark on a request) and the two new values its `CHECK` lists take (D14).
 
 Excluded, because the slice plan puts them later:
 
@@ -73,7 +73,7 @@ Excluded, because the slice plan puts them later:
 
 ### Prerequisites
 
-- Slices 260 and 261, built. As of 20261120 both are designed and not built. This design uses 260's decisions as written at commit `729b57fb` and 261's at `9a9b4d21`: the door, the call scope and kept results (260 D6, D8, D9), the network times (260 D7), the acting machine (260 D12), the two-machine fixture (260 D18), the client part and `here` (261 D5), `find_caller` and `find_member` (261 D6), checkouts and the wake command on them (261 D2, D9), and the `runs` document (261 D11). If either design changes one of these before this slice's task breakdown, this document is updated to match first.
+- Slices 260 and 261, built. As of 20261120 both are designed and not built. This design uses 260's decisions as written at commit `9ee28aa5` and 261's at `006c60ad`: the door, the call scope and kept results (260 D6, D8, D9), the network times (260 D7), the two store openers and the acting machine (260 D12), the hub home (260 D1, D2), `OPERATION_ERRORS` (260 D8), the two-machine fixture (260 D18), the client part and `here` (261 D5), `find_caller` and `find_member` (261 D6), checkouts and the wake command on them (261 D2, D9), and the `runs` document (261 D11). If either design changes one of these before this slice's task breakdown, this document is updated to match first.
 - No new package.
 
 ### Interfaces Required
@@ -105,7 +105,7 @@ Facts about other tools, read 20261120 on this machine: `sq` is 0.24.34 and `cf`
 | | `resume`, `wake_run`, `prune` | The same. |
 | | `answer`, `send`, `wake`, `question_sweep`, `question_sweep_scope`, `status` | Split into a client part and a hub part, as 261 did for its ten operations. |
 | | `served` | Cases for `answer`, and `send` without 261's wake refusal. |
-| `amoeba.store` | `schema/013_local_work.sql` (new); `questions`, `question_closing`, `held_questions`, `answers`, `wakes`, `sql`, `sql_wakes`, `vocabulary` | The migration. The machine on question and wake rows. The resume claim. Reads by machine. |
+| `amoeba.store` | `schema/013_local_work.sql` (new); `questions`, `question_closing`, `held_questions`, `answers`, `wakes`, `messages`, `sql`, `sql_held`, `sql_wakes`, `sql_messages`, `vocabulary` | The migration. The machine on question and wake rows. The resume claim and the two start counts. The wake mark on a request. Reads by machine. |
 | `amoeba.wire` | `protocol` | `STEP_CALLS`, `WRITING_STEPS`, the reply key `work`, the body key `via`. |
 | `amoeba.hub` | `calls`, `admin` | `handle_call` routes a step name to `run_step` and adds the work flag to a done reply. `rm-machine` does more (D13). |
 | `amoeba` (wiring) | `wiring_steps` (new, replaces `wiring_release`); `wiring`, `wiring_messages` | `DoorSteps`, which makes each step a door call. `steps_for(layout)` picks `LocalSteps` or `DoorSteps` once per command (D3). The after-step that claims and starts work. |
@@ -123,7 +123,7 @@ A run pauses on machine `alpha` and the PM answers from `beta`:
 
 1. On `alpha`, Squadron's hook runs `amoeba handle-pause <run>`. It polls the run and asks `cf` for the directory's project, then calls the step `pause_begin`. The hub sweeps that run's older questions, finds the member, and returns the member's settings and what the store holds for this pause.
 2. `alpha` reads the run file, gathers the sources, makes the scratch and calls `question_insert`. The row is `claimed`, on machine `alpha`.
-3. `alpha` runs the answering run, reads its replies and calls `question_settle`. The hub applies the answer limit and the reserved-term screen in that transaction. Say the answerer declined: the row is `waiting_on_pm`.
+3. `alpha` runs the answering run and reads its replies. An answer goes to `question_settle`, where the hub applies the answer limit and the reserved-term screen in that transaction. A decline goes to `question_wait`. Say the answerer declined: the row is `waiting_on_pm`.
 4. On `beta`, `amoeba answer` is one door call. The hub records the answer and sees the question is on `alpha`. The result says so, with when `alpha` last called.
 5. The next call from anything on `alpha` gets `work: true` in its reply. That client calls `claim_work`, gets the resume with its claim id, and starts `amoeba resume-run` detached.
 6. `resume-run` polls the run, starts `sq run --resume`, follows it, and calls `resume_record` with the outcome.
@@ -138,9 +138,9 @@ With no client file, `steps_for` returns `LocalSteps`, and each step is one tran
 | A pause claim | `questions.state = claimed`, `updated_at` | The settle. Past `pause_claim_seconds`, the next call from its machine starts `handle-pause`, which settles it, restarts it or closes it (D5, D10) |
 | A held question | `questions.state = waiting_on_request` | Its request ending, then the `handle-pause` the work claim starts. Or `dismiss`, the close sweep, or `rm-machine` |
 | A start mark | `questions.start_attempted_at` | Overwritten by the next start, at most once per `answering_wait_seconds` for a row |
-| A resume claim | `answers.resume_claim_id`, `resume_started_at` | `resume_record`. Past `resume_claim_seconds` with no outcome, it is handed out again (D6) |
+| A resume claim | `answers.resume_claim_id`, `resume_started_at` | `resume_record`. Past `resume_claim_seconds` with no outcome, it is handed out again (D6), at most `MAX_AUTOMATIC_STARTS` times, then recorded `refused` (D10). The close sweep never ends an answer that has no outcome (D9) |
 | A refused resume | `answers.resume_outcome = refused` | A new `answer`, `handle-pause` for that run on its machine, `dismiss`, or the close sweep marking it not delivered |
-| An answer waiting for another machine | `answers.resume_outcome` null | That machine's next call. Or `dismiss`, a newer answer, the close sweep on that machine, or `rm-machine` |
+| An answer waiting for another machine | `answers.resume_outcome` null | That machine's next call, whose resume attempt records an outcome, `not_delivered` if the run has left the pause. Or `dismiss`, a newer answer, or `rm-machine` |
 | A wake | `wakes`, now with `machine_id` | `wake_finish`. Unended, it stops counting as a live wake at its `deadline_at`, so it no longer holds off a wake for a newer mark (D8, rule 3). Rows are deleted by the message sweep past `prune_after_days`, as today |
 | A wake that is due and unclaimed | `messages.wake_wanted_at` on an open request, with no wake run since | A machine with a wakeable checkout calling. Or the request ending or expiring |
 | A question's automatic starts | `questions.start_count` | At `MAX_AUTOMATIC_STARTS` the question moves to `waiting_on_pm` (D10) |
@@ -160,7 +160,7 @@ Every transaction in the pause path, the answering settle, the resume, `answer` 
 | `store.answers.settle_answered` | The gate, passed in as a function: the reserved-term screen and the answer limit, from the member's settings | `question_settle`. The call carries the answer, what it cites and the evidence. The hub builds the gate from its own config and the member's settings and runs it in the transaction |
 | `pause_claim._limit_reached` | Reads the count in a transaction, compares it with `answer_limit` outside | `pause_begin` makes the comparison on the hub and returns the result with its detail text |
 | `pause_held.link_for` | `find_request_link` parses the question inside a read transaction and calls back to look each id up | `pause_begin`. The question text is in the call; the hub runs the parse and the lookups |
-| `question_sweep._judge` | Compares the claim's age with `answering_wait_seconds`, and the answer's newest sign of life with `resume_bound_seconds`, using the caller's clock and config | `pause_begin` and the hub part of `status`. The call carries only what Squadron said about each run |
+| `question_sweep._judge` | Compares the claim's age with `answering_wait_seconds`, and the answer's newest sign of life with `resume_bound_seconds`, using the caller's clock and config | `pause_begin` and the hub part of `status`. The call carries only what Squadron said about each run. The answer rule changes: it applies only to a `refused` answer, and its bound is `resume_claim_seconds` (D9) |
 | `request_release._due_rows` | `effective_state` on the caller's clock, and the start mark's age | `work_waiting` and `claim_work` |
 | `store.wakes.claim_wake` and `can_wake` | The live-session, live-wake and daily-limit checks, on the caller's clock and limits. `log_stem` is a path on the caller's disk | The hub part of `send`, and `claim_work`. Limits come from the hub's config. The client sends its logs directory (D8) |
 | `answer` | Finds the question, adds the answer and reads the question back in one transaction | The hub part of `answer`, unchanged |
@@ -201,16 +201,16 @@ The client-run commands call the `Steps` protocol, which has one method: `run(st
 
 `wiring_steps.steps_for(layout)` picks one when a command starts, by whether a client file exists, and the command keeps it to its end. It also takes the door times and a session id, which 263's tick passes; the tick is not a command and calls it on every tick (263 D1). A command never changes way partway:
 
-- One that started with a client file uses `DoorSteps` for every step. `DoorSteps` reads the client file on each call, and if the file is gone it raises 260's `ClientFileError` naming the file. It never goes to a local store.
-- One that started with none uses `LocalSteps`. If the machine joins meanwhile, its next step fails with 260's `LocalStoreClosedError` (260 D2).
+- One that started with a client file uses `DoorSteps` for every step. `DoorSteps` reads the client file on each call, and if the file is gone it raises 260's `ClientFileError` naming the file. That is one more case of that error than 260 D3 lists, and only `DoorSteps` raises it. It never goes to a local store.
+- One that started with none uses `LocalSteps`. If the machine joins meanwhile, its next step that opens the store or writes to it fails with 260's `LocalStoreClosedError` (260 D2, D4). In a hub home the local opener refuses with `HubHomeError` (260 D2), so no client-run command runs on a hub's own store.
 
 Each new command still decides for itself, so 260's rule that the mode is decided on every call holds between commands.
 
-Step names are in `STEP_CALLS` in `wire.protocol`, apart from `SERVED_OPERATIONS`, because they are not operations a person calls. `WRITING_STEPS` are the ones whose result is kept. `wire` imports nothing, so both are plain strings, and a test asserts they equal the names and the writing rows of `STEP_MODELS`. A step is refused, with `malformed_call`, when its document does not validate.
+Step names are in `STEP_CALLS` in `wire.protocol`, apart from `SERVED_OPERATIONS`, because they are not operations a person calls. The hub accepts a name that is in the served list, is `HELLO_CALL` or is in `STEP_CALLS`, and refuses any other as `not_served` (260 D6). `WRITING_STEPS` are the ones whose result is kept. `wire` imports nothing, so both are plain strings, and a test asserts they equal the names and the writing rows of `STEP_MODELS`. A step is refused, with `malformed_call`, when its document does not validate.
 
-**A step document that is too large.** 260 refuses a body over `MAX_CALL_BYTES` (1 MiB) before it reads it, and a step is refused like any other call. Only `question_settle` has a row waiting on it, and it can be over the limit only through the answer: nothing bounds the answer file a run writes, and the document carries the text twice, as the answer and as the evidence's proposed answer, so an answer of about half a mebibyte reaches the limit. That is unlikely, and it gets no branch of its own. The settle is refused, `handle-pause` exits 3 with the refusal in its calls-log line, and the claim goes stale. Each automatic start then finds the dead claim and tries the settle again, which is refused again. After `MAX_AUTOMATIC_STARTS` the question waits on the PM as `starts_exhausted`, whose detail points at that machine's calls log (D10). With no client file there is no door and no limit, as today. Any other step that is refused this way exits 3; the steps that carry the question's text come before any row exists, so nothing is left to start again.
+**A step document that is too large.** 260 refuses a body over `MAX_CALL_BYTES` (1 MiB) before it reads it, and a step is refused like any other call. Only the two steps that end a claim have a row waiting on them, `question_settle` and a `question_wait` that carries a decline, and each can be over the limit only through the answer: nothing bounds the answer file a run writes. `question_settle` carries the text twice, as the answer and as the evidence's proposed answer, so an answer of about half a mebibyte reaches the limit; a decline's evidence carries it once. That is unlikely, and it gets no branch of its own. The settle is refused, `handle-pause` exits 3 with the refusal in its calls-log line, and the claim goes stale. Each automatic start then finds the dead claim and tries the settle again, which is refused again. After `MAX_AUTOMATIC_STARTS` the question waits on the PM as `starts_exhausted`, whose detail points at that machine's calls log (D10). With no client file there is no door and no limit, as today. Any other step that is refused this way exits 3; the steps that carry the question's text come before any row exists, so nothing is left to start again.
 
-A step that fails on the hub with an operational error, such as a member whose settings name an authorize key the config lacks, is refused as `hub_error` (260 D6). The client raises it, and the command exits 3 as it does today.
+A step that fails on the hub with one of 260's `OPERATION_ERRORS` (260 D8), such as a member whose settings name an authorize key the config lacks, is refused as `hub_error` (260 D6). The client raises it, and the command exits 3 as it does today.
 
 - Rejected: one door call for the whole of `handle-pause`. The hub cannot read the run file, the repo or the scratch.
 - Rejected: a second copy of each command for the hub way. One body with two `Steps` is what keeps the local way and the hub way the same.
@@ -221,12 +221,12 @@ Status: decided
 | Step | Kind | Replaces | Does |
 |---|---|---|---|
 | `pause_begin` | writing | `sweep_run`, the reads in `check_eligibility` and `_handle_polled`, `link_for`, `_limit_reached`, the read in `pause_held._evaluate`, the message sweep | See below |
-| `pause_sources` | read | `pause_context._read_store`, `pause_claim._read_request` | The member's program, its members with each one's checkout path on the calling machine, the PM precedent, the standing answers, and a named request's result or that it is no longer stored |
+| `pause_sources` | read | `pause_context._read_store`, `pause_claim._read_request` | The member's program, its members with each one's checkout path and Context Forge id on the calling machine, the PM precedent, the standing answers, and a named request's result or that it is no longer stored |
 | `question_insert` | writing | `insert_question` | Inserts the row as `claimed` with its answering run, or as `waiting_on_pm` with a reason. The row's machine is the acting machine |
 | `question_hold` | writing | `insert_held`, then the read in `_evaluate` | Inserts the held row and returns its request's state |
 | `question_claim_held` | writing | `claim_held` | `waiting_on_request` to `claimed`. When it loses, says whether another claim or an answer won |
 | `question_replace_claim` | writing | `replace_claim` | Swaps a dead claim's answering run |
-| `question_wait` | writing | `settle_waiting`, `settle_held_waiting` | Moves a named claim, or a held row, to `waiting_on_pm` |
+| `question_wait` | writing | `settle_waiting`, `settle_held_waiting` | Moves a named claim, or a held row, to `waiting_on_pm`, with the reason, the detail and the evidence. Every decline goes here: the answerer's, a run that failed or stalled, a claim path that stopped |
 | `question_settle` | writing | `settle_answered`, then `_wait_on_pm` after a gate refusal | Runs the gate. Answered: writes the answer and takes its resume claim (D6). Refused by the gate: moves the row to `waiting_on_pm` with the reason. Claim gone: superseded |
 | `resume_claim` | writing | `mark_resume_started` | Takes the resume claim for an answer (D6) |
 | `resume_read` | read | The reads at the top of `resume` | For `resume-run`: the question, the answer text and `resume_wait_seconds`, if the claim id is still the answer's |
@@ -249,43 +249,43 @@ Status: decided
 | `question_settle` | The row is `claimed` by the named answering run | Superseded. No resume |
 | `resume_claim` | The claim is free (D6) | Skipped as `resume_in_progress`, or given the final outcome already stored |
 
-**`pause_begin`.** The request holds the caller (`here`, 261 D5), the run id, what the poll said about the pause (paused or not, the checkpoint kind, the paused time, the question), and the run's fate for the sweep, or none when the poll could not say. In one transaction the hub:
+**`pause_begin`.** The request holds the caller (`here`, 261 D5), or none when the run alone decides the skip (D5, step 1), the run id, what the poll said about the pause (paused or not, the checkpoint kind, the paused time, the question), and the run's fate for the sweep, or none when the poll could not say. In one transaction the hub:
 
-1. Closes the run's older open questions on the calling machine, by today's table.
+1. Closes the run's older open questions on the calling machine, by today's table with the one change in D9: an answer with no outcome is left to its resume claim.
 2. Runs the message sweep, when it is due.
-3. Stops there if the run alone decides the skip (not paused, another checkpoint kind, no question text), or if the run is an answering run.
+3. Stops there if the run alone decides the skip (not paused, another checkpoint kind, no question text), or if the run is an answering run. A request with no caller that gets past this step is refused as `malformed_call`; the client and the hub decide "the run alone" with the same function, `classify_run_only`, so it does not happen.
 4. Finds the caller with `find_caller`. Not a project and not in a program are returned as such.
 5. Reads the question's row and its latest answer. A row on another machine is returned as that, with the machine's name.
 6. With no row: reads the question's request link, and whether the run's answer limit is reached.
-7. With a held row: reads its request's effective state, and the request's result when it is done.
+7. With a held row: reads its request's effective state, the request's result when it is done, and whether the run's answer limit is reached. Both claim paths make that check before they gather, as `_limit_reached` does today.
 
 The reply holds what the sweep closed, and then either the skip or: the member, its answering settings (models, cost cap, answer limit, passage bound, rules, not-authorized items), `answering_wait_seconds`, `resume_wait_seconds`, the row with `claim_stale`, the latest answer, the link, the limit result and the request's state. These are the settings that come from the hub with the first call. The client reads no `config.yaml` in the pause path.
 
-Each replaced transaction stands alone today, protected by its own compare-and-set, with nothing local between them once the `cf` lookup is done first. So merging them changes no outcome.
+Each replaced transaction stands alone today, protected by its own compare-and-set, with nothing local between them once the `cf` lookup is done first. So merging them changes no outcome, with one exception. Today an answering run's own pause is skipped by a store read before `cf` is asked. Here `cf` is asked first, because the store read is inside `pause_begin`. The skip is the same when `cf` answers, since it is decided at step 3, before the caller is looked at. When `cf` fails, that call now exits 3 with nothing written, where today it was skipped. Nothing waits on it: an answering run's pause is settled by its claimant or by the dead-claim path, not by this call.
 
 ### D5 — `handle_pause` on steps
 Status: decided
 
-The order of work is today's. What changes is where each piece runs.
+The order of work is today's, apart from the answering-run skip that D4 describes. What changes is where each piece runs.
 
-1. **Client.** Poll the run. Gather the caller with `cf`. A failure of either is exit 3 with nothing written, as today.
+1. **Client.** Poll the run. If the run alone decides the skip (`classify_run_only`: not paused, another checkpoint kind, no question text), no `cf` call is made, as today, and `pause_begin` is sent with no caller. Otherwise gather the caller with `cf`. A failure of the poll or of `cf` is exit 3 with nothing written, as today.
 2. **`pause_begin`.**
-3. **Client.** If the reply is a skip, return it. If it is "not in a program", gather the checkout, call `add` with an empty document (261 D6), and call `pause_begin` again. A rejected `add` is today's skip.
+3. **Client.** If the reply is a skip, return it. If it is "not in a program", gather the checkout, call `add` with an empty document (261 D6), and call `pause_begin` again. A rejected `add` is today's skip. `add` is an operation, not a step, so `Steps` does not carry it. `handle_pause` is handed one more callable, `register`, which `wiring` builds from the placement `amoeba add` itself uses: the client part, then the hub part in process or the `add` door call. The pause modules import neither `add` nor the store.
 4. **Client.** Read the run file. Apply the three checks that need it or the directory: prompt-only, wrong checkout, another member's question. A row on another machine is a new skip, `other_machine`.
 5. **Client.** Classify, with `claim_stale` from the reply, and take today's path:
-   - **No row, no link.** If the limit is reached: `question_insert` as waiting. Else `pause_sources`, gather, make the scratch, `question_insert` as claimed, run the answering run, read its replies, `question_settle`.
+   - **No row, no link.** If the limit is reached: `question_insert` as waiting. Else `pause_sources`, gather, make the scratch, `question_insert` as claimed, run the answering run, read its replies, and settle: `question_settle` for an answer, `question_wait` for a decline.
    - **No row, a link.** `question_hold`. Then by the request's state: still open is `held`; done goes to the held claim; ended without a result is `question_wait`.
    - **A held row.** The same, from the state `pause_begin` returned.
-   - **A held claim.** `pause_sources` with the request, gather, scratch, `question_claim_held`, run, `question_settle`.
-   - **A claimed row.** Poll its answering run. Today's dead-claim table decides: settle from the scratch (`question_settle`), settle as stalled (`question_wait`), restart (`pause_sources`, `question_replace_claim`, run, `question_settle`), or leave a young claim alone.
+   - **A held claim.** If the limit is reached, from the result `pause_begin` returned: `question_wait` as `answer_limit_reached`, with nothing gathered and no run started, as today. Else `pause_sources` with the request, gather, scratch, `question_claim_held`, run, and settle as above.
+   - **A claimed row.** Poll its answering run. Today's dead-claim table decides: settle from the scratch (`question_settle` or `question_wait`, by what the scratch holds), settle as stalled (`question_wait`), restart (`pause_sources`, `question_replace_claim`, run, settle as above), or leave a young claim alone.
    - **Answered, not resumed.** `resume_claim`, then the resume (D6).
    - **Settled, closed, waiting on the PM.** Skipped, as today.
 6. **Client.** After an answered settle, the resume, with the claim the settle returned.
-7. **Client.** The after-step: the prune when due (D12), then the work claim (D10).
+7. **Client.** The prune when due, whose problems are a note in the result, as today (D12). Then, on every path including a raise, the after-step's work claim (D10).
 
 **A stale claim** is one whose `updated_at` is at least `pause_claim_seconds` old on the hub's clock: `answering_wait_seconds + 2 * CALL_BOUND_SECONDS`. The hub stamps the claim when it applies `question_insert`. The claimant may get that reply up to one call bound later, then waits up to `answering_wait_seconds` for its run, and its settle may take one more call bound to land. A claim judged at `answering_wait_seconds` alone would be called dead while its owner is still inside its own limits. The same function is used with no client file, so there is one definition.
 
-**The gather stays on the client.** `program_sources` (the member list and the concept file, read from another member's checkout) and the rest of `pause_context` run on the machine with the files, as 261 D6 left them. The hub never runs them. `pause_sources` gives them what they read from the store today: the program, its members, and each member's checkout path on the calling machine. A concept member with no checkout on this machine is 261's existing `missing` problem.
+**The gather stays on the client.** `program_sources` (the member list and the concept file, read from another member's checkout) and the rest of `pause_context` run on the machine with the files, as 261 D6 left them. The hub never runs them. `pause_sources` gives them what they read from the store today: the program, its members, and each member's checkout path and Context Forge id on the calling machine. The caller's own Context Forge id comes from its `here`. Every `cf -p` call in the gather takes one of those ids and never a member id, which `cf` does not know for a member made after 261 (261 D6). A concept member with no checkout on this machine is 261's existing `missing` problem.
 
 The calls log, the scratch and every log file stay on the machine that ran the command.
 
@@ -315,7 +315,7 @@ So a refused resume is never handed out by `claim_work`. It is tried again by a 
 **The resume on a claim.** `operations.resume.resume(steps, claimed, deps)` takes the claim's payload: the question, the answer text, the claim id and `resume_wait_seconds`. It polls the run, starts `sq run --resume`, follows it as today, and calls `resume_record`. The claim now comes before the first poll, because three of the four callers are handed it by the hub. Two cases follow from that:
 
 - The run is not at this pause: `resume_record` with `not_delivered`, as today.
-- The first poll cannot be read: `resume_record` with `refused` and the reason, which frees the claim. `answer` then returns the refused result and `handle-pause` raises `SquadronError`, as each does today.
+- The first poll cannot be read: `resume_record` with `refused` and the reason, which frees the claim. `answer` then returns the refused result and `handle-pause` raises `SquadronError`, as each does today. One case records nothing: an earlier attempt's file holds `started` (below).
 
 **What an attempt leaves on its own machine.** Each attempt keeps one small file, `logs/resume/<run id>/<answer seq>.attempt`, on its own machine. A later attempt for the same answer runs on the same machine and reads it first. An attempt writes it twice:
 
@@ -332,7 +332,11 @@ Each write goes to a temporary name and is renamed, so a reader sees a whole fil
 
 So a resume that worked is recorded as `resumed` whether its attempt stopped before it judged or after, and the PM is not told to answer a run that has already moved on. A `refused` in the file is never replayed: `handle-pause` retries a refused resume with the same answer, and a replay would stop it from ever starting `sq` again.
 
-A write of the file that fails is logged at error level and not retried, and the attempt goes on; `resume_record` is the record that counts. Without the file a later attempt behaves as today. So a wrong `not_delivered` now takes both a failed write to the machine's own state directory and the attempt stopping before its record lands.
+**`started` in the file and a first poll that cannot be read.** The attempt records nothing and leaves the file as it is. `resume-run` exits 3 with the error in its log, and `handle-pause` raises `SquadronError`. A `refused` here would say nothing was started, when the earlier attempt may have resumed the run, and writing it to the file would lose `started`. The claim runs out and the next attempt polls again. The cap in D10 bounds how many times `claim_work` hands it out.
+
+**The close sweep and the claim.** The sweep never ends an answer that has no outcome (D9). Such an answer is always work for its machine, so a resume attempt, which can read the attempt file, is what records its outcome: `resumed`, `not_delivered` or `refused`. If the sweep judged it first, a `list` or the next pause's `handle-pause` would mark a resumed answer `not_delivered` before `claim_work` in that same command handed it out, and the file would never be read.
+
+A write of the file that fails is logged at error level and not retried, and the attempt goes on; `resume_record` is the record that counts. Without the file a later attempt behaves as today. So for an answer with no outcome, a wrong `not_delivered` now takes both a failed write to the machine's own state directory and the attempt stopping before its record lands. The one other way to a wrong `not_delivered` is the retry of a refused resume that D9 describes.
 
 `resume_claim` that finds a claim in flight returns that, and `handle-pause` reports a new skip, `resume_in_progress`.
 
@@ -365,7 +369,7 @@ Status: decided
 **When a wake is due** for a member, read from records and judged on the hub's clock:
 
 1. The member has an open request that has not expired, and `send` wanted a wake for it. `send` decides that as it does today: when the request is `open` after the call (sent, or sent again unchanged) and today's three conditions hold at that moment, it sets the request's new column `wake_wanted_at` to the hub's time. A request sent while a session was live gets no mark and is never woken later, as today.
-2. No wake of the member was claimed since that mark. A mark gets one wake. A row whose command was started (it has a pid) is that wake whatever became of it, a wrapper that was killed included. One kind of claim does not count: a row that is unended, has no pid and is past its deadline. That is a claim nobody picked up (see "A lost claim" below).
+2. No wake of the member was claimed at or after that mark. The comparison includes the mark's own time, because a wake that `send` claims in the call that set the mark carries the same time. A mark gets one wake. A row whose command was started (it has a pid) is that wake whatever became of it, a wrapper that was killed included. One kind of claim does not count: a row that is unended, has no pid and is past its deadline. That is a claim nobody picked up (see "A lost claim" below).
 3. Today's three conditions hold now: no live session in the member, no live wake, and fewer than `max_wakes_per_day` wakes in the window. A live wake is today's rule, unchanged: unended and before its `deadline_at`, with or without a pid.
 
 `steps.wake.wake_due` is the one function for this. `claim_wake` calls it in its own transaction, so the read and the claim cannot differ.
@@ -402,6 +406,13 @@ The sweep closes open questions whose run has left their pause. Only the run's m
 
 261 left this sweep out of the door's `status`. It now runs in both ways.
 
+**An answered question whose run has left the pause.** Today the sweep marks its latest answer `not_delivered` when the outcome is none or `refused` and nothing has been in flight for `resume_bound_seconds`. Two things change, in both sweeps and in both ways:
+
+- **No outcome: the sweep leaves it.** That answer is work for its machine (D10), and the sweep runs inside the command, before that command's own after-step. The resume attempt that `claim_work` hands out records the outcome: `resumed` from the attempt file, or `not_delivered` when it polls and the run is not at the pause. An answer whose attempts never record anything is recorded `refused` after `MAX_AUTOMATIC_STARTS` hand-outs (D10), and is then the next case. So no answer keeps an empty outcome for ever on a machine that calls.
+- **`refused`: marked `not_delivered`, as today,** once its newest sign of life (recorded, resume started, outcome recorded) is `resume_claim_seconds` old. The bound is the claim's, not `resume_bound_seconds`, so a retry that `handle-pause` has in flight is never judged inside its own claim.
+
+One case still ends wrong, as it does today. `handle-pause` retries a refused resume, starts the run, and is killed before it records. The outcome on the hub is still `refused`, the run has moved on, and the sweep marks the answer `not_delivered` once the claim has run out. `claim_work` does not hand out a refused resume, so nothing reads the attempt file first. It takes a kill in the few seconds between the start and the record of a retry run by hand or by the hook, and the run itself is not harmed.
+
 A question on another machine is never closed by this machine's listing. It stays as the store has it until its own machine calls.
 
 ### D10 — Work that belongs to a machine
@@ -420,7 +431,7 @@ Each is an existence query on an index, and the function stops at the first hit.
 
 `handle_call` runs it inside the call scope, after the operation, and puts `work: true` or `work: false` in every done reply. A repeat that gets a kept result gets a fresh flag. A refused reply carries no flag.
 
-**When the flag cannot be worked out.** The flag needs the config's limits. If the hub's `config.yaml` cannot be loaded, the reply carries no `work` key and carries `work_problem`, the config error's text with the file and key. The client prints it as one line on stderr: the hub could not tell whether this machine has work waiting. It is never reported as false. This can only reach the operations that read no config: `decisions`, `mark_read`, `dismiss`, `retract` and `withdraw`. Every other operation and every step reads the config, so with a bad config the call itself is refused as `hub_error` with the same text. Work can come to exist with no call at all, when a request expires, which is why the flag does not rely on the call that made the work.
+**When the flag cannot be worked out.** The flag needs the config's limits. If the hub's `config.yaml` cannot be loaded, the reply carries no `work` key and carries `work_problem`, the config error's text with the file and key. The client prints it as one line on stderr: the hub could not tell whether this machine has work waiting. It is never reported as false. A call loads the config only when its own work needs it, as today, so `work_problem` reaches exactly the calls whose own work needs none. Among the operations those are `decisions`, `mark_read`, `dismiss`, `retract` and `withdraw`. Among the steps they include `resume_record`, `wake_set_pid` and `wake_finish`, which load no config on purpose: a broken config must not stop a resume's outcome or a wake's end from being recorded, as it does not stop the wake wrapper today. A call whose own work needs the config is refused as `hub_error` with the same text. Work can come to exist with no call at all, when a request expires, which is why the flag does not rely on the call that made the work.
 
 **The claim call.** `claim_work` claims up to `MAX_WORK_PER_CLAIM` (5, today's `MAX_STARTS_PER_CALL`) items in one transaction, and returns them: resumes first, then held questions never started, then the oldest starts, then wakes. Work beyond the cap is left as it is, with nothing marked. The reply to `claim_work` carries the flag like any other, and it is still true, so the machine's next call claims the next five. A `handle-pause` child runs the after-step, so a batch over the cap drains with no further command.
 
@@ -438,15 +449,19 @@ It is a writing call, so a repeat inside the retry time returns the same items. 
 
 **A resume that keeps dying.** The same cap applies to resumes. Each resume `claim_work` hands out adds one to the answer's `resume_start_count`. An attempt that dies with the run still at its pause, before it starts `sq run --resume` or after a start that did not take, records no outcome, so without a cap it would be handed out again for ever. When an answer that is due already has `MAX_AUTOMATIC_STARTS` such claims, `claim_work` does not hand it out. It records the outcome `refused`, with a detail that gives the count and says no attempt recorded an outcome. A refused resume is not pending work, shows in `list`, and is tried again by a new `answer` or by `handle-pause` for that run (D6).
 
-**The after-step.** `wiring_steps.after_call` replaces `wiring_release.start_after`. It runs at the end of `wiring.invoke` for every operation on the CLI door, and at the end of `amoeba handle-pause`, on every path including a raise. `invoke` takes whether to run it: on the MCP door it does not, and 263's tick runs it (263 D7). If the last reply the command got had the flag set, it makes one `claim_work` call and hands the items to `work_start.start_claimed`, which starts each one detached and does not wait:
+**The after-step.** `wiring_steps.after_call` replaces `wiring_release.start_after`. It runs at the end of `wiring.invoke`, on both doors as `start_after` does today, and at the end of `amoeba handle-pause`, on every path including a raise. On the CLI door it runs after every operation. On the MCP door it runs after every operation but `answer`: the MCP deadline check bounds an `answer` call by its resume alone (`wiring.check_deadline`), and `start_after` does not run after `answer` today either. So a `reply` or `cancel` made through an MCP tool still starts the held question it released, as it does today. 263 moves the MCP door's after-step to the session's tick, which this slice does not have (263 D7).
 
-- a resume: `amoeba resume-run <seq> <claim id>`;
+It first runs the file clean-up when one is due (D12), except after `handle-pause` and `status`, which have run their own. Then, if the last reply the command got had the flag set, it makes one `claim_work` call and hands the items to `work_start.start_claimed`, which starts each one detached and does not wait:
+
+- a resume: `amoeba resume-run <seq> <claim id>`. Its own stdout and stderr go to `logs/resume-run/<seq>-<stamp>.stdout.log` and `.stderr.log`, which need no run id and are removed by age like any other log. The logs of the `sq run --resume` it starts stay under `logs/resume/<run id>/`, as today;
 - a `handle-pause`: `amoeba handle-pause <run id>` in the row's checkout, as today;
 - a wake: `amoeba wake-run <wake id>`, as today.
 
 It never raises and never changes the operation's result, as today. A start that fails is logged and written to the calls log (a `handle-pause`), recorded as `refused` (a resume) or `start_failed` (a wake).
 
-With no client file the after-step asks `LocalSteps` for the flag with one read and does the same. So on the PM's install work now starts after any call, where today it started after seven operations.
+When the command stopped because a call got no reply (`HubUnreachableError`), the after-step makes no call: no `open_runs` and no `claim_work`. The hub is not answering, and each call would wait one more call bound. Nothing is lost, because the flag is worked out again on the machine's next call.
+
+With no client file the after-step asks `LocalSteps` for the flag with one read and does the same. So on the PM's install work now starts after any CLI call and after any MCP call but `answer`, where today it started after seven operations.
 
 `resume-run` and `wake-run` do not run the after-step. A `handle-pause` child does, so a batch over the cap drains through the children, as today.
 
@@ -471,16 +486,16 @@ Status: decided
 
 A command never carries on past a step it has no answer for, and never starts a process on a claim it did not get. `wake_set_pid` with no reply is the one exception. The claim was already read with `wake_read`, the step only records a pid, and the row's deadline bounds the command with or without it. Stopping there would end a working agent because the hub was away for a minute.
 
-**A reply that does not validate.** A done reply that does not fit the step's reply model raises `StepReplyError`, a new operational error whose text names the step and the field, and for a writing step says the hub applied it. It is handled exactly as no reply is: the rows of the table above apply, and the command exits 3 with the error in its log. It cannot come from an older or newer hub, which the door version refuses first. It means the two sides disagree inside one version, which is a bug, and a test calls every step through `DoorSteps` against the in-process hub, so each reply is run through its model.
+**A reply that does not validate.** A done reply that does not fit the step's reply model raises `StepReplyError`, a new operational error whose text names the step and the field. It is raised on the client, so it joins `wiring.OPERATIONAL_ERRORS` and not the hub's `OPERATION_ERRORS` (260 D8). For a writing step the text also says the hub applied it. It is handled exactly as no reply is: the rows of the table above apply, and the command exits 3 with the error in its log. It cannot come from an older or newer hub, which the door version refuses first. It means the two sides disagree inside one version, which is a bug, and a test calls every step through `DoorSteps` against the in-process hub, so each reply is run through its model.
 
 `UNKNOWN_ADVICE` for every writing step is one text: the command stopped at this step; the next call from this machine starts the work again from what the store holds.
 
 ### D12 — Clean-up of local files
 Status: decided
 
-`prune` keeps its marker file in the state directory and its limit of one walk an hour. Its trigger widens to the architecture's "from any call": today the code calls it at the end of `handle-pause` and of `status` only (`operations/prune.py`), and now the after-step (D10) calls it, so every operation and every `handle-pause` does. The walk covers everything under the machine's logs directory by age, as today, which includes each wake's logs and each resume's logs and attempt file; `wake-run` and `resume-run` are only ever started by a command whose after-step ran. When a walk is due it calls `open_runs`, which returns the calling machine's open run ids and answering run ids and `prune_after_days` from the hub's config. It then walks its own scratch and logs as today.
+`prune` keeps its marker file in the state directory and its limit of one walk an hour. Its trigger widens to the architecture's "from any call": today the code calls it at the end of `handle-pause` and of `status` only (`operations/prune.py`), and now the after-step (D10) also calls it, after every other operation. `handle-pause` and `status` keep their own call, in the same place as today, because its problems go into their result. The walk covers everything under the machine's logs directory by age, as today, which includes each wake's logs, each resume's logs and attempt file, and the `resume-run` logs; `wake-run` and `resume-run` do not prune, and the next command on that machine does. When a walk is due it calls `open_runs`, which returns the calling machine's open run ids and answering run ids and `prune_after_days` from the hub's config. It then walks its own scratch and logs as today.
 
-Through the door, 261 left the prune out of `status`. It now runs there in the after-step, with the `open_runs` reply `status` already has from the sweep (D9), so `status` makes that call once. A failed `open_runs` for the prune never changes the operation's result: it is a note in the result of `handle-pause` and `status`, as a failed prune is today, and a log line for any other operation. The marker is not touched, so the next call tries again.
+Through the door, 261 left the prune out of `status`. It now runs there in `status`'s client part, after the hub call and before the result is returned, with the `open_runs` reply `status` already has from the sweep (D9), so `status` makes that call once. What the prune could not do never fails the operation. In `handle-pause` and `status` it is a note in the result, as today: `detail` and `file_problems`. After any other operation the after-step runs it when the result is already made, so there it is a log line. A failed `open_runs` leaves the marker untouched, so the next call tries again.
 
 The hub prunes nothing on a client. Store rows are cleaned by the message sweep on the hub's clock, as in 261.
 
@@ -539,8 +554,8 @@ Status: decided
 
 Documents brought in line:
 
-- `docs/store-contract.md`: the three columns, the two new reasons, and that every time in the store is the store's own clock.
-- `docs/cli-contract.md`: `waiting_on_machine` on `answer`, `wake_waiting_on` on `send`, the machine on question and wake entries, the skips `other_machine` and `resume_in_progress`, the `amoeba resume-run` command, and work starting after any call.
+- `docs/store-contract.md`: the six columns of D14, the three new values (`machine_removed` as a closed reason and as a wake outcome, `starts_exhausted` as a waiting reason), and that every time in the store is the store's own clock.
+- `docs/cli-contract.md`: `waiting_on_machine` on `answer`, `wake_waiting_on` on `send`, the machine on question and wake entries, the skips `other_machine` and `resume_in_progress`, the `amoeba resume-run` command and its `logs/resume-run/` logs, and work starting after any call but an MCP `answer`.
 - `docs/config-contract.md`: the two claim limits and what they are worked out from.
 - `docs/squadron-hook.md`: `handle-pause` on a joined machine, and what a hub that is down leaves behind.
 - `docs/mcp-server.md`: the new result fields.
@@ -568,7 +583,7 @@ Status: decided
   | `resume-run` | 2 | `resume_read`, `resume_record` |
   | `wake-run` | 3 | `wake_read`, `wake_set_pid`, `wake_finish` |
 
-  Each door call is bounded by the load test above and, when the hub does not answer, by 260's `CALL_BOUND_SECONDS` (43). A command stops at the first call that gets no reply (D11), so an unreachable hub costs one call bound, not one per call. The target for the door's share of a command on an idle hub is its call count times 200 ms: at most 0.6 seconds for `answer`, `send`, `status` and `list` with `claim_work` counted, and two seconds for the longest `handle-pause`, whose answering run takes minutes.
+  Each door call is bounded by the load test above and, when the hub does not answer, by 260's `CALL_BOUND_SECONDS` (43). A command stops at the first call that gets no reply (D11), and its after-step then makes no call (D10), so an unreachable hub costs one call bound, not one per call. The target for the door's share of a command on an idle hub is its call count times 200 ms: at most 0.6 seconds for `answer`, `send`, `status` and `list` with `claim_work` counted, and two seconds for the longest `handle-pause`, whose answering run takes minutes.
 
 ### Departures from the parent documents
 
@@ -578,7 +593,8 @@ Status: decided
 | A pause claim is handed out again after `answering_wait_seconds` | After `answering_wait_seconds + 2 * CALL_BOUND_SECONDS` | The claimant's own limit starts when it gets the reply and ends when its settle lands. The architecture says every claim's limit allows for the retries of its last call |
 | Work is a resume, a `handle-pause` for a held question, or a wake | Also a `handle-pause` for a claim that went stale | The plan's own criterion: a `handle-pause` cut off by the hub is started again by the next call |
 | The resume claim is the started mark | The started mark and a claim id | The mark alone cannot tell a finished refused attempt from a new one in flight |
-| The resume polls, then marks | Claims, then polls. A first poll that fails is recorded as `refused` | Three of four callers are handed the claim by the hub. Without the record the claim would block a retry until it ran out |
+| The resume polls, then marks | Claims, then polls. A first poll that fails is recorded as `refused`, unless an earlier attempt's file holds `started` (D6) | Three of four callers are handed the claim by the hub. Without the record the claim would block a retry until it ran out |
+| Plan: the sweeps become client-run with hub steps, with no change to what they close | The close sweep no longer ends an answer that has no outcome, and judges a refused one at `resume_claim_seconds` (D9) | The sweep runs inside the command, before that command's after-step. It would mark a resumed answer `not_delivered` before the resume attempt that reads the attempt file was handed out |
 | Pending work is read from records that already exist | `send` records on the request that it wanted a wake | Another machine must be able to read that a wake is wanted, and `send` must stay the one that decides, as today |
 | The resume claim allows the network retry time in place of the one store wait | It allows `2 * CALL_BOUND_SECONDS`: 86 seconds, where the retry time alone is 30 | A call can take the retry time plus one connect and one read, and two calls sit inside the claim: the one that returns it and the one that records the outcome |
 | The clean-up runs on today's trigger | Today's code triggers it from `handle-pause` and `status` only; it now runs from any call | The architecture describes the trigger as any call, and a machine that runs neither command would keep its wake and resume logs |
@@ -604,7 +620,14 @@ This is a refactoring slice. The order keeps the suite passing on the local stor
 
 - **What moves.** Every `store.read()` and `store.write()` block in the client-run modules moves into a function in `operations.steps`. The client-run modules take `Steps`.
 - **Consumers.** `cli.commands.run_handle_pause`, `cli.wake_command.run_wake_run`, `wiring._dispatch` (for `answer`, `status`, `send`), `wiring.invoke` (the after-step) and `mcp.detached` (unchanged: it starts the CLI) are the callers. `request_release` and `wiring_release` are deleted in the task that moves their last caller.
-- **Behavior kept.** With no client file every existing pause, resume, wake, hold and sweep test passes, with three kinds of edit: a test that built a `Store` for a client-run function builds `LocalSteps` on it; a test that pinned the stale age or the resume bound uses the two new limits; a test of `start_after`'s seven operations asserts the after-step for any operation. 260's pinned tuple test takes the new door version.
+- **Behavior kept.** With no client file every existing pause, resume, wake, hold and sweep test passes, with five kinds of edit:
+  - A test that built a `Store` for a client-run function builds `LocalSteps` on it.
+  - A test that pinned the stale age or the resume bound uses the two new limits.
+  - A test of `start_after`'s seven operations asserts the after-step for any operation. The test that the MCP door starts a held question after `reply` and `cancel` (`tests/test_wiring_release.py`) stays and passes against the after-step.
+  - The sweep test that an unresumed answer past the bound becomes `not_delivered` (`tests/operations/test_question_sweep.py`) is split: with no outcome the sweep leaves it, and a refused one is marked (D9).
+  - The test that an answering run is skipped before Context Forge is asked (`tests/operations/test_pause_eligibility.py`) asserts the skip with `cf` answering, and exit 3 with `cf` failing (D4).
+
+  The test that a held question at the answer limit waits and starts nothing (`tests/operations/test_pause_claim_held.py`) passes with no edit beyond `LocalSteps`. 260's pinned tuple test takes the new door version.
 - **Existing data.** Migration 013, and the opener's one write that gives old rows the `local` machine.
 
 ### API Contracts
@@ -631,7 +654,7 @@ Migration 013 as in D14. `EXPECTED_SCHEMA_VERSION` becomes 13. `tests/store/test
 
 ### Provides to Other Slices
 
-- **The work flag and `claim_work`.** 263's tick reads `work` from its reply and runs the same after-step.
+- **The work flag and `claim_work`.** 263's tick reads `work` from its reply and runs the same after-step. 263 also takes the after-step off the MCP door's tool calls, and builds the switch on `wiring.invoke` for that; in this slice `invoke` has no such switch.
 - **`Steps`.** 264 deletes `LocalSteps` and the mode choice; the client-run commands do not change. 264's unit tests run the steps against an in-process hub.
 - **The resume claim** and **the hub steps of the pause path.** 320 replaces the answering run between `question_insert` and `question_settle` and keeps the steps.
 - **The machine on questions and wakes.** 263 uses it to show runs on other machines.
@@ -680,13 +703,23 @@ A step that fails at the door fails with 260's errors. This slice adds one, `Ste
 - A wake row with a pid, unended and past its deadline, does not hold off a wake for a newer mark, and no second wake is handed out for its own mark.
 - A step reply that does not fit its model stops the command at that step with `StepReplyError`, exit 3.
 - With seven resumes waiting on one machine, one `claim_work` returns five and its reply has `work: true`; the next returns two.
-- With the hub's `config.yaml` broken, a `mark_read` reply carries `work_problem` and no `work`, and the client prints it. `status` whose `open_runs` fails exits 3 and makes no further call.
+- With the hub's `config.yaml` broken, a `mark_read` reply carries `work_problem` and no `work`, and the client prints it. A `wake_finish` in that state ends its row and carries `work_problem` too. `status` whose `open_runs` fails exits 3 and makes no further call.
+- A resume attempt is killed after it started `sq run --resume`, and the run moves on. Once the claim has run out, the next call from that machine is, in three separate tests, `list`, `status`, and `handle-pause` for the run's next pause. In each, the sweep in that call leaves the answer alone, the call's after-step hands the resume out, and the answer is recorded `resumed`. The same three calls after a `resumed` record that got no reply record `resumed` from the attempt file.
+- A resume that never started, on a run that then left the pause: the sweep leaves the answer, and the resume attempt handed out by `claim_work` records `not_delivered`. A refused answer whose run has left the pause is marked `not_delivered` by the sweep once its newest sign of life is `resume_claim_seconds` old, and not before.
+- No answer keeps an empty outcome on a machine that calls: with every attempt dying before it records, the third hand-out is followed by `refused`, and the sweep then marks it `not_delivered` if the run has left the pause.
+- With no client file, a `reply` and a `cancel` made through the MCP door each start the `handle-pause` of the held question they released. An MCP `answer` runs no after-step.
+- A held question whose request is done, on a run already at its answer limit, waits on the PM as `answer_limit_reached`. Nothing is gathered and no answering run starts. The same for a question held and released in one call.
+- A `handle-pause` for a run that is not paused makes no `cf` call. One for an answering run's own pause is skipped as `answering_run` when `cf` answers.
+- A `handle-pause` that fails at `pause_begin` with the hub stopped returns after one call bound: its after-step makes no `open_runs` and no `claim_work` call, including when a prune is due.
+- A prune problem is in the `detail` of `handle-pause` and in `file_problems` of `status`, as today, and is a log line after `send`.
+- A resume attempt that finds `started` in the attempt file and cannot read its first poll records nothing and leaves the file. The next attempt polls, finds the run gone from the pause and records `resumed`.
+- A wake that `send` claims in the call that set the mark is that mark's wake: after it ends, no second wake is due.
 - Two `question_settle` calls for one run, sent at once with one answer left under the limit: one is answered and the other waits on the PM as `answer_limit_reached`.
 - A client whose clock is an hour ahead runs a pause, an answer, a held question and a wake: every stored time is the hub's, and no expiry, age or claim differs from a run with a correct clock.
 - No step request model has a date or time field.
 - `handle-pause` called for a run whose question is on another machine is skipped as `other_machine`, and that machine's rows are not swept.
 - `status` from machine A closes A's open question whose run is gone, and leaves B's open question open.
-- `rm-machine` leaves no open question, no answer without a final outcome and no unended wake on that machine. A later `answer` to one of those questions is recorded and marked `not_delivered`.
+- `rm-machine` leaves no open question, no question whose latest answer lacks a final outcome, and no unended wake on that machine. A later `answer` to one of those questions is recorded and marked `not_delivered`.
 - A wake wrapper whose machine was removed stops its command's process group at its next step.
 - Each machine's scratch and logs past `prune_after_days` are removed by that machine's prune through the door, and those of an open question on that machine are kept.
 - `handle-pause` on a joined machine reads no local `config.yaml`: it passes with none present.
@@ -707,12 +740,13 @@ A step that fails at the door fails with 260's errors. This slice adds one, `Ste
 - 263 can start a machine's waiting work from a tick by reading `work` and calling the after-step.
 - 264 can delete `LocalSteps` without changing a client-run command.
 - The PM's install, with no client file, behaves as before, with these differences, because the local way runs the same steps:
-  - Waiting work starts after any call, where today it starts after seven operations (D10).
-  - The file clean-up runs from any call (D12).
+  - Waiting work starts after any CLI call and after any MCP call but `answer`, where today it starts after seven operations on both doors (D10).
+  - The file clean-up runs from any call that runs the after-step (D12).
   - A question or a resume is started automatically at most three times (D10).
   - A pause claim counts as dead at `pause_claim_seconds`, 86 seconds later than today's `answering_wait_seconds` (D5).
-  - An answer whose resume recorded no outcome is taken again by the next call, once its claim is `resume_claim_seconds` old: 216.5 seconds with the example config (D6). Today the sweep judges such an answer after `resume_bound_seconds`, 135.5.
+  - An answer whose resume recorded no outcome is taken again by the next call, once its claim is `resume_claim_seconds` old: 216.5 seconds with the example config (D6). Its resume attempt records the outcome. Today the sweep marks such an answer `not_delivered` after `resume_bound_seconds`, 135.5, once its run has left the pause; the sweep now leaves it, and judges only a refused answer, at `resume_claim_seconds` (D9).
   - The resume claims before its first poll and keeps an attempt file. A first poll that cannot be read is stored as `refused`, where today nothing is stored (D6).
+  - `handle-pause` for an answering run's own pause asks `cf` before it is skipped, and exits 3 if `cf` fails (D4).
   - A wake that `send` wanted and whose claim was lost is due again after its deadline (D8).
   - Question and wake entries show the machine `local`.
 
@@ -769,7 +803,7 @@ On the local store, in a throwaway home seeded at schema 12: `amoeba list` migra
 ### Mitigation Strategies
 
 - Every start is behind a claim taken in one statement inside the hub's one write lock, and each claim has a test with three callers at once and a test with a lost reply. Squadron's own run lock still refuses a second resume.
-- The client-run modules keep their order of work, and the existing suite runs unchanged on `LocalSteps` apart from the three kinds of edit listed. The step functions are today's store calls moved, not rewritten.
+- The client-run modules keep their order of work, and the existing suite runs unchanged on `LocalSteps` apart from the five kinds of edit listed. The step functions are today's store calls moved, not rewritten.
 - The flag is four existence queries on indexes, and the load test bounds it on a seeded store.
 
 ## Implementation Notes
@@ -812,11 +846,12 @@ Done as the person running it. Before 264 only fixtures are joined; the local st
 - **The hub goes down in the middle of a `handle-pause`.** The command stops. What happens next depends on whether the question's row was written. If it was, nothing needs doing: once the hub is back and the claim is `answering_wait_seconds` plus two call bounds old, the next call from that machine starts it again. If the hub went down before the row was written, there is nothing for the hub to hand out: `list` on that machine shows the run as paused with no record, and the PM or an agent runs the command it gives, as for a hook that never fired.
 - **A reply carrying claimed work is lost.** The client's retry gets the same items. If the client gave up, the work is handed out again: a resume after 216.5 seconds with the example config, a `handle-pause` once its start is `answering_wait_seconds` old, a wake after `wake_timeout_seconds`.
 - **`sq` is broken on a machine.** A resume records `refused` with the reason. A `handle-pause` exits 3 and is started again at most once per `answering_wait_seconds`. After three automatic starts the question waits on the PM as `starts_exhausted`, and is answered or dismissed.
-- **The hub's config is broken.** Calls that need it fail with the file and key. The few that do not print that the hub could not tell whether work is waiting, with the same text.
+- **The hub's config is broken.** Calls that need it fail with the file and key. Those that do not still do their work, a wake's end and a resume's outcome among them, and print that the hub could not tell whether work is waiting, with the same text.
 - **A wake is waiting for a machine that is off.** `send` and `list` name the machine. The request waits for an agent or expires. `amoeba cancel` ends it sooner.
 - **A wake's command hangs.** Its wrapper stops it at the deadline, as today. If the wrapper was killed too, the row stops holding off other wakes at its deadline and is deleted with old wakes. The request it was for is not woken a second time; sending it again unchanged asks for a new wake.
 - **The hub goes down while a wake's command runs.** The command is not stopped. It runs to its end or its deadline. If the hub is still down when the wrapper records the end, the wrapper exits 3 and the row stays unended until its deadline, then stops holding off other wakes.
-- **A resume is cut off after it started the run.** The machine lost power, or `resume-run` was killed. The next call from that machine after the claim runs out starts `resume-run` again. It finds the earlier attempt's file, sees the run has left the pause, and records `resumed`. Nothing is started twice.
+- **A resume is cut off after it started the run.** The machine lost power, or `resume-run` was killed. The next call from that machine after the claim runs out starts `resume-run` again. It finds the earlier attempt's file, sees the run has left the pause, and records `resumed`. Nothing is started twice. That holds whichever call it is: `list`, `status` and the next pause's `handle-pause` sweep first, and the sweep leaves an answer with no outcome to its resume attempt. Until that call, `list` from anywhere shows the answer as waiting for that machine.
+- **A resume was retried by `handle-pause` and cut off after it started the run.** The outcome on the hub is still `refused`, and nothing hands a refused resume out again. Once the run has moved on, the sweep marks the answer `not_delivered`. The run is fine; the record is wrong, as it is in that case today (D9).
 - **An answer is too large for the door.** `handle-pause` exits 3 with the refusal in the calls log. After three automatic starts the question waits on the PM as `starts_exhausted`, and is answered or dismissed.
 - **A machine's clock is wrong.** Nothing in the store changes. That machine's own log names and file clean-up follow its clock.
 - **A machine is removed.** Its open questions close as `machine_removed`, its waiting answers are marked not delivered, and its wakes end. A wake command still running there is stopped by its wrapper.
@@ -825,3 +860,11 @@ Done as the person running it. Before 264 only fixtures are joined; the local st
 - **Undo.** There is no setting to turn off. On a client, `amoeba leave` (260) goes back to the local store: the set-aside one if the machine had one, or else none, and the next command there starts an empty store as on a new install. That machine can no longer do the work the hub holds for it, so the second step is `amoeba hub rm-machine <machine>` on the hub. It closes the machine's open questions as `machine_removed`, marks its waiting answers not delivered and ends its wakes. Until that is run they wait, and `list` from any machine shows them with the machine's name. For the upgrade itself, `uv run python scripts/update_live.py restore` puts back the store and config as they were just before the update and reinstalls the release from before it. Everything written since the update is lost: answers, decisions, standing answers, messages, sessions and wakes. So it is for an update found wrong soon after. Sessions started since the update are restarted first; the script prints them.
 
 Dead ends found: none. Three limits. The first two are from the architecture. Work for a machine waits until something on that machine calls the hub; each call that causes such a wait names the machine, and each wait ends with its record. And a pause whose `handle-pause` stopped before its row was written is not started again by the hub: it has no record to be read from, so it needs the command `list` shows on that machine, exactly as a missed hook does today. And the upgrade has no undo that keeps what was written after it: the restore is a copy from before the update, as for every migration so far.
+
+One record can still be wrong, and it is not a dead end: a refused resume that `handle-pause` retried, and that was killed after it started the run, ends as `not_delivered` (D9). The answer has a final outcome and nothing waits on it.
+
+Dead ends found by the full-text design review of 20261121, and how each is resolved:
+
+- A resume cut off after it started the run was to be recorded `resumed` from its attempt file. But `list`, `status` and the next pause's `handle-pause` sweep before their after-step, and the sweep marked the answer `not_delivered` first. The sweep now leaves an answer with no outcome to its resume attempt (D6, D9).
+- An MCP `reply` or `cancel` no longer started the held question it released, on the PM's own install, until 263. The after-step now runs on both doors in this slice (D10).
+- A held question on a run at its answer limit started an answering run before the settle refused it. The limit is now read for a held row and checked before the gather (D4, D5).

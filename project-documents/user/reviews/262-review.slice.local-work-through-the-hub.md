@@ -238,3 +238,25 @@ Resolved 20261120 in `user/slices/262-slice.local-work-through-the-hub.md`. Noth
 - [pass] Interfaces from 260 and 261 match what those designs define, and the load NFR is restated: no change.
 
 Also checked: the example value 216.5 seconds (135.5 - 5 + 86) is right against `resume_bound_seconds`, the config example and `CALL_BOUND_SECONDS`. The walkthrough's "about four minutes" now gives the figure.
+
+## Full-text review, 20261121
+
+The whole design (all 827 lines, in order) was read against the architecture, the slice plan, the 260 and 261 designs, the cited parts of 263 and 264, and the code under `src/amoeba/`, `scripts/` and `tests/`. The migration order and the one-statement resume claim were run in a throwaway SQLite database. It found 3 important and 8 minor findings, none unverified. All eleven changed the design; none ended as "no change". Nothing was deferred and no issue was filed. The design's citations of 260 were also brought in line with 260 as of commit `9ee28aa5`.
+
+- [important] The close sweep ran before the resume was handed out again, so `list`, `status` and the next pause's `handle-pause` marked a resumed answer `not_delivered` and the attempt file was never read: changed. The sweep leaves an answer with no outcome to its resume attempt, and judges only a `refused` answer, at `resume_claim_seconds`. D9, with D1, D4 step 1, D6, the state table, the departures table, the Migration Plan, four criteria and the walkthrough. One case still ends with a wrong record, as it does today, and D9 says so: a refused resume retried by `handle-pause` and killed after it started the run.
+- [important] The MCP door lost the after-step in this slice, so an MCP `reply` or `cancel` no longer started the held question it released, on the PM's install, until 263: changed. The after-step runs on both doors, after every operation on the CLI door and after every operation but `answer` on the MCP door, as `start_after` does today. The MCP opt-out and the switch on `wiring.invoke` belong to 263. D10, Provides, Integration Requirements, the Migration Plan and a criterion.
+- [important] The held-claim path lost the answer-limit check made before an answering run starts: changed. `pause_begin` reads the limit for a held row, and the held claim checks it before it gathers. D4 step 7, D5 and a criterion; the existing test passes unedited.
+- [minor] `cf` was asked before the checks that skip without it today: changed. A run-only skip makes no `cf` call and sends `pause_begin` no caller. The answering-run skip now comes after `cf`, which is stated as the one change of order, with what a `cf` failure does. D4, D5 step 1, Integration Requirements, the Migration Plan and a criterion.
+- [minor] Where a decline goes was stated two ways: changed. Every decline goes to `question_wait`; `question_settle` carries only an answer. Data Flow, D4, D5, and the too-large paragraph in D3, which now covers a decline's evidence.
+- [minor] An unreachable hub cost more than one call bound: changed. After a command stops on no reply, the after-step makes no call. D10, D16 and a criterion.
+- [minor] The prune's problems could not be both after the result and in it: changed. `handle-pause` and `status` keep their own prune call, with its problems in their result as today; the after-step prunes after every other operation and logs. D5 step 7, D10, D12 and a criterion.
+- [minor] The counts of what migration 013 adds disagreed: changed. Six columns and three new values, in Technical Scope and D15; the store row of Component Structure lists the message modules.
+- [minor] The `rm-machine` criterion was wider than D13: changed. It now says no question whose latest answer lacks a final outcome.
+- [minor] "Every other operation and every step reads the config" was not true: changed. `work_problem` reaches any call whose own work needs no config, and `resume_record`, `wake_set_pid` and `wake_finish` load none on purpose. D10, a criterion and the walkthrough.
+- [minor] Four places the implementer had to guess: changed, each with one rule.
+  - How the pause path calls `add`: a `register` callable built by `wiring` (D5 step 3).
+  - Where `resume-run`'s own log goes: `logs/resume-run/<seq>-<stamp>` (D10, D12).
+  - Whether "claimed since that mark" includes the mark's own time: it does (D8 rule 2, a criterion).
+  - Whether an unreadable first poll overwrites `started` in the attempt file: it records nothing and leaves the file (D6, a criterion).
+
+Outside changes this leaves, reported and not made here: 263's amendment row for 262 D10 and its D7 must say that 263, not 262, takes the after-step off the MCP door and adds the switch on `wiring.invoke`.
