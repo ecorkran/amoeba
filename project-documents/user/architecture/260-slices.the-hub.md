@@ -6,9 +6,9 @@ parent: user/architecture/260-arch.the-hub.md
 archIndex: 260
 component: the-hub
 audience: [human, ai]
-description: Slice plan for Amoeba initiative 260. The hub process, its door and machines; then members known by name across machines; then the work that needs local files, run through the hub; then sessions across machines; then moving the PM's live store to the hub and deleting the local-store way.
+description: Slice plan for Amoeba initiative 260. The hub process, its door and machines; then members known by name across machines; then the work that needs local files, run through the hub; then sessions across machines; then moving the PM's live store to the hub and deleting the local-store way; then members in several programs.
 dateCreated: 20261120
-dateUpdated: 20261120
+dateUpdated: 20261121
 status: not_started
 ---
 
@@ -22,9 +22,9 @@ status: not_started
 
 Architecture-level. Initiatives 100 to 240 left a store, operations with two doors (CLI and MCP), an MCP server with push and presence, and waking, all on one machine. This plan puts the store behind one always-up process and makes every machine a client. Four things shape it:
 
-- **The PM's install keeps working on its local store until the last slice.** Which way a machine runs is decided on every call by one thing: whether it has a client file (architecture, "How the build gets there"). The PM's laptop has none until slice 264. Every slice before that is proven with fixtures: one hub and two client homes with different machine names on one computer.
+- **The PM's install keeps working on its local store until adoption (264).** Which way a machine runs is decided on every call by one thing: whether it has a client file (architecture, "How the build gets there"). The PM's laptop has none until the release that ships slice 264. Every slice before that is proven with fixtures: one hub and two client homes with different machine names on one computer.
 - **Each slice widens what the door serves.** With a client file, an operation the door does not serve yet fails and says so. 260 serves the operations that name no member, 261 the ones that do, 262 the ones that need local files, 263 the session's own calls.
-- **Schema changes land on the local store as they come.** Each is an ordinary migration, with a backup of the live store first and a stated restore path. So adoption in 264 is a copy, not a migration.
+- **Schema changes reach the local store at each release.** Each is an ordinary migration. The release's last step runs `scripts/update_live.py update`, which backs up the live store and config first; `scripts/update_live.py restore` is the restore path. So adoption in 264 is a copy, not a migration.
 - **The largest risk is third.** Pulling `handle_pause` and the resume apart needs machines and named members first, so it cannot go earlier.
 
 Slice numbers are execution order. The first slice takes the plan's index (260).
@@ -32,10 +32,10 @@ Slice numbers are execution order. The first slice takes the plan's index (260).
 ## Foundation Work
 
 1. [ ] **(260) Hub and Door** — The hub process, the door, and machines.
-   - **The process.** `amoeba hub serve` in a container, with the image definition and an example `hub.yaml` shipped. `hub.yaml` holds the port, `backup_dir`, `backup_hours`, `backups_kept` and the log limits, each required with no default in code; a missing or bad key stops the start and names it. Store work runs in a worker thread on its own connection per request.
+   - **The process.** `amoeba hub serve` in a container, with the image definition and an example `hub.yaml` shipped. `hub.yaml` holds `bind`, the port, the `address` clients are told (both added by the slice design), `backup_dir`, `backup_hours`, `backups_kept` and the log limits, each required with no default in code; a missing or bad key stops the start and names it. Store work runs in a worker thread on its own connection per request.
    - **Certificate.** Made at first start in the state directory, with an end date that is never a limit. `cryptography` becomes a direct dependency.
    - **Machines.** A migration adds machines (name, token hash, last-called time, client version), the owner, and the owner on every record. The local store gets one machine standing for the install. `amoeba hub invite` (a new machine, or a new token for an existing one), `amoeba hub machines`, `amoeba hub rm-machine` (ends the token and removes the machine's session rows; later slices add what else it must end).
-   - **The client.** `amoeba join <line>` fetches the certificate, checks it against the fingerprint in the line and saves it; `--address` changes only the address; a machine with a local store is refused unless `--set-aside-local`. The client file holds the address, machine name and token, with owner-only permissions. The client trusts only the saved certificate, checked while the connection is set up. The mode is decided on every call, and with a client file no local store is opened or created.
+   - **The client.** `amoeba join <line>` fetches the certificate, checks it against the fingerprint in the line and saves it; `--address` changes only the address; a machine with a local store is refused unless `--set-aside-local`. `amoeba leave` removes the client file and puts a set-aside store back (added by the slice design, so the joined state has an exit). The client file holds the address, machine name and token, with owner-only permissions. The client trusts only the saved certificate, checked while the connection is set up. The mode is decided on every call, and with a client file no local store is opened or created.
    - **The door.** HTTPS with JSON. The machine comes from the token. Every call carries a client-made id; a writing call's result is kept in the call's own transaction under the machine and the id, returned to a repeat, and deleted by the sweep after its fixed lifetime. The connect, read and retry times are constants shared by client and hub. Outcomes are done, refused and unknown. The door version is checked on every call.
    - **Served.** The operations that name no member: `decisions`, `mark_read`, `dismiss`, `retract`, `standing`, `withdraw`. Every other operation, called with a client file, fails and says the door does not serve it yet.
    - **Backups and log.** Timed backups (only when the newest is older than `backup_hours`), backups before a migration in their own rotation, each holding the store, certificate and key. `amoeba hub backup`, and `amoeba hub serve --from-backup`. The log rotates by size with a keep count, and refused calls are lines in it.
@@ -51,7 +51,7 @@ Slice numbers are execution order. The first slice takes the plan's index (260).
    - `rm-machine` and a re-invite each end the old token at once.
    - The load test runs many clients calling while others write, and asserts a bound on call time.
    - The hub's log and its backups each stay inside their keep counts.
-   - The live store is backed up and migrated, with the restore path in the slice notes.
+   - The release's live update (`scripts/update_live.py update`) backs up the live store and config before it migrates the store. The slice tests the migration against a fixture store at the previous schema, and the restore path is in the slice notes.
 
    **Dependencies:** 240 (complete).
    **Interfaces:** Provides the hub process, the door and its call rules, machines and tokens, the client file and the per-call mode switch, the owner, and backups. Every later slice serves more operations through this door.
@@ -79,7 +79,7 @@ Slice numbers are execution order. The first slice takes the plan's index (260).
    - `rm <name>` removes a member that has no checkout left.
    - Agents in two worktrees and on two machines of one repo read the same inbox, and the first `accept` wins.
    - With no client file, every existing behavior still passes on the local store, with recipients found in the store.
-   - The live store is backed up and migrated, with the restore path in the slice notes.
+   - The release's live update (`scripts/update_live.py update`) backs up the live store and config before it migrates the store. The slice tests the migration against a fixture store at the previous schema, and the restore path is in the slice notes.
 
    **Dependencies:** 260.
    **Interfaces:** Provides member names, checkouts, the `origin` rule and both lookups. 262 uses checkouts to decide which machine work belongs to. 263 uses the caller lookup for a session's member.
@@ -120,7 +120,7 @@ Slice numbers are execution order. The first slice takes the plan's index (260).
 
 4. [ ] **(263) Sessions Across Machines** — `amoeba-mcp` becomes a client.
    - **One tick.** Every `notify_poll_seconds`, one hub call reads the member's highest delivery number and refreshes the session row when a heartbeat is due. Its reply carries the work flag. Ticks run one after another, off the event loop, and do not retry.
-   - **The directory.** A migration adds the machine and the client version to a session row. `list` and `status` show who is working where, on which machine, and which sessions and machines are behind the hub's door version. Stale rows are judged on the hub's clock.
+   - **The directory.** A migration adds the client version and door version to a session row, the door version to a machine, and each machine's last reported runs (260 already added the machine, because its `rm-machine` removes a machine's sessions). `list` and `status` show who is working where, on which machine, and which sessions and machines are behind the hub's door version. Stale rows are judged on the hub's clock.
    - **Tools.** Every MCP tool goes through the door. The check that an `answer` fits inside the MCP call deadline runs on the hub with the network times added. The wake command field is never sent from MCP.
    - **Runs on other machines** show in `list` and `status` as last reported, with the machine named.
    - Channel events, the pinned handshake and the `inbox` rule are unchanged from 241.
@@ -136,43 +136,69 @@ Slice numbers are execution order. The first slice takes the plan's index (260).
    - With no client file, the 241 tests still pass on the local store.
 
    **Dependencies:** 260, 261, 262.
-   **Interfaces:** Provides the cross-machine presence that 262's waking reads and the session directory. Consumes the work flag.
+   **Interfaces:** Provides the session rows of joined machines, which 262's cross-machine presence check reads, and the session directory. Consumes the work flag.
    **Risk Level:** Medium. The research-preview channel feature is unchanged; what is new is that every tick is a network call.
    **Relative Effort:** 2
 
 ## Migration Work
 
 5. [ ] **(264) Adoption** — The PM's live store moves to the hub and the local-store way is deleted.
-   - **`amoeba adopt <join line>`,** with the six steps in the architecture: the checks, the adoption id, the copy under the local store's write lock, the load with row counts, the config, and the switch with the adopted mark. Running it again is safe.
+   - **`amoeba adopt <join line>`,** with the six steps in the architecture: the checks, the adoption id, the copy under the local store's write lock, the load with row counts, the config, and the switch with the adopted mark. Running it again is safe. The slice design adds `amoeba discard-local`, which ends a handed-over store, migration 015 (the adoption row and the mark's reason) and `amoeba hub add-config-keys`.
    - **The hub's config.** `config.yaml` arrives from the laptop, or is written from the shipped example on a fresh hub. It is read on each call.
    - **Deleting.** The code path that runs operations on a local store, the mode switch, and the 228 state-move code. After this slice a command with no client file fails and says to run `amoeba join`.
    - **Tests.** The unit tests that ran operations on a local store run against an in-process hub on a throwaway store.
-   - **The release.** The release skill and `scripts/update_live.py` update the hub first, then each client.
+   - **The release.** The release skill and `scripts/update_live.py` update the hub first, then the client they run on, and list the others. Three shell scripts on the hub machine update it, restore or empty it, and print a join line.
    - **Documents.** `docs/cli-contract.md`, `docs/config-contract.md`, `docs/store-contract.md`, `docs/mcp-server.md` and `docs/squadron-hook.md` are brought in line, with a set-up page for the hub: start, invite, join, adopt, move, undo.
-   - **The PM's install.** The hub is started on the LAN machine and the laptop's store is adopted, with the dated backup's path in the slice notes.
+   - **The PM's install.** Not a task of the slice. The release that ships the slice sets the hub up on the LAN machine and adopts the laptop's store, through `update_live.py update`, which prints the dated backup's path. The slice rehearses this on a copy of the live store.
 
    **Value:** User value. The PM's decisions, messages and sessions are one store on every machine he works on.
    **Success Criteria:**
    - A fixture laptop store with members, questions, requests, standing answers and wakes is adopted, and every row count matches on the hub.
-   - Adoption is refused while a local session is live and names it, and when the hub holds anything but its owner and machines.
-   - A hook waiting on the lock during adoption fails naming the hub and writes nothing into the backup.
+   - Adoption never waits on a local session: it lists each one still open and whether it must be restarted. It is refused when the hub holds any record (sessions, reported runs and kept call results do not count).
+   - A connection opened before the adoption fails its next write naming the hub, and a hook from this release fails with the join message and opens no store.
    - Adoption is cut off after the load and after the config: the same command run again finishes, with one copy of the data on the hub. If something was written locally between the attempts, the hub holds it.
    - Moving the hub: a backup started on another state directory serves the same clients after `join --address`, with nothing lost.
-   - After the slice, no code opens a store outside the hub and its admin commands, and a client with no client file fails with the join message.
+   - After the slice, no code opens a store outside the hub, its admin commands and the three hand-over commands (`adopt`, `join --set-aside-local`, `discard-local`), none of which creates one; a client with no client file fails with the join message.
    - A fresh hub with `config.yaml` written from the example serves a new machine's `add` and `send`.
    - A bad edit to the hub's `config.yaml` fails calls with the file and key named, and a fixed one takes effect on the next call.
-   - The PM's live store is adopted on the hub, and `list` from the laptop shows what it showed before.
+   - A copy of the PM's live store is adopted in a rehearsal, and `list` shows what the installed release shows. The live store itself is adopted by the release.
 
    **Dependencies:** 260, 261, 262, 263.
    **Interfaces:** Provides the one mode. 300 builds on a hub that holds the PM's real data.
-   **Risk Level:** High. It moves the PM's live store and deletes the way back into the old code, so the restore path is the backup and a hub started from it.
+   **Risk Level:** High. It moves the PM's live store and deletes the way back into the old code, so the restore path is `update_live.py restore --local-store`, which puts the pre-migration backup back under the previous release.
+   **Relative Effort:** 3
+
+## Feature Slices After Adoption
+
+6. [ ] **(265) Members in Several Programs** — A member can be in more than one program at once. Added by the PM 20261120: a repo that two programs both depend on (the agent kit is the first) has to be a member of both.
+   - **Schema.** A migration adds a membership table keyed by member and program, fills it with one row per member from today's `program_id` column, and drops the column. Rules, authorize lists and checkouts stay on the member. Dependency pairs already name their program and do not change.
+   - **`add --program ID`** on a member that is already registered adds that program to it. It no longer moves the member and no longer refuses with `member_of_other_program`. `add` with no `--program` on a registered member changes no membership.
+   - **`rm NAME --program ID`** takes the member out of that one program and deletes its pairs there. `rm NAME` with no `--program` removes the member from every program, as removal does today. Leaving the last program is removing the member.
+   - **A command that works on one program** (`--depends-on`, `--pair`, `--concept`) uses the member's program when it has one. For a member in several it needs `--program`, and without it is refused with the member's programs listed.
+   - **Reads follow every membership.** `send` to a program reaches its other members, and the sender must be in it. `changes` and release notes cover the pairs in every program the member is in. A standing answer with reach `program` applies to a member in that program. An answering run reads the concept and sources of every program the member is in.
+   - **Views.** `list` and `status` show a member under each of its programs, and `list members` shows all of them on the member's line. `--program` narrows as today.
+   - **Documents.** `docs/store-contract.md`, `docs/cli-contract.md` and `docs/program-rules.md` are brought in line.
+
+   **Value:** User value. One repo can serve two programs, and each program's members can message it and see its releases.
+   **Success Criteria:**
+   - A fixture member added to a second program appears in both in `list`, and a note sent to either program reaches it once.
+   - A member in two programs sees a release report from a provider in each through `changes`.
+   - A standing answer with reach `program` applies to a member in two programs when the question is in either, and one for a third program does not.
+   - `rm NAME --program ID` leaves the member, its inbox and its other program untouched. Removing its last program removes the member and cancels its open requests as `member_removed`.
+   - `--depends-on` with no `--program` on a member in two programs is refused and lists both.
+   - After the migration every member has exactly the membership it had, with the row count checked, and the hub's before-migration backup path is in the slice notes.
+   - No code reads a program from the member row.
+
+   **Dependencies:** 260, 261, 264.
+   **Interfaces:** Provides membership as its own record. 320's stand-in reads a member's programs from it.
+   **Risk Level:** Low. It is wide (about 150 references in 26 files) but mechanical, and it runs after adoption so there is one code path and one store to migrate.
    **Relative Effort:** 3
 
 ## Implementation Order
 
-`260 → 261 → 262 → 263 → 264`.
+`260 → 261 → 262 → 263 → 264 → 265`.
 
-- **Dependencies.** Each slice needs the ones before it. 261 needs machines for checkouts. 262 needs checkouts to know which machine work belongs to. 263 carries 262's work flag. 264 needs every operation served through the door before it can delete the local-store way.
+- **Dependencies.** Each slice needs the ones before it. 261 needs machines for checkouts. 262 needs checkouts to know which machine work belongs to. 263 carries 262's work flag. 264 needs every operation served through the door before it can delete the local-store way. 265 is last so the membership change is made once, on the hub, and not also on the local-store way that 264 deletes.
 - **Risk.** 260 is first because everything trusts its access control. 262 is as early as its dependencies allow.
 
 ## Notes
