@@ -30,7 +30,8 @@ HANDOFF_PATTERN: Final = re.compile(
     r"|\bsay the word\b|\bif you want\b|\bwould you like\b|\bdo you want\b"
     r"|\bpm decision\b|\byour decision\b|\bdecide\b|\bconfirm\b|\bapprove\b"
     r"|\bwhich (?:one|option|way)\b|\boption [a-c1-3]\b|\bopen (?:item|question)s?\b"
-    r"|\bawaiting\b|\bwaiting (?:on|for) you\b|\bbefore i (?:proceed|continue)\b",
+    r"|\bawaiting\b|\bwaiting (?:on|for) you\b|\bbefore i (?:proceed|continue)\b"
+    r"|\bi need\b|\bneed (?:you|your)\b|\bup to you\b|\byes or no\b|\bgo ahead\b",
     re.IGNORECASE,
 )
 
