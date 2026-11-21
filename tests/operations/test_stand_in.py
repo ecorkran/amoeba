@@ -70,3 +70,12 @@ def test_a_verdict_inside_a_code_fence_is_read() -> None:
 def test_an_unreadable_verdict_raises(reply: str) -> None:
     with pytest.raises(VerdictError):
         read_verdict(reply)
+
+
+def test_asking_the_pm_whether_to_ask_a_peer_is_a_handoff_the_judge_settles() -> None:
+    message = "Should I ask the ai-project-guide session to release the guide?"
+
+    assert hands_off(message)
+    prompt = build_prompt(message=message, rules="", memory="", standing="", cwd="/r")
+    assert "message that session directly" in prompt
+    assert "that session's question to raise" in prompt

@@ -84,6 +84,12 @@ goal. Routine choices, confirmations of routine work, "want me to continue", opt
 lists with an obvious recommendation, bookkeeping, and rare cases that already end in \
 a named command are all yours to settle.
 
+Asking him whether it may ask, tell or message another agent or session is always \
+yours to settle, and the decision is: message that session directly, now. Whether \
+that other session needs his sign-off for its own action (a release, a push) is that \
+session's question to raise, never this agent's. He is not the relay between two \
+sessions, and a question on both ends is two questions too many.
+
 It is his ("for_pm") only when the answer changes product scope, spends real money \
 beyond the work already asked for, deletes or overwrites data that cannot be \
 recovered, publishes or sends something outside the machine that he has not asked \
