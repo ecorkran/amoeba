@@ -199,14 +199,14 @@ The client-run commands call the `Steps` protocol, which has one method: `run(st
 - **`LocalSteps`** calls `run_step` on the local store. Each step is its own transaction, as today.
 - **`DoorSteps`** sends the request model as the call's `document` to `POST /call/<step name>` and validates the reply against the step's reply model (D11 says what a reply that fails does). The hub runs `run_step` inside 260's call scope, so the step and its kept result commit together.
 
-`wiring_steps.steps_for(layout)` picks one when a command starts, by whether a client file exists, and the command keeps it to its end. It also takes the door times and a session id, which 263's tick passes; the tick is not a command and calls it on every tick (263 D1). A command never changes way partway:
+`wiring_steps.steps_for(layout)` picks one when a command starts, by whether a client file exists, and the command keeps it to its end. It also takes the door times and a session identity (the four values of 263's session headers, 263 D6), which 263's tick passes; the tick is not a command and calls it on every tick (263 D1). A command never changes way partway:
 
 - One that started with a client file uses `DoorSteps` for every step. `DoorSteps` reads the client file on each call, and if the file is gone it raises 260's `ClientFileError` naming the file. That is one more case of that error than 260 D3 lists, and only `DoorSteps` raises it. It never goes to a local store.
 - One that started with none uses `LocalSteps`. If the machine joins meanwhile, its next step that opens the store or writes to it fails with 260's `LocalStoreClosedError` (260 D2, D4). In a hub home the local opener refuses with `HubHomeError` (260 D2), so no client-run command runs on a hub's own store.
 
 Each new command still decides for itself, so 260's rule that the mode is decided on every call holds between commands.
 
-Step names are in `STEP_CALLS` in `wire.protocol`, apart from `SERVED_OPERATIONS`, because they are not operations a person calls. The hub accepts a name that is in the served list, is `HELLO_CALL` or is in `STEP_CALLS`, and refuses any other as `not_served` (260 D6). `WRITING_STEPS` are the ones whose result is kept. `wire` imports nothing, so both are plain strings, and a test asserts they equal the names and the writing rows of `STEP_MODELS`. A step is refused, with `malformed_call`, when its document does not validate.
+Step names are in `STEP_CALLS` in `wire.protocol`, apart from `SERVED_OPERATIONS`, because they are not operations a person calls. The hub accepts a name that is in the served list, is `HELLO_CALL` or is in `STEP_CALLS`, and refuses any other as `not_served` (260 D6). `WRITING_STEPS` are the ones whose result is kept. 263 adds `session_tick` and `session_end`, which write and keep no result, so the row's flag means "its result is kept" (263 D2). `wire` imports nothing, so both are plain strings, and a test asserts they equal the names and the writing rows of `STEP_MODELS`. A step is refused, with `malformed_call`, when its document does not validate.
 
 **A step document that is too large.** 260 refuses a body over `MAX_CALL_BYTES` (1 MiB) before it reads it, and a step is refused like any other call. Only the two steps that end a claim have a row waiting on them, `question_settle` and a `question_wait` that carries a decline, and each can be over the limit only through the answer: nothing bounds the answer file a run writes. `question_settle` carries the text twice, as the answer and as the evidence's proposed answer, so an answer of about half a mebibyte reaches the limit; a decline's evidence carries it once. That is unlikely, and it gets no branch of its own. The settle is refused, `handle-pause` exits 3 with the refusal in its calls-log line, and the claim goes stale. Each automatic start then finds the dead claim and tries the settle again, which is refused again. After `MAX_AUTOMATIC_STARTS` the question waits on the PM as `starts_exhausted`, whose detail points at that machine's calls log (D10). With no client file there is no door and no limit, as today. Any other step that is refused this way exits 3; the steps that carry the question's text come before any row exists, so nothing is left to start again.
 
@@ -550,7 +550,7 @@ Status: decided
 - `STEP_CALLS` holds the sixteen steps in D4.
 - `DOOR_VERSION` becomes 2, for `send` (D8). 260's pinned tuple test holds the new value.
 - In 260's entry-point table, the row for `amoeba handle-pause` and `amoeba wake-run` is removed: both run on a joined machine. `amoeba resume-run` is registered beside `wake-run`, CLI only.
-- `amoeba-mcp` start is still refused on a joined machine. A server that was running before the machine joined serves its `answer` tool through `wiring.invoke`, with no deadline check until 263 adds the hub's.
+- `amoeba-mcp` start is still refused on a joined machine. A server that was running before the machine joined serves its `answer` tool through `wiring.invoke`, with no deadline check until 263 adds the hub's. 263 then deletes `NotServedError` and the client's served check (263 D14).
 
 Documents brought in line:
 

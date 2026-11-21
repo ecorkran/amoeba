@@ -391,7 +391,7 @@ Status: decided
 2. **Checks that need no store.** The version, the body, the served list, and the config when the operation needs it (`standing` needs `passages_max_chars`). A failure here is remembered, not yet returned.
 3. **The call scope.** One `BEGIN IMMEDIATE` transaction, the call's only lock wait:
    - Touch the machine by its token hash: set `last_called_at` (hub time) and `client_version`. No row means the token ended since step 1, by `rm-machine` or a re-invite, and the call is refused as `bad_token`.
-   - If step 2 failed, commit the touch and refuse. So `amoeba hub machines` shows the client version of a machine that was refused for its door version. 263 adds `machines.door_version`, which the touch also sets, and on a `door_version` refusal of a tick writes the session's row from the headers (263 D6).
+   - If step 2 failed, commit the touch and refuse. So `amoeba hub machines` shows the client version of a machine that was refused for its door version. 263 adds `machines.door_version`, which the touch also sets, and on a `door_version` refusal of a tick writes the session's row from the headers (263 D6). From 263 on, the touch for `session_tick` and `session_end` sets `last_called_at` only, so an old session's ticks do not rewrite an upgraded machine's versions (263 D6).
    - Delete expired kept results (D9).
    - For a writing call, look for a kept result and return it if found.
    - Set the acting machine (D12) and run the operation inside a savepoint.
@@ -407,7 +407,7 @@ A failure outside the call scope, such as the store failing to open, goes throug
 
 261 adds a third branch, before these two: an operation that raises `CallRefused` is refused with the code it carries (261 D12).
 
-"Today's operational errors" are the five types in `wiring.OPERATIONAL_ERRORS` before this slice. The hub may not import `wiring`, so the five move to `operations/errors.py` as `OPERATION_ERRORS`, defined once. The hub imports that, and `wiring.OPERATIONAL_ERRORS` becomes those five plus the errors this slice adds, so every existing user of the `wiring` name is unchanged.
+"Today's operational errors" are the five types in `wiring.OPERATIONAL_ERRORS` before this slice. The hub may not import `wiring`, so the five move to `operations/errors.py` as `OPERATION_ERRORS`, defined once. The hub imports that, and `wiring.OPERATIONAL_ERRORS` becomes those five plus the errors this slice adds, so every existing user of the `wiring` name is unchanged. 263 moves `DeadlineError` there as a sixth (263 D9).
 
 The operations open their own transactions with `store.write()` and `store.read()`. Inside a call scope those become savepoints: released on a normal exit, rolled back to on an exception. This matters for `standing`, which raises inside its write block to undo an insert that would overflow. The operation code is not changed for this.
 
@@ -504,7 +504,7 @@ Each opens the store with `open_hub_store`, which never creates one (D12). Run o
 | Command | Does | Rejected when (exit 1) |
 |---|---|---|
 | `amoeba hub invite <machine>` | Creates the machine, or gives an existing one a new token, in one transaction. Prints the join line. Needs `hub.yaml` for the address and the certificate for the fingerprint | The name is malformed |
-| `amoeba hub machines` | Lists each machine: name, whether it has a token, `last_called_at` and `client_version`. The hub does not store a machine's door version in this slice, so it does not say which machines are behind; 263 adds the column and that display (263 D6) | — |
+| `amoeba hub machines` | Lists each machine: name, whether it has a token, `last_called_at` and `client_version`. The hub does not store a machine's door version in this slice, so it does not say which machines are behind; 263 adds the column and that display (263 D6, D12) | — |
 | `amoeba hub rm-machine <machine>` | One transaction: deletes the machine's session rows, its kept results and the machine. 261 and 262 add to this transaction (Technical Scope) | No such machine |
 | `amoeba hub backup` | Takes a timed backup now and prints its path (D15) | — |
 
@@ -715,7 +715,7 @@ Nothing moves. Two functions change what they take (`decisions`, `standing`, D11
 - **The fixture** in `tests/hub_fixture.py` and the load test, which 263 extends.
 - **Backups and `--from-backup`,** which 264 uses for moving and undoing the hub.
 
-**What later slices change here.** 263's changes to this design are stated where they apply: the entry-point table and `NotServedError` (D2), the session headers (D6), the pinned tuple and the door version (D7), and the touch and `machines.door_version` (D8, D13). They are listed in 263's "Amendments to 260 and 262". 264's are stated the same way: `joined()` and the guard (D2), the set-aside store and `leave` (D4), `hello`'s reply (D4), the upload's two times (D7), `closed_mark.reason` and the two openers (D12), the config mount and the example's source (D17), and the release script (D19). They are listed in 264's "Amendments to 260 and 263".
+**What later slices change here.** 263's changes to this design are stated where they apply: the entry-point table and `NotServedError` (D2), the session headers (D6), the pinned tuple and the door version (D7), and the touch and `machines.door_version` (D8, D13). 263 also adds the session-id shape and the client-name pattern to `wire.protocol`, and 261 adds the `CallRefused` branch to the handler (D8). They are listed in 263's "Amendments to 260 and 262". 264's are stated the same way: `joined()` and the guard (D2), the set-aside store and `leave` (D4), `hello`'s reply (D4), the upload's two times (D7), `closed_mark.reason` and the two openers (D12), the config mount and the example's source (D17), and the release script (D19). They are listed in 264's "Amendments to 260 and 263".
 
 ### Consumes from Other Slices
 
