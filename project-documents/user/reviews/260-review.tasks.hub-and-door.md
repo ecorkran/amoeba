@@ -6,7 +6,7 @@ slice: hub-and-door
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: FAIL
+verdict: CONCERNS (reviewer stated FAIL; its three fail findings, F001 to F003, were fixed in the design and tasks 20261121; all thirteen findings were checked, see Resolution)
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/260-tasks.hub-and-door.md
 aiModel: claude-haiku-5-5
@@ -207,3 +207,20 @@ There are no dependency cycles, and each test subsection follows its implementat
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 15
 - Finding-shaped matches — surviving validation: 15
+
+## Resolution
+
+Checked 20261121 against the task file, the design and the source.
+
+- **F001 (fail), fixed.** 10.2 adds a stub seventh operation run through `handle_call` with the door version unchanged; 17.4 cites it and no longer leans on 261.
+- **F002 (fail), fixed.** Valid: six test files insert raw rows into record tables at schema 11, which the owner triggers abort. 3.4 now binds `owner_id` (and `machine_id` for sessions) in each, `tests/live` included, and confirms the pre-011 migration-test inserts stay. The Context Summary says the triggers are never weakened for a test.
+- **F003 (fail), fixed.** `leave` now ends the hand-placed pair: it moves the store at the store path and its side files to `amoeba.sqlite3.displaced-<UTC stamp>`, prints it, and puts the set-aside store back. Nothing is deleted. `join` refuses the pair and names `amoeba leave`. Design D4 and walkthrough, 13.2 and 13.5 updated.
+- **F004, fixed.** 2.1 names the table-count pin in `tests/test_contract_docs.py` and its new value, 18.
+- **F005, fixed.** 1.2's success line allows `pydantic`.
+- **F006, fixed.** 17.3 lists `client/errors.py`.
+- **F007, fixed.** 1.3 and 13.1 join `JoinError` and `NotServedError` to `OPERATIONAL_ERRORS`.
+- **F008, fixed.** 0.3's example version is gone; the bound is read from 0.1's version.
+- **F009, dropped.** Same finding as round 3's F005: the architecture requires backups that can sit on another disk, and the design records the departure. The rule keeps state out of the config directory, which this does.
+- **F010, fixed.** 11.2a: step 2 lets `HubConfigError` through; `HubStartError` covers steps 3 to 7.
+- **F011, F013, no action.** The reviewer accepts both.
+- **F012, fixed.** 12.3 checks `ssl.SSLCertVerificationError` before the `OSError` no-reply branch.
