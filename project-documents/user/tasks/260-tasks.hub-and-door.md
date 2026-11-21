@@ -6,13 +6,27 @@ lld: user/slices/260-slice.hub-and-door.md
 dependencies:
 - 240-slice.requests
 projectState: Slices 220 to 244 are merged on main. Store schema version 10 (migrations
-  001 to 010), state in ~/.local/state/amoeba, package version 0.2.3. No hub, client or
-  network code exists. cryptography, starlette and uvicorn are installed through mcp but
-  not declared. This is the first slice of initiative 260 (the hub); 261 to 264 are
-  designed and build on it.
+  001 to 010), state in ~/.local/state/amoeba, package version 0.2.3. No hub, client
+  or network code exists. cryptography, starlette and uvicorn are installed through
+  mcp but not declared. This is the first slice of initiative 260 (the hub); 261 to
+  264 are designed and build on it.
 dateCreated: 20261121
 dateUpdated: 20261121
 status: not_started
+turns: 24
+promptTokens: 1928431
+cachedTokens: 1807184
+cacheWriteTokens: 121203
+completionTokens: 50137
+durationSeconds: 473.1
+costUsd: 2.334271
+usageRounds: 1
+pricedRounds: 1
+usageByModel:
+  claude-opus-5-5:
+    rounds: 1
+    costUsd: 2.3342712000000003
+    completionTokens: 50137
 ---
 
 # Tasks: Hub and Door
