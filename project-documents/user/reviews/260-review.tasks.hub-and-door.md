@@ -6,7 +6,7 @@ slice: hub-and-door
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: CONCERNS (all twenty findings checked 20261121; F001 to F011, F013 and F015 fixed, the rest no action or rejected, see Resolution)
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/260-tasks.hub-and-door.md
 aiModel: claude-haiku-5-5
@@ -135,6 +135,8 @@ findings:
 # Review: tasks — slice 260
 
 **Verdict:** CONCERNS
+
+> Verdict note: all twenty findings checked 20261121; F001 to F011, F013 and F015 fixed, the rest no action or rejected, see Resolution.
 **Model:** claude-haiku-5-5
 
 ## Findings

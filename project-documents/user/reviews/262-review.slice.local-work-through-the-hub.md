@@ -6,7 +6,7 @@ slice: local-work-through-the-hub
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: CONCERNS (reviewer stated FAIL; its fail findings were fixed; all fifteen findings were checked 20261120; fourteen changed the design, one needed no change, see Resolution)
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/262-slice.local-work-through-the-hub.md
 aiModel: claude-haiku-5-5
@@ -120,6 +120,8 @@ findings:
 # Review: slice — slice 262
 
 **Verdict:** FAIL
+
+> Verdict note: the frontmatter verdict is CONCERNS. The reviewer stated FAIL; its fail findings were fixed; all fifteen findings were checked 20261120; fourteen changed the design, one needed no change, see Resolution.
 **Model:** claude-haiku-5-5
 
 ## Findings

@@ -6,7 +6,7 @@ slice: hub-and-door
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: CONCERNS (reviewer stated FAIL; its fail findings were fixed; all eleven findings were checked 20261120; nine were fixed in the design and two dropped, see Resolution)
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/260-slice.hub-and-door.md
 aiModel: claude-haiku-5-5
@@ -105,6 +105,8 @@ findings:
 # Review: slice — slice 260
 
 **Verdict:** FAIL
+
+> Verdict note: the frontmatter verdict is CONCERNS. The reviewer stated FAIL; its fail findings were fixed; all eleven findings were checked 20261120; nine were fixed in the design and two dropped, see Resolution.
 **Model:** claude-haiku-5-5
 
 ## Findings

@@ -6,7 +6,7 @@ slice: members-by-name
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: CONCERNS (reviewer stated FAIL; its fail findings were fixed; all twenty findings were checked 20261120; seventeen changed the design, three needed no change, see Resolution)
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/261-slice.members-by-name.md
 aiModel: claude-haiku-5-5
@@ -140,6 +140,8 @@ findings:
 # Review: slice — slice 261
 
 **Verdict:** FAIL
+
+> Verdict note: the frontmatter verdict is CONCERNS. The reviewer stated FAIL; its fail findings were fixed; all twenty findings were checked 20261120; seventeen changed the design, three needed no change, see Resolution.
 **Model:** claude-haiku-5-5
 
 ## Findings

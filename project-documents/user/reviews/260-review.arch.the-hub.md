@@ -8,7 +8,7 @@ rulesSource: project
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: CONCERNS (all eleven findings were checked, found valid and fixed in the document 20261120, see Resolution)
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/architecture/260-arch.the-hub.md
 aiModel: claude-opus-5-5
@@ -90,6 +90,8 @@ findings:
 # Review: arch — initiative 260
 
 **Verdict:** CONCERNS
+
+> Verdict note: all eleven findings were checked, found valid and fixed in the document 20261120, see Resolution.
 **Model:** claude-opus-5-5
 
 ## Findings
