@@ -237,10 +237,10 @@ Checked 20261121 against the task file, the design and the source. Fixed in the 
 - **F002, dropped.** The pair comes only from files placed by hand, which Amoeba's commands never make, and the refusal names both files. A command for a state only a hand edit creates adds mechanism for a case that should not occur.
 - **F003, fixed.** `local_served_edges` takes the loader, readers and clock from `wiring` (7.4).
 - **F004, fixed.** The four client errors move to `client/errors.py`, imported by `trust` and `call` alike.
-- **F005, dropped.** The architecture requires backups that can sit on another disk from the store they protect, and the design records the departure with that reason. Backups stay out of the config directory, which is what the rule protects.
+- **F005, fixed by citation.** The architecture requires backups that can sit on another disk from the store they protect, and the design records the departure with that reason (D1, Departures). 9.1 now cites it. Backups stay out of the config directory, which is what the rule protects.
 - **F006, fixed.** 16.2 sets `address` to the host and the published port.
 - **F007, fixed.** The section 16 commit marker follows 16.1; 16.2's note commits with section 17.
-- **F008, dropped.** Sizing only; each bullet is one test file's cases and the scope is clear.
+- **F008, fixed.** 10.2, 11.4 (`test_start`) and 13.5 now give each case its own checkbox; the scope is unchanged.
 - **F009, no action.** The reviewer agrees the CI gate is met.
 - **F010, fixed.** 17.4's mapping note says how the 261 seam criterion is proven.
 - **F011, fixed.** 17.4 allows the baseline failures from 0.2.

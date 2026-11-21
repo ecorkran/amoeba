@@ -262,7 +262,7 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
 ## 9. Backups (D15; effort 3)
 
 - [ ] **9.1 `hub/backups.py`**
-  - [ ] `BACKUP_CHECK_SECONDS = 300`. Two kinds: timed (`<backup_dir>/timed/<UTC stamp>/`) and pre-migration (`<backup_dir>/pre-migration/<UTC stamp>-v<version>/`)
+  - [ ] `BACKUP_CHECK_SECONDS = 300`. Two kinds: timed (`<backup_dir>/timed/<UTC stamp>/`) and pre-migration (`<backup_dir>/pre-migration/<UTC stamp>-v<version>/`). `backup_dir` is outside the state directory by the design's recorded departure (D1 and Departures: backups must be able to sit on another disk from the store)
   - [ ] `take_backup(kind, ...)`: first delete any `.partial-` directory of that kind; write into a new `.partial-` directory the store (SQLite's backup call on its own connection), `hub-cert.pem` and `hub-key.pem`; directories `0700`, files `0600`; rename when complete; then delete that kind's directories beyond the newest `backups_kept`. On failure delete its own partial directory, then raise `BackupError` naming the path and cause
   - [ ] `timed_backup_due(backup_dir, now, backup_hours)` and `newest_complete_backup(backup_dir)` (either kind, complete directories only, for D5)
   - [ ] Success: pyright clean
@@ -284,9 +284,21 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] It never raises to the caller: on a raise it rolls back the operation's savepoint, commits the touch, keeps nothing and refuses through 10.1a's mapping. A failure before the scope (the store not opening) goes through the same mapping without the touch. Every refusal writes one `refusal_line`. The run uses `id_names` and `id_resolver` from `operations.served`, the hub's clock and its `config.yaml` loader
   - [ ] Success: pyright clean
 - [ ] **10.2 Tests (no network)**
-  - [ ] `tests/hub/test_handle_call.py`, on a throwaway hub store with an invited machine: `hello` returns the name; each of the six runs and returns its result document; each refusal code from its cause (no token, unknown token, wrong door version, bad JSON, oversized body, unserved name, reused call id with another body and with another operation, a missing `config.yaml` for `standing` as `hub_error`); a version refusal still sets `client_version` and `last_called_at`; a repeated writing call returns the stored reply and applies once; the same call id from a second machine runs as a new call; a kept result older than the lifetime is deleted by the next call; `decisions` keeps nothing
+  - [ ] `tests/hub/test_handle_call.py`, on a throwaway hub store with an invited machine:
+    - [ ] `hello` returns the name; each of the six runs and returns its result document
+    - [ ] No token and an unknown token are each `bad_token`
+    - [ ] A wrong door version is `door_version`, and still sets `client_version` and `last_called_at`
+    - [ ] Bad JSON and an oversized body are each `malformed_call`; an unserved name is `not_served`
+    - [ ] A reused call id with another body, and with another operation, are each `call_id_reused`
+    - [ ] A missing `config.yaml` for `standing` is `hub_error`
+    - [ ] A repeated writing call returns the stored reply and applies once; the same call id from a second machine runs as a new call
+    - [ ] A kept result older than the lifetime is deleted by the next call; `decisions` keeps nothing
   - [ ] `hub_fault`: monkeypatch `run_served` to raise `RuntimeError`; the reply names the type, the traceback is in the log, nothing is stored, and the next call succeeds
-  - [ ] A token removed between the read and the scope (`remove_machine` called from a monkeypatched token read) is `bad_token`; a run with `act_as` skipped fails the first insert with `NoActingMachineError`, refused as `hub_error`; an `open_store` that raises `StoreError` is `hub_error` and one that raises `RuntimeError` is `hub_fault`, each with the machine's `last_called_at` unchanged; no log line holds the token
+  - [ ] Failure paths:
+    - [ ] A token removed between the read and the scope (`remove_machine` called from a monkeypatched token read) is `bad_token`
+    - [ ] A run with `act_as` skipped fails the first insert with `NoActingMachineError`, refused as `hub_error`
+    - [ ] An `open_store` that raises `StoreError` is `hub_error`, and one that raises `RuntimeError` is `hub_fault`, each with the machine's `last_called_at` unchanged
+    - [ ] No log line written by these tests holds the token
   - [ ] `tests/wire/test_times.py` gains: `READ_SECONDS > HUB_LOCK_WAITS_PER_CALL * BUSY_TIMEOUT_SECONDS`
   - [ ] Success: checks pass
 
@@ -311,7 +323,14 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] Success: a smoke test makes a `hello` call over pinned TLS with plain `http.client` and gets `done`
 - [ ] **11.4 Tests**
   - [ ] `tests/hub/test_app.py` (through the helper): an over-size length and a missing length are `malformed_call` with status 400 and the body unread; each code's status matches the map; every reply has the door-version header
-  - [ ] `tests/hub/test_start.py` (prepare only): a certificate without its key, a key without its certificate, and a store with neither each refuse naming the file; a bad `hub.yaml` key refuses naming it; a schema-10 store with an unwritable `backup_dir` refuses and the store stays at 10; a taken port refuses before any file is written and the store stays unmigrated; an empty state directory beside a `backup_dir` with a backup refuses, names it, gives the `--from-backup` command and makes nothing; the same with an empty `backup_dir` is a first start; an unwritable `backup_dir` with no migration due starts and logs the failure; `--from-backup` into a non-empty state refuses naming the file
+  - [ ] `tests/hub/test_start.py` (prepare only):
+    - [ ] A certificate without its key, a key without its certificate, and a store with neither each refuse naming the missing file
+    - [ ] A bad `hub.yaml` key refuses naming it
+    - [ ] A schema-10 store with an unwritable `backup_dir` refuses and the store stays at 10
+    - [ ] A taken port refuses before any file is written and the store stays unmigrated
+    - [ ] An empty state directory beside a `backup_dir` with a backup refuses, names it, gives the `--from-backup` command and makes nothing; the same with an empty `backup_dir` is a first start
+    - [ ] An unwritable `backup_dir` with no migration due starts and logs the failure
+    - [ ] `--from-backup` into a non-empty state refuses naming the file
   - [ ] `tests/hub/test_backup_loop.py`: run with a short interval and a `backup_hours` small enough that a backup is due at each check, the loop takes a timed backup without a restart; with `backup_dir` unwritable it logs the failure at error level, and once it is writable again the next check takes the backup
   - [ ] Success: checks pass
 
@@ -358,8 +377,23 @@ Sections 2 and 3 commit together: once migration 011 adds its triggers, every re
   - [ ] `amoeba join <line> [--set-aside-local] [-j]`, `amoeba join --address <host:port> [-j]`, `amoeba leave [-j]`, registered as CLI-only commands; exit codes as today. `docs/cli-contract.md`: the commands, flags and new errors
   - [ ] Success: `amoeba join --help` and `amoeba leave --help` work
 - [ ] **13.5 Tests (in-process hub)**
-  - [ ] `tests/hub/test_join.py`: join writes a `0600` client file with the name from `hello` and the certificate; a wrong fingerprint raises `JoinError` naming both, saves nothing, and the hub read no application bytes; nothing listening raises `HubUnreachableError` and saves nothing; a refused `hello` saves nothing and a re-join that fails puts the previous certificate back; a re-join replaces the token; a local store without the flag is refused naming it; `--address` changes only the address with the hub stopped
-  - [ ] `tests/hub/test_set_aside.py`: join with the flag prints the path, the store path is free and the file holds the mark; a connection opened before the join fails its next write with `LocalStoreClosedError` naming the hub; `leave` puts the store back with its rows, removes the set-aside file, and the next local command writes to it; `leave` stopped after each step (simulated by running the step functions partway) is finished by a second `leave`; a `join --set-aside-local` stopped after the rename (its steps run up to the rename) is finished by a second identical `join`, which writes the client file and leaves one set-aside store; a `join --set-aside-local` stopped after the mark is written and before the rename leaves local writes failing with `LocalStoreClosedError` that names `amoeba leave`; from that state a second identical `join` finishes, and separately `leave` clears the mark so the next local command writes; a taken store path makes `leave` refuse changing nothing; a client file with no certificate fails a served call with `ClientFileError` and `leave` still works
+  - [ ] `tests/hub/test_join.py`:
+    - [ ] Join writes a `0600` client file with the name from `hello`, and saves the certificate
+    - [ ] A wrong fingerprint raises `JoinError` naming both, saves nothing, and the hub read no application bytes
+    - [ ] Nothing listening raises `HubUnreachableError` and saves nothing
+    - [ ] A refused `hello` saves nothing, and a re-join that fails puts the previous certificate back
+    - [ ] A re-join replaces the token
+    - [ ] A local store without the flag is refused naming it
+    - [ ] `--address` changes only the address with the hub stopped
+  - [ ] `tests/hub/test_set_aside.py`:
+    - [ ] Join with the flag prints the path, the store path is free and the file holds the mark
+    - [ ] A connection opened before the join fails its next write with `LocalStoreClosedError` naming the hub
+    - [ ] `leave` puts the store back with its rows, removes the set-aside file, and the next local command writes to it
+    - [ ] `leave` stopped after each step (simulated by running the step functions partway) is finished by a second `leave`
+    - [ ] A `join --set-aside-local` stopped after the rename (its steps run up to the rename) is finished by a second identical `join`, which writes the client file and leaves one set-aside store
+    - [ ] A `join --set-aside-local` stopped after the mark is written and before the rename leaves local writes failing with `LocalStoreClosedError` that names `amoeba leave`; from that state a second identical `join` finishes, and separately `leave` clears the mark so the next local command writes
+    - [ ] A taken store path makes `leave` refuse, changing nothing
+    - [ ] A client file with no certificate fails a served call with `ClientFileError`, and `leave` still works
   - [ ] Success: checks pass
 
 **Commit**: `feat: add the mode switch, join and leave`
