@@ -285,3 +285,27 @@ Resolved 20261120 in `user/slices/261-slice.members-by-name.md`. Nothing was def
 - [note] This design depends on 260 decisions that are still open: no change. The prerequisite already gates the task breakdown on re-reading 260.
 - [note] Frontmatter date is in the future: changed. `dateUpdated` is 20261120.
 - [pass] Scope matches the slice plan's entry for 261: no change.
+
+## Full-text review, 20261121
+
+The whole design (664 lines) was read start to finish, with the architecture, the slice plan, the 260 design, the cited parts of 262 to 264, and the code each claim names; this review was made without reading the findings above. It found 17 things: 3 important, 13 minor and 1 that could not be confirmed at the time. All 17 are resolved in the design, and none ended as "no change". The unconfirmed one was settled by running `cf` in a throwaway Context Forge home and turned out to be real. The 260 design was read again at commit `9ee28aa5`, and the design's citations of it were brought in line.
+
+- **1 (important). The pause path gave the member id to `cf -p`, and a member made by this slice has an id `cf` does not know,** so no pause in a newly added repo could gather its sources. The three calls now take the checkout's Context Forge id (D6, with D10, the Component Structure table, a departures row and a criterion).
+- **2 (important). "Reducing a reduced form changes nothing" was false:** a reduced `origin` is neither accepted form, so the hub would empty it or change it. The hub now checks the form with `is_reduced_origin` and refuses anything else as `malformed_call` (D3, D12, the departures row, the API contract and a criterion).
+- **3 (important). After a `cf` failure in the update's `amoeba list`, both ways on left a restore point that reinstalls code the store refuses.** The script now restores by itself on that failure, as it does on a failed read-back (D16, the walkthrough, a departures row and the criterion).
+- **4. Which calls need `here` was stated two ways.** D5 now has one table: `list` with a subject, `rm --checkout`, `rm --pair`, `rm --concept --program`, `rm <name>` and `add --project` send none.
+- **5. A refusal made by a hub part had no path through 260's handler.** `CallRefused` in `operations/errors.py` and one branch in `handle_call` (D12). D9 now says the door check looks at every machine and the claim at the acting one, and that the message names each machine.
+- **6. The pin on `members.wake_command` collided with `test_members_queried_in_one_place.py`.** The statements are constants in `store/sql.py` that only `operations.naming` uses (D2).
+- **7. Three problem codes in one place, four in another, and `not_a_checkout` in neither.** One list of five (D7), cited from D16, which now also lists `--attach-to` and `--new-member`.
+- **8. `status` reads the runs at five points, not four.** The fifth, the close sweep's run-file check, stays in the sweep, so a run cut from the document for size never closes a live question (D11 and a criterion).
+- **9. Exit 128 does not mean "not a repo".** That is now decided by a `.git` check before git runs (D5 and the facts list).
+- **10. Which checkout, when a member has several on one machine, was said only for wakes.** The one added first, for the concept read (D6) and `MemberRow.path` (D13). `rm --checkout` compares the path as text and removes every row that holds it (D8).
+- **11. `working_directory` for a call that gathers nothing was unstated.** It is null (D13), in D16's contract changes and the departures table.
+- **12. The prerequisites named an old 260 commit and a re-read that was due.** The paragraph now cites `9ee28aa5` and what was read (Prerequisites).
+- **13. A name could equal another member's id in a different case.** The check ignores case (D1 and a criterion).
+- **14. The naming fixture could not come from the seed helpers.** It is built as `test_migration_010.py` builds its store (D15).
+- **15. `--attach-to` did not say what happens when the member has a different `origin`.** Step 1's three rules apply (D7).
+- **16. Modules that must change were missing from the Component Structure table.** Added: `set_up_remove`, `wake`, `pause_context`, `errors`, `hub.calls`, `wiring_results`, `mcp.message_tools`.
+- **17 (was unconfirmed, now confirmed). In a registered worktree `cf get` gives the same project id and the worktree's own directory,** so updating the path on `add` would move a checkout between worktrees. The path is now set when the row is made; a moved repo is `rm --checkout`, then `add` (D7 step 1, State Management, the departures table, the walkthrough and a criterion).
+
+Two changes came from re-reading 260 and not from a finding. `name_by_id` reads before it writes, so the hub's per-call store open stays the plain read 260 D8 now pins (D4). `ContextForgeError` moves to `operations/errors.py`, beside 260's `OPERATION_ERRORS`, and not to `operations.here` (D10).

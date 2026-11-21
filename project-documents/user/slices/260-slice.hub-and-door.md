@@ -405,6 +405,8 @@ Status: decided
 
 A failure outside the call scope, such as the store failing to open, goes through the same handler without the touch.
 
+261 adds a third branch, before these two: an operation that raises `CallRefused` is refused with the code it carries (261 D12).
+
 "Today's operational errors" are the five types in `wiring.OPERATIONAL_ERRORS` before this slice. The hub may not import `wiring`, so the five move to `operations/errors.py` as `OPERATION_ERRORS`, defined once. The hub imports that, and `wiring.OPERATIONAL_ERRORS` becomes those five plus the errors this slice adds, so every existing user of the `wiring` name is unchanged.
 
 The operations open their own transactions with `store.write()` and `store.read()`. Inside a call scope those become savepoints: released on a normal exit, rolled back to on an exception. This matters for `standing`, which raises inside its write block to undo an insert that would overflow. The operation code is not changed for this.
