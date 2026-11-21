@@ -13,21 +13,21 @@ projectState: Slices 220 to 244 are merged on main. Store schema version 10 (mig
 dateCreated: 20261121
 dateUpdated: 20261121
 status: not_started
-turns: 41
-promptTokens: 4196889
-cachedTokens: 4044027
-cacheWriteTokens: 152786
-completionTokens: 67630
-durationSeconds: 651.2
-costUsd: 3.384292
-usageRounds: 2
-pricedRounds: 2
+turns: 47
+promptTokens: 5255229
+cachedTokens: 5084045
+cacheWriteTokens: 171096
+completionTokens: 74716
+durationSeconds: 718.3
+costUsd: 3.880544
+usageRounds: 3
+pricedRounds: 3
 usageByModel:
   claude-opus-5-5:
-    rounds: 2
-    costUsd: 3.3842918
-    completionTokens: 67630
-revision_number: 1
+    rounds: 3
+    costUsd: 3.8805434
+    completionTokens: 74716
+revision_number: 2
 ---
 
 # Tasks: Hub and Door
