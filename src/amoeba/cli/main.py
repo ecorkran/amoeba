@@ -11,6 +11,11 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 
+from amoeba.cli.answer_first_install import (
+    ANSWER_FIRST_COMMAND,
+    AnswerFirstInstallError,
+    run_answer_first_install,
+)
 from amoeba.cli.commands import (
     RequestDocumentError,
     log_failed_call,
@@ -53,6 +58,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if getattr(arguments, "cli_only", None) == STAND_IN_COMMAND:
             # The end-of-turn hook: never touches the calls log or an operation.
             return run_stand_in()
+        if getattr(arguments, "cli_only", None) == ANSWER_FIRST_COMMAND:
+            # Edits Claude Code's settings only: no state home, no operation.
+            return run_answer_first_install(arguments.action)
         if getattr(arguments, "cli_only", None) == WAKE_RUN_COMMAND:
             # Before the operation lookup and before any config load (244 D6).
             return run_wake_run(state_layout(), arguments.wake_id)
@@ -65,7 +73,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except RequestDocumentError as error:
         sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
         return EXIT_USAGE
-    except (WakeRunError, *OPERATIONAL_ERRORS) as error:
+    except (AnswerFirstInstallError, WakeRunError, *OPERATIONAL_ERRORS) as error:
         # The process boundary: these are the expected failures, reported once. With
         # no layout (no state home) there is no calls log to write: stderr only.
         sys.stderr.write(f"error: {type(error).__name__}: {error}\n")

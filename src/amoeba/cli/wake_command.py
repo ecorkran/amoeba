@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 from typing import Any, Final
 
+from amoeba.cli.answer_first_install import ANSWER_FIRST_COMMAND
 from amoeba.cli.exit_codes import EXIT_ERROR, EXIT_OK, EXIT_REJECTED
 from amoeba.cli.stand_in_command import STAND_IN_COMMAND
 from amoeba.config.home import StateLayout
@@ -20,7 +21,9 @@ from amoeba.store.vocabulary import WakeOutcome
 from amoeba.wiring import default_deps, open_store
 
 #: Commands that are not operations: no ``OperationName``, no tool, no ``-j``.
-CLI_ONLY_COMMANDS: Final = frozenset({WAKE_RUN_COMMAND, STAND_IN_COMMAND})
+CLI_ONLY_COMMANDS: Final = frozenset(
+    {WAKE_RUN_COMMAND, STAND_IN_COMMAND, ANSWER_FIRST_COMMAND}
+)
 
 #: The exit code of each way a wake is recorded (D6): the command's own exit code is
 #: data, a start failure is 1, and the wrapper's own unexpected error is operational.

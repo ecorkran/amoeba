@@ -253,6 +253,15 @@ remove:
   and a removed member named as the end of a pair (in `remove.pairs` or as a
   `depends_on` provider). Any problem rejects the whole request.
 
+## `amoeba answer-first install|uninstall`
+
+Adds, or removes, the answer-first hook under `PreToolUse` and `Stop` in Claude Code's
+user settings (`~/.claude/settings.json`, or `$CLAUDE_CONFIG_DIR/settings.json`), always
+both together, leaving every other hook in place. It is CLI-only (no MCP tool, no `-j`),
+safe to repeat, and touches no Amoeba state. Exit 0 with a line saying what it wrote;
+exit 1 with `error: AnswerFirstInstallError: ...` when the settings file is not a JSON
+object it can edit, in which case the file is left as it was. See `docs/answer-first.md`.
+
 ## `amoeba wake-run WAKE_ID`
 
 Internal: Amoeba starts it, detached, when a request wakes a member (see "The wake

@@ -12,6 +12,7 @@ import argparse
 from importlib.metadata import version
 from typing import Any
 
+from amoeba.cli.answer_first_install import register_answer_first
 from amoeba.cli.registration_arguments import (
     register_add,
     register_list,
@@ -145,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     _register_standing_commands(commands, parent)
     register_wake_run(commands)
     register_stand_in(commands)
+    register_answer_first(commands)
     return parser
 
 

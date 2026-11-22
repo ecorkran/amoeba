@@ -38,9 +38,24 @@ refused; a subagent works for the agent and cannot reply to the PM.
 
 ## Install
 
-One command, `amoeba-answer-first`, under two hook events in `~/.claude/settings.json`.
-**Install both or neither.** With only `PreToolUse`, nothing ever releases a message and
-no tool runs again in any session.
+```bash
+amoeba answer-first install      # from a checkout: uv run amoeba answer-first install
+amoeba answer-first uninstall
+```
+
+`install` adds the hook under `PreToolUse` and `Stop` in `~/.claude/settings.json` (or
+`$CLAUDE_CONFIG_DIR/settings.json`), beside the hooks already there, and prints what it
+wrote. It is safe to repeat. `uninstall` removes both entries and nothing else. Sessions
+already open pick either change up on their next hook run.
+
+The entries run the `amoeba-answer-first` executable of the Amoeba that ran the command,
+by its full path. After moving or reinstalling Amoeba somewhere else, run `install`
+again.
+
+### By hand
+
+The command writes the block below. **Install both or neither.** With only `PreToolUse`,
+nothing ever releases a message and no tool runs again in any session.
 
 ```json
 {
