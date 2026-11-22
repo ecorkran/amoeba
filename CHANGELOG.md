@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `amoeba answer-first install` writes the bare `amoeba-answer-first` command, never a path into a checkout or virtualenv, so the hook always runs the `uv tool` install. It refuses when the command is not on `PATH`.
 - The stand-in never starts work the PM did not ask for (#46). It is now shown his last messages and slash commands and settles only what blocks work he asked for; after a summary restore, a question, or an offer of new work, the turn ends. A session he asked nothing of is never judged.
 
 ## [0.2.4] - 2026-11-22

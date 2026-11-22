@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from amoeba.cli import answer_first_install
 from amoeba.cli.answer_first_hook import EVENT_PRE_TOOL_USE, EVENT_STOP
 from amoeba.cli.answer_first_install import (
     CLAUDE_CONFIG_DIR_VAR,
@@ -39,12 +39,20 @@ EXISTING_SETTINGS: dict[str, Any] = {
         "SessionStart": [{"hooks": [OTHER_HOOK]}],
     },
 }
-HOOK_PATH = str(Path(sys.executable).parent / HOOK_EXECUTABLE)
+
+
+def _on_the_path(name: str) -> str | None:
+    return f"/installed/bin/{name}"
+
+
+def _not_on_the_path(name: str) -> str | None:
+    return None
 
 
 @pytest.fixture
 def settings_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv(CLAUDE_CONFIG_DIR_VAR, str(tmp_path))
+    monkeypatch.setattr(answer_first_install.shutil, "which", _on_the_path)
     return tmp_path / SETTINGS_FILE_NAME
 
 
@@ -73,17 +81,21 @@ def test_install_adds_both_entries_beside_the_hooks_already_there(
     assert settings["hooks"]["SessionStart"] == [{"hooks": [OTHER_HOOK]}]
     assert _commands(settings_file, EVENT_PRE_TOOL_USE) == [
         OTHER_HOOK["command"],
-        HOOK_PATH,
+        HOOK_EXECUTABLE,
     ]
     assert _commands(settings_file, EVENT_STOP) == [
         OTHER_HOOK["command"],
         "uv run --quiet --project /repo amoeba stand-in",
-        HOOK_PATH,
+        HOOK_EXECUTABLE,
     ]
     assert settings["hooks"][EVENT_PRE_TOOL_USE][-1] == {
         "matcher": "*",
         "hooks": [
-            {"type": "command", "command": HOOK_PATH, "timeout": HOOK_TIMEOUT_SECONDS}
+            {
+                "type": "command",
+                "command": HOOK_EXECUTABLE,
+                "timeout": HOOK_TIMEOUT_SECONDS,
+            }
         ],
     }
 
@@ -94,8 +106,8 @@ def test_install_twice_leaves_one_entry_per_event(settings_file: Path) -> None:
     main(["answer-first", "install"])
     main(["answer-first", "install"])
 
-    assert _commands(settings_file, EVENT_PRE_TOOL_USE).count(HOOK_PATH) == 1
-    assert _commands(settings_file, EVENT_STOP).count(HOOK_PATH) == 1
+    assert _commands(settings_file, EVENT_PRE_TOOL_USE).count(HOOK_EXECUTABLE) == 1
+    assert _commands(settings_file, EVENT_STOP).count(HOOK_EXECUTABLE) == 1
 
 
 def test_install_replaces_an_entry_written_by_hand_in_the_checkout_form(
@@ -115,8 +127,8 @@ def test_install_replaces_an_entry_written_by_hand_in_the_checkout_form(
 
     main(["answer-first", "install"])
 
-    assert _commands(settings_file, EVENT_PRE_TOOL_USE) == [HOOK_PATH]
-    assert _commands(settings_file, EVENT_STOP) == [HOOK_PATH]
+    assert _commands(settings_file, EVENT_PRE_TOOL_USE) == [HOOK_EXECUTABLE]
+    assert _commands(settings_file, EVENT_STOP) == [HOOK_EXECUTABLE]
 
 
 def test_install_creates_the_settings_file_when_there_is_none(
@@ -124,8 +136,8 @@ def test_install_creates_the_settings_file_when_there_is_none(
 ) -> None:
     assert main(["answer-first", "install"]) == EXIT_OK
 
-    assert _commands(settings_file, EVENT_PRE_TOOL_USE) == [HOOK_PATH]
-    assert _commands(settings_file, EVENT_STOP) == [HOOK_PATH]
+    assert _commands(settings_file, EVENT_PRE_TOOL_USE) == [HOOK_EXECUTABLE]
+    assert _commands(settings_file, EVENT_STOP) == [HOOK_EXECUTABLE]
 
 
 def test_uninstall_removes_both_entries_and_nothing_else(settings_file: Path) -> None:
@@ -175,3 +187,24 @@ def test_the_command_is_listed_in_help(capsys: pytest.CaptureFixture[str]) -> No
         main(["--help"])
 
     assert "answer-first" in capsys.readouterr().out
+
+
+def test_install_writes_the_bare_command_never_a_path(settings_file: Path) -> None:
+    """The hook runs whatever ``uv tool install amoeba-ai`` put on ``PATH``."""
+    main(["answer-first", "install"])
+
+    for event in (EVENT_PRE_TOOL_USE, EVENT_STOP):
+        assert _commands(settings_file, event) == ["amoeba-answer-first"]
+
+
+def test_install_is_an_error_when_the_hook_is_not_on_the_path(
+    settings_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(answer_first_install.shutil, "which", _not_on_the_path)
+
+    assert main(["answer-first", "install"]) == EXIT_ERROR
+
+    assert not settings_file.exists()
+    assert "uv tool install amoeba-ai" in capsys.readouterr().err

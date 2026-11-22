@@ -5,9 +5,9 @@ neither: with only ``PreToolUse`` nothing ever releases a message and no tool ru
 again. This command writes both entries, or removes both, in one atomic write of the
 user's ``settings.json``, and leaves every other hook where it was.
 
-The entries run the ``amoeba-answer-first`` executable that sits beside the running
-interpreter, by absolute path, so the hook works whether Amoeba is a ``uv tool``
-install or a checkout's virtualenv, and needs no ``PATH``.
+The entries run ``amoeba-answer-first`` by its bare name, so the hook is whatever
+``uv tool install amoeba-ai`` put on ``PATH``, the same on every machine and in every
+project. It never writes a path into a checkout or a virtualenv.
 
 A CLI-only command: no ``OperationName`` and no MCP tool, since it edits the settings
 of the person at the keyboard.
@@ -19,6 +19,7 @@ import argparse
 import json
 import os
 import shlex
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Final, cast
@@ -33,6 +34,8 @@ ACTION_UNINSTALL: Final = "uninstall"
 
 #: The hook's entry point (``[project.scripts]``); also how its entries are recognized.
 HOOK_EXECUTABLE: Final = "amoeba-answer-first"
+#: How Amoeba is installed: the one install every hook and command runs from.
+INSTALL_HINT: Final = "uv tool install amoeba-ai"
 HOOK_TIMEOUT_SECONDS: Final = 10
 HOOK_EVENTS: Final = (EVENT_PRE_TOOL_USE, EVENT_STOP)
 MATCH_EVERY_TOOL: Final = "*"
@@ -67,10 +70,12 @@ def settings_path() -> Path:
 
 
 def _hook_command() -> str:
-    executable = Path(sys.executable).parent / HOOK_EXECUTABLE
-    if not executable.is_file():
-        raise AnswerFirstInstallError(f"no {HOOK_EXECUTABLE} at {executable}")
-    return shlex.quote(str(executable))
+    """The hook's bare command name; an error when it is not installed on ``PATH``."""
+    if shutil.which(HOOK_EXECUTABLE) is None:
+        raise AnswerFirstInstallError(
+            f"{HOOK_EXECUTABLE} is not on PATH; install it with: {INSTALL_HINT}"
+        )
+    return HOOK_EXECUTABLE
 
 
 def _load(path: Path) -> dict[str, Any]:

@@ -39,7 +39,7 @@ refused; a subagent works for the agent and cannot reply to the PM.
 ## Install
 
 ```bash
-amoeba answer-first install      # from a checkout: uv run amoeba answer-first install
+amoeba answer-first install
 amoeba answer-first uninstall
 ```
 
@@ -48,9 +48,9 @@ amoeba answer-first uninstall
 wrote. It is safe to repeat. `uninstall` removes both entries and nothing else. Sessions
 already open pick either change up on their next hook run.
 
-The entries run the `amoeba-answer-first` executable of the Amoeba that ran the command,
-by its full path. After moving or reinstalling Amoeba somewhere else, run `install`
-again.
+The entries run `amoeba-answer-first` by its bare name, so the hook is always the Amoeba
+installed with `uv tool install amoeba-ai`, and upgrading that install upgrades the hook.
+`install` refuses when the command is not on `PATH`.
 
 ### By hand
 
@@ -70,8 +70,8 @@ nothing ever releases a message and no tool runs again in any session.
 }
 ```
 
-`amoeba-answer-first` is installed with Amoeba (`uv tool install amoeba-ai`). From a
-checkout, use `uv run --quiet --project <checkout> amoeba-answer-first`. Keep any hooks
+`amoeba-answer-first` is installed with Amoeba (`uv tool install amoeba-ai`). Always use
+the bare command: a hook never points at a checkout or a virtualenv. Keep any hooks
 already listed under those events; add these beside them.
 
 To turn it off, remove both entries. Sessions already open pick the change up on their
