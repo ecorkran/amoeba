@@ -28,9 +28,11 @@ from amoeba.config.home import claude_home, logs_dir, state_layout, user_home
 from amoeba.operations.answer_first import (
     ANSWER_FIRST_PREFIX,
     last_stop_block_reasons,
+    recent_pm_requests,
 )
 from amoeba.operations.stand_in import (
     CHILD_ENV_VAR,
+    PM_REQUESTS_SHOWN,
     REASON_PREFIX,
     Judgement,
     Verdict,
@@ -225,18 +227,23 @@ def write_log(record: dict[str, Any]) -> None:
             old.unlink(missing_ok=True)
 
 
-def _kept_going_by_answer_first_alone(hook_input: dict[str, Any]) -> bool:
+def _transcript_newest_first(hook_input: dict[str, Any]) -> list[str]:
+    """The session transcript's lines, newest first; none when the hook names none."""
+    transcript_path = hook_input.get("transcript_path")
+    if not isinstance(transcript_path, str):
+        return []
+    lines = Path(transcript_path).read_text(encoding="utf-8").splitlines()
+    lines.reverse()
+    return lines
+
+
+def _kept_going_by_answer_first_alone(newest_first: list[str]) -> bool:
     """Whether the turn was last kept going only so the PM could see a reply.
 
     The answer-first hook keeps a turn going once after each PM message. That is not a
     stand-in decision, so the end of the work that follows is still judged.
     """
-    transcript_path = hook_input.get("transcript_path")
-    if not isinstance(transcript_path, str):
-        return False
-    lines = Path(transcript_path).read_text(encoding="utf-8").splitlines()
-    lines.reverse()
-    reasons = last_stop_block_reasons(lines)
+    reasons = last_stop_block_reasons(newest_first)
     return bool(reasons) and all(
         reason.startswith(ANSWER_FIRST_PREFIX) and REASON_PREFIX not in reason
         for reason in reasons
@@ -245,15 +252,20 @@ def _kept_going_by_answer_first_alone(hook_input: dict[str, Any]) -> bool:
 
 def judge(hook_input: dict[str, Any]) -> Judgement | None:
     """The judgement for one turn's end, or ``None`` when there is nothing to judge."""
+    newest_first = _transcript_newest_first(hook_input)
     if hook_input.get("stop_hook_active") and not _kept_going_by_answer_first_alone(
-        hook_input
+        newest_first
     ):
         return None  # one stand-in decision per stop: the agent's next end goes through
     message = closing_message(hook_input)
     if not hands_off(message):
         return None
+    requests = recent_pm_requests(newest_first, PM_REQUESTS_SHOWN)
+    if not requests:
+        return None  # the PM asked this session for nothing: nothing of his to settle
     cwd = Path(str(hook_input.get("cwd") or Path.cwd()))
     prompt = build_prompt(
+        requests=requests,
         message=message,
         rules=gather_rules(cwd),
         memory=gather_memory(cwd),
@@ -267,6 +279,7 @@ def judge(hook_input: dict[str, Any]) -> Judgement | None:
             "session": hook_input.get("session_id"),
             "verdict": judgement.verdict.value,
             "text": judgement.text,
+            "request": requests[-1][:2000],
             "message": message[:2000],
         }
     )

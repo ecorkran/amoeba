@@ -100,6 +100,48 @@ SLASH_COMMAND: dict[str, Any] = {
         "content": "<command-message>sq:summary</command-message>",
     },
 }
+#: ``/sq:summary --restore`` as Claude Code wrote it on 2026-11-22: the command tags
+#: in one string, from the PM. The command's instructions follow in an ``isMeta`` entry.
+SUMMARY_RESTORE: dict[str, Any] = {
+    "type": "user",
+    "uuid": "slash-2",
+    "isSidechain": False,
+    "origin": {"kind": "human"},
+    "message": {
+        "role": "user",
+        "content": (
+            "<command-message>sq:summary</command-message>\n"
+            "<command-name>/sq:summary</command-name>\n"
+            "<command-args>--restore</command-args>"
+        ),
+    },
+}
+SLASH_COMMAND_INSTRUCTIONS: dict[str, Any] = {
+    "type": "user",
+    "isMeta": True,
+    "isSidechain": False,
+    "message": {
+        "role": "user",
+        "content": [{"type": "text", "text": "Generate a clipboard summary."}],
+    },
+}
+
+
+def pm_prompt_from_the_ide(text: str, uuid: str) -> dict[str, Any]:
+    """A PM message with the text blocks the IDE and the browser tools add to it."""
+    entry = pm_prompt(text, uuid)
+    entry["message"]["content"] = [
+        {
+            "type": "text",
+            "text": "<ide_opened_file>The user opened the file /a/b.toml in the IDE. "
+            "This may or may not be related to the current task.</ide_opened_file>",
+        },
+        {"type": "text", "text": "<browser_instruction># Browser automation"},
+        {"type": "text", "text": text},
+    ]
+    return entry
+
+
 INTERRUPTED: dict[str, Any] = {
     "type": "user",
     "message": {

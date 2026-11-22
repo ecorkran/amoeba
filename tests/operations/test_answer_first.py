@@ -15,6 +15,8 @@ from transcript_entries import (
     INTERRUPTED,
     PEER_MESSAGE,
     SLASH_COMMAND,
+    SLASH_COMMAND_INSTRUCTIONS,
+    SUMMARY_RESTORE,
     TASK_NOTIFICATION,
     TEXT,
     THINKING,
@@ -24,6 +26,7 @@ from transcript_entries import (
     newest_first,
     pm_mid_turn,
     pm_prompt,
+    pm_prompt_from_the_ide,
     stop_block,
 )
 
@@ -33,6 +36,7 @@ from amoeba.operations.answer_first import (
     is_pm_message,
     last_stop_block_reasons,
     latest_pm_message,
+    recent_pm_requests,
 )
 
 
@@ -160,3 +164,33 @@ def test_a_turn_never_kept_going_has_no_stop_block_reasons() -> None:
 
     assert last_stop_block_reasons(newest_first(pm_prompt("go", "p1"), TEXT)) == []
     assert last_stop_block_reasons(newest_first(TEXT, tool_refusal, THINKING)) == []
+
+
+def test_the_pms_requests_are_his_messages_and_commands_oldest_first() -> None:
+    lines = newest_first(
+        pm_prompt("first", "p1"),
+        TEXT,
+        pm_prompt_from_the_ide("Implement slice 432.", "p2"),
+        TOOL_USE,
+        TOOL_RESULT,
+        PEER_MESSAGE,
+        TASK_NOTIFICATION,
+        pm_mid_turn("and skip the review", "p3"),
+        TEXT,
+        SUMMARY_RESTORE,
+        SLASH_COMMAND_INSTRUCTIONS,
+        HOOK_FEEDBACK,
+        TEXT,
+    )
+
+    assert recent_pm_requests(lines, limit=3) == [
+        "Implement slice 432.",
+        "and skip the review",
+        SUMMARY_RESTORE["message"]["content"],
+    ]
+
+
+def test_a_transcript_with_nothing_from_the_pm_has_no_requests() -> None:
+    lines = newest_first(PEER_MESSAGE, TEXT, TASK_NOTIFICATION, TOOL_RESULT, TEXT)
+
+    assert recent_pm_requests(lines, limit=3) == []

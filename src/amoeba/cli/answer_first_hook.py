@@ -68,8 +68,9 @@ REFUSAL_NOT_ENDED: Final = ANSWER_FIRST_PREFIX + (
     "turn now, with no tool call. You will be put straight back to work."
 )
 RESUME: Final = ANSWER_FIRST_PREFIX + (
-    "the PM has your reply. If his message left work to do, do it now. If nothing "
-    "is left to do, end your turn without repeating the reply."
+    "the PM has your reply. If his message asked for work, do it now. If it asked "
+    "for none, or an instruction to wait or take no action is in force, end your "
+    "turn without repeating the reply."
 )
 
 

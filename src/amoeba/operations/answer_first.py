@@ -32,6 +32,7 @@ command, whose own instructions say what its output must be.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any, Final, cast
@@ -46,6 +47,9 @@ HOOK_EVENT_STOP: Final = "Stop"
 BLOCK_TEXT: Final = "text"
 #: A slash command's prompt is a string that opens with a Claude Code command tag.
 SLASH_COMMAND_PREFIX: Final = "<command-"
+#: A text block that opens with a tag the harness wrote (an opened file, a reminder,
+#: tool instructions) and not a command the PM ran: not his words.
+HARNESS_BLOCK: Final = re.compile(r"\s*<(?!command-)[a-z][a-z_-]*[\s>]")
 #: Opens every reason the answer-first hooks give, so the stand-in can tell a turn
 #: that answer-first kept going from one it kept going itself.
 ANSWER_FIRST_PREFIX: Final = "Amoeba answer-first: "
@@ -124,6 +128,59 @@ def latest_pm_message(newest_first: Iterable[str]) -> PmMessage | None:
                 return PmMessage(message_id, replied)
             return None
     return None
+
+
+def _text_blocks(content: object) -> list[str]:
+    """The texts in a message's content: the string itself, or its text blocks."""
+    if isinstance(content, str):
+        return [content]
+    if not isinstance(content, list):
+        return []
+    texts = (_dict(block) for block in cast("list[object]", content))
+    return [
+        block["text"]
+        for block in texts
+        if block.get("type") == BLOCK_TEXT and isinstance(block.get("text"), str)
+    ]
+
+
+def _pm_words(entry: dict[str, Any]) -> str | None:
+    """What the PM typed or ran in this entry; ``None`` when the entry is not his."""
+    kind = entry.get("type")
+    if kind == ENTRY_ATTACHMENT:
+        attachment = _dict(entry.get("attachment"))
+        if attachment.get("type") != ATTACHMENT_QUEUED_MESSAGE:
+            return None
+        if not _from_human(attachment):
+            return None
+        content = attachment.get("prompt")
+    elif kind == ENTRY_USER and _from_human(entry):
+        content = _dict(entry.get("message")).get("content")
+    else:
+        return None
+    words = [
+        text.strip()
+        for text in _text_blocks(content)
+        if text.strip() and not HARNESS_BLOCK.match(text)
+    ]
+    return "\n".join(words) or None
+
+
+def recent_pm_requests(newest_first: Iterable[str], limit: int) -> list[str]:
+    """The PM's last ``limit`` messages and slash commands, oldest first.
+
+    Unlike ``latest_pm_message`` this counts a slash command: it is not a message to
+    reply to, but it is what he asked the session for.
+    """
+    requests: list[str] = []
+    for entry in _entries(newest_first):
+        words = _pm_words(entry)
+        if words is not None:
+            requests.append(words)
+            if len(requests) == limit:
+                break
+    requests.reverse()
+    return requests
 
 
 def _stop_block_reason(entry: dict[str, Any]) -> str | None:

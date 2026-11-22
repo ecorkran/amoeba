@@ -8,6 +8,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from transcript_entries import (
+    PEER_MESSAGE,
+    SLASH_COMMAND_INSTRUCTIONS,
+    SUMMARY_RESTORE,
+    TEXT,
+    pm_prompt,
+    transcript_lines,
+)
 
 from amoeba.cli import stand_in_command
 from amoeba.cli.stand_in_command import (
@@ -18,6 +26,20 @@ from amoeba.cli.stand_in_command import (
 from amoeba.operations.stand_in import CHILD_ENV_VAR, REASON_PREFIX, Judgement, Verdict
 
 HANDOFF = "Want me to run the task review too?"
+#: The closing message of issue 46: a restored summary, with its next step.
+RESTORED = "Restored. The next step is the task breakdown for slice 432. Go ahead?"
+
+
+def _session(tmp_path: Path, *entries: dict[str, Any]) -> dict[str, Any]:
+    """The hook's input for a session whose transcript holds ``entries``."""
+    transcript = tmp_path / "session.jsonl"
+    transcript.write_text("\n".join(transcript_lines(*entries)), encoding="utf-8")
+    return {"cwd": str(tmp_path), "transcript_path": str(transcript)}
+
+
+def _asked(tmp_path: Path) -> dict[str, Any]:
+    """The hook's input for a session where the PM asked for work."""
+    return _session(tmp_path, pm_prompt("Implement the slice.", "p1"), TEXT)
 
 
 def _run(
@@ -52,10 +74,7 @@ def test_a_settled_handoff_blocks_the_stop_with_the_instruction(
     code, out, _ = _run(
         monkeypatch,
         capsys,
-        {
-            "cwd": str(tmp_path),
-            "last_assistant_message": HANDOFF,
-        },
+        {**_asked(tmp_path), "last_assistant_message": HANDOFF},
     )
     assert code == 0
     assert json.loads(out) == {"decision": "block", "reason": REASON_PREFIX + "Run it."}
@@ -70,10 +89,7 @@ def test_a_question_for_the_pm_lets_the_turn_end(
     code, out, _ = _run(
         monkeypatch,
         capsys,
-        {
-            "cwd": str(tmp_path),
-            "last_assistant_message": HANDOFF,
-        },
+        {**_asked(tmp_path), "last_assistant_message": HANDOFF},
     )
     assert (code, out) == (0, "")
 
@@ -84,15 +100,12 @@ def test_no_handoff_and_a_second_stop_make_no_model_call(
     tmp_path: Path,
 ) -> None:
     prompts = _stub_model(monkeypatch, Judgement(Verdict.SETTLED, "x"))
-    _run(monkeypatch, capsys, {"cwd": str(tmp_path), "last_assistant_message": "Done."})
+    asked = _asked(tmp_path)
+    _run(monkeypatch, capsys, {**asked, "last_assistant_message": "Done."})
     _run(
         monkeypatch,
         capsys,
-        {
-            "cwd": str(tmp_path),
-            "last_assistant_message": HANDOFF,
-            "stop_hook_active": True,
-        },
+        {**asked, "last_assistant_message": HANDOFF, "stop_hook_active": True},
     )
     assert prompts == []
 
@@ -107,10 +120,7 @@ def test_the_judges_own_session_is_never_judged(
     code, out, _ = _run(
         monkeypatch,
         capsys,
-        {
-            "cwd": str(tmp_path),
-            "last_assistant_message": HANDOFF,
-        },
+        {**_asked(tmp_path), "last_assistant_message": HANDOFF},
     )
     assert (code, out, prompts) == (0, "", [])
 
@@ -128,10 +138,7 @@ def test_a_failed_model_call_is_one_stderr_line_and_exit_1(
     code, out, err = _run(
         monkeypatch,
         capsys,
-        {
-            "cwd": str(tmp_path),
-            "last_assistant_message": HANDOFF,
-        },
+        {**_asked(tmp_path), "last_assistant_message": HANDOFF},
     )
     assert (code, out) == (1, "")
     assert "timed out" in err
@@ -156,3 +163,44 @@ def test_the_closing_message_comes_from_the_transcript_when_not_given(
     ]
     transcript.write_text("\n".join(json.dumps(line) for line in lines) + "\n{part")
     assert closing_message({"transcript_path": str(transcript)}) == HANDOFF
+
+
+def test_a_session_the_pm_asked_nothing_of_makes_no_model_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    prompts = _stub_model(monkeypatch, Judgement(Verdict.SETTLED, "x"))
+    session = _session(tmp_path, PEER_MESSAGE, TEXT)
+    code, out, _ = _run(
+        monkeypatch, capsys, {**session, "last_assistant_message": HANDOFF}
+    )
+    assert (code, out, prompts) == (0, "", [])
+
+
+def test_the_judge_sees_that_the_pm_last_ran_a_summary_restore(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """Issue 46: the restore, not the summary's next step, is what the PM asked for."""
+    prompts = _stub_model(
+        monkeypatch, Judgement(Verdict.FOR_PM, "He asked for nothing.")
+    )
+    session = _session(
+        tmp_path,
+        pm_prompt("Design slice 432.", "p1"),
+        TEXT,
+        SUMMARY_RESTORE,
+        SLASH_COMMAND_INSTRUCTIONS,
+        TEXT,
+    )
+    code, out, _ = _run(
+        monkeypatch, capsys, {**session, "last_assistant_message": RESTORED}
+    )
+
+    assert (code, out) == (0, "")
+    [prompt] = prompts
+    restore = "[2 of 2]\n" + SUMMARY_RESTORE["message"]["content"]
+    assert prompt.index("Design slice 432.") < prompt.index(restore)
+    assert prompt.index(restore) < prompt.index(RESTORED)

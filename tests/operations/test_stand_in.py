@@ -6,6 +6,7 @@ import pytest
 
 from amoeba.operations.stand_in import (
     MESSAGE_MAX_CHARS,
+    REQUEST_MAX_CHARS,
     Verdict,
     VerdictError,
     build_prompt,
@@ -38,6 +39,7 @@ def test_a_report_of_finished_work_is_not_a_handoff(message: str) -> None:
 
 def test_the_prompt_holds_every_part_and_cuts_a_long_message() -> None:
     prompt = build_prompt(
+        requests=["Implement slice 432."],
         message="x" * (MESSAGE_MAX_CHARS + 50),
         rules="RULES-TEXT",
         memory="",
@@ -76,6 +78,38 @@ def test_asking_the_pm_whether_to_ask_a_peer_is_a_handoff_the_judge_settles() ->
     message = "Should I ask the ai-project-guide session to release the guide?"
 
     assert hands_off(message)
-    prompt = build_prompt(message=message, rules="", memory="", standing="", cwd="/r")
+    prompt = build_prompt(
+        requests=["Get the guide released."],
+        message=message,
+        rules="",
+        memory="",
+        standing="",
+        cwd="/r",
+    )
     assert "message that session directly" in prompt
     assert "that session's question to raise" in prompt
+
+
+def test_the_prompt_gives_the_pms_requests_in_order_and_never_cuts_the_last() -> None:
+    prompt = build_prompt(
+        requests=["y" * (REQUEST_MAX_CHARS + 50), "LAST-REQUEST"],
+        message="Next step is the task breakdown. Want me to start?",
+        rules="",
+        memory="",
+        standing="",
+        cwd="/r",
+    )
+
+    first, last = prompt.index("[1 of 2]"), prompt.index("[2 of 2]\nLAST-REQUEST")
+    assert first < last < prompt.index("The agent's closing message")
+    assert "[... cut for length ...]" in prompt[first:last]
+
+
+def test_the_judge_is_told_it_never_starts_work_the_pm_did_not_ask_for() -> None:
+    prompt = build_prompt(
+        requests=["x"], message="m", rules="", memory="", standing="", cwd="/r"
+    )
+
+    assert "You never start work he did not ask for" in prompt
+    assert "summary or context restore" in prompt
+    assert "never a request from him" in prompt
