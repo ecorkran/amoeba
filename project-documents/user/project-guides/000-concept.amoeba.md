@@ -18,7 +18,7 @@ status: in_progress
 
 ## Overview
 
-Amoeba is an agent that stands in for the PM. Everything another agent would hand to the PM goes to Amoeba first: questions, leftover work, paused runs. It looks, decides and acts the way the PM would, and it learns from every case and every time the PM overrules it.
+Amoeba is the room the PM and his agents share, and the persistent agent that lives in it. Everything another agent would hand to the PM goes there first: questions, leftover work, paused runs. The agent settles what the PM's record and the repo already settle, in its own voice, and makes the rest cheap for him to answer. It learns from every case and every time the PM overrules it.
 
 The User-Provided Concept below is the original idea, kept as written. Amoeba has moved a long way from it. The Refined Concept is the current one.
 
@@ -129,13 +129,29 @@ What that produced was a record-keeper and a few hooks.
 
 ### What Amoeba is
 
-Amoeba is an agent that stands in for the PM. It judges and interprets, and that is the product.
+Amoeba is a room and the agent that lives in it (The room, below). The agent judges and interprets. Standing in for the PM is one of its functions, not the whole of it.
 
-Everything an agent would hand to the PM goes to Amoeba first: a question, a "remaining" list, a pause, a run that finished with work left over. Amoeba looks at the repo with full tools, decides what the PM would decide, and either does the work or tells the agent what to do. It does three jobs and learns from each.
+Everything an agent would hand to the PM goes to Amoeba first: a question, a "remaining" list, a pause, a run that finished with work left over. Amoeba looks at the repo with full tools, works out what the repo and the PM's record settle, and either does the work, tells the agent what to do, or puts the question to the PM in one line. It does three jobs and learns from each.
 
 1. **It answers needless questions,** so the agent keeps working and the PM never sees them.
 2. **It catches leftovers.** An agent's work is not finished until Amoeba has checked what it left. Amoeba finishes small leftovers itself or sends the agent back to finish them.
 3. **It answers real questions** from whatever settles them: the code, the plans, the git history, the repo's rules, other repos in the program, and the PM's earlier decisions.
+
+### The room
+
+> Added 20261122 at the PM's direction, after two days of the turn-end hook in use.
+
+Standing in for the PM is a role. The room is a place, and the place is what the PM needs: something coherent, where today everything is fragmented across sessions.
+
+- **One shared thread.** The PM, the session agents in every repo, and Amoeba's persistent agent are in it. A hand-off from any session goes there, not to a private judgment inside that session.
+- **The agent speaks as itself.** It never writes an instruction or a decision in the PM's name. When the record settles something (a decision he made, a standing answer, the plan, the repo's rules), it says so and cites it. The turn-end hook wrote its orders as the PM. On 20261122, after its fix, it gave three in a day and two were wrong.
+- **It still decides by default** (Judgment, below), by looking, with tools. Two things it does not do, both learned from the hook: start work the PM did not ask for, and guess a fact only he has. Those go to him.
+- **Asking the PM is cheap there.** A question used to cost the PM a switch into one session and a read of its detail, which is why earlier versions had to guess. In the room the agent has done the reading, and the question is one line with its recommendation. He answers without opening that session, and the answer goes back to the agent that asked.
+- **The PM sees outcomes.** Agents talk to each other in the room while he is away. He is shown what needs him and what was decided. The talk between agents is there to open, and folded by default.
+- **What the persistent agent does there.** It settles what the record settles (the stand-in's job), carries messages between agents and repos, tells sessions the standing facts they would otherwise rediscover, reads detail so the PM does not have to, and notices what crosses projects. Later it directs work the PM asked for in the room. Directing work is one function of it. The room is not a hierarchy of a boss and workers.
+- **The PM's seat is a session like any other,** in his editor, opened on the room. The chat is a component he places beside whatever else he is doing. Amoeba builds no dashboard.
+- **Smaller rooms are later work.** The PM will want to talk to some agents and not all, most often every agent in one program. The first version is one room in which a message can be addressed to a member or to a program.
+- **The test:** the PM stops having to visit a session to unblock it.
 
 ### Judgment
 
@@ -216,12 +232,12 @@ These are built and stay. They are the stand-in's wiring and reach.
 - **A pipeline engine.** Squadron runs planned work inside a repo: phases, reviews, merges.
 - **A rules engine.** It does not look up a matching rule and apply it. A design that could be replaced by a script or a query is the wrong design.
 - **An extension to Squadron.** Squadron is one source of hand-offs among several. A gap in what Amoeba handles is fixed in Amoeba.
-- **The PM's chat.** The PM talks to whatever agent he likes. Amoeba is what that agent's hand-offs go through.
+- **A chat product or a dashboard.** The PM's seat in the room is an ordinary session. He still talks to whatever agent he likes, and that agent's hand-offs go through Amoeba.
 
 ### Users and how they reach it
 
 - **Agents** reach Amoeba through the hooks above and through one set of operations, over MCP for sessions and a CLI for pipelines and scripts.
-- **The PM** types no `amoeba` command in normal use. He sees the result: fewer questions, and a short list of what was decided for him. He overrules by saying so to any agent.
+- **The PM** sits in the room through a session like any other, and types no `amoeba` command in normal use. He sees what needs him and a short list of what was decided, and he answers there. He can also overrule by saying so to any agent.
 - **Set-up** is one command per repo.
 
 ### How it runs
@@ -229,7 +245,7 @@ These are built and stay. They are the stand-in's wiring and reach.
 - **One process stays running, on a machine on the PM's LAN that does not sleep.** It holds the store, inbox, timers, memory and the PM's decisions, and runs the scheduler. This reverses the earlier "nothing stays running": timers and a turn-end answer both need it. The PM's laptop sleeps and he works on several machines, so the process does not live on any of them.
 - **Every machine the PM works on is a client of it.** Sessions and runs send their hand-offs to that process, so the PM's decisions are one store everywhere (the hub, initiative 260).
 - **A run happens where its files are.** Work from a clone runs on the LAN machine. Work that needs a live working tree, uncommitted changes included, runs on the machine that has it, started by the session's own hook. That machine is awake whenever a session on it is asking.
-- **A wake starts a command.** The definition names it: Claude Code or Codex without a window, or a Squadron pipeline for any other provider and model. Amoeba builds no model layer of its own. It enforces the time cap for every command, because no runtime has one.
+- **A wake is a run on `agent-kit`.** The kit starts the provider that the agent's definition names and enforces the time and cost caps. Amoeba builds no model layer and no runner of its own.
 - **Entry points do not depend on one vendor.** For any runtime, Amoeba reads what a run produced when it ends, and a paused pipeline run reports itself. Where a runtime offers more (Claude Code's turn-end hook, its pause-and-resume for approval, its cost cap), Amoeba uses it as the faster path.
 - **Every record names its owner.** Each agent, event, run and memory entry records whose it is. Today that is always the PM, through one stored login. It is the one seam kept for a later multi-person version.
 - **Config and state are separate.** What a person edits lives in the config directory. The store, memory, run records and logs live in the state directory.
@@ -274,6 +290,8 @@ The architecture answers these itself.
 4. **How the stand-in runs:** which runtime, how the time and cost caps are enforced, and how fast a turn-end answer has to be.
 5. **How the kept-running process starts and restarts,** and how it becomes the hub for other machines.
 6. **What the audit keeps.** Today's code is sorted against this concept into keep, change or delete.
+7. **The PM's seat.** Whether the session the PM sits in is the persistent agent itself, attended, with the same memory and record as its unattended runs, and how a hand-off that arrives while he is typing is shown.
+8. **How an answer given in the room reaches a session that has stopped,** in each runtime, without the PM opening that session.
 
 ### Development approach
 
