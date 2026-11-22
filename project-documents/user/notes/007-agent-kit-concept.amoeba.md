@@ -45,8 +45,9 @@ The PM needs long-running agents in use at his job as well as on his own project
 
 The kit is built generically. Enterprise environment specifics, including how AI access works there, are a separate matter and are not designed into it. Two facts about where it runs are known:
 
-- The PM runs it himself, on his own machine, with whichever provider he chooses.
-- The ideal deployment is a Docker container on a Linux VM. It will use Claude there. Whether that is by API key or by login is not settled; during development the PM's enterprise Claude login can be used.
+- **It runs in a Docker container and is reachable over the network** (decided 20261122). That lets the PM run it on his LAN now and is the same shape that works later at his job, on a Linux VM.
+- The PM uses it himself, with whichever provider he chooses.
+- At work it will use Claude. Whether that is by API key or by login is not settled; during development the PM's enterprise Claude login can be used.
 
 ## Build order (decided 20261120, revised 20261122)
 
@@ -63,15 +64,16 @@ The kit is not designed in the abstract: every part is proven by a real agent ru
 
 1. **It acts as the right person.** Each agent runs under one named person's own logins: their model account, their GitHub, their mail. At work that includes SSO. No shared account and no shared quota.
 2. **It never decides as its person.** An agent uses its person's logins; it does not speak for them. An action is either inside the authority its definition states, or it goes to the person through the approval path. It never composes an instruction or a decision in the person's name.
-3. **It is not tied to one vendor.** The definition names the runtime and the model. The kit starts that runtime; it does not replace it. The PM uses the kit himself as well as at work, so no provider is assumed anywhere.
+3. **It is not tied to one provider, and it knows which ones are usable.** The definition names the provider and the model. The desired state is what Squadron's provider layer does today (see "Squadron's provider layer" below): Anthropic by account login, Codex by OpenAI login, anything (Anthropic and OpenAI included) through OpenRouter, and a local model behind a compatible interface. At any moment the kit can say which of these are active. The first build may support one, Anthropic by account login, as long as the others are added without changing the kit's own code.
 4. **It does things.** An agent labels and closes issues, pushes fixes, replies on review threads, filters and moves mail. It never hands a person instructions to paste.
 5. **A new agent is quick.** One definition file, one command. No hand-written wrapper script per agent.
 6. **It is easy to adopt, for people and for their AI agents.** A person installs it with one command. An AI agent given only the kit's published documentation can write a correct definition, install the agent and confirm it ran, with nobody explaining anything. This is tested: a fresh agent session with only the docs creates and runs a new agent.
-7. **One install per machine.** Every command, hook and background process runs from the installed package. Nothing ever points at a source checkout or a virtualenv.
-8. **Every run is bounded** by a time cap and a cost cap, and one run at a time per agent.
-9. **Every state ends on its own:** completion, expiry or an explicit cancel.
-10. **An agent can tell how well it is doing.** When an action can later be shown right or wrong (a finding it dismissed, a fix it pushed), the kit records the outcome when it arrives (a person overturned it, the checks failed, the pull request merged) and reports the rate per agent. The PM's words for reviews apply to every agent: it needs to know how good it is, and how to make itself better.
-11. **Memory stays bounded.** Curation merges and replaces. Memory and instructions never grow by appending a rule after each incident; the definition sets a size limit and the curation pass keeps to it.
+7. **It runs in a container and is reachable over the network.** One image starts the whole kit. Its commands work against a kit on another machine, so the PM can list agents, read a run's log, cancel a run and answer an approval from anywhere on the network. Access is controlled; nothing is open by default.
+8. **One install per machine.** Every command, hook and background process runs from the installed package. Nothing ever points at a source checkout or a virtualenv.
+9. **Every run is bounded** by a time cap and a cost cap, and one run at a time per agent.
+10. **Every state ends on its own:** completion, expiry or an explicit cancel.
+11. **An agent can tell how well it is doing.** When an action can later be shown right or wrong (a finding it dismissed, a fix it pushed), the kit records the outcome when it arrives (a person overturned it, the checks failed, the pull request merged) and reports the rate per agent. The PM's words for reviews apply to every agent: it needs to know how good it is, and how to make itself better.
+12. **Memory stays bounded.** Curation merges and replaces. Memory and instructions never grow by appending a rule after each incident; the definition sets a size limit and the curation pass keeps to it.
 
 ## What already exists (checked 20261120)
 
@@ -97,6 +99,16 @@ What the runtimes supply, so the kit does not build it:
 | Run as a person, unattended | a token minted once by that person's login, or an API key; one config directory per person | login, API key, or a per-member access token on Enterprise | start the runtime in that person's environment |
 | Memory curation | none locally | none | the kit's |
 
+### Squadron's provider layer (checked 20261122, Squadron commit fc009694)
+
+The PM's other tool, Squadron, already has the provider code this kit needs, and it gives full agents with tools, not bare models.
+
+- **Three provider types behind one interface** (`AgentProvider` creates an `Agent`; an agent takes a message and yields messages). `sdk` is the Claude Agent SDK, signed in by account login, with its own file and shell tools. `openai-oauth` is Codex by OpenAI login, with its own sandbox. `openai` is any OpenAI-compatible chat endpoint, and for that one Squadron runs the tool loop itself with its own file and shell tools, confined to a directory.
+- **Profiles** name an endpoint and how to sign in: `openai`, `openrouter`, `local` (a compatible server on the machine), `gemini`, `sdk`, `openai-oauth`. A user file adds more.
+- **It knows what is usable.** Each profile has a sign-in strategy that reports whether its credentials are valid, where they came from, and what to do if they are missing. `sq auth status` lists every profile this way; `sq auth login` and `logout` exist for the account logins.
+- **Every call reports usage and cost**, which is what a cost cap sums.
+- **Size and coupling:** about 3,900 lines in `src/squadron/providers`, plus about 2,500 in `src/squadron/tools` for the compatible-endpoint tool loop. It imports a small part of the rest of Squadron: the message and agent-config models, usage records, logging and config lookup.
+
 Other runtimes (opencode, Goose) fit the same adapter shape. Gemini's tool is not a base to build on: its docs say it was replaced for some account types in June 2026.
 
 ## What the kit builds
@@ -104,7 +116,10 @@ Other runtimes (opencode, Goose) fit the same adapter shape. Gemini's tool is no
 - **One store** (SQLite, in the state directory) with tables for events, timers, runs, outgoing messages and outcomes.
 - **Intake.** Two ways in, both writing events with a dedup id: a small HTTP handler for webhooks, and polling sources run on a timer. Polling through the person's own tools needs no inbound network, which is what a work machine usually allows.
 - **One process that stays up.** Each pass turns due timers into events and starts a run for any agent with pending events. One run per agent at a time; events that arrive mid-run wait for the next.
-- **A runner with one adapter per runtime.** It starts the runtime in the agent's working directory with the caps from the definition, enforces time and cost itself, records the outcome and the session id, and kills the whole process group at the limit. Claude Code and Codex adapters are in the first build.
+- **A runner over the provider layer.** Each run is one child process that hosts one provider agent in the agent's working directory, with the caps from the definition. The runner enforces time and cost itself (cost from the usage each call reports), records the outcome and the session id, and kills the whole process group at the limit. The first build supports Anthropic by account login.
+- **A provider status view.** Which providers are signed in and usable right now, and what to do about one that is not.
+- **A network door.** The staying-up process serves its commands and its webhook intake over HTTP, behind access control, so the command line is a client that can point at another machine.
+- **A container image** that starts the staying-up process, with the state directory and each person's sign-in kept outside the image.
 - **Timers.** Follow-ups an agent sets for itself and schedules from the definition. Each has an expiry.
 - **Memory.** A folder per agent: instructions, an index, notes, progress per ongoing item, and what has already been reported. The index and instructions load every run. A scheduled curation pass merges repeats, replaces stale entries and keeps to the size limit.
 - **Outcomes.** A record per judged action, closed when later evidence says whether it held, and a per-agent rate in the status view.
@@ -132,7 +147,7 @@ In no fixed order. The PM names the first (Build order, item 2).
 
 ## Out of scope
 
-- **An agent loop of its own.** The runtime has one.
+- **An agent loop of its own.** The provider layer has one for every provider type.
 - **A safety classifier of its own.** The runtime has one.
 - **A credential proxy.** Each agent runs as its person on a machine that person or their employer controls. A proxy is needed only for an agent running somewhere neither controls, which this kit does not do.
 - **A hosted service.** The kit runs on machines the PM or his employer has.
@@ -153,7 +168,7 @@ Three lessons from Amoeba's session hooks, observed 20261122:
 
 - A model that wrote instructions in the PM's name issued orders he never gave. This is why requirement 2 exists.
 - A hook that forced an extra turn after every message fed a second hook, and the pair looped. This is why a run never triggers itself.
-- Hooks that ran from the source checkout changed behaviour in every session the moment a file was edited. This is why requirement 7 exists.
+- Hooks that ran from the source checkout changed behaviour in every session the moment a file was edited. This is why requirement 8 exists.
 
 ## What can be taken from Amoeba
 
@@ -170,7 +185,10 @@ Amoeba keeps its own copies until its persistent agent moves onto the kit. At th
 5. How approval requests reach a person and how the answer gets back as an event. The channel is an adapter, chosen in the definition.
 6. Which surfaces make the kit adoptable by an AI agent (an `AGENTS.md`, an `llms.txt`, a skill, an MCP server with instructions), and the exact form of the adoption test in requirement 6.
 7. For each first agent, which later evidence closes an outcome record, and how the kit learns of it.
-8. On the machine that runs Amoeba's hub, whether the hub and the kit's staying-up process are one process or two. This is settled when Amoeba's agent moves onto the kit and blocks nothing before then.
+8. **How the kit gets Squadron's provider layer.** Three ways: copy it into the kit, depend on Squadron as a library, or move it into its own package that both use. Recommended, not yet confirmed by the PM: a separate installable package inside the kit's repo, started as a copy of Squadron's provider and tool code, with the kit using it through one adapter module. Squadron switches to that package later and deletes its copy. This does not touch Squadron now, and it leaves one copy at the end.
+9. How an account login (Anthropic, OpenAI) is made, kept and refreshed for an agent running in a container.
+10. What controls access to the network door, and what it exposes.
+11. On the machine that runs Amoeba's hub, whether the hub and the kit's staying-up process are one process or two. This is settled when Amoeba's agent moves onto the kit and blocks nothing before then.
 
 ## Only the PM can supply
 
