@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-22
+
 ### Fixed
 
 - `amoeba answer-first install` writes the bare `amoeba-answer-first` command, never a path into a checkout or virtualenv, so the hook always runs the `uv tool` install. It refuses when the command is not on `PATH`.

@@ -3,7 +3,7 @@ docType: devlog
 project: amoeba
 layer: project
 dateCreated: 20261009
-dateUpdated: 20261120
+dateUpdated: 20261122
 ---
 
 # Development Log
@@ -11,6 +11,9 @@ dateUpdated: 20261120
 ---
 
 ## 20261122
+
+### Release 0.2.5
+- The stand-in never starts work the PM did not ask for (#46), and `answer-first install` writes the bare command so hooks always run the tool install.
 
 ### Release 0.2.4
 - Answer-first hooks (`amoeba answer-first install/uninstall`), stand-in settles asking another session, and slice 230 standing answers (store migration 010).
