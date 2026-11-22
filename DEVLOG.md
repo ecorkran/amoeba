@@ -10,6 +10,13 @@ dateUpdated: 20261120
 
 ---
 
+## 20261122
+
+### Release 0.2.4
+- Answer-first hooks (`amoeba answer-first install/uninstall`), stand-in settles asking another session, and slice 230 standing answers (store migration 010).
+
+---
+
 ## 20261120
 
 **p6: devlog-4**

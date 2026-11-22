@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-22
+
 ### Added
 
 - Answer first: `amoeba-answer-first`, a Claude Code hook installed under `PreToolUse` and `Stop`. After the PM sends a message, no tool runs until the agent has replied and ended its turn, so he sees the reply; the turn is then kept going once so the work continues. `amoeba answer-first install` adds both entries to Claude Code's settings and `amoeba answer-first uninstall` removes them. See `docs/answer-first.md`.
