@@ -12,7 +12,7 @@ status: in-progress
 
 # Agent kit: hand-off concept
 
-"Agent kit" is a working name. The PM names the project.
+The project is `agent-kit`, in its own repo beside the PM's others at `repos/manta/agent-kit` (named and created 20261122, registered with Context Forge).
 
 ## How to use this document
 
@@ -192,5 +192,4 @@ Amoeba keeps its own copies until its persistent agent moves onto the kit. At th
 
 ## Only the PM can supply
 
-1. **Where the project lives and what it is called.** Asked once, at the start.
-2. **Which agent is first.** He says when the substrate runs.
+1. **Which agent is first.** He says when the substrate runs.
