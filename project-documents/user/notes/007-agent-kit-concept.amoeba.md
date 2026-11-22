@@ -24,7 +24,7 @@ The PM's interest is the system, not the code: how AI is used to put this togeth
 
 A small package that turns a definition file into a long-running agent. The agent wakes when there is work, does a bounded piece of it with real tools, remembers what it learned, and sleeps. Writing a new agent means writing one file and running one command.
 
-The kit knows nothing about Amoeba, Squadron or Context Forge. The PR review responder is the first agent built on it.
+The kit knows nothing about Amoeba, Squadron or Context Forge.
 
 ## The pattern
 
@@ -41,23 +41,29 @@ The kit implements Anthropic's article "Building always-on agents" (https://clau
 
 ## Why now
 
-The PM needs long-running agents in use at his job as well as on his own projects, and needs them now. The first build is therefore judged on two machines: the PM's own, and a work machine under his work login. Nothing in it may assume the personal machine.
+The PM needs long-running agents in use at his job as well as on his own projects, and needs them now. Today there is no substrate to run one on, so the substrate is the project. Which agent runs on it first is decided when it exists.
 
-## Build order (decided 20261120)
+The kit is built generically. Enterprise environment specifics, including how AI access works there, are a separate matter and are not designed into it. Two facts about where it runs are known:
+
+- The PM runs it himself, on his own machine, with whichever provider he chooses.
+- The ideal deployment is a Docker container on a Linux VM. It will use Claude there. Whether that is by API key or by login is not settled; during development the PM's enterprise Claude login can be used.
+
+## Build order (decided 20261120, revised 20261122)
 
 The kit is its own project. It does not wait for Amoeba to build an agent core and extract it.
 
-1. **The kit is built for one real agent: the PR review responder.** The first build is done when that agent runs unattended on the PM's own repos, and then on a work repo under his work login. Nothing in it needs Amoeba.
-2. **Amoeba's persistent agent is the second agent.** Amoeba's concept calls it the stand-in. On 20261122 the PM described it as the agent that lives in Amoeba's shared room and can see what is going on across projects; standing in for him is one of its functions. Putting it on the kit is what shows which parts are general. Expect rework in the kit when it lands.
-3. **Amoeba does not build these parts itself.** Timers, memory curation, outgoing messages, runtime adapters and the cost cap are built in the kit and nowhere else.
+1. **The substrate comes first.** The first build is done when a definition file becomes an agent that wakes, runs bounded, remembers and sleeps, unattended, on the PM's machine and in a Linux container. Nothing in it needs Amoeba.
+2. **The PM names the first agent when the substrate runs.** At work it is probably review, otherwise issue triage. No design decision waits on this choice.
+3. **Amoeba's persistent agent comes after that.** Amoeba's concept calls it the stand-in. On 20261122 the PM described it as the agent that lives in Amoeba's shared room and can see what is going on across projects; standing in for him is one of its functions. Putting it on the kit is what shows which parts are general. Expect rework in the kit when it lands.
+4. **Amoeba does not build these parts itself.** Timers, memory curation, outgoing messages, runtime adapters and the cost cap are built in the kit and nowhere else.
 
-The kit is not designed in the abstract: every part is built because the review responder needs it.
+The kit is not designed in the abstract: every part is proven by a real agent running on it, and a part that no agent listed below needs is not built.
 
 ## What the PM requires
 
 1. **It acts as the right person.** Each agent runs under one named person's own logins: their model account, their GitHub, their mail. At work that includes SSO. No shared account and no shared quota.
 2. **It never decides as its person.** An agent uses its person's logins; it does not speak for them. An action is either inside the authority its definition states, or it goes to the person through the approval path. It never composes an instruction or a decision in the person's name.
-3. **It is not tied to one vendor.** The definition names the runtime and the model. The kit starts that runtime; it does not replace it.
+3. **It is not tied to one vendor.** The definition names the runtime and the model. The kit starts that runtime; it does not replace it. The PM uses the kit himself as well as at work, so no provider is assumed anywhere.
 4. **It does things.** An agent labels and closes issues, pushes fixes, replies on review threads, filters and moves mail. It never hands a person instructions to paste.
 5. **A new agent is quick.** One definition file, one command. No hand-written wrapper script per agent.
 6. **It is easy to adopt, for people and for their AI agents.** A person installs it with one command. An AI agent given only the kit's published documentation can write a correct definition, install the agent and confirm it ran, with nobody explaining anything. This is tested: a fresh agent session with only the docs creates and runs a new agent.
@@ -110,14 +116,16 @@ Other runtimes (opencode, Goose) fit the same adapter shape. Gemini's tool is no
 
 **When a cap is hit:** the run ends and is recorded with what it did. The item is retried once on the next wake. A second failure closes the item as failed and tells the person once.
 
-**Identity.** The definition names the person. The kit runs that agent as that person's OS user, with that person's config directory, and loads no credential of its own. A machine that hosts agents for several people runs each under its own user. The kit never copies a credential between people.
+**Identity.** The definition names the person. The kit runs that agent as that person's OS user, with that person's config directory, and loads no credential of its own. A machine that hosts agents for several people runs each under its own user. In a container, the person's credential is given to that container alone, by the method its definition names (a login token or an API key). The kit never copies a credential between people.
 
 **No self-triggering.** What an agent writes during a run never becomes an event for that same agent. A run ends, and only a new outside event, a due timer or a person's answer starts the next.
 
 ## First agents
 
-1. **PR review responder (the build target; the PM's own repos first, then work).** Wakes when a review lands on the person's pull request, from Copilot or a human's AI review. It reads every finding, sorts real problems from noise (a rare edge case rated high is the usual noise), fixes the real ones on the branch, replies on each thread with what it did or why the finding does not hold, pushes, and asks for re-review. Its person hears about a finding that is a real design question and about a pull request that is ready to merge. Its outcome records are the calls people overturned, so its sorting improves. It uses whatever review-combing tools the person has installed.
-2. **Amoeba's persistent agent (personal).** See Build order, item 2.
+In no fixed order. The PM names the first (Build order, item 2).
+
+1. **PR review responder (personal and work).** Wakes when a review lands on the person's pull request, from Copilot or a human's AI review. It reads every finding, sorts real problems from noise (a rare edge case rated high is the usual noise), fixes the real ones on the branch, replies on each thread with what it did or why the finding does not hold, pushes, and asks for re-review. Its person hears about a finding that is a real design question and about a pull request that is ready to merge. Its outcome records are the calls people overturned, so its sorting improves. It uses whatever review-combing tools the person has installed.
+2. **Amoeba's persistent agent (personal).** See Build order, item 3.
 3. **Reviewer (personal, then work).** Named by the PM on 20261122: one long-running agent handles reviewing, and a review must be measurable and trusted. It lives long enough to see what became of what it approved, which a one-shot reviewer cannot.
 4. **Issue triage (work and personal).** Labels and categorizes new issues, marks the ones an agent can resolve, resolves those through a pull request, and leaves the rest sorted for people.
 5. **Tracker sync.** Keeps issues and a project tool such as ClickUp in step in both directions.
@@ -158,16 +166,13 @@ Amoeba keeps its own copies until its persistent agent moves onto the kit. At th
 1. The definition file's exact keys, and how tools and connections are declared per runtime.
 2. How the cost cap is computed for a runtime with no budget flag.
 3. The polling sources in the first build (GitHub reviews and issues, mail) and the webhook handler's access control.
-4. How the staying-up process starts at login and restarts, on macOS and on a work Linux or Windows machine.
-5. How approval requests reach a person at work (the PM's chat tool there) and how the answer gets back as an event.
+4. How the staying-up process starts and restarts, on macOS and in a Docker container on a Linux VM.
+5. How approval requests reach a person and how the answer gets back as an event. The channel is an adapter, chosen in the definition.
 6. Which surfaces make the kit adoptable by an AI agent (an `AGENTS.md`, an `llms.txt`, a skill, an MCP server with instructions), and the exact form of the adoption test in requirement 6.
 7. For each first agent, which later evidence closes an outcome record, and how the kit learns of it.
 8. On the machine that runs Amoeba's hub, whether the hub and the kit's staying-up process are one process or two. This is settled when Amoeba's agent moves onto the kit and blocks nothing before then.
 
 ## Only the PM can supply
 
-The session starting the project asks for these once, at the start.
-
-1. **Where the project lives and what it is called.**
-2. **The work side.** The PM has said there are practical, procedural and people reasons the kit is needed at work now. None of them is written down. They decide what the first work agent is, who else adopts it first, and what "easy to adopt" has to mean there.
-3. **The work machine's constraints:** operating system, what may run in the background, whether inbound network is allowed, and which chat tool carries approvals.
+1. **Where the project lives and what it is called.** Asked once, at the start.
+2. **Which agent is first.** He says when the substrate runs.
