@@ -25,6 +25,7 @@ from typing import Any, Final, cast
 
 from amoeba.cli.answer_first_hook import EVENT_PRE_TOOL_USE, EVENT_STOP
 from amoeba.cli.exit_codes import EXIT_OK
+from amoeba.config.home import claude_home
 
 ANSWER_FIRST_COMMAND: Final = "answer-first"
 ACTION_INSTALL: Final = "install"
@@ -38,7 +39,6 @@ MATCH_EVERY_TOOL: Final = "*"
 
 #: Claude Code's own variable for a settings directory other than ``~/.claude``.
 CLAUDE_CONFIG_DIR_VAR: Final = "CLAUDE_CONFIG_DIR"
-CLAUDE_CONFIG_DIR_NAME: Final = ".claude"
 SETTINGS_FILE_NAME: Final = "settings.json"
 
 
@@ -62,7 +62,7 @@ def register_answer_first(commands: Any) -> argparse.ArgumentParser:
 
 def settings_path() -> Path:
     configured = os.environ.get(CLAUDE_CONFIG_DIR_VAR)
-    directory = Path(configured) if configured else Path.home() / CLAUDE_CONFIG_DIR_NAME
+    directory = Path(configured) if configured else claude_home()
     return directory / SETTINGS_FILE_NAME
 
 
