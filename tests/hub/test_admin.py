@@ -8,16 +8,26 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
+from store.decision_support import CORE, LINT, NAMES, seed_programs
+from store.seed import insert_checkout
+from user_configs import user_config
 
 from amoeba.cli.hub_commands import hub_config_loader
 from amoeba.cli.main import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, main
+from amoeba.cli.render.registry import NO_CHECKOUT, render_members
 from amoeba.config.home import StateLayout, layout_under, state_layout
 from amoeba.config.user_config import IMAGE_CONTRACT_DOC, ConfigError
 from amoeba.hub.admin import machines
 from amoeba.hub.start import prepare_start
 from amoeba.hub.store_open import open_hub_store
+from amoeba.operations.list_registry import members_view
 from amoeba.store import sql
-from amoeba.store.machines import hash_token, machine_for_token
+from amoeba.store.machines import (
+    ActingMachine,
+    hash_token,
+    machine_for_token,
+    the_owner,
+)
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION, read_schema_version
 from amoeba.wire.fingerprint import fingerprint
 from amoeba.wire.join_line import parse_join_line
@@ -257,3 +267,49 @@ def test_admin_commands_refuse_a_hub_store_that_needs_migrating(
     assert "HubStoreBehindError" in err
     assert "amoeba hub serve" in err
     assert _schema_version(hub_home) == older
+
+
+def test_rm_machine_deletes_its_checkouts_keeps_the_members_and_marks_one_with_none(
+    hub_home: StateLayout, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """261 D14: the machine's checkouts go in the same transaction; another machine's
+    stay; a member left with none is still listed, marked as having no checkout."""
+    _invite(capsys, "alpha")
+    _invite(capsys, "beta")
+    with open_hub_store(hub_home) as store:
+        with store.read() as transaction:
+            owner = the_owner(transaction)
+            ids = {
+                str(row[0]): int(row[1])
+                for row in transaction.execute("SELECT name, machine_id FROM machines")
+            }
+        store.act_as(ActingMachine(ids["alpha"], owner))
+        seed_programs(store)
+        store.act_as(ActingMachine(ids["beta"], owner))
+        with store.write() as transaction:
+            insert_checkout(
+                transaction,
+                member_id=CORE,
+                cf_project_id="cf-core-on-beta",
+                path="/beta/core",
+                now=NOW,
+            )
+
+    assert _run(capsys, "hub", "rm-machine", "alpha")[0] == EXIT_OK
+
+    with open_hub_store(hub_home) as store:
+        with store.read() as transaction:
+            remaining = [
+                tuple(row)
+                for row in transaction.execute(
+                    "SELECT member_id, cf_project_id FROM checkouts"
+                )
+            ]
+        store.act_as(ActingMachine(ids["beta"], owner))
+        view = members_view(store, user_config(), program=None)
+    assert remaining == [(CORE, "cf-core-on-beta")]
+    by_name = {row.name: row for row in view.members}
+    assert set(by_name) == {NAMES[CORE], NAMES[LINT]}
+    assert by_name[NAMES[LINT]].checkouts == ()
+    assert [c.machine for c in by_name[NAMES[CORE]].checkouts] == ["beta"]
+    assert NO_CHECKOUT in render_members(view)

@@ -449,10 +449,11 @@ Before `add`'s rewrite, so a command is never written to a checkout while the cl
 
 ## 14. `rm-machine` deletes checkouts (D14; effort 1)
 
-- [ ] **14.1 Implementation and test**
-  - [ ] `hub/admin.py` `rm_machine`: `delete_checkouts_on_machine` in its one transaction; members stay
-  - [ ] `tests/hub/test_admin.py`: the machine's checkouts go, another's remain, and a member left with none is marked in `list members`
-  - [ ] Success: checks pass
+- [x] **14.1 Implementation and test**
+  - [x] `hub/admin.py` `rm_machine`: `delete_checkouts_on_machine` in its one transaction; members stay
+  - [x] `tests/hub/test_admin.py`: the machine's checkouts go, another's remain, and a member left with none is marked in `list members`
+  - [x] Success: checks pass
+  - Note: `hub/admin.py` `rm_machine` already deletes the machine's checkouts because `store/machines.remove_machine` does it (added in 7.6 for the tests that seed checkouts on hub machines), in the one transaction, and members stay; the new test is `test_rm_machine_deletes_its_checkouts_keeps_the_members_and_marks_one_with_none` in `tests/hub/test_admin.py` (machine alpha's checkouts go, beta's remains, the member left with none is still in `members_view` with no checkouts and `render_members` marks it).
 
 **Commit**: `feat: delete a retired machine's checkouts`
 
