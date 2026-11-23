@@ -3,8 +3,9 @@ and everything answers may be barred from authorizing.
 
 No key has a default in code. A missing key, an unknown key and a bad value each
 fail, and ``load_user_config`` reports every problem in one pass, naming the file
-and the key. The default ``authorize_items`` list exists only as the example in
-``docs/config-contract.md``.
+and the key. The suggested values, the default ``authorize_items`` list among them,
+live in ``starter_config.yaml`` (``amoeba.config.starter``), which ``amoeba init``
+writes and ``docs/config-contract.md`` shows as its example.
 """
 
 from __future__ import annotations

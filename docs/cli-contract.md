@@ -81,12 +81,14 @@ machine, and it is safe to repeat.
 - **Config.** With no `config.yaml` in the config home, it writes the starter config:
   every key, with the values under Example in `docs/config-contract.md`. With a config
   already there, it adds each required key the file lacks, from the same values, and
-  changes nothing else. It never overwrites a value.
+  changes nothing else. It never overwrites a value. A file that is empty or only
+  comments gets every key. A config that is a link is written through the link.
 - **Store.** It creates the store in the state home, or brings an existing one up to
   date.
 
-It prints one line for the config (`wrote`, `added <keys> to`, or `is already
-complete`), one for the store (`created` or `is already there`), and the next step.
+It prints what it did to the config (`wrote`, with a note that the two model aliases
+are placeholders; `added <keys> to`; or `is already complete`), one line for the store
+(`created` or `is already there`), and the next step.
 Exit 0. A config with a fault that adding keys does not fix (an unknown key, a bad
 value) is exit 3, naming the file and the key, and the file is left as it was.
 

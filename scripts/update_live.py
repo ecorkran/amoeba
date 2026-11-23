@@ -6,7 +6,7 @@ Run from the checkout, on its target branch, after a slice merges:
     uv run python scripts/update_live.py restore
 
 ``update`` backs up the store and config, appends any config key the new code
-requires (value from the config contract's example), installs this checkout with
+requires (value from the starter config Amoeba ships), installs this checkout with
 ``uv tool install``, runs ``amoeba list`` (which migrates the store) and reads the
 result back. A failed read-back restores automatically. ``restore`` puts the
 newest backup back and reinstalls the commit that was installed before it.

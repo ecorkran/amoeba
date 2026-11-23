@@ -20,7 +20,7 @@ any key. A missing
 file, a missing key, an unknown key or a bad value fails the command with exit 3,
 naming the file and the key, and every problem found is listed in one pass.
 
-Later slices add keys; each is required too, so an old file fails naming the new key. `request_open_ttl_hours` and `max_chain_depth` (slice 240) are two such keys, and `notify_poll_seconds`, `session_heartbeat_seconds` and `session_stale_seconds` (slice 241) three more, and `wake_timeout_seconds` and `max_wakes_per_day` (slice 244) two more: a config without one fails, naming it. The suggested values are in the example below and nowhere else.
+Later slices add keys; each is required too, so an old file fails naming the new key. `request_open_ttl_hours` and `max_chain_depth` (slice 240) are two such keys, and `notify_poll_seconds`, `session_heartbeat_seconds` and `session_stale_seconds` (slice 241) three more, and `wake_timeout_seconds` and `max_wakes_per_day` (slice 244) two more: a config without one fails, naming it. The suggested values are in the starter config Amoeba ships, which `amoeba init` writes and the example below shows.
 
 ## Keys
 
