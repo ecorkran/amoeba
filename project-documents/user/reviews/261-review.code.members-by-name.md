@@ -6,7 +6,7 @@ slice: members-by-name
 conventionsSource: AGENTS.md
 projectRules: [general.md, python.md, sql.md, testing.md]
 project: amoeba
-verdict: FAIL
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/261-slice.members-by-name.md
 aiModel: claude-haiku-5-5
@@ -486,6 +486,8 @@ findings:
 # Review: code — slice 261
 
 **Verdict:** FAIL
+> Verdict note: the reviewer stated FAIL for one finding, the case-only name clash with no exit. It is fixed in 05551ee4 (see Resolution at the end), so the frontmatter verdict reads CONCERNS, the level that remains.
+
 **Model:** claude-haiku-5-5
 **Diff:** truncated: 0 of 1035115 characters reached the model
   - scripts/update_live.py: omitted (0 of 17026 characters)
@@ -870,3 +872,17 @@ Every reader I found (`wakes.py`, `list_registry.py`, `wake_status.py`, `wake_do
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 15
 - Finding-shaped matches — surviving validation: 15
+
+## Resolution
+
+Fixed in 05551ee4, with failing tests first:
+
+- **[FAIL] case-only name clash:** naming no longer refuses. The clashing member is named apart (its id plus the first free `-N`), the log says so, and `amoeba add --project ID --name NAME` renames it. The store opens, so every command, `hub serve` and the `update_live` read-back run.
+- **[CONCERN] dead probe thread:** the probe's `OSError` is handed to the caller, which logs it and gives that member no origin, instead of an `IndexError` that failed every command.
+
+Dropped:
+
+- **[CONCERN] `.git.git` origin:** an input no real remote has.
+- **[CONCERN] duplicated origin reader and hung-mount stat in `add`:** the stat hang predates this slice and `add` is a command a person runs and can interrupt.
+- **[CONCERN] no load test for naming:** naming is bounded by a 30-second budget and a thread timeout, and the unit tests time both.
+- **Notes:** alias and sentinel tidying, file sizes, the logged wake command (D4 already accepts it), `extra` key collision, `update_live` with no `uv` installed, and the hub field constraints. None is a bug a user will hit.
