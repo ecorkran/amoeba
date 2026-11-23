@@ -716,3 +716,36 @@ def test_a_backup_killed_mid_copy_leaves_nothing_that_blocks_the_next_update(
     assert _version(only / update_live.STORE_BACKUP) == SCHEMA_ELEVEN
     leftovers = [p.name for p in update_live.backups_root().iterdir() if p.is_dir()]
     assert leftovers == [only.name], "the success cleanup removed the partial one"
+
+
+def test_a_backup_from_before_the_version_record_is_not_reused(live: Path) -> None:
+    """An older script recorded ``previous-commit``, not ``previous-version``: that
+    backup is no restore point for a version, so the update takes its own, not a
+    traceback (found on the live state at the 0.2.9 update)."""
+    old = update_live.backups_root() / "20261122T000000"
+    old.mkdir(parents=True)
+    (old / update_live.STORE_BACKUP).write_bytes(b"")
+    (old / "previous-commit").write_text("abc\n", encoding="utf-8")
+
+    assert update_live.reusable_backup(PREVIOUS) is None
+
+
+def test_tool_command_is_the_uv_tool_bin_not_the_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under ``uv run`` a bare ``amoeba`` is the checkout's; the read-back must use the
+    tool install's (found at the 0.2.9 update, where it would have tested the
+    checkout)."""
+    (tmp_path / "amoeba").write_text("", encoding="utf-8")
+
+    def uv_tool_dir(
+        command: list[str], **_: object
+    ) -> subprocess.CompletedProcess[str]:
+        assert command == ["uv", "tool", "dir", "--bin"]
+        return subprocess.CompletedProcess(command, 0, stdout=f"{tmp_path}\n")
+
+    monkeypatch.setattr(update_live.subprocess, "run", uv_tool_dir)
+
+    assert update_live.tool_command("amoeba") == str(tmp_path / "amoeba")
+    with pytest.raises(update_live.UpdateError, match="does not exist"):
+        update_live.tool_command("amoeba-mcp")

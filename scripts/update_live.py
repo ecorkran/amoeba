@@ -334,7 +334,10 @@ def reusable_backup(previous: str) -> Path | None:
     if not stamps:
         return None
     newest = stamps[-1]
-    recorded = (newest / PREVIOUS_VERSION).read_text(encoding="utf-8").strip()
+    record = newest / PREVIOUS_VERSION
+    if not record.is_file():
+        return None  # taken by a script that recorded a commit, not a version
+    recorded = record.read_text(encoding="utf-8").strip()
     if recorded != previous:
         return None
     if _schema_of(newest / STORE_BACKUP) >= _schema_of(store_path()):
@@ -409,16 +412,36 @@ def _uv_install(spec: str) -> None:
         ) from error
 
 
-def installed_version() -> str:
-    """The version of the amoeba on PATH (the tool install), before any update."""
+def tool_command(name: str) -> str:
+    """The path of ``name`` in the ``uv tool`` bin directory: the tool install itself.
+
+    Run from the checkout under ``uv run``, a bare ``amoeba`` resolves to the
+    checkout's ``.venv``, so the read-back would test the checkout, not the install.
+    """
     done = subprocess.run(
-        ["amoeba", "--version"], capture_output=True, text=True, check=True
+        ["uv", "tool", "dir", "--bin"], capture_output=True, text=True, check=True
+    )
+    command = Path(done.stdout.strip()) / name
+    if not command.exists():
+        raise UpdateError(f"{command} does not exist: is amoeba-ai a uv tool install?")
+    return str(command)
+
+
+def installed_version() -> str:
+    """The version of the tool install, before any update."""
+    done = subprocess.run(
+        [tool_command("amoeba"), "--version"],
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return done.stdout.strip()
 
 
 def _amoeba_list() -> None:
-    subprocess.run(["amoeba", "list"], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(
+        [tool_command("amoeba"), "list"], check=True, stdout=subprocess.DEVNULL
+    )
 
 
 def _cf_projects() -> set[str]:
@@ -431,7 +454,9 @@ def _cf_projects() -> set[str]:
 
 def _installed_tools() -> set[str]:
     async def run() -> set[str]:
-        server = StdioServerParameters(command="amoeba-mcp", env=dict(os.environ))
+        server = StdioServerParameters(
+            command=tool_command("amoeba-mcp"), env=dict(os.environ)
+        )
         with anyio.fail_after(MCP_LIST_TIMEOUT_SECONDS):
             async with stdio_client(server) as (read, write):
                 async with ClientSession(read, write) as session:
