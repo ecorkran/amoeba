@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-11-22
+
 ### Added
 
 - `amoeba init` sets a new machine up: it writes a complete starter config and creates the store. It is safe to repeat, adds only the keys an older config lacks, and never overwrites a value.

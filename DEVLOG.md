@@ -12,6 +12,9 @@ dateUpdated: 20261122
 
 ## 20261122
 
+### Release 0.2.6
+- `amoeba init` sets up a new machine (starter config and store, safe to repeat), and a missing config is one line with no traceback (#47).
+
 ### Release 0.2.5
 - The stand-in never starts work the PM did not ask for (#46), and `answer-first install` writes the bare command so hooks always run the tool install.
 
