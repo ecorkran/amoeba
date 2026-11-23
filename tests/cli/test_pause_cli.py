@@ -29,6 +29,7 @@ from fake_sq import (
 )
 from live_environment import process_environment
 from process_containment import contained_popen
+from store_open import open_local_store
 from user_configs import example_config_text
 
 from amoeba.answering.values import DeclineReason
@@ -37,7 +38,6 @@ from amoeba.config.home import calls_log_dir, config_path, store_path
 from amoeba.store.models import MemberSettings, QuestionKey
 from amoeba.store.programs import get_member, upsert_member, upsert_program
 from amoeba.store.questions import NewQuestion, insert_question, settle_waiting
-from amoeba.store.store import Store
 from amoeba.store.vocabulary import RulesFrom
 
 AMOEBA = Path(sys.executable).with_name("amoeba")
@@ -105,7 +105,7 @@ def _result(completed: subprocess.CompletedProcess[str]) -> dict[str, Any]:
 def _seed_waiting_question() -> QuestionKey:
     assert PAUSE.checkpoint is not None
     key = QuestionKey(RUN, PAUSE.checkpoint.paused_at_text or "")
-    with Store.open(store_path()) as store, store.write() as transaction:
+    with open_local_store(store_path()) as store, store.write() as transaction:
         upsert_program(
             transaction,
             program_id="demo",
@@ -202,7 +202,7 @@ def test_handle_pause_registers_a_project_in_no_program(
     assert completed.returncode == EXIT_OK, completed.stderr
     # Past the membership check: the next check is what stops this call.
     assert _result(completed)["skip_reason"] == "wrong_checkout"
-    with Store.open(store_path()) as store, store.read() as transaction:
+    with open_local_store(store_path()) as store, store.read() as transaction:
         assert get_member(transaction, fixture_document(DEFAULT_WORKTREE)["id"])
 
 

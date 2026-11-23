@@ -70,6 +70,7 @@ def insert_release(
             encode_string_list(touched),
             stamp,
             None if version is None else stamp,
+            transaction.acting("releases").owner_id,
         ),
     )
 

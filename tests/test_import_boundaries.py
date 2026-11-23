@@ -43,6 +43,23 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
         "amoeba.cli",
     ),
     "operations": ("amoeba.cli",),
+    # The client talks to the hub over the wire; it never touches a store (260).
+    "client": ("amoeba.store", "amoeba.hub", "amoeba.upstream"),
+    # The hub takes its store opener and operations from the commands that run it.
+    "hub": (
+        "amoeba.client",
+        "amoeba.upstream",
+        "amoeba.cli",
+        "amoeba.mcp",
+        "amoeba.wiring",
+        "amoeba.wiring_door",
+        "amoeba.wiring_messages",
+        "amoeba.wiring_presence",
+        "amoeba.wiring_registry",
+        "amoeba.wiring_release",
+        "amoeba.wiring_releases",
+        "amoeba.wiring_results",
+    ),
 }
 #: package -> the only ``amoeba`` modules outside itself it may import.
 ONLY_ALLOWED: dict[str, tuple[str, ...]] = {
@@ -51,6 +68,8 @@ ONLY_ALLOWED: dict[str, tuple[str, ...]] = {
         "amoeba.answering.values",
         "amoeba.store.vocabulary",
     ),
+    # The client and the hub's shared package depends on nothing of ours (slice 260).
+    "wire": (),
 }
 
 
@@ -115,6 +134,46 @@ def test_package_imports_only_what_it_is_allowed(package: str) -> None:
             path.read_text(encoding="utf-8"), package, ONLY_ALLOWED[package]
         )
         assert not found, f"{path.relative_to(SRC)} imports {found}"
+
+
+def _module_file(name: str) -> Path | None:
+    base = SRC.parent.joinpath(*name.split("."))
+    for candidate in (base.with_suffix(".py"), base / "__init__.py"):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _reached_from(package: str) -> dict[str, str]:
+    """Every ``amoeba`` module ``package`` reaches by following imports, each with
+    the module that imported it first."""
+    reached: dict[str, str] = {}
+    pending = [
+        (f"{ROOT}.{package}", f"amoeba.{package}"),
+        *(
+            (".".join(path.relative_to(SRC.parent).with_suffix("").parts), "")
+            for path in _modules(package)
+        ),
+    ]
+    while pending:
+        name, importer = pending.pop()
+        path = _module_file(name)
+        if name in reached or path is None:
+            continue
+        reached[name] = importer
+        for imported in _imported_names(path.read_text(encoding="utf-8")):
+            if imported.startswith(ROOT + "."):
+                pending.append((imported, name))
+    return reached
+
+
+def test_the_hub_reaches_no_client_module_through_any_import() -> None:
+    # Direct imports are checked above; this follows them through ``operations``,
+    # ``store`` and the rest, so a hub never depends on the client indirectly.
+    reached = _reached_from("hub")
+    leaked = sorted(name for name in reached if name.startswith("amoeba.client"))
+
+    assert not leaked, {name: reached[name] for name in leaked}
 
 
 def test_the_forbidden_rule_catches_each_way_of_importing() -> None:

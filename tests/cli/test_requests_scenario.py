@@ -16,13 +16,13 @@ from typing import Any
 
 import pytest
 from cf_routing import RoutedProject
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.cli.exit_codes import EXIT_REJECTED
 from amoeba.config.home import store_path
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.store.notes import NewNote, insert_note
-from amoeba.store.store import Store
 from cli.cli_support import write_config
 from cli.requests_support import (
     CHILD,
@@ -258,7 +258,7 @@ def _write_note(
         "news",
         "not a request",
     )
-    with Store.open(store_path()) as store, store.write() as transaction:
+    with open_local_store(store_path()) as store, store.write() as transaction:
         insert_note(transaction, note, [r.id for r in recipients], datetime.now(UTC))
 
 

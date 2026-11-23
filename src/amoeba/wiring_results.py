@@ -4,11 +4,6 @@ whether it was a rejection (slice 226, D4). Re-exported by ``wiring``.
 
 from __future__ import annotations
 
-import json
-from dataclasses import asdict
-
-from pydantic import BaseModel
-
 from amoeba.operations.answer import AnswerOutcome, AnswerResult
 from amoeba.operations.changes_models import ChangesOutcome, ChangesResult
 from amoeba.operations.decisions import DecisionsOutcome, DecisionsResult
@@ -38,6 +33,8 @@ from amoeba.operations.report_release_models import (
     ReportReleaseResult,
 )
 from amoeba.operations.retract import RetractOutcome, RetractResult
+from amoeba.operations.served import result_document as json_document
+from amoeba.operations.served import result_from_document
 from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
 from amoeba.operations.standing_models import (
     StandingOutcome,
@@ -47,7 +44,7 @@ from amoeba.operations.standing_models import (
 )
 from amoeba.operations.status import StatusOutcome, StatusResult
 
-__all__ = ["OperationResult", "is_rejected", "result_document"]
+__all__ = ["OperationResult", "is_rejected", "result_document", "result_from_document"]
 
 #: What ``invoke`` returns: the in-process operations' results.
 type OperationResult = (
@@ -78,10 +75,7 @@ def result_document(result: OperationResult) -> dict[str, object]:
     """``result`` as the JSON document both doors give: enums are strings."""
     if isinstance(result, ListResult):
         return result.document()
-    if isinstance(result, BaseModel):
-        return result.model_dump(mode="json")
-    document: dict[str, object] = json.loads(json.dumps(asdict(result)))
-    return document
+    return json_document(result)
 
 
 def is_rejected(result: OperationResult) -> bool:

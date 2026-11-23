@@ -9,13 +9,13 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.operations import state_move, state_move_store
 from amoeba.operations.state_move import prepare_state_home
 from amoeba.operations.state_move_types import MoveHooks, MoveStep
 from amoeba.store.errors import StoreBusyError, StoreRelocateError
 from amoeba.store.relocate import copy_store
-from amoeba.store.store import Store
 from operations.state_move_support import (
     SELECT_ANSWERS,
     Crash,
@@ -53,7 +53,7 @@ def test_a_legacy_store_moves_with_every_row_and_resume_log(tmp_path: Path) -> N
     assert after[0][2] == f"{layout.state_home}/logs/resume/run-a/1.log"
     assert after[1][2] == "/elsewhere/logs/run-b.log"
     assert after[2][2] is None
-    with Store.open(layout.store_path):
+    with open_local_store(layout.store_path):
         pass
 
 

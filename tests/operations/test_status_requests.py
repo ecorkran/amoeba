@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from store.decision_support import CORE, LINT, seed_programs
 from store.message_support import TTL, delivery_rows, send_request
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.cli.render.waiting import NOTHING_NEEDS_YOU, render_waiting
@@ -37,7 +38,7 @@ SHORT_BUSY_TIMEOUT_SECONDS = 0.2
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(
+    with open_local_store(
         tmp_path / "amoeba.sqlite3", busy_timeout_seconds=SHORT_BUSY_TIMEOUT_SECONDS
     ) as opened:
         seed_programs(opened)

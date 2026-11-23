@@ -37,6 +37,7 @@ from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY
 from process_containment import contained_popen
 from store.message_support import NOW, PROGRAM, seed_members, send_request
+from store_open import open_local_store
 
 from amoeba.operations.cancel import cancel
 from amoeba.operations.inbox import inbox
@@ -49,7 +50,7 @@ from amoeba.operations.message_models import (
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.reply import reply
 from amoeba.store.deliveries import highest_assigned_seq
-from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
+from amoeba.store.store import BUSY_TIMEOUT_SECONDS
 from load.lock_probe import write_lock_is_held
 from load.messages_worker import (
     BUSY,
@@ -90,7 +91,7 @@ def _start(
 def _run_workers(tmp_path: Path) -> tuple[Path, list[list[dict[str, Any]]]]:
     """The seeded store and each worker's calls, in start order, mixed workers first."""
     store_path = tmp_path / "home" / "amoeba.sqlite3"
-    with Store.open(store_path) as store, store.write() as transaction:
+    with open_local_store(store_path) as store, store.write() as transaction:
         seed_members(transaction, SENDER, RECIPIENT, THIRD)
         send_request(
             transaction,
@@ -147,7 +148,7 @@ def test_no_call_ends_busy_and_every_send_is_stored(
     assert [call["outcome"] for call in sends] == [
         SendOutcome.SENT.value
     ] * MIXED_PROCESSES
-    with Store.open(store_path) as store, store.read() as transaction:
+    with open_local_store(store_path) as store, store.read() as transaction:
         stored = {
             str(row[0])
             for row in transaction.execute("SELECT message_id FROM messages")
@@ -183,7 +184,7 @@ def test_delivery_numbers_are_unique_and_the_highest_equals_the_count(
 ) -> None:
     store_path, _ = burst
 
-    with Store.open(store_path) as store, store.read() as transaction:
+    with open_local_store(store_path) as store, store.read() as transaction:
         seqs = [
             int(row[0]) for row in transaction.execute("SELECT seq FROM deliveries")
         ]
@@ -196,7 +197,7 @@ def test_every_inbox_snapshot_is_consistent(
     burst: tuple[Path, list[list[dict[str, Any]]]],
 ) -> None:
     store_path, calls = burst
-    with Store.open(store_path) as store, store.read() as transaction:
+    with open_local_store(store_path) as store, store.read() as transaction:
         final = highest_assigned_seq(transaction)
 
     for call in _all(calls, "inbox"):
@@ -237,7 +238,7 @@ class _LockProbingCf:
 
 
 def test_no_cf_call_runs_while_the_write_lock_is_held(tmp_path: Path) -> None:
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         with store.write() as transaction:
             seed_members(transaction, SENDER, RECIPIENT, THIRD)
         in_member = _LockProbingCf(store.path, DEFAULT_WORKTREE)
@@ -284,7 +285,7 @@ def note_burst(
 ) -> tuple[Path, list[list[dict[str, Any]]]]:
     tmp_path = tmp_path_factory.mktemp("notes-load")
     store_path = tmp_path / "home" / "amoeba.sqlite3"
-    with Store.open(store_path) as store, store.write() as transaction:
+    with open_local_store(store_path) as store, store.write() as transaction:
         seed_members(transaction, SENDER, *_note_recipients())
     return store_path, _run_processes(
         store_path, tmp_path / "gate", [NOTES] * NOTE_PROCESSES
@@ -299,7 +300,7 @@ def test_every_program_note_send_is_sent_and_reaches_each_recipient_once(
     sends = [call for worker in calls for call in worker]
     total = NOTE_PROCESSES * NOTES_PER_WORKER
     assert [call["outcome"] for call in sends] == [SendOutcome.SENT.value] * total
-    with Store.open(store_path) as store, store.read() as transaction:
+    with open_local_store(store_path) as store, store.read() as transaction:
         per_member = dict(
             transaction.execute(
                 "SELECT member_id, count(*) FROM deliveries GROUP BY member_id"
@@ -324,7 +325,7 @@ def test_no_program_note_send_waits_beyond_one_store_wait_bound(
 
 
 def test_no_cf_call_runs_while_a_program_note_is_written(tmp_path: Path) -> None:
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         with store.write() as transaction:
             seed_members(transaction, SENDER, *_note_recipients())
         probing = _LockProbingCf(store.path, DEFAULT_WORKTREE)

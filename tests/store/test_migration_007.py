@@ -82,7 +82,7 @@ def test_sessions_has_the_design_columns_and_both_indexes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     connection = _version_six_store_with_mail(monkeypatch)
-    migrate(connection)
+    _migrate_to_seven(connection, monkeypatch)
 
     columns = {row[1] for row in connection.execute("PRAGMA table_info(sessions)")}
     index_names = [row[1] for row in connection.execute("PRAGMA index_list(sessions)")]

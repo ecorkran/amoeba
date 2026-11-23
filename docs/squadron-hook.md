@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: How Squadron's pause command is wired to amoeba handle-pause, and what the hook needs.
 dateCreated: 20261110
-dateUpdated: 20261116
+dateUpdated: 20261122
 status: complete
 ---
 
@@ -71,3 +71,13 @@ A held question (slice 242: the question's last line names a request this repo s
 and that request is still open) needs no further hook call. The hook's one call holds
 it, and Amoeba starts `handle-pause` for it itself once the request ends. `status`
 shows it as `waiting_on_request`, with the newest calls-log line for it as `last_call`.
+
+## On a joined machine (slice 260)
+
+On a machine joined to a hub (`amoeba join`; a `client.yaml` is in the config home),
+`amoeba handle-pause` fails with `NotServedError` (exit 3): the door does not serve it
+yet, and the machine has no local store to handle the pause in. The check is the first
+thing `handle-pause` does, before the state layout is built and before the config is
+loaded, so it writes no calls-log line and no row, and a pause it would have handled
+shows as **Paused, not handled** once the machine leaves the hub (`amoeba leave`) or the
+door serves it. `amoeba wake-run` fails the same way.

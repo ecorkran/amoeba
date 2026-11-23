@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from store.question_support import NOW
 from store.seed import insert_member, insert_pair, insert_program
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.list_registry import (
@@ -37,7 +38,7 @@ PROJECTS = [
 def store(tmp_path: Path) -> Iterator[Store]:
     """``demo``: with-path (concept, named rules), no-path (default rules),
     a member CF forgot, a removed member and a consumer; ``hollow``: nothing."""
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as tx:
             _seed(tx)
         yield opened

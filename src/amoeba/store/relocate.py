@@ -200,6 +200,20 @@ def verify_copy(old: Path, new: Path, old_prefix: str) -> None:
         raise StoreRelocateError(f"cannot verify the copy at {new}: {error}") from error
 
 
+def backup_store(old: Path, new: Path) -> None:
+    """Copy the store at ``old`` to ``new`` with SQLite's backup call.
+
+    The source is opened read-only, so this can never create a store; the copy is a
+    consistent snapshot even with writers, and holds what is in the write-ahead log.
+    The one copy the state move, the set-aside of a local store and a hub backup share.
+    """
+    with (
+        closing(_open_read_only(old)) as source,
+        closing(sqlite3.connect(new)) as target,
+    ):
+        source.backup(target)
+
+
 def copy_store(
     old: Path,
     new: Path,
@@ -218,11 +232,7 @@ def copy_store(
         StoreRelocateError: The copy or its verification failed; ``new`` is gone.
     """
     try:
-        with (
-            closing(_open_read_only(old)) as source,
-            closing(sqlite3.connect(new)) as target,
-        ):
-            source.backup(target)
+        backup_store(old, new)
         if after_backup is not None:
             after_backup()
         _rewrite_resume_logs(new, old_prefix, new_prefix)

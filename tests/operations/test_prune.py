@@ -15,9 +15,11 @@ from store.question_support import (
     seed_members,
     waiting_question,
 )
+from store_open import open_local_store
 
 from amoeba.answering.values import DeclineReason
-from amoeba.config.home import StateLayout
+from amoeba.config.home import StateLayout, layout_under
+from amoeba.operations.cf_readers import cf_names
 from amoeba.operations.decisions import DecisionsOutcome, decisions
 from amoeba.operations.dismiss import dismiss
 from amoeba.operations.prune import prune
@@ -44,7 +46,7 @@ YOUNG_ANSWERING = "answering-young-settled"
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         yield opened
 
@@ -52,14 +54,7 @@ def store(tmp_path: Path) -> Iterator[Store]:
 @pytest.fixture
 def layout(tmp_path: Path) -> StateLayout:
     state = tmp_path / "state"
-    return StateLayout(
-        state_home=state,
-        store_path=state / "amoeba.sqlite3",
-        answering_dir=state / "answering",
-        logs_dir=state / "logs",
-        calls_log_dir=state / "logs" / "calls",
-        legacy_home=None,
-    )
+    return layout_under(state, state, None)
 
 
 def _age(path: Path, days: float) -> None:
@@ -246,7 +241,7 @@ def test_a_pruned_resume_log_stays_named_in_the_answer_and_decisions_still_lists
     assert answer.resume_log == str(log)
     rig = build_deps(tmp_path, polls={}, spawns=[])
     deps = replace(rig.deps, project_names=lambda: {"member-a": "a", "member-b": "b"})
-    result = decisions(store, {}, deps=deps)
+    result = decisions(store, {}, names=cf_names(deps))
     assert result.outcome is DecisionsOutcome.LISTED
     assert [record.seq for record in result.records] == [seq]
 

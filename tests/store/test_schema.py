@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.answering.values import AnsweredBy
 from amoeba.store.errors import StoreIntegrityError
@@ -36,12 +37,16 @@ TABLES = {
     "sessions",
     "wakes",
     "standing_answers",
+    "owners",
+    "machines",
+    "call_results",
+    "closed_mark",
 }
 
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         yield opened
 
 
@@ -83,7 +88,7 @@ def _pair(
     )
 
 
-def test_a_new_store_has_all_thirteen_tables(store: Store) -> None:
+def test_a_new_store_has_all_its_tables(store: Store) -> None:
     with store.read() as transaction:
         names = {
             row[0]

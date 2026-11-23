@@ -10,6 +10,7 @@ import pytest
 from store.decision_support import CORE, LINT, TOOLS, TRADING, seed_programs
 from store.message_support import send_request
 from store.question_support import NOW, claimed_question
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.answering.values import AnsweredBy
@@ -47,7 +48,7 @@ ANSWERED = QuestionKey("run-answered", "2026-11-09T11:00:00+00:00")
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         yield opened
 

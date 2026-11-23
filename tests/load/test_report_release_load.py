@@ -30,6 +30,7 @@ from store.release_support import (
     seed_members,
 )
 from store.seed import insert_member, insert_pair
+from store_open import open_local_store
 
 from amoeba.operations.message_models import MAX_NOTES_PER_SENDER
 from amoeba.operations.report_release import report_release
@@ -68,7 +69,7 @@ def _burst(
     """Each batch is one writer's documents, run in order on its own connection; all
     writers start together. ``seed_consumers`` adds the pairs a test needs."""
     path = tmp_path / "amoeba.sqlite3"
-    with Store.open(path) as setup:
+    with open_local_store(path) as setup:
         seed_members(setup)
         if seed_consumers is not None:
             seed_consumers(setup)
@@ -77,7 +78,7 @@ def _burst(
 
     def write_all(batch: list[dict[str, object]]) -> list[tuple[ReportOutcome, float]]:
         results: list[tuple[ReportOutcome, float]] = []
-        with Store.open(path) as store:
+        with open_local_store(path) as store:
             gate.wait(timeout=LATENCY_BOUND_SECONDS)
             for document in batch:
                 started = time.monotonic()
@@ -108,7 +109,7 @@ def test_the_same_commit_reported_by_eight_writers_is_recorded_once(
 
     assert burst.outcomes.count(ReportOutcome.RECORDED) == 1
     assert burst.outcomes.count(ReportOutcome.UNCHANGED) == WRITERS - 1
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         (row,) = release_rows(store)
     assert row[1] == PROVIDER
 
@@ -130,7 +131,7 @@ def test_a_burst_of_distinct_reports_is_kept_within_the_latency_and_budget(
 
     total = WRITERS * REPORTS_PER_WRITER
     assert burst.outcomes == [ReportOutcome.RECORDED] * total
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         rows = release_rows(store)
     assert len(rows) == total
     assert len({row[0] for row in rows}) == total, "every row has its own seq"
@@ -189,7 +190,10 @@ def test_release_notes_written_inside_the_write_lock_stay_within_the_bounds(
 
     total = WRITERS * REPORTS_PER_WRITER
     assert burst.outcomes == [ReportOutcome.RECORDED] * total
-    with Store.open(tmp_path / "amoeba.sqlite3") as store, store.read() as transaction:
+    with (
+        open_local_store(tmp_path / "amoeba.sqlite3") as store,
+        store.read() as transaction,
+    ):
         per_member = dict(
             transaction.execute(
                 "SELECT member_id, count(*) FROM deliveries GROUP BY member_id"

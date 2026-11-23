@@ -20,6 +20,7 @@ import pytest
 from cf_fixtures import DEFAULT_WORKTREE, OUTSIDE_ANY_PROJECT
 from store.decision_support import CORE, LINT, seed_programs
 from store.message_support import delivery_rows, send_request
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.cancel import cancel
@@ -193,7 +194,7 @@ def test_every_terminal_state_is_pruned_after_the_retention(
 
 @pytest.fixture
 def listing_store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         yield opened
 
@@ -256,7 +257,7 @@ RULES = {"rules_paths": ["CLAUDE.md"]}
 
 @pytest.fixture
 def program_store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         result = run_set_up(
             opened,
             {

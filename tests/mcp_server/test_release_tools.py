@@ -20,13 +20,14 @@ import pytest
 from cf_fixtures import DEFAULT_WORKTREE, write_fake_cf_with_projects
 from cli.cli_support import PROJECT_ID, result_of, run_amoeba, write_config
 from store.seed import insert_member, insert_pair
+from store_open import open_local_store
 
 from amoeba.cli.exit_codes import EXIT_OK, EXIT_REJECTED
 from amoeba.config.home import store_path
 from amoeba.mcp import server
 from amoeba.store import releases
 from amoeba.store.programs import get_member
-from amoeba.store.store import Store, Transaction
+from amoeba.store.store import Transaction
 from amoeba.store.vocabulary import ConsumedMode
 from mcp_server.presence_rig import idle_presence
 
@@ -82,7 +83,7 @@ def _without_clock(document: dict[str, Any]) -> dict[str, Any]:
 def _seed_provider(tmp_path: Path) -> None:
     """A provider this repo consumes, with one report; the names ``cf`` gives do not
     include it, so the result also carries the warning."""
-    with Store.open(store_path()) as store, store.write() as transaction:
+    with open_local_store(store_path()) as store, store.write() as transaction:
         program = _program_of(transaction)
         insert_member(
             transaction,
@@ -211,7 +212,7 @@ def test_a_directory_in_no_program_is_not_a_member_through_both_doors(
     assert not is_error
     assert document == result_of(completed)
     assert document["problems"][0]["code"] == "not_a_member"
-    with Store.open(store_path()) as store, store.read() as transaction:
+    with open_local_store(store_path()) as store, store.read() as transaction:
         count = transaction.execute("SELECT COUNT(*) FROM releases").fetchone()
     assert count is not None
     assert count[0] == 0

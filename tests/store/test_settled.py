@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.answering.values import AnsweredBy
 from amoeba.store.answers import add_pm_answer, record_resume
@@ -37,7 +38,7 @@ def _key(name: str) -> QuestionKey:
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         yield opened
 
@@ -82,7 +83,8 @@ def _answer_automatically(
 ) -> None:
     transaction.execute(
         "INSERT INTO answers (run_id, paused_at, answered_by, answer, recorded_at, "
-        "resume_outcome) VALUES (?, ?, ?, 'ok', ?, ?)",
+        "resume_outcome, owner_id) "
+        "VALUES (?, ?, ?, 'ok', ?, ?, (SELECT owner_id FROM owners))",
         (
             key.run_id,
             key.paused_at,

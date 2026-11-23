@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from fault_injection import InjectedFailureError, fail_on_statement
+from store_open import open_local_store
 
 from amoeba.store import sql
 from amoeba.store.errors import (
@@ -59,10 +60,10 @@ def test_the_busy_timeout_is_defined_once() -> None:
 
 def test_reopen_applies_nothing(tmp_path: Path) -> None:
     path = tmp_path / "amoeba.sqlite3"
-    with Store.open(path) as store, store.write() as transaction:
+    with open_local_store(path) as store, store.write() as transaction:
         _program(transaction)
 
-    with Store.open(path) as store, store.read() as transaction:
+    with open_local_store(path) as store, store.read() as transaction:
         rows = transaction.execute("SELECT program_id FROM programs").fetchall()
         markers = transaction.execute("SELECT count(*) FROM pm_marker").fetchone()
 
@@ -123,7 +124,7 @@ def test_a_file_that_is_not_a_database_is_a_corrupt_error(tmp_path: Path) -> Non
 
 
 def test_a_failed_write_block_rolls_back(tmp_path: Path) -> None:
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         with pytest.raises(ValueError, match="boom"), store.write() as transaction:
             _program(transaction)
             raise ValueError("boom")
@@ -137,7 +138,7 @@ def test_a_failed_write_block_rolls_back(tmp_path: Path) -> None:
 def test_a_fault_on_the_second_insert_leaves_no_program_row(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         with pytest.raises(InjectedFailureError), store.write() as transaction:
             fail_on_statement(monkeypatch, transaction, sql.INSERT_MEMBER)
             _program(transaction)

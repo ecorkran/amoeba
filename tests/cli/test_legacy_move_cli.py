@@ -18,6 +18,7 @@ from amoeba import wiring
 from amoeba.cli import commands
 from amoeba.cli import main as cli
 from amoeba.config.home import HOME_VARIABLE
+from amoeba.operations import served
 from amoeba.upstream.squadron.errors import SquadronError
 
 #: Each command: the function its operation is reached through, and its arguments.
@@ -31,6 +32,9 @@ STUBBED_OPERATIONS = (
     ("decisions", "decisions", ["decisions"]),
     ("mark-read", "mark_read", ["mark-read", "--through", "0"]),
 )
+
+
+SERVED_COMMANDS = ("decisions", "mark-read")
 
 
 @pytest.mark.parametrize(
@@ -59,8 +63,16 @@ def test_the_move_happens_before_the_commands_own_work(
         seen.append((state_store.exists(), legacy_store.exists()))
         raise SquadronError("stub")
 
-    # ``handle-pause`` is the CLI's own body; the others are placed by ``wiring``.
-    monkeypatch.setattr(commands if command == "handle-pause" else wiring, target, stub)
+    # ``handle-pause`` is the CLI's own body; ``decisions`` and ``mark-read`` run
+    # through ``operations.served`` (260); the others are placed by ``wiring``.
+    module = (
+        commands
+        if command == "handle-pause"
+        else served
+        if command in SERVED_COMMANDS
+        else wiring
+    )
+    monkeypatch.setattr(module, target, stub)
     argv = [*arguments, str(request)] if command == "add" else arguments
 
     exit_code = cli.main(argv)

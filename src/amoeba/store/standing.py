@@ -68,7 +68,14 @@ def give_standing(
         return integer(match[0], "standing_answers.id"), False
     cursor = transaction.execute(
         sql_standing.INSERT_STANDING,
-        (ruling, reach.value, program_id, member_id, encode_timestamp(now)),
+        (
+            ruling,
+            reach.value,
+            program_id,
+            member_id,
+            encode_timestamp(now),
+            transaction.acting("standing_answers").owner_id,
+        ),
     )
     return integer(cursor.lastrowid, "standing_answers.id"), True
 

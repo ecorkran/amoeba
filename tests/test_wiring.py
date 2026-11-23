@@ -17,8 +17,15 @@ from wiring_support import TrackedStore, is_closed, record_opened_stores
 from amoeba import wiring, wiring_messages, wiring_releases
 from amoeba.cli import commands
 from amoeba.cli import main as cli
+from amoeba.client.errors import (
+    ClientFileError,
+    HubCertificateError,
+    HubRefusedError,
+    HubUnreachableError,
+)
 from amoeba.config.home import AmoebaHomeError, config_path, state_layout
 from amoeba.config.user_config import ConfigError
+from amoeba.operations import served
 from amoeba.operations.answer import AnswerOutcome, AnswerResult
 from amoeba.operations.changes_models import (
     ChangesOutcome,
@@ -56,6 +63,8 @@ from amoeba.operations.status import StatusResult
 from amoeba.store.errors import StoreBusyError, StoreError
 from amoeba.store.vocabulary import ConsumedMode
 from amoeba.upstream.squadron.errors import SquadronError
+from amoeba.wire.join_line import JoinError
+from amoeba.wiring_door import NotServedError
 
 #: For each in-process operation, a document it refuses and the result type it gives.
 REFUSED: dict[OperationName, tuple[object, type]] = {
@@ -97,13 +106,20 @@ def test_default_deps_sets_every_field() -> None:
     assert unset == ["legacy_home"]
 
 
-def test_the_operational_errors_are_the_five_the_cli_maps_to_exit_three() -> None:
+def test_the_operational_errors_are_the_ones_the_cli_maps_to_exit_three() -> None:
+    """The five of slice 226 and the door's errors, each added by its own task."""
     assert set(wiring.OPERATIONAL_ERRORS) == {
         AmoebaHomeError,
         ConfigError,
         ContextForgeError,
         SquadronError,
         StoreError,
+        JoinError,
+        ClientFileError,
+        HubUnreachableError,
+        HubCertificateError,
+        HubRefusedError,
+        NotServedError,
     }
 
 
@@ -155,7 +171,7 @@ def test_invoke_closes_the_store_when_the_operation_raises(
     def raising(*_arguments: object, **_keywords: object) -> object:
         raise SquadronError("sq down")
 
-    monkeypatch.setattr(wiring, "mark_read", raising)
+    monkeypatch.setattr(served, "mark_read", raising)
 
     with pytest.raises(SquadronError):
         wiring.invoke(OperationName.MARK_READ, {"through": 0}, None, Door.MCP)

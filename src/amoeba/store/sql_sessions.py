@@ -24,7 +24,8 @@ _SESSION_COLUMNS: Final = (
 #: Register and beat in one statement: a first insert sets every column, a later
 #: beat only the heartbeat and the confirmation, so ``started_at`` stays the first.
 UPSERT_SESSION: Final = (
-    f"INSERT INTO sessions ({_SESSION_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?) "
+    f"INSERT INTO sessions ({_SESSION_COLUMNS}, owner_id, machine_id) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
     "ON CONFLICT (session_id) DO UPDATE SET heartbeat_at = excluded.heartbeat_at, "
     "push_confirmed_at = excluded.push_confirmed_at"
 )

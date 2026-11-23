@@ -8,6 +8,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.answering.values import AnsweringEvidence, DeclineReason
 from amoeba.store.answers import Settled, add_pm_answer, settle_answered
@@ -26,7 +27,7 @@ from store.question_support import (
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         yield opened
 

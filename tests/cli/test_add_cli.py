@@ -11,6 +11,7 @@ import pytest
 import yaml
 from cf_fixtures import DEFAULT_WORKTREE
 from operations.set_up_support import DIRECTORY, FakeCf
+from store_open import open_local_store
 from user_configs import example_config_text, user_config
 
 from amoeba.cli.exit_codes import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE
@@ -19,7 +20,6 @@ from amoeba.cli.parser import build_parser
 from amoeba.cli.registration_arguments import add_document
 from amoeba.config.home import config_path, store_path
 from amoeba.operations.set_up import set_up
-from amoeba.store.store import Store
 from cli.cli_support import (
     PROJECT_ID,
     PROJECT_NAME,
@@ -200,7 +200,7 @@ def test_file_gives_the_result_the_old_set_up_gave_for_the_same_document(
 ) -> None:
     write_config()
     path = request_file(tmp_path, REQUEST)
-    with Store.open(tmp_path / "reference.sqlite3") as reference_store:
+    with open_local_store(tmp_path / "reference.sqlite3") as reference_store:
         expected = set_up(
             reference_store,
             user_config(),
@@ -339,7 +339,7 @@ def test_a_failing_cf_exits_three_and_writes_nothing(tmp_path: Path) -> None:
 
 def test_a_store_stamped_higher_exits_three(tmp_path: Path) -> None:
     write_config()
-    Store.open(store_path()).close()
+    open_local_store(store_path()).close()
     with sqlite3.connect(store_path()) as connection:
         connection.execute("UPDATE schema_meta SET version = 99")
     connection.close()

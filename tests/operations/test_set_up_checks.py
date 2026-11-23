@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from store.seed import insert_member, insert_program
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.set_up import SetUpProblemCode, SetUpResult
@@ -24,7 +25,7 @@ RULES = {"rules_paths": ["CLAUDE.md"]}
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         yield opened
 
 

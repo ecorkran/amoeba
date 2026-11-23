@@ -12,6 +12,25 @@ dateUpdated: 20261122
 
 ## 20261122
 
+
+**p6: devlog-4**
+- branch-0:branch-0: PASS
+- implement-1:cf-op-0: PASS
+- implement-1:cf-op-1: PASS
+- implement-1:cf-op-2: PASS
+- implement-1:cf-op-3: PASS
+- implement-1:dispatch-4: PASS
+- implement-1:review-5: PASS (verdict: FAIL)
+- implement-1:checkpoint-6: PASS
+- implement-1:commit-7: PASS
+- close-out:dispatch-0: PASS
+- revise-code:dispatch-0: PASS
+- revise-code:review-1: PASS (verdict: CONCERNS)
+- revise-code:commit-2: PASS
+- revise-code:dispatch-3: PASS
+- revise-code:review-4: PASS (verdict: CONCERNS)
+- revise-code:commit-5: PASS
+
 ### Release 0.2.7
 - Replaces 0.2.6, tagged but never published (a test needed Context Forge on the CI machine).
 - `amoeba init` sets up a new machine (starter config and store, safe to repeat), and a missing config is one line with no traceback (#47).

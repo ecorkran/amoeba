@@ -39,6 +39,7 @@ def insert_program(
             concept_path,
             encode_timestamp(registered_at),
             encode_timestamp(updated_at),
+            transaction.acting("programs").owner_id,
         ),
     )
 
@@ -68,6 +69,7 @@ def insert_member(
             encode_timestamp(updated_at),
             rules_from,
             wake_command,
+            transaction.acting("members").owner_id,
         ),
     )
 
@@ -91,6 +93,7 @@ def insert_pair(
             consumed.value,
             encode_timestamp(registered_at),
             encode_timestamp(updated_at),
+            transaction.acting("dependency_pairs").owner_id,
         ),
     )
 
@@ -122,6 +125,7 @@ def insert_question(
             waiting_reason,
             encode_timestamp(claimed_at),
             encode_timestamp(updated_at),
+            transaction.acting("questions").owner_id,
         ),
     )
 
@@ -145,5 +149,6 @@ def insert_answer(
             answer,
             encode_timestamp(recorded_at),
             None if resume_outcome is None else resume_outcome.value,
+            transaction.acting("answers").owner_id,
         ),
     )

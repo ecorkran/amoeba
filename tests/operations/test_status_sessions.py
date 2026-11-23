@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from store.decision_support import CORE, LINT, seed_programs
 from store.seed import insert_member
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.deps import Deps
@@ -36,7 +37,7 @@ STALE = timedelta(seconds=CONFIG.session_stale_seconds)
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         yield opened
 

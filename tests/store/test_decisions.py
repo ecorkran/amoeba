@@ -7,6 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.answering.values import AnsweredBy, AnsweringEvidence
 from amoeba.store.answers import add_pm_answer
@@ -30,7 +31,7 @@ from store.question_support import NOW
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         yield opened
 

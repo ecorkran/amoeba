@@ -18,6 +18,7 @@ from store.question_support import (
     seed_members,
     waiting_question,
 )
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.question_sweep import (
@@ -57,7 +58,7 @@ BOUND = timedelta(seconds=resume_bound_seconds(CONFIG))
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         yield opened
 
@@ -263,7 +264,7 @@ def test_a_busy_write_is_reported_as_a_problem_and_raises_nothing(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "busy.sqlite3"
-    with Store.open(path, busy_timeout_seconds=0.1) as store:
+    with open_local_store(path, busy_timeout_seconds=0.1) as store:
         seed_members(store)
         _waiting(store, OLD)
         holder = sqlite3.connect(path, isolation_level=None)

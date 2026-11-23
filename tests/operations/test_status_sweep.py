@@ -15,6 +15,7 @@ import pytest
 from fake_sq import FakeListing, write_fake_sq
 from store.decision_support import CORE, LINT, seed_programs
 from store.question_support import NOW, claimed_question, waiting_question
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.members import ContextForgeError
@@ -45,7 +46,9 @@ GONE = QuestionKey("gone-run", PAUSED_AT)
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3", busy_timeout_seconds=0.2) as opened:
+    with open_local_store(
+        tmp_path / "amoeba.sqlite3", busy_timeout_seconds=0.2
+    ) as opened:
         seed_programs(opened)
         yield opened
 

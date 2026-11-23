@@ -14,6 +14,7 @@ from pathlib import Path
 from live_environment import process_environment
 from process_containment import contained_popen
 from store.question_support import NOW, waiting_question
+from store_open import open_local_store
 
 from amoeba.operations.dismiss import dismiss
 from amoeba.operations.set_up_models import SetUpOutcome, SetUpProblemCode
@@ -21,7 +22,6 @@ from amoeba.store.models import QuestionKey
 from amoeba.store.programs import get_member_any, members_of
 from amoeba.store.question_closing import member_open_questions
 from amoeba.store.questions import insert_question
-from amoeba.store.store import Store
 from operations.set_up_support import run_set_up
 from operations.set_up_worker import BUSY, GATE_FILE
 
@@ -68,7 +68,7 @@ def test_eight_concurrent_set_ups_store_every_applied_member(tmp_path: Path) -> 
             applied.add(f"id-{number}")
 
     assert applied, "no worker reported applied"
-    with Store.open(store_path) as store, store.read() as transaction:
+    with open_local_store(store_path) as store, store.read() as transaction:
         stored = {member.project_id for member in members_of(transaction, "demo")}
     # Every member that reported applied is stored. (A member that reported busy
     # was never written, so the sets are equal.)
@@ -81,7 +81,7 @@ RACE_KEY = QuestionKey("run-race", "2026-11-10T11:00:00+00:00")
 
 
 def _race_store(path: Path) -> None:
-    with Store.open(path) as store:
+    with open_local_store(path) as store:
         run_set_up(
             store,
             {
@@ -104,7 +104,7 @@ def _race(path: Path) -> SetUpOutcome:
     gate = threading.Barrier(2)
 
     def remove() -> SetUpOutcome:
-        with Store.open(path) as store:
+        with open_local_store(path) as store:
             gate.wait()
             result = run_set_up(
                 store,
@@ -118,7 +118,7 @@ def _race(path: Path) -> SetUpOutcome:
         return result.outcome
 
     def dismiss_it() -> None:
-        with Store.open(path) as store:
+        with open_local_store(path) as store:
             gate.wait()
             dismiss(
                 store,
@@ -144,7 +144,7 @@ def test_a_racing_removal_and_dismiss_never_strand_an_open_question(
 
         seen.add(_race(path))
 
-        with Store.open(path) as store, store.read() as transaction:
+        with open_local_store(path) as store, store.read() as transaction:
             member = get_member_any(transaction, "racer-id")
             assert member is not None
             if member.removed_at is not None:

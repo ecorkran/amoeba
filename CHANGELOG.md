@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Slice 260: the hub and the door. `amoeba hub serve` holds the store and serves six operations (`decisions`, `mark_read`, `dismiss`, `retract`, `standing`, `withdraw`) over TLS pinned to the hub's own certificate, with a token per machine (`amoeba hub invite`, `machines`, `rm-machine`), kept results so a repeated call applies once, timed and pre-migration backups, `--from-backup`, and a rotating hub log. `amoeba join <line>` points a machine at a hub (`--set-aside-local` sets a local store aside, `--address` changes the address) and `amoeba leave` undoes it; a joined machine says the door does not serve any other command yet. A container image and compose example are in `docker/`. Store migration 011 (version 11) adds owners, machines, kept results and the closed mark. `cryptography`, `starlette` and `uvicorn` are now declared dependencies. See `docs/cli-contract.md`, `docs/config-contract.md` and `docs/store-contract.md`.
+
 ## [0.2.7] - 2026-11-22
 
 Released in place of 0.2.6, which was tagged but never published: its tag failed CI on a test that needed Context Forge installed.

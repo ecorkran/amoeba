@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from cf_fixtures import DEFAULT_WORKTREE, OUTSIDE_ANY_PROJECT, fake_cf_run
 from store.message_support import NOW, seed_members
+from store_open import open_local_store
 
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.message_member import (
@@ -34,7 +35,7 @@ STRANGER = "stranger-project"
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
             seed_members(transaction, RECORDED_ID, OTHER_ID)
         yield opened
@@ -92,7 +93,7 @@ def test_a_directory_in_no_project_takes_the_explicit_member(
 
 
 def test_a_project_in_no_program_takes_the_explicit_member(tmp_path: Path) -> None:
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         with store.write() as transaction:
             seed_members(transaction, OTHER_ID)
 

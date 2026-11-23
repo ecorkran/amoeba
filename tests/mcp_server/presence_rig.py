@@ -18,6 +18,7 @@ from mcp.server.connection import Connection
 from mcp.shared.dispatcher import CallOptions
 from mcp_types.version import LATEST_HANDSHAKE_VERSION
 from store.message_support import send_request
+from store_open import open_local_store
 
 from amoeba.mcp.presence import (
     PresenceDeps,
@@ -82,11 +83,11 @@ class Opener:
         queued = self.errors.pop(0) if self.errors else None
         if queued is not None:
             raise queued
-        return Store.open(self.path)
+        return open_local_store(self.path)
 
 
 def seed_member(path: Path, member_id: str = MEMBER_ID) -> None:
-    with Store.open(path) as store, store.write() as transaction:
+    with open_local_store(path) as store, store.write() as transaction:
         upsert_program(
             transaction,
             program_id=PROGRAM_ID,
@@ -112,7 +113,7 @@ def seed_member(path: Path, member_id: str = MEMBER_ID) -> None:
 def deliver(path: Path, *events: DeliveryEvent, message: str = "req") -> None:
     """Deliver ``events`` (one ``SENT`` by default) of a request from ``PEER``,
     sending the request first if ``message`` is new."""
-    with Store.open(path) as store, store.write() as transaction:
+    with open_local_store(path) as store, store.write() as transaction:
         if (
             transaction.execute(
                 "SELECT 1 FROM messages WHERE message_id = ?", (message,)
@@ -156,12 +157,12 @@ def member_state(clock: FakeClock, directory: Path) -> PresenceState:
 
 
 def sessions_in(path: Path, now: datetime, stale_seconds: float) -> tuple[Session, ...]:
-    with Store.open(path) as store, store.read() as transaction:
+    with open_local_store(path) as store, store.read() as transaction:
         return live_sessions(transaction, now, stale_seconds)
 
 
 def all_session_rows(path: Path) -> list[tuple[object, ...]]:
-    with Store.open(path) as store, store.read() as transaction:
+    with open_local_store(path) as store, store.read() as transaction:
         return transaction.execute(
             "SELECT session_id, client, started_at, heartbeat_at, push_confirmed_at "
             "FROM sessions"

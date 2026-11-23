@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from store.decision_support import CORE, LINT, TOOLS, TRADING, seed_programs
 from store.question_support import NOW, waiting_question
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.members import ContextForgeError
@@ -40,7 +41,7 @@ NULL_DIRECTORY_FAILED = "run-20261105-effort-compact-acbbe8e8"
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         yield opened
 

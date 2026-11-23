@@ -11,6 +11,7 @@ from pathlib import Path
 from answering.sources_repo import build_sources_repo
 from cf_plan_run import plan_cf_run
 from git_repo import head_of
+from store_open import open_local_store
 
 from amoeba.answering.passages import SourcesProblem
 from amoeba.answering.settings import AnswererSettings, RulesChoice
@@ -84,7 +85,7 @@ def gather_rig(tmp_path: Path, *, with_concept: bool = True) -> Generator[Gather
     asker = build_sources_repo(tmp_path / "asker").path
     concept_repo = tmp_path / "concept-repo"
     build_concept_repo(concept_repo)
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         with store.write() as transaction:
             upsert_program(
                 transaction,

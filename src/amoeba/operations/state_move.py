@@ -16,11 +16,19 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Final
 
+from amoeba.client.client_file import read_client_address
 from amoeba.config.home import STORE_FILE_NAME, StateLayout
 from amoeba.operations.state_move_dirs import has_legacy_state, move_directories
 from amoeba.operations.state_move_store import move_store
 from amoeba.operations.state_move_types import MoveHooks, MoveReport, MoveStep
-from amoeba.store.errors import StoreBusyError, StoreRelocateError
+from amoeba.store.errors import (
+    HubHomeError,
+    LocalStoreClosedError,
+    StoreBusyError,
+    StoreRelocateError,
+)
+from amoeba.store.machines import act_as_local
+from amoeba.store.set_aside import set_aside_stores
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 
 __all__ = [
@@ -67,6 +75,36 @@ def _move_lock(state_home: Path, timeout_seconds: float) -> Generator[None]:
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
+def refuse_joined_or_hub_home(layout: StateLayout) -> None:
+    """Refuse before any store or directory is touched (260 D2).
+
+    A client file means this machine is joined: its store lives at the hub. A
+    ``hub.yaml`` means this home is a hub's: its store is served, never written
+    behind the door.
+
+    Raises:
+        LocalStoreClosedError: A client file exists; names the hub's address.
+        HubHomeError: The config home holds ``hub.yaml``.
+    """
+    refuse_local_store_if_joined(layout)
+    if layout.hub_file.exists():
+        raise HubHomeError(
+            f"this home is a hub's ({layout.hub_file} exists): its store is served "
+            "by `amoeba hub serve`, so no other command opens it. Run ordinary "
+            "commands from a machine joined to the hub"
+        )
+
+
+def refuse_local_store_if_joined(layout: StateLayout) -> None:
+    """Raise ``LocalStoreClosedError`` naming the hub when a client file exists."""
+    if layout.client_file.exists():
+        address = read_client_address(layout.client_file)
+        raise LocalStoreClosedError(
+            f"this machine is joined to the hub at {address}, so there is no local "
+            "store. Run `amoeba leave` to go back to a local store"
+        )
+
+
 def prepare_state_home(
     layout: StateLayout,
     *,
@@ -84,6 +122,7 @@ def prepare_state_home(
         StoreRelocateError: A copy failed, did not verify, or a directory could not
             be moved; any ``OSError`` of the move arrives as this.
     """
+    refuse_joined_or_hub_home(layout)
     legacy = layout.legacy_home
     if legacy is None or not has_legacy_state(legacy, STORE_FILE_NAME):
         return MoveReport(store_moved=False, entries_moved=0)
@@ -114,7 +153,44 @@ def prepare_state_home(
     return report
 
 
+def _refuse_set_aside_without_store(layout: StateLayout) -> None:
+    """A set-aside store and no store: the machine is joined or mid-join (D4).
+
+    Creating a store here would give the machine a second one beside the set-aside
+    store, so the opener refuses and names the command that ends it.
+    """
+    if layout.store_path.exists():
+        return
+    aside = set_aside_stores(layout.store_path)
+    if aside:
+        raise LocalStoreClosedError(
+            f"the local store was set aside at {aside[-1]} for a hub, and there is "
+            "no store at "
+            f"{layout.store_path}. Run `amoeba leave` to put it back"
+        )
+
+
 def open_state_store(layout: StateLayout) -> Store:
-    """Move legacy state, then open (and migrate) the store at the state home."""
+    """Move legacy state, then open (and migrate) the store at the state home.
+
+    The store acts as the machine ``local``, made on the first open (D12), so every
+    record it inserts carries the install's one owner and machine.
+
+    Raises:
+        LocalStoreClosedError: This machine is joined, or its store was set aside.
+        HubHomeError: This home is a hub's.
+    """
+    refuse_joined_or_hub_home(layout)
+    _refuse_set_aside_without_store(layout)
     prepare_state_home(layout)
-    return Store.open(layout.store_path)
+    store = Store.open(layout.store_path)
+    acting = False
+    try:
+        act_as_local(store)
+        acting = True
+    finally:
+        # A store that cannot act as `local` is closed, not handed out; the failure
+        # propagates.
+        if not acting:
+            store.close()
+    return store

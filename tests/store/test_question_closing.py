@@ -7,6 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.store.answers import (
     add_pm_answer,
@@ -49,7 +50,7 @@ THIRD = QuestionKey(KEY.run_id, "2026-11-10T14:00:00+00:00")
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         yield opened
 
@@ -142,7 +143,7 @@ def test_writers_on_two_connections_compare_and_set_one_waiting_row(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "shared.sqlite3"
-    with Store.open(path) as first, Store.open(path) as second:
+    with open_local_store(path) as first, open_local_store(path) as second:
         seed_members(first)
         _seed_waiting(first)
         stale = _row(second)

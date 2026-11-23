@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.store.models import Session
 from amoeba.store.programs import remove_member
@@ -29,7 +30,7 @@ TICK = timedelta(microseconds=1)
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
             seed_members(transaction, SENDER, ADDRESSEE, THIRD)
         yield opened

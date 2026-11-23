@@ -15,6 +15,7 @@ from store.question_support import (
     seed_members,
     waiting_question,
 )
+from store_open import open_local_store
 
 from amoeba.answering.values import AnsweringEvidence, DeclineReason
 from amoeba.operations.dismiss import (
@@ -43,7 +44,7 @@ REASON = "not needed tonight"
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         yield opened
 

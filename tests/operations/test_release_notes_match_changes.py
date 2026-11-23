@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 from store.release_support import FULL_HASH, OTHER_PROVIDER, PROVIDER, seed_members
+from store_open import open_local_store
 
 from amoeba.operations.changes import changes
 from amoeba.operations.deps import Deps
@@ -85,7 +86,7 @@ SCENARIOS = {
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         seed_pairs(opened)
         yield opened

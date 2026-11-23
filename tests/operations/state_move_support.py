@@ -11,7 +11,7 @@ from pathlib import Path
 
 from store.relocate_support import RUN_IDS, seed_store
 
-from amoeba.config.home import StateLayout
+from amoeba.config.home import StateLayout, layout_under
 from amoeba.operations.state_move_types import MoveStep
 
 SELECT_ANSWERS = "SELECT seq, run_id, resume_log FROM answers ORDER BY seq"
@@ -38,14 +38,7 @@ def crash_after(step: MoveStep):  # noqa: ANN201
 
 def make_layout(tmp_path: Path) -> StateLayout:
     state = tmp_path / "state"
-    return StateLayout(
-        state_home=state,
-        store_path=state / "amoeba.sqlite3",
-        answering_dir=state / "answering",
-        logs_dir=state / "logs",
-        calls_log_dir=state / "logs" / "calls",
-        legacy_home=tmp_path / "legacy",
-    )
+    return layout_under(state, state, tmp_path / "legacy")
 
 
 def seed_legacy_home(layout: StateLayout) -> Path:

@@ -15,13 +15,13 @@ from pathlib import Path
 
 import pytest
 from release_child_wait import child_finished, wait_until
+from store_open import open_local_store
 
 from amoeba.config.home import logs_dir, store_path
 from amoeba.store.held_questions import HeldQuestion, insert_held
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import get_question
 from amoeba.store.row_values import encode_timestamp
-from amoeba.store.store import Store
 from cli.cli_support import write_config
 from cli.requests_support import Repos
 
@@ -41,14 +41,14 @@ def repos(tmp_path: Path) -> Repos:
         found.squadron, "send", "--id", REQUEST_ID, "--to", "context-forge",
         "--subject", "Need X", "--body", "Please add X",
     )  # fmt: skip
-    with Store.open(store_path()) as store, store.write() as transaction:
+    with open_local_store(store_path()) as store, store.write() as transaction:
         held = HeldQuestion(HELD, found.squadron.id, "q", str(found.squadron.path))
         assert insert_held(transaction, held, REQUEST_ID, datetime.now(UTC))
     return found
 
 
 def _start_attempted(key: QuestionKey) -> datetime | None:
-    with Store.open(store_path()) as store, store.read() as transaction:
+    with open_local_store(store_path()) as store, store.read() as transaction:
         row = get_question(transaction, key)
     assert row is not None
     return row.start_attempted_at
@@ -98,7 +98,7 @@ def test_an_expired_request_is_started_by_the_next_send(repos: Repos) -> None:
     """``send`` here, not ``list``: ``list`` first closes this test's held row as
     ``run_gone``, because no real Squadron run stands behind it."""
     past = encode_timestamp(datetime.now(UTC) - timedelta(hours=1))
-    with Store.open(store_path()) as store, store.write() as transaction:
+    with open_local_store(store_path()) as store, store.write() as transaction:
         transaction.execute(
             "UPDATE messages SET expires_at = ? WHERE message_id = ?",
             (past, REQUEST_ID),
@@ -115,7 +115,7 @@ def test_an_expired_request_is_started_by_the_next_send(repos: Repos) -> None:
 
 def test_inbox_starts_nothing(repos: Repos) -> None:
     _reply_done(repos)
-    with Store.open(store_path()) as store, store.write() as transaction:
+    with open_local_store(store_path()) as store, store.write() as transaction:
         transaction.execute("UPDATE questions SET start_attempted_at = NULL")
     _wait_for_child()
 

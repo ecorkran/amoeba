@@ -13,24 +13,24 @@ from pathlib import Path
 import pytest
 from store.decision_support import SECOND, waiting_then_pm
 from store.question_support import KEY, MEMBER_ID, NOW, seed_members, waiting_question
+from store_open import open_local_store
 
 from amoeba.cli.main import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE, main
 from amoeba.config.home import store_path
 from amoeba.store.questions import insert_question
-from amoeba.store.store import Store
 
 REASON = "not needed tonight"
 
 
 def _seed_waiting() -> None:
-    with Store.open(store_path()) as store:
+    with open_local_store(store_path()) as store:
         seed_members(store)
         with store.write() as transaction:
             insert_question(transaction, waiting_question(), now=NOW)
 
 
 def _seed_pm_answer() -> int:
-    with Store.open(store_path()) as store:
+    with open_local_store(store_path()) as store:
         seed_members(store)
         return waiting_then_pm(store, SECOND, MEMBER_ID, 2)
 

@@ -17,10 +17,10 @@ _STANDING_COLUMNS: Final = (
 )
 _SELECT_STANDING: Final = f"SELECT {_STANDING_COLUMNS} FROM standing_answers"
 
-#: Parameters: text, reach, program id, member id, given at.
+#: Parameters: text, reach, program id, member id, given at, owner.
 INSERT_STANDING: Final = (
-    "INSERT INTO standing_answers (text, reach, program_id, member_id, given_at) "
-    "VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO standing_answers (text, reach, program_id, member_id, given_at, "
+    "owner_id) VALUES (?, ?, ?, ?, ?, ?)"
 )
 #: The active row with the same text and reach (D2's safe repeat). ``IS`` matches a
 #: null program or member. Parameters: text, reach, program id, member id.

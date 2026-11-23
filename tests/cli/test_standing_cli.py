@@ -10,13 +10,14 @@ import json
 
 import pytest
 from store.question_support import MEMBER_ID, seed_members
+from store_open import open_local_store
 from user_configs import example_config_text
 
 from amoeba.cli.main import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE, main
 from amoeba.config.home import config_path, store_path
+from amoeba.operations import cf_readers
 from amoeba.operations import standing as standing_operation
 from amoeba.store.errors import StoreBusyError
-from amoeba.store.store import Store
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.project_of import CFProject
 
@@ -27,7 +28,7 @@ RULING = "CONCERNS reviews never block a merge."
 def _members() -> None:
     config_path().parent.mkdir(parents=True, exist_ok=True)
     config_path().write_text(example_config_text(), encoding="utf-8")
-    with Store.open(store_path()) as store:
+    with open_local_store(store_path()) as store:
         seed_members(store)
 
 
@@ -39,7 +40,7 @@ def known_member(monkeypatch: pytest.MonkeyPatch) -> None:
     def found(**_kwargs: object) -> CFProject:
         return project
 
-    monkeypatch.setattr(standing_operation, "project_of", found)
+    monkeypatch.setattr(cf_readers, "project_of", found)
 
 
 def _run(capsys: pytest.CaptureFixture[str], *argv: str) -> tuple[int, str]:
@@ -48,7 +49,7 @@ def _run(capsys: pytest.CaptureFixture[str], *argv: str) -> tuple[int, str]:
 
 
 def _count() -> int:
-    with Store.open(store_path()) as store, store.read() as transaction:
+    with open_local_store(store_path()) as store, store.read() as transaction:
         return int(
             transaction.execute("SELECT COUNT(*) FROM standing_answers").fetchone()[0]
         )
@@ -169,7 +170,7 @@ def test_a_cf_failure_exits_three_with_nothing_written(
     def failed(**_kwargs: object) -> CfCallFailed:
         return CfCallFailed("cf broke")
 
-    monkeypatch.setattr(standing_operation, "project_of", failed)
+    monkeypatch.setattr(cf_readers, "project_of", failed)
 
     code = main(["standing", "--text", RULING, "--member", "member-name"])
 

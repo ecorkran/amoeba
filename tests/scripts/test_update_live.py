@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import sqlite3
 import sys
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
@@ -11,10 +13,13 @@ from types import ModuleType
 import pytest
 import yaml
 from store.seed import insert_member, insert_program
+from store_open import open_local_store
 from user_configs import example_config_text
 
-from amoeba.config.home import config_path, store_path
+from amoeba.config.home import config_path, state_layout, store_path
 from amoeba.operations.names import OperationName
+from amoeba.operations.state_move import open_state_store
+from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
 from amoeba.store.store import Store
 
 SCRIPT = Path(__file__).parents[2] / "scripts" / "update_live.py"
@@ -62,7 +67,7 @@ def _seed_member(store: Store, project_id: str) -> None:
 @pytest.fixture
 def live(amoeba_home: Path) -> Path:
     """A home with a migrated store holding two members and the example config."""
-    store = Store.open(store_path())
+    store = open_local_store(store_path())
     _seed_member(store, "one")
     _seed_member(store, "two")
     store.close()
@@ -75,7 +80,6 @@ class FakeSteps:
         self.installed: list[str] = []
         self.migrations = 0
         self.tools = tools
-        self.on_migrate: list[object] = []
 
     def steps(self) -> object:
         return update_live.Steps(
@@ -85,8 +89,10 @@ class FakeSteps:
         )
 
     def _migrate(self) -> None:
+        """What `amoeba list` does: the local opener, which migrates the store and
+        makes the machine `local`."""
         self.migrations += 1
-        Store.open(store_path()).close()
+        open_state_store(state_layout()).close()
 
 
 def _drop_key(key: str) -> None:
@@ -150,7 +156,7 @@ def test_a_failed_read_back_restores_store_config_and_tool(live: Path) -> None:
     dropped_config = config_path().read_text(encoding="utf-8")
 
     def lose_a_member() -> None:
-        store = Store.open(store_path())
+        store = open_local_store(store_path())
         with store.write() as transaction:
             transaction.execute("DELETE FROM members WHERE project_id = 'two'")
         store.close()
@@ -184,7 +190,7 @@ def test_missing_mcp_tools_fail_the_read_back(live: Path) -> None:
 def test_restore_puts_the_newest_backup_back(live: Path) -> None:
     fake = FakeSteps()
     update_live.update(HEAD, PREVIOUS, fake.steps(), NOW)
-    held = Store.open(store_path())  # stays open, as a running server's does
+    held = open_local_store(store_path())  # stays open, as a running server's does
     _seed_member(held, "three")
 
     restored = update_live.restore(update_live.newest_backup(), fake.steps())
@@ -201,3 +207,75 @@ def test_no_install_record_and_no_previous_is_an_error(live: Path) -> None:
     with pytest.raises(update_live.UpdateError, match="--previous"):
         update_live.previous_commit(None)
     assert update_live.previous_commit(PREVIOUS) == PREVIOUS
+
+
+def _schema_ten_store(path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A copy of a schema-10 store holding two members: migrations 1 to 10 only."""
+    from amoeba.store import migrations
+
+    with closing(sqlite3.connect(path, isolation_level=None)) as connection:
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA foreign_keys=ON")
+        with monkeypatch.context() as patch:
+            first = migrations.migration_files()[:10]
+            patch.setattr(migrations, "migration_files", lambda: first)
+            patch.setattr(migrations, "EXPECTED_SCHEMA_VERSION", 10)
+            migrations.migrate(connection)
+        connection.execute(
+            "INSERT INTO programs VALUES ('p-one', NULL, NULL, 't', 't')"
+        )
+        for project in ("one", "two"):
+            connection.execute(
+                "INSERT INTO members (project_id, program_id, rules_paths, "
+                "authorize_allow, authorize_deny, registered_at, updated_at) "
+                "VALUES (?, 'p-one', '[]', '[]', '[]', 't', 't')",
+                (project,),
+            )
+
+
+def _version(path: Path) -> int:
+    with closing(sqlite3.connect(path)) as connection:
+        return int(connection.execute("SELECT version FROM schema_meta").fetchone()[0])
+
+
+def test_update_and_restore_against_a_copy_of_a_schema_ten_store(
+    amoeba_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _schema_ten_store(store_path(), monkeypatch)
+    config_path().write_text(example_config_text(), encoding="utf-8")
+    assert _version(store_path()) == 10
+    fake = FakeSteps()
+
+    update_live.update(HEAD, PREVIOUS, fake.steps(), NOW)
+
+    assert _version(store_path()) == EXPECTED_SCHEMA_VERSION
+    with closing(sqlite3.connect(store_path())) as connection:
+        assert connection.execute("SELECT count(*) FROM owners").fetchone() == (1,)
+        assert connection.execute("SELECT name FROM machines").fetchall() == [
+            ("local",)
+        ]
+    backup = update_live.newest_backup()
+    assert _version(backup / update_live.STORE_BACKUP) == 10
+
+    restored = update_live.restore(backup, fake.steps())
+
+    assert restored == PREVIOUS
+    assert _version(store_path()) == 10
+    assert update_live.member_count(store_path()) == 2
+
+
+def test_a_store_with_no_local_machine_fails_the_read_back(live: Path) -> None:
+    def forget_local() -> None:
+        with closing(sqlite3.connect(store_path())) as connection:
+            connection.execute("DELETE FROM machines")
+            connection.commit()
+
+    def install(_spec: str) -> None:
+        return None
+
+    steps = update_live.Steps(
+        install=install, migrate=forget_local, list_tools=lambda: ALL_TOOLS
+    )
+
+    with pytest.raises(update_live.UpdateError, match="machines holds"):
+        update_live.update(HEAD, PREVIOUS, steps, NOW)

@@ -149,7 +149,14 @@ def upsert_program(
     if existing is None:
         transaction.execute(
             sql.INSERT_PROGRAM,
-            (program_id, concept_member, concept_path, stamp, stamp),
+            (
+                program_id,
+                concept_member,
+                concept_path,
+                stamp,
+                stamp,
+                transaction.acting("programs").owner_id,
+            ),
         )
         return True
     if (existing.concept_member, existing.concept_path) == (
@@ -195,6 +202,7 @@ def upsert_member(
                 stamp,
                 settings.rules_from,
                 settings.wake_command,
+                transaction.acting("members").owner_id,
             ),
         )
         return True
@@ -251,7 +259,15 @@ def upsert_pair(
     if existing is None:
         transaction.execute(
             sql.INSERT_PAIR,
-            (program_id, provider_id, consumer_id, consumed.value, stamp, stamp),
+            (
+                program_id,
+                provider_id,
+                consumer_id,
+                consumed.value,
+                stamp,
+                stamp,
+                transaction.acting("dependency_pairs").owner_id,
+            ),
         )
         return True
     if existing.consumed is consumed:

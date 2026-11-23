@@ -13,8 +13,9 @@ import sys
 import time
 from pathlib import Path
 
+from store_open import open_local_store
+
 from amoeba.store.errors import StoreBusyError
-from amoeba.store.store import Store
 from operations.set_up_support import run_set_up
 
 GATE_FILE = "go"
@@ -40,7 +41,7 @@ def main(arguments: list[str]) -> None:
         "members": [{"project": f"member-{number}", "rules_paths": ["CLAUDE.md"]}],
     }
     try:
-        with Store.open(store_path) as store:
+        with open_local_store(store_path) as store:
             result = run_set_up(
                 store, document, projects=[(f"id-{number}", f"member-{number}")]
             )

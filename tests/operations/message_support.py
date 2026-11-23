@@ -9,6 +9,7 @@ from pathlib import Path
 
 from cf_fixtures import DEFAULT_WORKTREE
 from store.message_support import seed_members
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.deps import Deps
@@ -51,7 +52,7 @@ def message_deps(
 
 def open_message_store(tmp_path: Path) -> Iterator[Store]:
     """A store holding the sender, the recipient and a third member in one program."""
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
             seed_members(transaction, SENDER, RECIPIENT, THIRD)
         yield opened

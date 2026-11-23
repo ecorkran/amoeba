@@ -73,8 +73,8 @@ def insert_raw_note(
     stamp = encode_timestamp(changed)
     transaction.execute(
         "INSERT INTO messages (message_id, kind, from_member, to_member, depth, "
-        "subject, body, created_at, state_changed_at) "
-        "VALUES (?, 'note', ?, ?, 1, 's', 'b', ?, ?)",
+        "subject, body, created_at, state_changed_at, owner_id) "
+        "VALUES (?, 'note', ?, ?, 1, 's', 'b', ?, ?, (SELECT owner_id FROM owners))",
         (message_id, SENDER, ADDRESSEE, stamp, stamp),
     )
 

@@ -20,10 +20,11 @@ from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from store_open import open_local_store
+
 from amoeba.operations.wake_environment import WAKE_ENV_NAMES
 from amoeba.store.message_sweep import sweep
 from amoeba.store.row_values import encode_timestamp
-from amoeba.store.store import Store
 from live.waking.world import (
     MAX_WAKES_PER_DAY,
     RECIPIENT_NAME,
@@ -191,8 +192,10 @@ def _write_session(world: WakingWorld, *, confirmed: bool) -> None:
         connection.execute("DELETE FROM sessions")
         connection.execute(
             "INSERT INTO sessions (session_id, member_id, client, directory, "
-            "started_at, heartbeat_at, push_confirmed_at) "
-            "VALUES ('fixture-session', ?, 'fixture', '/work', ?, ?, ?)",
+            "started_at, heartbeat_at, push_confirmed_at, owner_id, machine_id) "
+            "VALUES ('fixture-session', ?, 'fixture', '/work', ?, ?, ?, "
+            "(SELECT owner_id FROM owners), "
+            "(SELECT machine_id FROM machines WHERE name = 'local'))",
             (_member_id(world), now, now, now if confirmed else None),
         )
 
@@ -304,6 +307,6 @@ def test_a_killed_wrapper_leaves_an_overdue_row_and_a_command_amoeba_never_stops
         WAKE_TIMEOUT_SECONDS + 30,
     )
     later = datetime.now(UTC) + timedelta(days=RETENTION_DAYS + 1)
-    with Store.open(waking.sender.store) as store, store.write() as transaction:
+    with open_local_store(waking.sender.store) as store, store.write() as transaction:
         sweep(transaction, later, RETENTION_DAYS)
     assert wake_rows(waking) == []

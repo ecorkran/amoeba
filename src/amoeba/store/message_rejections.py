@@ -43,6 +43,7 @@ def record_rejection(
             code,
             detail,
             encode_timestamp(now),
+            transaction.acting("message_rejections").owner_id,
         ),
     )
 

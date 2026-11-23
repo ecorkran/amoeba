@@ -16,6 +16,7 @@ from store.release_support import (
     seed_members,
 )
 from store.seed import insert_member, insert_pair
+from store_open import open_local_store
 
 from amoeba.operations import release_notes
 from amoeba.operations.deps import Deps
@@ -59,7 +60,7 @@ LONGEST_HASH = "f" * max(FULL_HASH_LENGTHS)
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         seed_pairs(opened)
         yield opened

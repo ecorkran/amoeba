@@ -37,6 +37,7 @@ from mcp_server.presence_rig import (
 )
 from mcp_server.serving_rig import presence_background, serving
 from store.message_support import send_request
+from store_open import open_local_store
 
 from amoeba.mcp import presence
 from amoeba.mcp.channel_event import CHANNEL_METHOD
@@ -50,7 +51,6 @@ from amoeba.mcp.presence_task import run_presence
 from amoeba.mcp.server import build_server
 from amoeba.store.deliveries import write_delivery
 from amoeba.store.models import Session
-from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent
 from amoeba.upstream.context_forge.cli_call import CfRun
 from amoeba.wiring_presence import StoreOpener, beat_session
@@ -107,7 +107,7 @@ def _write_bursts(path: Path, started: threading.Event) -> None:
     started.wait()
     for burst in range(BURSTS):
         time.sleep(BURST_GAP_SECONDS)
-        with Store.open(path) as store, store.write() as transaction:
+        with open_local_store(path) as store, store.write() as transaction:
             for index in BURSTED:
                 message = f"m-{burst}-{index}"
                 send_request(

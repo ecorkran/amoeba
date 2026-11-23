@@ -11,9 +11,10 @@ from pathlib import Path
 import pytest
 from store.decision_support import CORE, LINT, seed_programs
 from store.question_support import claimed_question
+from store_open import open_local_store
 from user_configs import user_config
 
-from amoeba.config.home import StateLayout
+from amoeba.config.home import layout_under
 from amoeba.operations.dismiss import dismiss
 from amoeba.operations.handle_pause import handle_pause
 from amoeba.operations.pause_models import HandlePauseOutcome
@@ -35,7 +36,7 @@ SETTLED_KEY = QuestionKey("run-settled", "2026-11-10T11:05:00+00:00")
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         yield opened
 
@@ -72,13 +73,11 @@ def _status(
         names=NAMES,
         answering_dir=state / "answering",
     )
-    layout = StateLayout(
-        state_home=state,
-        store_path=state / "amoeba.sqlite3",
+    layout = replace(
+        layout_under(state, state, None),
         answering_dir=deps.answering_dir,
         logs_dir=deps.logs_dir,
         calls_log_dir=deps.calls_log_dir,
-        legacy_home=None,
     )
 
     def real_prune(target: Store, *, now: datetime, after_days: int) -> PruneReport:

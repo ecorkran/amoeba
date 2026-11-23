@@ -14,6 +14,7 @@ from pathlib import Path
 
 from cf_fixtures import DEFAULT_WORKTREE
 from store.seed import insert_member, insert_program
+from store_open import open_local_store
 
 from amoeba.store.programs import remove_member
 from amoeba.store.store import Store
@@ -49,7 +50,7 @@ class RecordingCf(FakeCf):
 
 
 def seeded_store(path: Path) -> Iterator[Store]:
-    with Store.open(path) as store:
+    with open_local_store(path) as store:
         with store.write() as transaction:
             for program_id, members in LAYOUT.items():
                 insert_program(

@@ -50,6 +50,7 @@ def insert_held(
             request_id,
             moment,
             moment,
+            transaction.acting("questions").owner_id,
         ),
     )
     return cursor.rowcount == 1

@@ -149,6 +149,7 @@ def add_pm_answer(
             None,
             recorded,
             None if via is None else via.value,
+            transaction.acting("answers").owner_id,
         ),
     )
     transaction.execute(
@@ -289,6 +290,7 @@ def settle_answered(
                 serialize_cited(cited),
                 moment,
                 None,  # automatic answers are carried by no door
+                transaction.acting("answers").owner_id,
             ),
         )
         return Settled(integer(cursor.lastrowid, "answers.seq"))

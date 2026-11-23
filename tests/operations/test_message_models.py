@@ -18,6 +18,7 @@ from store.message_support import (
     seed_members,
     send_request,
 )
+from store_open import open_local_store
 
 from amoeba.operations.message_models import (
     MAX_BODY_LENGTH,
@@ -195,7 +196,7 @@ def test_inbox_since_is_an_integer_of_at_least_zero() -> None:
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
             seed_members(transaction, SENDER, ADDRESSEE)
         yield opened

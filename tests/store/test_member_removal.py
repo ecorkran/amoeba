@@ -7,6 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.store.decisions import answers_since
 from amoeba.store.errors import StoreIntegrityError
@@ -46,7 +47,7 @@ THIRD_MEMBER = "member-third"
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         with opened.write() as transaction:
             insert_member(
@@ -169,7 +170,8 @@ def test_the_removed_members_questions_answers_and_releases_remain(
     with store.write() as transaction:
         transaction.execute(
             "INSERT INTO releases (member_id, commit_sha, changed, touched, "
-            "reported_at) VALUES (?, 'abc', '[]', '[]', '2026-11-10T00:00:00Z')",
+            "reported_at, owner_id) VALUES (?, 'abc', '[]', '[]', "
+            "'2026-11-10T00:00:00Z', (SELECT owner_id FROM owners))",
             (THIRD_MEMBER,),
         )
 

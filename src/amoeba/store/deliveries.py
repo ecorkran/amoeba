@@ -35,7 +35,13 @@ def write_delivery(
     """One delivery for ``member_id``; its ``seq`` is the next one."""
     transaction.execute(
         sql_messages.INSERT_DELIVERY,
-        (member_id, message_id, event.value, encode_timestamp(now)),
+        (
+            member_id,
+            message_id,
+            event.value,
+            encode_timestamp(now),
+            transaction.acting("deliveries").owner_id,
+        ),
     )
 
 

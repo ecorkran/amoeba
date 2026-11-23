@@ -24,8 +24,8 @@ MESSAGE_COLUMN_COUNT: Final = len(_MESSAGE_COLUMNS.split(","))
 #: A new request: ``state_changed_at`` is its creation time, ``state`` is ``open``.
 INSERT_REQUEST: Final = (
     "INSERT INTO messages (message_id, kind, from_member, to_member, parent_id, "
-    "depth, subject, body, state, created_at, state_changed_at, expires_at) "
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "depth, subject, body, state, created_at, state_changed_at, expires_at, "
+    "owner_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 SELECT_MESSAGE: Final = f"SELECT {_MESSAGE_COLUMNS} FROM messages WHERE message_id = ?"
 
@@ -56,8 +56,8 @@ PRUNABLE_NOTE: Final = f"{_NOTE} AND state IS NULL AND created_at < ?"
 #: A new note: no state and no expiry; ``state_changed_at`` is its creation time.
 INSERT_NOTE: Final = (
     "INSERT INTO messages (message_id, kind, from_member, to_member, to_program, "
-    "depth, subject, body, created_at, state_changed_at) "
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "depth, subject, body, created_at, state_changed_at, owner_id) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 _DELIVERY_COLUMNS: Final = (
     "delivery.seq, delivery.member_id, delivery.message_id, delivery.event, "
@@ -132,8 +132,8 @@ SELECT_REQUESTS_CHANGED_SINCE: Final = (
 # --- deliveries ------------------------------------------------------------
 
 INSERT_DELIVERY: Final = (
-    "INSERT INTO deliveries (member_id, message_id, event, created_at) "
-    "VALUES (?, ?, ?, ?)"
+    "INSERT INTO deliveries (member_id, message_id, event, created_at, owner_id) "
+    "VALUES (?, ?, ?, ?, ?)"
 )
 #: Select order: ``store.deliveries.delivery_from_row`` reads these positionally.
 SELECT_DELIVERIES_SINCE: Final = (
@@ -207,7 +207,8 @@ SELECT_SWEEP_DUE: Final = (
 
 INSERT_REJECTION: Final = (
     "INSERT INTO message_rejections (member_id, operation, to_ref, message_id, "
-    "parent_id, code, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    "parent_id, code, detail, created_at, owner_id) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 #: The member's retained rejections, newest first.
 SELECT_REJECTIONS_OF: Final = (

@@ -9,6 +9,7 @@ import pytest
 from store.decision_support import CORE, LINT, TOOLS, TRADING, seed_programs
 from store.question_support import NOW
 from store.seed import insert_program
+from store_open import open_local_store
 
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.reject_codes import RejectCode
@@ -24,7 +25,7 @@ UNREGISTERED = Path("/work/unregistered")
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         with opened.write() as transaction:
             insert_program(

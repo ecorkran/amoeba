@@ -16,6 +16,7 @@ from store.question_support import (
     insert_held_row,
     seed_members,
 )
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.amoeba_script import AmoebaScriptMissing
@@ -46,7 +47,7 @@ CHECKOUT = Path("/work/a")
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         yield opened
 

@@ -28,6 +28,7 @@ from operations.release_support import (
 from store.message_support import PROGRAM, seed_members
 from store.release_support import FULL_HASH, PROVIDER
 from store.seed import insert_member, insert_pair
+from store_open import open_local_store
 
 from amoeba.mcp.channel_event import channel_event
 from amoeba.operations.release_notes import RELEASE_NOTE_ID_PREFIX
@@ -46,7 +47,7 @@ PROGRAM_NOTE_ID = "push-program-note"
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
             seed_members(transaction, SENDER, RECIPIENT, THIRD)
             insert_member(
@@ -79,7 +80,7 @@ def test_a_direct_note_a_program_note_and_a_release_note_make_one_event(
     release_dependencies = release_deps(tmp_path, clock)
 
     def open_store() -> Store:
-        return Store.open(store.path)
+        return open_local_store(store.path)
 
     baseline = read_high_seq(open_store, RECIPIENT)
     direct = send_note_as_sender(

@@ -59,9 +59,14 @@ def _version_five_store_with_members(
 
 @pytest.fixture
 def migrated(monkeypatch: pytest.MonkeyPatch) -> sqlite3.Connection:
+    """The store at version 6: later migrations add the owner these inserts omit."""
     connection = _version_five_store_with_members(monkeypatch)
     assert read_schema_version(connection) == 5
-    migrate(connection)
+    with monkeypatch.context() as patch:
+        first_six = migration_files()[:6]
+        patch.setattr(migrations, "migration_files", lambda: first_six)
+        patch.setattr(migrations, "EXPECTED_SCHEMA_VERSION", 6)
+        migrate(connection)
     return connection
 
 

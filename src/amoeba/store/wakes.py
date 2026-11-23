@@ -180,6 +180,7 @@ def claim_wake(
             WakeOutcome.START_FAILED.value if failed else None,
             None,
             NO_CHECKOUT_DETAIL if failed else None,
+            transaction.acting("wakes").owner_id,
         ),
     )
     if failed:

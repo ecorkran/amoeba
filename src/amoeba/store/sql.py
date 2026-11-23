@@ -74,8 +74,9 @@ _PROGRAM_COLUMNS: Final = (
 )
 SELECT_PROGRAMS: Final = f"SELECT {_PROGRAM_COLUMNS} FROM programs ORDER BY program_id"
 SELECT_PROGRAM: Final = f"SELECT {_PROGRAM_COLUMNS} FROM programs WHERE program_id = ?"
+# Parameters: the five columns, then the acting machine's owner (D12).
 INSERT_PROGRAM: Final = (
-    f"INSERT INTO programs ({_PROGRAM_COLUMNS}) VALUES (?, ?, ?, ?, ?)"
+    f"INSERT INTO programs ({_PROGRAM_COLUMNS}, owner_id) VALUES (?, ?, ?, ?, ?, ?)"
 )
 UPDATE_PROGRAM: Final = """
 UPDATE programs SET concept_member = ?, concept_path = ?, updated_at = ?
@@ -105,8 +106,10 @@ SELECT_MEMBERS_OF: Final = (
     f"SELECT {_MEMBER_COLUMNS} FROM members WHERE program_id = ? "
     f"AND {ACTIVE_MEMBER} ORDER BY project_id"
 )
+# Parameters: the nine columns, then the acting machine's owner (D12).
 INSERT_MEMBER: Final = (
-    f"INSERT INTO members ({_MEMBER_INSERT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    f"INSERT INTO members ({_MEMBER_INSERT_COLUMNS}, owner_id) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 UPDATE_MEMBER: Final = """
 UPDATE members SET rules_paths = ?, rules_from = ?, authorize_allow = ?,
@@ -159,8 +162,10 @@ DELETE_PAIR: Final = (
 DELETE_PAIRS_OF_MEMBER: Final = (
     "DELETE FROM dependency_pairs WHERE provider_id = ? OR consumer_id = ?"
 )
+# Parameters: the six columns, then the acting machine's owner (D12).
 INSERT_PAIR: Final = (
-    f"INSERT INTO dependency_pairs ({_PAIR_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)"
+    f"INSERT INTO dependency_pairs ({_PAIR_COLUMNS}, owner_id) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?)"
 )
 UPDATE_PAIR: Final = """
 UPDATE dependency_pairs SET consumed = ?, updated_at = ?
@@ -175,11 +180,13 @@ RELEASE_COLUMNS: Final = (
 SELECT_RELEASE_FOR_COMMIT: Final = (
     f"SELECT {RELEASE_COLUMNS} FROM releases WHERE member_id = ? AND commit_sha = ?"
 )
-# Parameters: member, commit, version, changed, touched, reported_at, versioned_at.
+# Parameters: member, commit, version, changed, touched, reported_at, versioned_at,
+# owner.
 INSERT_RELEASE: Final = """
 INSERT INTO releases
-    (member_id, commit_sha, version, changed, touched, reported_at, versioned_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+    (member_id, commit_sha, version, changed, touched, reported_at, versioned_at,
+    owner_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 """
 # Parameters: version, versioned_at, changed, touched, member, commit.
 VERSION_RELEASE: Final = """
@@ -214,13 +221,13 @@ SELECT_RELEASES_FROM_RELEASE: Final = (
 # Seeding statements: the slice 222 columns only, kept for tests that state a row.
 INSERT_QUESTION: Final = """
 INSERT INTO questions (run_id, paused_at, member_id, question, checkout, state,
-    answering_run_id, waiting_reason, claimed_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    answering_run_id, waiting_reason, claimed_at, updated_at, owner_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 INSERT_ANSWER: Final = """
 INSERT INTO answers (run_id, paused_at, answered_by, answer, recorded_at,
-    resume_outcome)
-VALUES (?, ?, ?, ?, ?, ?)
+    resume_outcome, owner_id)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 """
 
 QUESTION_COLUMNS: Final = """run_id, paused_at, member_id, question, checkout, state,
@@ -244,8 +251,8 @@ SELECT_QUESTION_CLAIM: Final = (
 INSERT_NEW_QUESTION: Final = """
 INSERT INTO questions (run_id, paused_at, member_id, question, checkout, state,
     answering_run_id, waiting_reason, waiting_detail, slice_label, source_commit,
-    passages, claimed_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    passages, claimed_at, updated_at, owner_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (run_id, paused_at) DO NOTHING
 """
 # Every move out of ``claimed`` names the claim it holds (D4). The state values are
@@ -343,8 +350,8 @@ WHERE run_id = ? AND answered_by = ?
 """
 INSERT_RECORDED_ANSWER: Final = """
 INSERT INTO answers (run_id, paused_at, answered_by, answer, cited, recorded_at,
-    via)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+    via, owner_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 """
 # ``resumed`` and ``not_delivered`` are final; only ``refused`` may be retried.
 RECORD_RESUME: Final = """

@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from cf_fixtures import OUTSIDE_ANY_PROJECT, fake_cf_run
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.members import ContextForgeError
@@ -28,7 +29,7 @@ PROJECTS = [("provider-id", "provider")]
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         yield opened
 
 

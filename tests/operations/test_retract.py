@@ -19,7 +19,9 @@ from store.decision_support import (
     waiting_then_pm,
 )
 from store.question_support import NOW, waiting_question
+from store_open import open_local_store
 
+from amoeba.operations.cf_readers import cf_names
 from amoeba.operations.decisions import DecisionsOutcome, DecisionsResult, decisions
 from amoeba.operations.dismiss import DismissOutcome, dismiss
 from amoeba.operations.retract import (
@@ -43,7 +45,7 @@ REASON = "wrong number"
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         yield opened
 
@@ -55,7 +57,7 @@ def _retract(store: Store, seq: object, reason: object = REASON) -> RetractResul
 def _decisions(store: Store, tmp_path: Path) -> DecisionsResult:
     rig = build_deps(tmp_path, polls={}, spawns=[])
     deps = replace(rig.deps, project_names=lambda: NAMES)
-    return decisions(store, {}, deps=deps)
+    return decisions(store, {}, names=cf_names(deps))
 
 
 def _precedent(store: Store, member: str = LINT) -> list[str]:

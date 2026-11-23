@@ -163,8 +163,9 @@ def test_a_version_one_store_migrates_forward_with_its_rows_intact() -> None:
 
 DANGLING_MIGRATION = """
 INSERT INTO questions (run_id, paused_at, member_id, question, checkout, state,
-                       claimed_at, updated_at)
-VALUES ('r9', 'p9', 'no-such-member', 'why?', '/c', 'claimed', 't', 't');
+                       claimed_at, updated_at, owner_id)
+VALUES ('r9', 'p9', 'no-such-member', 'why?', '/c', 'claimed', 't', 't',
+        (SELECT owner_id FROM owners));
 """
 FOREIGN_KEYS_PRAGMA = "PRAGMA foreign_keys"
 
@@ -346,14 +347,16 @@ def test_the_rebuilt_questions_table_keeps_the_key_answers_reference(
 
     with pytest.raises(sqlite3.IntegrityError):
         connection.execute(
-            f"INSERT INTO answers ({ANSWER_OLD_COLUMNS}) VALUES "
-            "(NULL, 'run-x', 'p-x', 'pm', 'orphan', 't', NULL, NULL, NULL, NULL, NULL)"
+            f"INSERT INTO answers ({ANSWER_OLD_COLUMNS}, owner_id) VALUES "
+            "(NULL, 'run-x', 'p-x', 'pm', 'orphan', 't', NULL, NULL, NULL, NULL, NULL, "
+            "(SELECT owner_id FROM owners))"
         )
     with pytest.raises(sqlite3.IntegrityError):
         connection.execute(
             "INSERT INTO questions (run_id, paused_at, member_id, question, checkout, "
-            "state, claimed_at, updated_at) "
-            "VALUES ('run-0', 'p-0', 'm1', 'dup', '/c', 'claimed', 't', 't')"
+            "state, claimed_at, updated_at, owner_id) "
+            "VALUES ('run-0', 'p-0', 'm1', 'dup', '/c', 'claimed', 't', 't', "
+            "(SELECT owner_id FROM owners))"
         )
 
 
@@ -361,16 +364,19 @@ def test_a_closed_question_needs_a_known_reason() -> None:
     connection = _empty_database()
     connection.execute("PRAGMA foreign_keys=ON")
     migrate(connection)
-    connection.execute("INSERT INTO programs VALUES ('demo', NULL, NULL, 't', 't')")
+    owner = "(SELECT owner_id FROM owners)"
+    connection.execute(
+        f"INSERT INTO programs VALUES ('demo', NULL, NULL, 't', 't', {owner})"
+    )
     connection.execute(
         "INSERT INTO members (project_id, program_id, rules_paths, authorize_allow, "
-        "authorize_deny, registered_at, updated_at, removed_at) "
-        "VALUES ('m1', 'demo', '[]', '[]', '[]', 't', 't', NULL)"
+        "authorize_deny, registered_at, updated_at, removed_at, owner_id) "
+        f"VALUES ('m1', 'demo', '[]', '[]', '[]', 't', 't', NULL, {owner})"
     )
     insert = (
         "INSERT INTO questions (run_id, paused_at, member_id, question, checkout, "
-        "state, claimed_at, updated_at, closed_reason) "
-        "VALUES (?, 'p', 'm1', 'why?', '/c', 'closed', 't', 't', ?)"
+        "state, claimed_at, updated_at, closed_reason, owner_id) "
+        f"VALUES (?, 'p', 'm1', 'why?', '/c', 'closed', 't', 't', ?, {owner})"
     )
 
     connection.execute(insert, ("good", "run_gone"))
@@ -379,6 +385,7 @@ def test_a_closed_question_needs_a_known_reason() -> None:
     with pytest.raises(sqlite3.IntegrityError):
         connection.execute(
             "INSERT INTO questions (run_id, paused_at, member_id, question, "
-            "checkout, state, claimed_at, updated_at) "
-            "VALUES ('odd', 'p', 'm1', 'why?', '/c', 'not_a_state', 't', 't')"
+            "checkout, state, claimed_at, updated_at, owner_id) "
+            "VALUES ('odd', 'p', 'm1', 'why?', '/c', 'not_a_state', 't', 't', "
+            f"{owner})"
         )

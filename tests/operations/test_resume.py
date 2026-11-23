@@ -21,6 +21,7 @@ from fake_sq import (
 )
 from process_containment import contained_popen
 from store.question_support import MEMBER_ID, NOW, seed_members
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.answering.values import AnsweredBy
@@ -66,7 +67,7 @@ KEY = QuestionKey(RUN, PAUSED_AT)
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         yield opened
 

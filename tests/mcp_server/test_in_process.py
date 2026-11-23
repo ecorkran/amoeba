@@ -15,6 +15,7 @@ import anyio
 import pytest
 import yaml
 from store.question_support import seed_members
+from store_open import open_local_store
 from user_configs import example_config_text
 from wiring_support import is_closed, record_opened_stores
 
@@ -30,6 +31,7 @@ from amoeba.mcp.tools import (
     ToolSpec,
     prepare_arguments,
 )
+from amoeba.operations import served
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
 from amoeba.operations.names import Door, OperationName
 from amoeba.store.standing import list_standing
@@ -251,7 +253,7 @@ def test_the_abandoned_worker_closes_its_store_when_it_finishes(
         assert release.wait(WAIT_SECONDS), "the test never released the worker"
         return STUB_RESULT
 
-    monkeypatch.setattr(wiring, "mark_read", slow_mark_read)
+    monkeypatch.setattr(served, "mark_read", slow_mark_read)
     monkeypatch.setattr(in_process, "MCP_CALL_DEADLINE_SECONDS", 0.2)
 
     async def scenario() -> None:
@@ -282,7 +284,7 @@ def test_the_store_is_closed_after_a_normal_call_and_after_one_that_raises(
     def raising(store: Store, document: object) -> MarkReadResult:
         raise SquadronError("sq down")
 
-    monkeypatch.setattr(wiring, "mark_read", raising)
+    monkeypatch.setattr(served, "mark_read", raising)
 
     async def failing() -> None:
         with pytest.raises(SquadronError):
@@ -425,7 +427,7 @@ def test_an_add_tool_call_passing_wake_command_is_rejected_as_an_unknown_field(
 
 
 def _seed_demo_program() -> None:
-    with Store.open(store_path()) as store:
+    with open_local_store(store_path()) as store:
         seed_members(store)
 
 
@@ -445,7 +447,7 @@ def test_a_standing_call_writes_one_row_and_a_repeat_is_unchanged() -> None:
         "unchanged",
         first["standing_id"],
     )
-    with Store.open(store_path()) as store, store.read() as transaction:
+    with open_local_store(store_path()) as store, store.read() as transaction:
         assert list_standing(transaction, include_withdrawn=True)[0].program_id == (
             "demo"
         )
@@ -465,7 +467,7 @@ def test_a_withdraw_call_withdraws() -> None:
         "withdrawn",
         given["standing_id"],
     )
-    with Store.open(store_path()) as store, store.read() as transaction:
+    with open_local_store(store_path()) as store, store.read() as transaction:
         (row,) = list_standing(transaction, include_withdrawn=True)
     assert row.withdraw_reason == "wrong"
 

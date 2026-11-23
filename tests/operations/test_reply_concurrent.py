@@ -13,12 +13,12 @@ from typing import Any
 from live_environment import process_environment
 from process_containment import contained_popen
 from store.message_support import NOW, seed_members, send_request
+from store_open import open_local_store
 
 from amoeba.operations.message_models import ReplyOutcome
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.store.messages import get_message
 from amoeba.store.row_values import encode_timestamp
-from amoeba.store.store import Store
 from amoeba.store.vocabulary import RequestState
 from operations.message_support import RECIPIENT, SENDER, THIRD
 from operations.reply_worker import GATE_FILE
@@ -60,7 +60,7 @@ def test_two_accepts_at_once_have_exactly_one_winner(tmp_path: Path) -> None:
     store_path = tmp_path / "home" / "amoeba.sqlite3"
     gate = tmp_path / "gate"
     gate.mkdir()
-    with Store.open(store_path) as store, store.write() as transaction:
+    with open_local_store(store_path) as store, store.write() as transaction:
         seed_members(transaction, SENDER, RECIPIENT, THIRD)
         send_request(
             transaction, REQUEST_ID, from_member=SENDER, to_member=RECIPIENT, now=NOW
@@ -79,7 +79,7 @@ def test_two_accepts_at_once_have_exactly_one_winner(tmp_path: Path) -> None:
     assert outcomes == [ReplyOutcome.APPLIED.value, ReplyOutcome.REJECTED.value]
     (loser,) = (r for r in results if r["outcome"] == ReplyOutcome.REJECTED.value)
     assert loser["rejection"] == RejectCode.ALREADY_ACCEPTED.value
-    with Store.open(store_path) as store, store.read() as transaction:
+    with open_local_store(store_path) as store, store.read() as transaction:
         stored = get_message(transaction, REQUEST_ID)
         accepted = transaction.execute(
             "SELECT count(*) FROM deliveries WHERE event = 'accepted'"

@@ -1,7 +1,7 @@
 """``standing``: record a ruling the PM gave ahead of time (slice 230, D2, D10).
 
 The document is validated here, so the CLI and the MCP layer pass their input through
-unchanged. ``--member`` is resolved through ``cf`` with no working directory, before
+unchanged. ``--member`` is resolved by the caller's resolver (``cf`` locally), before
 the write transaction opens, so no subprocess runs while the write lock is held. The
 lookup of the program or member and the give are then one transaction, so a repeat
 of the same call finds the row the first one wrote.
@@ -9,11 +9,11 @@ of the same call finds the row the first one wrote.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 
 from pydantic import ValidationError
 
-from amoeba.operations.members import ContextForgeError
 from amoeba.operations.reject_codes import validation_problems
 from amoeba.operations.standing_fit import overflow
 from amoeba.operations.standing_models import (
@@ -26,12 +26,19 @@ from amoeba.store.programs import get_member, get_program
 from amoeba.store.standing import give_standing
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import StandingReach
-from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
-from amoeba.upstream.context_forge.project_of import CFProjectNotFound, project_of
+
+#: Resolves ``--member`` to a member id, or ``None`` when no active member goes by
+#: that reference. The local way asks Context Forge; the hub takes only an id (260 D11).
+type MemberResolver = Callable[[str], str | None]
 
 
 def standing(
-    store: Store, document: object, *, max_chars: int, run: CfRun, now: datetime
+    store: Store,
+    document: object,
+    *,
+    max_chars: int,
+    resolve_member: MemberResolver,
+    now: datetime,
 ) -> StandingResult:
     """Give the standing answer ``document`` describes, or find the same one active.
 
@@ -40,7 +47,7 @@ def standing(
     ``too_long`` and rolled back, rather than found at the next pause.
 
     Raises:
-        ContextForgeError: ``cf`` failed resolving ``member``; nothing was written.
+        ContextForgeError: The local resolver's ``cf`` failed; nothing was written.
         StoreError: The store cannot be used; nothing was written.
     """
     try:
@@ -49,7 +56,7 @@ def standing(
         return StandingResult.rejected(
             StandingRejection.MALFORMED, validation_problems(error)
         )
-    member_id = None if request.member is None else _member_project_id(request, run)
+    member_id = None if request.member is None else resolve_member(request.member)
     if request.member is not None and member_id is None:
         return _no_such_member(request.member)
     reach = _reach(request)
@@ -106,16 +113,6 @@ def _reach(request: StandingRequest) -> StandingReach:
     if request.member is not None:
         return StandingReach.MEMBER
     return StandingReach.ALL
-
-
-def _member_project_id(request: StandingRequest, run: CfRun) -> str | None:
-    """The Context Forge id of ``request.member``; ``None`` when ``cf`` has none."""
-    found = project_of(reference=request.member, run=run)
-    if isinstance(found, CfCallFailed):
-        raise ContextForgeError(found.detail)
-    if isinstance(found, CFProjectNotFound):
-        return None
-    return found.id
 
 
 def _no_such_member(member: str | None) -> StandingResult:

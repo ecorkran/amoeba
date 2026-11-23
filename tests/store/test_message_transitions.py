@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from pytest import MonkeyPatch
+from store_open import open_local_store
 
 from amoeba.store import message_transitions
 from amoeba.store.message_transitions import StateFields, change_state
@@ -30,7 +31,7 @@ LATER = NOW + timedelta(hours=1)
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
             seed_members(transaction, SENDER, ADDRESSEE)
             send_request(transaction, "first")

@@ -24,13 +24,13 @@ from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY, RECORDED_ID, FakeCf
 from store.message_support import NOW, PROGRAM, seed_members
 from store.seed import insert_member
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.names import OperationName
 from amoeba.operations.processes import WaitableChild
 from amoeba.operations.send import send
 from amoeba.operations.wake import WAKE_BOUND_SECONDS
-from amoeba.store.store import Store
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.wiring_messages import worst_case_seconds
 
@@ -70,7 +70,7 @@ def _targets(count: int) -> list[tuple[str, str]]:
 
 
 def _seed(path: Path, members: Sequence[tuple[str, str]]) -> None:
-    with Store.open(path) as setup, setup.write() as transaction:
+    with open_local_store(path) as setup, setup.write() as transaction:
         seed_members(transaction, RECORDED_ID)
         for project_id, _ in members:
             insert_member(
@@ -105,7 +105,7 @@ def _burst(tmp_path: Path, targets: Sequence[tuple[str, str]]) -> Burst:
 
     def send_one(number: int) -> float:
         _, name = targets[number % len(targets)]
-        with Store.open(path) as store:
+        with open_local_store(path) as store:
             gate.wait(timeout=WAKE_BOUND_SECONDS)
             started = time.monotonic()
             result = send(
@@ -126,7 +126,7 @@ def _burst(tmp_path: Path, targets: Sequence[tuple[str, str]]) -> Burst:
 
 
 def _count(path: Path, query: str) -> list[tuple[object, ...]]:
-    with Store.open(path) as store, store.read() as transaction:
+    with open_local_store(path) as store, store.read() as transaction:
         return [tuple(row) for row in transaction.execute(query).fetchall()]
 
 

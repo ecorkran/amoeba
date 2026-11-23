@@ -7,8 +7,9 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
+from store_open import open_local_store
+
 from amoeba.answering.values import AnsweredBy
-from amoeba.store.store import Store
 from amoeba.store.vocabulary import QuestionState, ResumeOutcome
 from store.seed import (
     insert_answer,
@@ -30,7 +31,7 @@ def seed_store(home: Path) -> Path:
     three answers whose ``resume_log`` is under ``home``, elsewhere, and null."""
     home.mkdir(parents=True, exist_ok=True)
     path = home / "amoeba.sqlite3"
-    with Store.open(path) as store, store.write() as transaction:
+    with open_local_store(path) as store, store.write() as transaction:
         insert_program(
             transaction,
             program_id=PROGRAM,

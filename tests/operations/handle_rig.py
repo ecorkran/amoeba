@@ -32,6 +32,7 @@ from fake_sq import (
     SQUADRON_FIXTURES,
     poll_result,
 )
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.answering.settings import AnswererSettings
@@ -176,7 +177,7 @@ def world(  # noqa: PLR0913 - the knobs a handle_pause test turns
         return FakeChild(exit_code=0)
 
     cf = plan_cf_run(integration_branch="", broken=False)
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         member = register_member(store, PROJECT_ID)
         rig = build_deps(tmp_path, polls={}, spawns=[], spawner=spawner)
         deps = replace(
