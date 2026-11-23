@@ -11,7 +11,7 @@ projectState: Slices 220 to 244 are merged on main. Package version 0.2.3. Slice
   Forge project id and every member lookup runs the local cf.
 dateCreated: 20261121
 dateUpdated: 20261123
-status: in_progress
+status: complete
 turns: 83
 promptTokens: 7241565
 cachedTokens: 6819324
