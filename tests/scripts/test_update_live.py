@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import sqlite3
+import subprocess
 import sys
 from contextlib import closing
 from datetime import UTC, datetime
@@ -25,8 +26,8 @@ from amoeba.store.store import Store
 SCRIPT = Path(__file__).parents[2] / "scripts" / "update_live.py"
 NOW = datetime(2026, 11, 15, 12, 0, tzinfo=UTC)
 LATER = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
-HEAD = "a" * 40
-PREVIOUS = "b" * 40
+VERSION = "0.2.8"
+PREVIOUS = "0.2.7"
 ALL_TOOLS = {name.value for name in OperationName}
 
 
@@ -101,26 +102,29 @@ def _drop_key(key: str) -> None:
     config_path().write_text(yaml.safe_dump(document), encoding="utf-8")
 
 
-def test_update_backs_up_installs_migrates_and_records(live: Path) -> None:
+def test_update_backs_up_installs_the_release_from_pypi_and_migrates(
+    live: Path,
+) -> None:
     fake = FakeSteps()
 
-    added = update_live.update(HEAD, PREVIOUS, fake.steps(), NOW)
+    added = update_live.update(VERSION, PREVIOUS, fake.steps(), NOW)
 
     assert added == []
-    assert fake.installed == [update_live.install_spec(HEAD)]
+    assert fake.installed == ["amoeba-ai>=0.2.8"]
     assert fake.migrations == 1
-    root = update_live.backups_root()
     backup = update_live.newest_backup()
     assert update_live.member_count(backup / update_live.STORE_BACKUP) == 2
     assert (backup / update_live.CONFIG_BACKUP).exists()
-    assert (backup / update_live.PREVIOUS_COMMIT).read_text().strip() == PREVIOUS
-    assert (root / update_live.INSTALLED_COMMIT).read_text().strip() == HEAD
-    assert update_live.previous_commit(None) == HEAD
+    assert (backup / update_live.PREVIOUS_VERSION).read_text().strip() == PREVIOUS
+
+
+def test_restore_reinstalls_the_exact_previous_version() -> None:
+    assert update_live.restore_spec(PREVIOUS) == "amoeba-ai==0.2.7"
 
 
 def test_a_second_update_deletes_the_older_backup(live: Path) -> None:
-    update_live.update(HEAD, PREVIOUS, FakeSteps().steps(), NOW)
-    update_live.update(HEAD, HEAD, FakeSteps().steps(), LATER)
+    update_live.update(VERSION, PREVIOUS, FakeSteps().steps(), NOW)
+    update_live.update(VERSION, VERSION, FakeSteps().steps(), LATER)
 
     stamps = [p for p in update_live.backups_root().iterdir() if p.is_dir()]
     assert [p.name for p in stamps] == [LATER.strftime("%Y%m%dT%H%M%S")]
@@ -129,7 +133,7 @@ def test_a_second_update_deletes_the_older_backup(live: Path) -> None:
 def test_a_missing_config_key_is_appended_from_the_example(live: Path) -> None:
     _drop_key("prune_after_days")
 
-    added = update_live.update(HEAD, PREVIOUS, FakeSteps().steps(), NOW)
+    added = update_live.update(VERSION, PREVIOUS, FakeSteps().steps(), NOW)
 
     assert added == ["prune_after_days"]
     document = yaml.safe_load(config_path().read_text(encoding="utf-8"))
@@ -167,29 +171,28 @@ def test_a_failed_read_back_restores_store_config_and_tool(live: Path) -> None:
         list_tools=lambda: ALL_TOOLS,
     )
     with pytest.raises(update_live.UpdateError, match="members 1 != 2"):
-        update_live.update(HEAD, PREVIOUS, steps, NOW)
+        update_live.update(VERSION, PREVIOUS, steps, NOW)
 
     assert update_live.member_count(store_path()) == 2
     assert config_path().read_text(encoding="utf-8") == dropped_config
     assert config_path().read_text(encoding="utf-8") != original_config
     assert fake.installed == [
-        update_live.install_spec(HEAD),
-        update_live.install_spec(PREVIOUS),
+        update_live.install_spec(VERSION),
+        update_live.restore_spec(PREVIOUS),
     ]
-    assert not (update_live.backups_root() / update_live.INSTALLED_COMMIT).exists()
 
 
 def test_missing_mcp_tools_fail_the_read_back(live: Path) -> None:
     fake = FakeSteps(tools=ALL_TOOLS - {OperationName.STATUS.value})
 
     with pytest.raises(update_live.UpdateError, match="tools differ"):
-        update_live.update(HEAD, PREVIOUS, fake.steps(), NOW)
-    assert fake.installed[-1] == update_live.install_spec(PREVIOUS)
+        update_live.update(VERSION, PREVIOUS, fake.steps(), NOW)
+    assert fake.installed[-1] == update_live.restore_spec(PREVIOUS)
 
 
 def test_restore_puts_the_newest_backup_back(live: Path) -> None:
     fake = FakeSteps()
-    update_live.update(HEAD, PREVIOUS, fake.steps(), NOW)
+    update_live.update(VERSION, PREVIOUS, fake.steps(), NOW)
     held = open_local_store(store_path())  # stays open, as a running server's does
     _seed_member(held, "three")
 
@@ -203,10 +206,16 @@ def test_restore_puts_the_newest_backup_back(live: Path) -> None:
     held.close()
 
 
-def test_no_install_record_and_no_previous_is_an_error(live: Path) -> None:
-    with pytest.raises(update_live.UpdateError, match="--previous"):
-        update_live.previous_commit(None)
-    assert update_live.previous_commit(PREVIOUS) == PREVIOUS
+def test_a_version_not_on_pypi_is_an_update_error_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def uv_fails(command: list[str], **_: object) -> None:
+        raise subprocess.CalledProcessError(1, command)
+
+    monkeypatch.setattr(update_live.subprocess, "run", uv_fails)
+
+    with pytest.raises(update_live.UpdateError, match="on PyPI yet"):
+        update_live._uv_install(update_live.install_spec(VERSION))  # pyright: ignore[reportPrivateUsage]
 
 
 def _schema_ten_store(path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -246,7 +255,7 @@ def test_update_and_restore_against_a_copy_of_a_schema_ten_store(
     assert _version(store_path()) == 10
     fake = FakeSteps()
 
-    update_live.update(HEAD, PREVIOUS, fake.steps(), NOW)
+    update_live.update(VERSION, PREVIOUS, fake.steps(), NOW)
 
     assert _version(store_path()) == EXPECTED_SCHEMA_VERSION
     with closing(sqlite3.connect(store_path())) as connection:
@@ -278,4 +287,4 @@ def test_a_store_with_no_local_machine_fails_the_read_back(live: Path) -> None:
     )
 
     with pytest.raises(update_live.UpdateError, match="machines holds"):
-        update_live.update(HEAD, PREVIOUS, steps, NOW)
+        update_live.update(VERSION, PREVIOUS, steps, NOW)

@@ -67,4 +67,4 @@ Once PyPI shows the new version, put it on this machine. From the main checkout:
 uv run python scripts/update_live.py update
 ```
 
-It backs up the live store and config, appends any config key the new code needs, reinstalls amoeba, migrates the store and checks the result. If a check fails it has already restored the backup and the previous install and exits 1: report its output and stop. Otherwise report the client sessions it lists in the release summary; they run the old `amoeba-mcp` until restarted. This is a release step, not a per-slice step: merged slices wait for the next release.
+It backs up the live store and config, appends any config key the new code needs, installs the released version from PyPI (never a build of the checkout), migrates the store and checks the result. If a check fails it has already restored the backup and the previous install and exits 1: report its output and stop. Otherwise report the client sessions it lists in the release summary; they run the old `amoeba-mcp` until restarted. This is a release step, not a per-slice step: merged slices wait for the next release.

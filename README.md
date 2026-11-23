@@ -48,7 +48,7 @@ The release skill runs this as its last step. To run it by hand, from the main c
 uv run python scripts/update_live.py update
 ```
 
-It backs up the store and config, appends any config key the new code needs (from the config contract's example), reinstalls amoeba, migrates the store, then checks the schema version, integrity, foreign keys, member count and the `amoeba-mcp` tool list. If any check fails it restores the backup and the previous install itself, and exits 1. It lists the running `amoeba-mcp` servers at the end: they run the old code until their client sessions restart.
+It backs up the store and config, appends any config key the new code needs (from the config contract's example), installs the released version from PyPI (never a build of the checkout), migrates the store, then checks the schema version, integrity, foreign keys, member count and the `amoeba-mcp` tool list. If any check fails it restores the backup and the previous install itself, and exits 1. It lists the running `amoeba-mcp` servers at the end: they run the old code until their client sessions restart.
 
 ```
 uv run python scripts/update_live.py restore

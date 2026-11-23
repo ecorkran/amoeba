@@ -1,22 +1,24 @@
-"""Update the installed amoeba to this checkout and migrate the live store.
+"""Update the installed amoeba to the release just made and migrate the live store.
 
 Run from the checkout, on its target branch, as the release skill's last step
-(`.claude/skills/release/SKILL.md`), not after a slice merges:
+(`.claude/skills/release/SKILL.md`), once PyPI shows the version, not after a slice
+merges:
 
-    uv run python scripts/update_live.py update [--previous SHA]
+    uv run python scripts/update_live.py update [--previous VERSION]
     uv run python scripts/update_live.py restore
 
 ``update`` backs up the store and config, appends any config key the new code
-requires (value from the starter config Amoeba ships), installs this checkout with
-``uv tool install``, runs ``amoeba list`` (which migrates the store) and reads the
-result back (the schema version, integrity, foreign keys, the member count, that
-``owners`` holds its one row and ``machines`` the one ``local`` row, and the MCP tool
-list). A failed read-back restores automatically. ``restore`` puts the
-newest backup back and reinstalls the commit that was installed before it.
+requires (value from the starter config Amoeba ships), installs the checkout's
+version from PyPI with ``uv tool install`` (never a build of the checkout), runs
+``amoeba list`` (which migrates the store) and reads the result back (the schema
+version, integrity, foreign keys, the member count, that ``owners`` holds its one row
+and ``machines`` the one ``local`` row, and the MCP tool list). A failed read-back
+restores automatically. ``restore`` puts the newest backup back and reinstalls the
+version that was installed before it.
 
 Backups live in ``<state home>/backups/<stamp>/``; a successful update deletes
-every older one, so one set is kept. ``<state home>/backups/installed-commit``
-records what was last installed, and is the next update's restore point.
+every older one, so one set is kept. Each backup records the version installed
+before the update: ``--previous``, else what ``amoeba --version`` reports.
 Paths honour ``AMOEBA_HOME`` exactly as amoeba does.
 """
 
@@ -28,6 +30,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tomllib
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -47,11 +50,11 @@ from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS
 
 CHECKOUT = Path(__file__).resolve().parents[1]
+PACKAGE_NAME = "amoeba-ai"
 BACKUPS_DIRNAME = "backups"
 STORE_BACKUP = "amoeba.sqlite3"
 CONFIG_BACKUP = "config.yaml"
-PREVIOUS_COMMIT = "previous-commit"
-INSTALLED_COMMIT = "installed-commit"
+PREVIOUS_VERSION = "previous-version"
 MCP_LIST_TIMEOUT_SECONDS = 30
 INTEGRITY_OK = "ok"
 SELECT_OWNER_COUNT = "SELECT count(*) FROM owners"
@@ -83,7 +86,7 @@ def _git(*args: str) -> str:
 
 
 def check_checkout() -> str:
-    """The checkout's HEAD commit, once it is on its target and clean."""
+    """The checkout's version, once it is on its target and clean."""
     configured = subprocess.run(
         ["cf", "config", "get", "git.integration_branch", "--value"],
         cwd=CHECKOUT,
@@ -97,7 +100,8 @@ def check_checkout() -> str:
         raise UpdateError(f"checkout is on {branch!r}, not the target {target!r}")
     if _git("status", "--porcelain"):
         raise UpdateError("checkout has uncommitted changes")
-    return _git("rev-parse", "HEAD")
+    pyproject = tomllib.loads((CHECKOUT / "pyproject.toml").read_text("utf-8"))
+    return str(pyproject["project"]["version"])
 
 
 def example_values() -> dict[str, Any]:
@@ -147,7 +151,7 @@ def take_backup(previous: str, now: datetime) -> Path:
     target.mkdir(parents=True)
     copy_database(store_path(), target / STORE_BACKUP)
     shutil.copy2(config_path(), target / CONFIG_BACKUP)
-    (target / PREVIOUS_COMMIT).write_text(previous + "\n", encoding="utf-8")
+    (target / PREVIOUS_VERSION).write_text(previous + "\n", encoding="utf-8")
     return target
 
 
@@ -178,18 +182,23 @@ def check_store(expected_members: int) -> list[str]:
     return failures
 
 
-def install_spec(commit: str) -> str:
-    # No package name: commits from before and after the PyPI rename (amoeba ->
-    # amoeba-ai) both install, and uv reads the name from the commit itself.
-    return f"git+file://{CHECKOUT}@{commit}"
+def install_spec(version: str) -> str:
+    """The release or a later one: the install records a floor, never a pin, so a
+    later `uv tool upgrade amoeba-ai` still moves it."""
+    return f"{PACKAGE_NAME}>={version}"
+
+
+def restore_spec(version: str) -> str:
+    """Exactly the version to go back to: a floor would reinstall the new one."""
+    return f"{PACKAGE_NAME}=={version}"
 
 
 def restore(backup: Path, steps: Steps) -> str:
-    """Put ``backup`` back and reinstall its previous commit; returns that commit."""
+    """Put ``backup`` back and reinstall its previous version; returns that version."""
     copy_database(backup / STORE_BACKUP, store_path())
     shutil.copy2(backup / CONFIG_BACKUP, config_path())
-    previous = (backup / PREVIOUS_COMMIT).read_text(encoding="utf-8").strip()
-    steps.install(install_spec(previous))
+    previous = (backup / PREVIOUS_VERSION).read_text(encoding="utf-8").strip()
+    steps.install(restore_spec(previous))
     return previous
 
 
@@ -200,25 +209,12 @@ def newest_backup() -> Path:
     return stamps[-1]
 
 
-def previous_commit(given: str | None) -> str:
-    """The commit to restore to: ``--previous``, else the last recorded install."""
-    if given:
-        return given
-    record = backups_root() / INSTALLED_COMMIT
-    if not record.exists():
-        raise UpdateError(
-            f"no {record}: pass --previous with the commit the installed amoeba "
-            "was built from (right after a merge, `git rev-parse HEAD^1`)"
-        )
-    return record.read_text(encoding="utf-8").strip()
-
-
-def update(head: str, previous: str, steps: Steps, now: datetime) -> list[str]:
+def update(version: str, previous: str, steps: Steps, now: datetime) -> list[str]:
     """Run the update; returns the config keys added. Restores on a failed check."""
     expected_members = member_count(store_path())
     backup = take_backup(previous, now)
     added = add_missing_keys(config_path(), example_values())
-    steps.install(install_spec(head))
+    steps.install(install_spec(version))
     steps.migrate()
     failures = check_store(expected_members)
     tools = steps.list_tools()
@@ -228,7 +224,6 @@ def update(head: str, previous: str, steps: Steps, now: datetime) -> list[str]:
     if failures:
         restored = restore(backup, steps)
         raise UpdateError(f"read-back failed {failures}; restored {restored}")
-    (backups_root() / INSTALLED_COMMIT).write_text(head + "\n", encoding="utf-8")
     for old in backups_root().iterdir():
         if old.is_dir() and old != backup:
             shutil.rmtree(old)
@@ -236,9 +231,24 @@ def update(head: str, previous: str, steps: Steps, now: datetime) -> list[str]:
 
 
 def _uv_install(spec: str) -> None:
-    subprocess.run(
-        ["uv", "tool", "install", "--force", "--reinstall", spec], check=True
+    # --refresh: right after a release the index can lag a cached listing.
+    try:
+        subprocess.run(
+            ["uv", "tool", "install", "--force", "--reinstall", "--refresh", spec],
+            check=True,
+        )
+    except subprocess.CalledProcessError as error:
+        raise UpdateError(
+            f"uv could not install {spec} (is it on PyPI yet?): exit {error.returncode}"
+        ) from error
+
+
+def installed_version() -> str:
+    """The version of the amoeba on PATH (the tool install), before any update."""
+    done = subprocess.run(
+        ["amoeba", "--version"], capture_output=True, text=True, check=True
     )
+    return done.stdout.strip()
 
 
 def _amoeba_list() -> None:
@@ -288,19 +298,19 @@ PRODUCTION = Steps(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Update the installed amoeba to this checkout."
+        description="Update the installed amoeba to the release just made."
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    up = sub.add_parser("update", help="install this checkout and migrate")
-    up.add_argument("--previous", help="commit to restore to if the update fails")
+    up = sub.add_parser("update", help="install the released version and migrate")
+    up.add_argument("--previous", help="version to restore to if the update fails")
     sub.add_parser("restore", help="put the newest backup back")
     args = parser.parse_args(argv)
     try:
         if args.command == "update":
-            head = check_checkout()
-            previous = previous_commit(args.previous)
-            added = update(head, previous, PRODUCTION, datetime.now(UTC))
-            print(f"updated to {head[:12]}; config keys added: {added or 'none'}")
+            version = check_checkout()
+            previous = args.previous or installed_version()
+            added = update(version, previous, PRODUCTION, datetime.now(UTC))
+            print(f"updated to {version}; config keys added: {added or 'none'}")
         else:
             backup = newest_backup()
             print(f"restored {backup.name}; reinstalled {restore(backup, PRODUCTION)}")
