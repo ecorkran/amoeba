@@ -147,6 +147,12 @@ SELECT_NAME_IS_OTHER_MEMBERS_ID: Final = (
     "SELECT 1 FROM members WHERE project_id = ? COLLATE NOCASE AND project_id <> ? "
     "LIMIT 1"
 )
+#: The members from before migration 012 that naming has not reached, in
+#: registration order (D4): id, whether removed, and the old wake command.
+SELECT_UNNAMED_MEMBERS: Final = (
+    "SELECT project_id, removed_at IS NOT NULL, wake_command FROM members "
+    "WHERE name IS NULL ORDER BY registered_at, project_id"
+)
 # Parameters: name, time, member id.
 SET_MEMBER_NAME: Final = (
     "UPDATE members SET name = ?, updated_at = ? WHERE project_id = ?"

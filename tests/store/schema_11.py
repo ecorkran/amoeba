@@ -22,6 +22,8 @@ from amoeba.store.migrations import migrate, migration_files
 SCHEMA_ELEVEN = 11
 OWNER = "(SELECT owner_id FROM owners)"
 PROGRAM_ID = "demo"
+#: A valid stored time, for the rows that need one.
+STAMP = "2026-11-01T00:00:00Z"
 
 
 @dataclass(frozen=True)
@@ -78,15 +80,15 @@ def _insert_pair_and_message(
     connection.execute(
         "INSERT INTO dependency_pairs (program_id, provider_id, consumer_id, "
         "consumed, registered_at, updated_at, owner_id) "
-        f"VALUES (?, ?, ?, 'from_source', 't', 't', {OWNER})",
-        (PROGRAM_ID, provider, consumer),
+        f"VALUES (?, ?, ?, 'from_source', ?, ?, {OWNER})",
+        (PROGRAM_ID, provider, consumer, STAMP, STAMP),
     )
     connection.execute(
         "INSERT INTO messages (message_id, kind, from_member, to_member, depth, "
         "subject, body, state, created_at, state_changed_at, expires_at, owner_id) "
-        "VALUES ('r1', 'request', ?, ?, 1, 's', 'b', 'open', 't', 't', 't', "
+        "VALUES ('r1', 'request', ?, ?, 1, 's', 'b', 'open', ?, ?, ?, "
         f"{OWNER})",
-        (provider, consumer),
+        (provider, consumer, STAMP, STAMP, "2099-01-01T00:00:00Z"),
     )
 
 
@@ -96,13 +98,14 @@ def build_schema_11_store(path: Path, members: Sequence[OldMember]) -> None:
     The first two active members are a provider and its consumer, and one open
     message goes from the first to the second.
     """
+    path.parent.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(path, isolation_level=None)) as connection:
         connection.execute("PRAGMA foreign_keys=ON")
         migrate_to_eleven(connection)
         connection.execute(
             "INSERT INTO programs (program_id, registered_at, updated_at, owner_id) "
-            f"VALUES (?, 't', 't', {OWNER})",
-            (PROGRAM_ID,),
+            f"VALUES (?, ?, ?, {OWNER})",
+            (PROGRAM_ID, STAMP, STAMP),
         )
         _insert_members(connection, members)
         _insert_pair_and_message(connection, members)

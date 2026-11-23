@@ -7,12 +7,13 @@ function takes an open transaction. A name is compared without regard to case;
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 
 from amoeba.store import sql
 from amoeba.store.models import Member
 from amoeba.store.programs import member_from_row
-from amoeba.store.row_values import encode_timestamp
+from amoeba.store.row_values import encode_timestamp, integer, optional_text, text
 from amoeba.store.store import Transaction
 
 
@@ -57,4 +58,27 @@ def set_member_origin(
 ) -> None:
     transaction.execute(
         sql.SET_MEMBER_ORIGIN, (origin, encode_timestamp(now), member_id)
+    )
+
+
+@dataclass(frozen=True)
+class UnnamedMember:
+    """A member row from before migration 012 that naming has not reached (D4)."""
+
+    project_id: str
+    removed: bool
+    #: The old ``members.wake_command``, which naming moves to the member's checkout.
+    wake_command: str | None
+
+
+def unnamed_members(transaction: Transaction) -> tuple[UnnamedMember, ...]:
+    """Every unnamed member, in registration order; empty once naming has run."""
+    rows = transaction.execute(sql.SELECT_UNNAMED_MEMBERS).fetchall()
+    return tuple(
+        UnnamedMember(
+            project_id=text(row[0], "members.project_id"),
+            removed=bool(integer(row[1], "members.removed_at")),
+            wake_command=optional_text(row[2], "members.wake_command"),
+        )
+        for row in rows
     )
