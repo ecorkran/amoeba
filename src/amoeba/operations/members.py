@@ -8,9 +8,9 @@ the store is touched, so no subprocess runs under a lock.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
+from amoeba.operations.caller import NotAProject, NotInProgram
 from amoeba.operations.errors import ContextForgeError
 from amoeba.store.models import Member
 from amoeba.store.programs import get_member
@@ -20,20 +20,6 @@ from amoeba.upstream.context_forge.project_of import (
     CFProjectNotFound,
     project_of,
 )
-
-
-@dataclass(frozen=True)
-class NotInProgram:
-    """A Context Forge project that is not a member of any program."""
-
-    cf_id: str
-
-
-@dataclass(frozen=True)
-class NotAProject:
-    """A directory outside every Context Forge project; ``message`` is CF's text."""
-
-    message: str
 
 
 def resolve_member(

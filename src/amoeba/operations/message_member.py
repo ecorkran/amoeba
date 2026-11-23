@@ -10,12 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from amoeba.operations.caller import NotAProject, NotInProgram
 from amoeba.operations.member_reference import anchor
-from amoeba.operations.members import (
-    NotAProject,
-    NotInProgram,
-    resolve_member,
-)
+from amoeba.operations.members import resolve_member
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.release_member import not_a_member_detail
 from amoeba.store.programs import get_member

@@ -180,14 +180,15 @@ revision_number: 4
 
 ## 6. The caller and reference lookups (D6; effort 2)
 
-- [ ] **6.1 `operations/caller.py`**
-  - [ ] Move `NotInProgram` and `NotAProject` here from `operations/members.py`, shapes unchanged; update their importers
-  - [ ] `find_caller(transaction, machine, here) -> Member | NotInProgram | NotAProject`: `checkout_at(machine, here.project_id)`, then the active member by its `member_id` with the existing `get_member`, so no new `members` statement is needed
-  - [ ] `find_member(transaction, reference) -> Member | None`: the active member with that name, else with that id. `find_member_for_removal`: as `find_member`, then a removed member by id only (D6, D8). Imports nothing from `upstream`
-  - [ ] Success: pyright clean
-- [ ] **6.2 Tests**
-  - [ ] `tests/operations/test_caller.py`: caller by machine and project id; the same project id on another machine is `NotInProgram`; a removed member's checkout is not found; `HereNotAProject` gives `NotAProject`; `find_member` by name in another case, by id, unknown is `None`; a removed member is not found by `find_member`, and by `find_member_for_removal` only by id
-  - [ ] Success: checks pass
+- [x] **6.1 `operations/caller.py`**
+  - [x] Move `NotInProgram` and `NotAProject` here from `operations/members.py`, shapes unchanged; update their importers
+  - [x] `find_caller(transaction, machine, here) -> Member | NotInProgram | NotAProject`: `checkout_at(machine, here.project_id)`, then the active member by its `member_id` with the existing `get_member`, so no new `members` statement is needed
+  - [x] `find_member(transaction, reference) -> Member | None`: the active member with that name, else with that id. `find_member_for_removal`: as `find_member`, then a removed member by id only (D6, D8). Imports nothing from `upstream`
+  - [x] Success: pyright clean
+  - Note: find_caller takes the machine as machine_id (int) and here as the Here alias (HereCaller, HereCheckout or HereNotAProject). members.py imports NotInProgram and NotAProject from caller.py and keeps resolve_member until 10.3.
+- [x] **6.2 Tests**
+  - [x] `tests/operations/test_caller.py`: caller by machine and project id; the same project id on another machine is `NotInProgram`; a removed member's checkout is not found; `HereNotAProject` gives `NotAProject`; `find_member` by name in another case, by id, unknown is `None`; a removed member is not found by `find_member`, and by `find_member_for_removal` only by id
+  - [x] Success: checks pass
 
 **Commit**: `feat: add the store lookups for the caller and named members`
 

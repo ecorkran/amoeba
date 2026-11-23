@@ -9,11 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from amoeba.operations.members import (
-    NotAProject,
-    NotInProgram,
-    resolve_member,
-)
+from amoeba.operations.caller import NotAProject, NotInProgram
+from amoeba.operations.members import resolve_member
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.report_release_models import ReleaseProblem
 from amoeba.store.models import Member

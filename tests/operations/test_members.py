@@ -17,12 +17,9 @@ from cf_fixtures import (
 )
 from store_open import open_local_store
 
+from amoeba.operations.caller import NotAProject, NotInProgram
 from amoeba.operations.errors import ContextForgeError
-from amoeba.operations.members import (
-    NotAProject,
-    NotInProgram,
-    resolve_member,
-)
+from amoeba.operations.members import resolve_member
 from amoeba.store.models import Member, MemberSettings
 from amoeba.store.programs import remove_member, upsert_member, upsert_program
 from amoeba.store.store import Store

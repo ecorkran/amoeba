@@ -17,13 +17,10 @@ from pathlib import Path
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.add import add
+from amoeba.operations.caller import NotAProject, NotInProgram
 from amoeba.operations.deps import Deps
 from amoeba.operations.here import git_root
-from amoeba.operations.members import (
-    NotAProject,
-    NotInProgram,
-    resolve_member,
-)
+from amoeba.operations.members import resolve_member
 from amoeba.operations.pause_class import (
     ObservedPause,
     PauseClass,

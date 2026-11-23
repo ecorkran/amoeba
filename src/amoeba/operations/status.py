@@ -19,14 +19,11 @@ from pydantic import (
 )
 
 from amoeba.config.user_config import NonBlank, UserConfig
+from amoeba.operations.caller import NotAProject, NotInProgram
 from amoeba.operations.decisions_models import MemberName
 from amoeba.operations.deps import Deps
 from amoeba.operations.errors import ContextForgeError
-from amoeba.operations.members import (
-    NotAProject,
-    NotInProgram,
-    resolve_member,
-)
+from amoeba.operations.members import resolve_member
 from amoeba.operations.message_sweep import sweep_messages
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.question_sweep_scope import sweep_scope
