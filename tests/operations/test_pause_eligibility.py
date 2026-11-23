@@ -194,6 +194,7 @@ def test_a_project_in_no_program_is_registered_with_the_defaults_and_handled(
 
     assert isinstance(result, Eligible), result
     assert result.member.project_id == PROJECT_ID
+    assert result.cf_project_id == PROJECT_ID
     # A one-member program named after the Context Forge project, as `amoeba add`.
     assert result.member.program_id == PROJECT_NAME
     with store.read() as transaction:

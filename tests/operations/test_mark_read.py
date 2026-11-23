@@ -19,13 +19,11 @@ from store.decision_support import (
 )
 from store_open import open_local_store
 
-from amoeba.operations.cf_readers import cf_names
 from amoeba.operations.decisions import decisions
 from amoeba.operations.mark_read import MarkReadOutcome, mark_read
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.store.decisions import read_marker
 from amoeba.store.store import Store
-from operations.pause_support import build_deps
 
 
 @pytest.fixture
@@ -143,13 +141,11 @@ def test_two_threads_advancing_to_different_values_leave_the_higher(
 def test_a_record_written_after_a_decisions_call_stays_unread(
     store: Store, seqs: list[int], tmp_path: Path
 ) -> None:
-    rig = build_deps(tmp_path, polls={}, spawns=[])
-    deps = replace(rig.deps, project_names=lambda: {CORE: "core", LINT: "lint"})
-    listed = decisions(store, {}, names=cf_names(deps))
+    listed = decisions(store, {})
     assert listed.read_through == seqs[1]
     late = waiting_then_pm(store, replace(FIRST, run_id="late-run"), CORE, 9)
 
     mark_read(store, {"through": listed.read_through})
-    after = decisions(store, {}, names=cf_names(deps))
+    after = decisions(store, {})
 
     assert [record.seq for record in after.records] == [late]

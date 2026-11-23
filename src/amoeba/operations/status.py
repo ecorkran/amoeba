@@ -19,11 +19,15 @@ from pydantic import (
 )
 
 from amoeba.config.user_config import NonBlank, UserConfig
-from amoeba.operations.caller import NotAProject, NotInProgram
+from amoeba.operations.caller import (
+    NotAProject,
+    NotInProgram,
+    acting_machine_id,
+    find_caller,
+)
 from amoeba.operations.decisions_models import MemberName
 from amoeba.operations.deps import Deps
-from amoeba.operations.errors import ContextForgeError
-from amoeba.operations.members import resolve_member
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_sweep import sweep_messages
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.question_sweep_scope import sweep_scope
@@ -62,7 +66,6 @@ from amoeba.store.questions import (
     sweep_candidates,
 )
 from amoeba.store.store import Store, Transaction
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.project_of import project_of
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.run_list import RunListProblem
@@ -103,17 +106,13 @@ class ScopeRejected:
 
 
 def resolve_scope(
-    store: Store, directory: Path, program: str | None, deps: Deps
+    store: Store, here: HereCaller | HereNotAProject, program: str | None
 ) -> tuple[ScopedProgram, ...] | ScopeRejected:
     """The programs ``status`` covers (D2).
 
     ``program`` given: that program, or ``unknown_program`` listing the known ids.
-    Otherwise the program of the member ``directory`` is in, or every program when it
-    is in none.
-
-    Raises:
-        ContextForgeError: ``cf`` failed while resolving ``directory``. This is an
-            operational error and never widens the scope.
+    Otherwise the program of the member whose checkout is ``here``, or every program
+    when it is in none.
     """
     if program is not None:
         with store.read() as transaction:
@@ -121,8 +120,8 @@ def resolve_scope(
             if unknown is not None:
                 return ScopeRejected(RejectCode.UNKNOWN_PROGRAM, (unknown,))
             return (_scoped(transaction, program),)
-    resolved = resolve_member(store, directory, deps.cf_run)
     with store.read() as transaction:
+        resolved = find_caller(transaction, acting_machine_id(transaction), here)
         if isinstance(resolved, NotAProject | NotInProgram):
             return tuple(
                 _scoped(transaction, entry.program_id)
@@ -143,20 +142,24 @@ def status(
     document: object,
     *,
     directory: Path,
+    here: HereCaller | HereNotAProject,
     deps: Deps,
 ) -> StatusResult:
     """What is running, paused and waiting on the PM, per program and member.
 
+    ``here`` is the caller's gathered project; ``directory`` is still used to place
+    runs (``status_placement`` asks ``cf`` about each run's directory until 12.2).
+
     Raises:
         SquadronError: ``sq runs list --json`` gave no usable listing.
-        ContextForgeError: ``cf`` gave no usable answer, or no name for a member.
+        ContextForgeError: ``cf`` gave no usable answer for a run's directory.
         StoreError: The store cannot be used.
     """
     try:
         request = StatusRequest.model_validate(document)
     except ValidationError as error:
         return _rejected(RejectCode.MALFORMED, validation_problems(error))
-    scope = resolve_scope(store, directory, request.program, deps)
+    scope = resolve_scope(store, here, request.program)
     if isinstance(scope, ScopeRejected):
         return _rejected(scope.code, scope.problems)
     members = {m.project_id: m for entry in scope for m in entry.members}
@@ -190,9 +193,7 @@ def status(
     )
     with_calls = attach_last_calls(runs, deps.calls_log_dir)
     runs = with_calls.runs
-    # Names come before the sweep: the external ``cf`` call can fail, and a failure
-    # after the sweep's write would lose the report of what it closed.
-    names = _names(members, deps)
+    names = _names(members)
     swept = sweep_scope(store, config, candidates, listed, deps, deps.clock())
     # What is still open after the sweep. After a failed write that is everything,
     # shown as before the sweep.
@@ -250,17 +251,9 @@ def _rejected(code: RejectCode, problems: tuple[str, ...]) -> StatusResult:
     )
 
 
-def _names(members: dict[str, Member], deps: Deps) -> dict[str, str]:
-    """Names of the members in scope, from one ``cf`` call (none if there are none)."""
-    if not members:
-        return {}
-    names = deps.project_names()
-    if isinstance(names, CfCallFailed):
-        raise ContextForgeError(names.detail)
-    missing = sorted(set(members) - set(names))
-    if missing:
-        raise ContextForgeError(f"Context Forge lists no project named for {missing}")
-    return names
+def _names(members: dict[str, Member]) -> dict[str, str]:
+    """The stored name of each member in scope (261 D13)."""
+    return {project_id: member.name for project_id, member in members.items()}
 
 
 def _program_status(

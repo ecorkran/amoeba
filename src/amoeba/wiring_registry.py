@@ -14,7 +14,8 @@ from pathlib import Path
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.add import add
 from amoeba.operations.deps import Deps
-from amoeba.operations.list_view import ListOutcome, list_view
+from amoeba.operations.here import gather_caller
+from amoeba.operations.list_view import ListOutcome, list_view, needs_here
 from amoeba.operations.names import Door
 from amoeba.operations.rm import rm
 from amoeba.operations.set_up_models import SetUpResult
@@ -42,4 +43,7 @@ def place_list(
     directory: Path,
     deps: Deps,
 ) -> ListOutcome:
-    return list_view(store, config, document, directory=directory, deps=deps)
+    # The client part first, only for the default view (D5): ``list members`` and the
+    # other subjects read the store and need no ``cf`` call.
+    here = gather_caller(directory, deps.cf_run) if needs_here(document) else None
+    return list_view(store, config, document, directory=directory, here=here, deps=deps)

@@ -36,7 +36,7 @@ from amoeba.operations.changes_models import (
 from amoeba.operations.decisions import DecisionsResult
 from amoeba.operations.dismiss import DismissResult
 from amoeba.operations.errors import ContextForgeError
-from amoeba.operations.here_document import HereCaller
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
 from amoeba.operations.message_models import (
@@ -224,25 +224,37 @@ def test_the_cli_calls_invoke_as_the_cli_door(
         (OperationName.CHANGES, "changes"),
     ],
 )
-def test_invoke_gives_each_release_operation_the_directory(
+def test_invoke_gives_each_release_operation_the_gathered_caller(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     name: OperationName,
     operation: str,
 ) -> None:
-    seen: list[Path] = []
+    seen: list[HereCaller | HereNotAProject] = []
+    gathered: list[Path] = []
+    caller = HereCaller(project_id="gathered-project")
+
+    def gathering(directory: Path, _run: object) -> HereCaller:
+        gathered.append(directory)
+        return caller
 
     def recording(
-        _store: object, _document: object, *, directory: Path, deps: object
+        _store: object,
+        _document: object,
+        *,
+        here: HereCaller | HereNotAProject,
+        deps: object,
     ) -> object:
-        seen.append(directory)
+        seen.append(here)
         return _changes_result(ChangesOutcome.LISTED)
 
+    monkeypatch.setattr(wiring_releases, "gather_caller", gathering)
     monkeypatch.setattr(wiring_releases, operation, recording)
 
     wiring.invoke(name, {}, tmp_path, Door.CLI)
 
-    assert seen == [tmp_path]
+    assert gathered == [tmp_path]
+    assert seen == [caller]
 
 
 def test_invoke_refuses_handle_pause_naming_it(tmp_path: Path) -> None:

@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from amoeba.operations.cf_readers import cf_member_resolver
 from amoeba.operations.standing import standing
 from amoeba.operations.standing_models import (
     WithdrawOutcome,
@@ -17,7 +16,7 @@ from amoeba.operations.standing_models import (
 from amoeba.operations.withdraw import withdraw
 from amoeba.store.standing import list_standing
 from amoeba.store.store import Store
-from operations.standing_support import MAX_CHARS, NOW, RecordingCf, seeded_store
+from operations.standing_support import MAX_CHARS, NOW, seeded_store
 
 LATER = NOW + timedelta(hours=1)
 
@@ -29,13 +28,7 @@ def store(tmp_path: Path) -> Iterator[Store]:
 
 @pytest.fixture
 def standing_id(store: Store) -> int:
-    given = standing(
-        store,
-        {"text": "rule"},
-        max_chars=MAX_CHARS,
-        resolve_member=cf_member_resolver(RecordingCf()),
-        now=NOW,
-    )
+    given = standing(store, {"text": "rule"}, max_chars=MAX_CHARS, now=NOW)
     assert given.standing_id is not None
     return given.standing_id
 

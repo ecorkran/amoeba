@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
-import subprocess
-from collections.abc import Iterator, Sequence
-from contextlib import AbstractContextManager
+from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from cf_fixtures import fake_cf_run
 
-from amoeba.operations.cf_readers import cf_member_resolver
-from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.standing import standing
 from amoeba.operations.standing_models import (
     StandingOutcome,
@@ -20,12 +15,11 @@ from amoeba.operations.standing_models import (
     StandingResult,
 )
 from amoeba.store.standing import list_standing
-from amoeba.store.store import Store, Transaction
+from amoeba.store.store import Store
 from amoeba.store.vocabulary import StandingReach
 from operations.standing_support import (
     MAX_CHARS,
     NOW,
-    RecordingCf,
     seeded_store,
     standing_count,
 )
@@ -36,16 +30,8 @@ def store(tmp_path: Path) -> Iterator[Store]:
     yield from seeded_store(tmp_path / "amoeba.sqlite3")
 
 
-def _give(
-    store: Store, document: object, cf: RecordingCf | None = None
-) -> StandingResult:
-    return standing(
-        store,
-        document,
-        max_chars=MAX_CHARS,
-        resolve_member=cf_member_resolver(cf or RecordingCf()),
-        now=NOW,
-    )
+def _give(store: Store, document: object) -> StandingResult:
+    return standing(store, document, max_chars=MAX_CHARS, now=NOW)
 
 
 @pytest.mark.parametrize(
@@ -90,7 +76,6 @@ def test_a_repeat_is_unchanged_with_the_same_id(store: Store) -> None:
         store,
         {"text": "rule", "member": "alpha-id"},
         max_chars=MAX_CHARS,
-        resolve_member=cf_member_resolver(RecordingCf()),
         now=NOW + timedelta(hours=1),
     )
 
@@ -131,34 +116,14 @@ def test_both_flags_names_both_fields(store: Store) -> None:
     assert any("program" in p and "member" in p for p in result.problems)
 
 
-def test_a_cf_failure_raises_and_writes_nothing(store: Store) -> None:
-    with pytest.raises(ContextForgeError):
-        standing(
-            store,
-            {"text": "r", "member": "alpha"},
-            max_chars=MAX_CHARS,
-            resolve_member=cf_member_resolver(fake_cf_run(None)),
-            now=NOW,
-        )
+@pytest.mark.parametrize("reference", ["alpha", "ALPHA", "alpha-id"])
+def test_a_member_is_given_by_name_in_any_case_or_by_id(
+    store: Store, reference: str
+) -> None:
+    result = _give(store, {"text": "r", "member": reference})
 
-    assert standing_count(store) == 0
-
-
-def test_the_member_lookup_runs_cf_with_no_working_directory(store: Store) -> None:
-    cf = RecordingCf()
-
-    _give(store, {"text": "r", "member": "alpha"}, cf)
-
-    assert len(cf.calls) == 1
-    assert all("cwd" not in keywords for keywords in cf.keywords)
-
-
-def test_no_member_means_no_cf_call(store: Store) -> None:
-    cf = RecordingCf()
-
-    _give(store, {"text": "r", "program": "demo"}, cf)
-
-    assert cf.calls == []
+    assert result.outcome is StandingOutcome.GIVEN
+    assert result.member == "alpha-id"
 
 
 def test_a_committed_give_whose_result_is_dropped_repeats_as_unchanged(
@@ -173,37 +138,6 @@ def test_a_committed_give_whose_result_is_dropped_repeats_as_unchanged(
         (row,) = list_standing(transaction, include_withdrawn=True)
     assert repeated.outcome is StandingOutcome.UNCHANGED
     assert repeated.standing_id == row.standing_id
-
-
-def test_the_member_lookup_runs_before_the_write_lock_is_taken(
-    store: Store, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """No ``cf`` subprocess runs while ``standing`` holds the store's write lock."""
-    events: list[str] = []
-    cf = RecordingCf()
-    original_write = Store.write
-
-    def recording_write(self: Store) -> AbstractContextManager[Transaction]:
-        events.append("write")
-        return original_write(self)
-
-    def recording_cf(
-        argv: Sequence[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        events.append("cf")
-        return cf(argv, **kwargs)
-
-    monkeypatch.setattr(Store, "write", recording_write)
-
-    standing(
-        store,
-        {"text": "r", "member": "alpha"},
-        max_chars=MAX_CHARS,
-        resolve_member=cf_member_resolver(recording_cf),
-        now=NOW,
-    )
-
-    assert events == ["cf", "write"]
 
 
 def test_a_row_taking_a_reached_members_standing_answers_past_the_cap_is_too_long(

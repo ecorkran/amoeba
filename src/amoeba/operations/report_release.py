@@ -11,12 +11,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from pathlib import Path
 from typing import assert_never
 
 from pydantic import ValidationError
 
 from amoeba.operations.deps import Deps
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.release_member import resolve_release_member
 from amoeba.operations.release_notes import NOTE_OUTCOMES, write_release_notes
@@ -74,19 +74,18 @@ def _plan(request: ReportReleaseRequest, stored: Release | None) -> _Plan:
 
 
 def report_release(
-    store: Store, document: object, *, directory: Path, deps: Deps
+    store: Store, document: object, *, here: HereCaller | HereNotAProject, deps: Deps
 ) -> ReportReleaseResult:
-    """Apply ``document`` for the member whose checkout is ``directory``.
+    """Apply ``document`` for the member whose checkout is ``here``.
 
     Raises:
-        ContextForgeError: ``cf`` failed while finding the member.
         StoreError: The store cannot be used.
     """
     try:
         request = ReportReleaseRequest.model_validate(document)
     except ValidationError as error:
         return _rejected(None, malformed_problems(error))
-    member = resolve_release_member(store, directory, deps.cf_run)
+    member = resolve_release_member(store, here)
     if isinstance(member, ReleaseProblem):
         return _rejected(None, (member,))
     now = deps.clock()

@@ -35,6 +35,7 @@ from amoeba.operations.answer import answer
 from amoeba.operations.answering_run import STDERR_LOG_SUFFIX, STDOUT_LOG_SUFFIX
 from amoeba.operations.deps import Deps, production_deps
 from amoeba.operations.errors import OPERATION_ERRORS
+from amoeba.operations.here import gather_caller
 from amoeba.operations.names import Door, OperationName
 from amoeba.operations.processes import start_child
 from amoeba.operations.prune import prune
@@ -228,12 +229,12 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
                 via=door,
             )
         case OperationName.STATUS:
+            where = _required_directory(name, directory)
+            deps = default_deps(layout)
+            # The client part first: a ``cf`` failure raises before any store work.
+            here = gather_caller(where, deps.cf_run)
             return status(
-                store,
-                load_config(),
-                document,
-                directory=_required_directory(name, directory),
-                deps=default_deps(layout),
+                store, load_config(), document, directory=where, here=here, deps=deps
             )
         case (
             OperationName.DECISIONS

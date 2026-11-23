@@ -24,14 +24,13 @@ from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.deps import Deps
-from amoeba.operations.list_view import list_view
 from amoeba.operations.rm import rm
 from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.message_sweep import sweep
 from amoeba.store.messages import get_message
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import RequestState
-from operations.list_support import ListCf, names_of, project_entry
+from operations.list_support import ListCf, project_entry
 from operations.message_placed import cancel, reply
 from operations.message_support import (
     CONFIG,
@@ -43,6 +42,7 @@ from operations.message_support import (
 )
 from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY, FakeCf, run_set_up
+from operations.status_placed import list_view
 from operations.status_support import CfAnswer, status_deps
 
 TTL = timedelta(hours=CONFIG.request_open_ttl_hours)
@@ -201,7 +201,7 @@ def listing_store(tmp_path: Path) -> Iterator[Store]:
 def _list_deps(tmp_path: Path, clock: SettableClock) -> Deps:
     projects = [project_entry(CORE, "core"), project_entry(LINT, "lint")]
     cf = ListCf(projects, {ELSEWHERE: CfAnswer.NOT_A_PROJECT})
-    base = status_deps(tmp_path, cf=cf, runs=[], names=names_of(projects))
+    base = status_deps(tmp_path, cf=cf, runs=[])
     return replace(base, clock=clock)
 
 

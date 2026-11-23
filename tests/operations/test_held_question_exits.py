@@ -24,7 +24,7 @@ from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseOutcome
 from amoeba.operations.question_sweep import sweep_run
 from amoeba.operations.request_release import start_ended_held
-from amoeba.operations.status import StatusResult, status
+from amoeba.operations.status import StatusResult
 from amoeba.operations.status_models import NextOperation, RunEntry
 from amoeba.store.answers import answers_of
 from amoeba.store.messages import get_message
@@ -49,7 +49,6 @@ from operations.handle_rig import (
     world,
 )
 from operations.held_support import (
-    ADDRESSEE,
     REQUEST_ID,
     add_addressee,
     end_request,
@@ -57,6 +56,7 @@ from operations.held_support import (
     seed_request,
 )
 from operations.pause_support import START
+from operations.status_placed import status
 from operations.status_support import FakeCf, in_directory, recorded_run
 
 LATER = START + timedelta(minutes=5)
@@ -211,7 +211,6 @@ def _status_entry(w: World, now: datetime) -> RunEntry:
         w.deps,
         cf_run=FakeCf({w.directory: PROJECT_ID}),
         list_runs=lambda: [listed],
-        project_names=lambda: {PROJECT_ID: "member-name", ADDRESSEE: "addressee-name"},
         clock=lambda: now,
     )
     result: StatusResult = status(

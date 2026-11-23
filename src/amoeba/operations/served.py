@@ -1,15 +1,15 @@
 """The six operations the door serves, run by one function (slice 260, D11).
 
 ``run_served`` is used by the local way (``wiring``) and by the hub, so the two never
-differ in what an operation does. What an operation reads from outside is in
-``ServedEdges``: the clock, the config, the names to show and how a member reference
-is resolved. The hub gives its own readers, because it has no ``cf`` (D11).
+differ in what an operation does. What an operation reads from outside the store is in
+``ServedEdges``: the clock and the config. Names and member references are store reads
+(slice 261, D6).
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime
 from typing import Final
@@ -17,15 +17,14 @@ from typing import Final
 from pydantic import BaseModel, TypeAdapter
 
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.decisions import DecisionsResult, NamesReader, decisions
+from amoeba.operations.decisions import DecisionsResult, decisions
 from amoeba.operations.dismiss import DismissResult, dismiss
 from amoeba.operations.mark_read import MarkReadResult, mark_read
 from amoeba.operations.names import OperationName
 from amoeba.operations.retract import RetractResult, retract
-from amoeba.operations.standing import MemberResolver, standing
+from amoeba.operations.standing import standing
 from amoeba.operations.standing_models import StandingResult, WithdrawResult
 from amoeba.operations.withdraw import withdraw
-from amoeba.store.programs import get_member
 from amoeba.store.store import Store
 
 type ServedResult = (
@@ -45,15 +44,13 @@ class ServedEdges:
     clock: Callable[[], datetime]
     #: Called only by an operation that needs config (``standing``).
     load_config: Callable[[], UserConfig]
-    names: NamesReader
-    resolve_member: MemberResolver
 
 
 type _Runner = Callable[[Store, object, ServedEdges], ServedResult]
 
 
 def _decisions(store: Store, document: object, edges: ServedEdges) -> ServedResult:
-    return decisions(store, document, names=edges.names)
+    return decisions(store, document)
 
 
 def _mark_read(store: Store, document: object, edges: ServedEdges) -> ServedResult:
@@ -73,7 +70,6 @@ def _standing(store: Store, document: object, edges: ServedEdges) -> ServedResul
         store,
         document,
         max_chars=edges.load_config().passages_max_chars,
-        resolve_member=edges.resolve_member,
         now=edges.clock(),
     )
 
@@ -139,27 +135,6 @@ def result_from_document(name: str, document: dict[str, object]) -> ServedResult
             operation's result (pydantic's ``ValidationError`` is a ``ValueError``).
     """
     return TypeAdapter(_served(name).result_type).validate_python(document)
-
-
-def id_names(member_ids: tuple[str, ...]) -> Mapping[str, str]:
-    """Each member named by its id, the architecture's rule for a member with no name.
-
-    The hub's names reader until 261 gives members names (D11).
-    """
-    return {member_id: member_id for member_id in member_ids}
-
-
-def id_resolver(store: Store) -> MemberResolver:
-    """A resolver that takes only a member id: an active member's id resolves to
-    itself and any other text to ``None`` (``no_such_member``). The hub's resolver
-    until 261 (D11)."""
-
-    def resolve(reference: str) -> str | None:
-        with store.read() as transaction:
-            member = get_member(transaction, reference)
-        return None if member is None else member.project_id
-
-    return resolve
 
 
 def result_document(result: object) -> dict[str, object]:

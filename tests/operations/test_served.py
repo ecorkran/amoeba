@@ -33,8 +33,6 @@ from amoeba.operations.served import (
     SERVED,
     ServedEdges,
     ServedResult,
-    id_names,
-    id_resolver,
     run_served,
 )
 from amoeba.operations.standing_models import (
@@ -63,8 +61,6 @@ def _edges(store: Store, *, max_chars: int | None = None) -> ServedEdges:
     return ServedEdges(
         clock=lambda: NOW,
         load_config=lambda: config,
-        names=id_names,
-        resolve_member=id_resolver(store),
     )
 
 
@@ -141,7 +137,7 @@ def test_each_of_the_six_runs_on_a_seeded_store(store: Store) -> None:
     assert retracted.outcome is RetractOutcome.RETRACTED
 
 
-def test_the_hub_readers_name_a_member_by_its_id_and_resolve_only_ids(
+def test_names_and_references_are_store_reads_and_start_no_process(
     store: Store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def no_subprocess(*_args: object, **_kwargs: object) -> None:
@@ -158,14 +154,22 @@ def test_the_hub_readers_name_a_member_by_its_id_and_resolve_only_ids(
         StandingResult,
     )
     by_name = _is(
-        run_served("standing", store, {"text": "r2", "member": "core"}, edges),
+        run_served("standing", store, {"text": "r2", "member": "core-name"}, edges),
+        StandingResult,
+    )
+    unknown = _is(
+        run_served("standing", store, {"text": "r3", "member": "nobody"}, edges),
         StandingResult,
     )
 
-    assert [(r.member.id, r.member.name) for r in listed.records] == [(CORE, CORE)]
+    assert [(r.member.id, r.member.name) for r in listed.records] == [
+        (CORE, "core-name")
+    ]
     assert by_id.outcome is StandingOutcome.GIVEN
     assert by_id.member == CORE
-    assert by_name.rejection is StandingRejection.NO_SUCH_MEMBER
+    assert by_name.outcome is StandingOutcome.GIVEN
+    assert by_name.member == CORE
+    assert unknown.rejection is StandingRejection.NO_SUCH_MEMBER
 
 
 def test_a_standing_answer_for_a_program_reaches_it(store: Store) -> None:

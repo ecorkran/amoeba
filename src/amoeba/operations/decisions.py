@@ -7,7 +7,7 @@ their input through unchanged.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 
 from pydantic import (
     BaseModel,
@@ -31,7 +31,6 @@ from amoeba.operations.decisions_models import (
     PmBasis,
     ResumeRecord,
 )
-from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import (
     RejectCode,
@@ -41,19 +40,14 @@ from amoeba.operations.reject_codes import (
 from amoeba.operations.since import parse_since
 from amoeba.store.decisions import DecisionRow, answers_since, read_marker
 from amoeba.store.errors import StoreRowError
-from amoeba.store.store import Store
-
-#: Gives each member id the name to show for it. Handed the ids of the members the
-#: listing holds (never asked when it is empty). The local way reads Context Forge's
-#: names; the hub names a member by its id until 261 (260 D11).
-type NamesReader = Callable[[tuple[str, ...]], Mapping[str, str]]
+from amoeba.store.programs import get_member_any
+from amoeba.store.store import Store, Transaction
 
 __all__ = [
     "DecisionsOutcome",
     "DecisionsRecord",
     "DecisionsRequest",
     "DecisionsResult",
-    "NamesReader",
     "decisions",
 ]
 
@@ -76,19 +70,17 @@ class DecisionsRequest(BaseModel):
         return parse_since(value)
 
 
-def decisions(store: Store, document: object, *, names: NamesReader) -> DecisionsResult:
+def decisions(store: Store, document: object) -> DecisionsResult:
     """The recorded answers ``document`` asks for, oldest first.
 
     Raises:
-        ContextForgeError: ``names`` found none for a listed member (the local reader
-            also raises it when ``cf`` fails).
         StoreError: The store cannot be used.
     """
     try:
         request = DecisionsRequest.model_validate(document)
     except ValidationError as error:
         return _rejected(RejectCode.MALFORMED, validation_problems(error))
-    # One read transaction, closed before ``names`` is asked (it may run ``cf``).
+    # One read transaction: the names come from the store in the same one (261 D13).
     with store.read() as transaction:
         if request.program is not None:
             unknown = unknown_program_problem(transaction, request.program)
@@ -101,7 +93,7 @@ def decisions(store: Store, document: object, *, names: NamesReader) -> Decision
             since=request.since,
             program=request.program,
         )
-    named = _names_for(rows, names)
+        named = _names_for(transaction, rows)
     records = tuple(_record(row, named) for row in rows)
     started_at_marker = request.since is None and request.program is None
     return DecisionsResult(
@@ -123,21 +115,28 @@ def _rejected(code: RejectCode, problems: tuple[str, ...]) -> DecisionsResult:
     )
 
 
-def _names_for(rows: tuple[DecisionRow, ...], names: NamesReader) -> Mapping[str, str]:
-    """Names of the listed members; none is asked for when there is nothing to show."""
-    if not rows:
-        return {}
-    return names(tuple(dict.fromkeys(row.question.member_id for row in rows)))
+def _names_for(
+    transaction: Transaction, rows: tuple[DecisionRow, ...]
+) -> Mapping[str, str]:
+    """The stored name of each listed member, removed members included: a decision
+    keeps its member after the member is removed."""
+    named: dict[str, str] = {}
+    for row in rows:
+        member_id = row.question.member_id
+        if member_id not in named:
+            member = get_member_any(transaction, member_id)
+            if member is None:
+                raise StoreRowError(
+                    f"the member {member_id!r} of run {row.question.key.run_id} "
+                    "is not in the store"
+                )
+            named[member_id] = member.name
+    return named
 
 
 def _record(row: DecisionRow, names: Mapping[str, str]) -> DecisionsRecord:
     answer, question = row.answer, row.question
-    name = names.get(question.member_id)
-    if name is None:
-        raise ContextForgeError(
-            f"Context Forge lists no project {question.member_id!r}, "
-            f"the member of run {question.key.run_id}"
-        )
+    name = names[question.member_id]
     return DecisionsRecord(
         seq=answer.seq,
         recorded_at=answer.recorded_at,

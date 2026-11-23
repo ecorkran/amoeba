@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -19,7 +18,6 @@ from store_open import open_local_store
 
 from amoeba.answering.values import DeclineReason
 from amoeba.config.home import StateLayout, layout_under
-from amoeba.operations.cf_readers import cf_names
 from amoeba.operations.decisions import DecisionsOutcome, decisions
 from amoeba.operations.dismiss import dismiss
 from amoeba.operations.prune import prune
@@ -30,7 +28,6 @@ from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question, settle_waiting
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ResumeOutcome
-from operations.pause_support import build_deps
 
 CLOCK = datetime(2026, 11, 12, 12, 0, tzinfo=UTC)
 AFTER_DAYS = 30
@@ -239,9 +236,7 @@ def test_a_pruned_resume_log_stays_named_in_the_answer_and_decisions_still_lists
     with store.read() as transaction:
         (answer,) = answers_of(transaction, SETTLED_KEY)
     assert answer.resume_log == str(log)
-    rig = build_deps(tmp_path, polls={}, spawns=[])
-    deps = replace(rig.deps, project_names=lambda: {"member-a": "a", "member-b": "b"})
-    result = decisions(store, {}, names=cf_names(deps))
+    result = decisions(store, {})
     assert result.outcome is DecisionsOutcome.LISTED
     assert [record.seq for record in result.records] == [seq]
 

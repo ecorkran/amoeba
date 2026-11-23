@@ -168,11 +168,9 @@ def test_changes_gives_equal_results_through_both_doors(
     assert not is_error
     assert document == result_of(completed)
     (pair,) = document["pairs"]
-    assert pair["provider"] == {"id": PROVIDER_ID, "name": None}
+    assert pair["provider"] == {"id": PROVIDER_ID, "name": PROVIDER_ID}
     assert [report["commit"] for report in pair["releases"]] == [SEEDED_HASH]
-    assert [warning["code"] for warning in document["warnings"]] == [
-        "not_in_context_forge"
-    ]
+    assert document["warnings"] == []
 
 
 @pytest.mark.parametrize(

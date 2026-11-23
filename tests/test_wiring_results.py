@@ -24,8 +24,6 @@ from user_configs import user_config
 from amoeba.operations.served import (
     ServedEdges,
     ServedResult,
-    id_names,
-    id_resolver,
     result_document,
     run_served,
 )
@@ -46,8 +44,6 @@ def _run(store: Store, name: str, document: object) -> ServedResult:
     edges = ServedEdges(
         clock=lambda: NOW,
         load_config=user_config,
-        names=id_names,
-        resolve_member=id_resolver(store),
     )
     return run_served(name, store, document, edges)
 

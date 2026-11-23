@@ -12,7 +12,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from amoeba.operations.members import resolve_member
+from amoeba.operations.caller import acting_machine_id, find_caller
+from amoeba.operations.here import gather_caller
 from amoeba.store.deliveries import highest_assigned_seq
 from amoeba.store.errors import StoreBusyError, StoreError
 from amoeba.store.models import Member, PushRow, Session
@@ -51,7 +52,7 @@ class MemberLookup:
 
     directory: Path
     member_id: str | None
-    #: For a non-member: what ``resolve_member`` said, for the log line.
+    #: For a non-member: what ``find_caller`` said, for the log line.
     detail: str
 
 
@@ -63,8 +64,9 @@ def lookup_member(open_store: StoreOpener, cf_run: CfRun) -> MemberLookup:
         StoreError: The lookup's read failed.
     """
     directory = Path.cwd()
-    with open_store() as store:
-        found = resolve_member(store, directory, cf_run)
+    here = gather_caller(directory, cf_run)
+    with open_store() as store, store.read() as transaction:
+        found = find_caller(transaction, acting_machine_id(transaction), here)
     if isinstance(found, Member):
         return MemberLookup(directory, found.project_id, "")
     return MemberLookup(directory, None, str(found))

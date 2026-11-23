@@ -35,28 +35,22 @@ from amoeba.answering.values import (
     DeclineReason,
     PassageRef,
 )
-from amoeba.operations.cf_readers import cf_names
 from amoeba.operations.decisions import (
     DecisionsOutcome,
     DecisionsResult,
     decisions,
 )
 from amoeba.operations.decisions_models import AnswererBasis, PmBasis
-from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.store.answers import Settled, add_pm_answer, record_resume, settle_answered
 from amoeba.store.decisions import advance_marker
 from amoeba.store.held_questions import claim_held
 from amoeba.store.models import QuestionKey
+from amoeba.store.programs import remove_member
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import Door, ResumeOutcome
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
-from amoeba.upstream.context_forge.projects import ProjectNames
-from operations.pause_support import DepsRig, build_deps
-
-NAMES: ProjectNames = {CORE: "core-name", LINT: "lint-name"}
 
 
 @pytest.fixture
@@ -76,24 +70,8 @@ def seqs(store: Store) -> list[int]:
     ]
 
 
-def _rig(
-    tmp_path: Path, names: ProjectNames | CfCallFailed = NAMES
-) -> tuple[DepsRig, list[int]]:
-    calls: list[int] = []
-
-    def read_names() -> ProjectNames | CfCallFailed:
-        calls.append(1)
-        return names
-
-    rig = build_deps(tmp_path, polls={}, spawns=[])
-    return replace(rig, deps=replace(rig.deps, project_names=read_names)), calls
-
-
-def _run(store: Store, tmp_path: Path, document: object = None) -> DecisionsResult:
-    rig, _calls = _rig(tmp_path)
-    return decisions(
-        store, {} if document is None else document, names=cf_names(rig.deps)
-    )
+def _run(store: Store, document: object = None) -> DecisionsResult:
+    return decisions(store, {} if document is None else document)
 
 
 def test_the_default_start_is_after_the_marker(
@@ -101,7 +79,7 @@ def test_the_default_start_is_after_the_marker(
 ) -> None:
     advance_marker(store, seqs[0])
 
-    result = _run(store, tmp_path)
+    result = _run(store)
 
     assert result.outcome is DecisionsOutcome.LISTED
     assert [record.seq for record in result.records] == seqs[1:]
@@ -112,7 +90,7 @@ def test_the_default_start_is_after_the_marker(
 def test_since_starts_at_a_time_and_gives_no_read_through(
     store: Store, tmp_path: Path, seqs: list[int]
 ) -> None:
-    result = _run(store, tmp_path, {"since": at(2).isoformat()})
+    result = _run(store, {"since": at(2).isoformat()})
 
     assert [record.seq for record in result.records] == seqs[1:]
     assert result.read_through is None
@@ -122,30 +100,25 @@ def test_since_starts_at_a_time_and_gives_no_read_through(
 def test_program_narrows_the_listing_and_gives_no_read_through(
     store: Store, tmp_path: Path, seqs: list[int]
 ) -> None:
-    result = _run(store, tmp_path, {"program": TOOLS})
+    result = _run(store, {"program": TOOLS})
 
     assert [record.seq for record in result.records] == [seqs[1]]
     assert {record.program for record in result.records} == {TOOLS}
     assert result.read_through is None
 
 
-def test_an_empty_listing_has_no_read_through_and_asks_cf_nothing(
-    store: Store, tmp_path: Path
-) -> None:
-    rig, calls = _rig(tmp_path, CfCallFailed("cf is down"))
-
-    result = decisions(store, {}, names=cf_names(rig.deps))
+def test_an_empty_listing_has_no_read_through(store: Store) -> None:
+    result = decisions(store, {})
 
     assert result.records == ()
     assert result.read_through is None
     assert result.marker == 0
-    assert calls == []
 
 
 def test_an_unknown_program_is_rejected_listing_the_known_ids(
     store: Store, tmp_path: Path
 ) -> None:
-    result = _run(store, tmp_path, {"program": "nope"})
+    result = _run(store, {"program": "nope"})
 
     assert result.outcome is DecisionsOutcome.REJECTED
     assert result.rejection is RejectCode.UNKNOWN_PROGRAM
@@ -159,7 +132,7 @@ def test_an_unknown_program_is_rejected_listing_the_known_ids(
 def test_a_malformed_request_is_rejected(
     store: Store, tmp_path: Path, document: object
 ) -> None:
-    result = _run(store, tmp_path, document)
+    result = _run(store, document)
 
     assert result.outcome is DecisionsOutcome.REJECTED
     assert result.rejection is RejectCode.MALFORMED
@@ -169,7 +142,7 @@ def test_a_malformed_request_is_rejected(
 def test_an_automatic_record_names_its_passages_check_and_resume(
     store: Store, tmp_path: Path, seqs: list[int]
 ) -> None:
-    result = _run(store, tmp_path)
+    result = _run(store)
 
     record = result.records[0]
     assert record.answered_by is AnsweredBy.ANSWERER
@@ -203,7 +176,7 @@ def test_a_resume_outcome_is_part_of_the_record(
             at=at(5),
         )
 
-    record = _run(store, tmp_path).records[0]
+    record = _run(store).records[0]
 
     assert record.resume.outcome is ResumeOutcome.REFUSED
     assert record.resume.detail == "run is busy"
@@ -213,7 +186,7 @@ def test_a_resume_outcome_is_part_of_the_record(
 def test_a_pm_record_after_a_waiting_question_carries_the_waiting_reason(
     store: Store, tmp_path: Path, seqs: list[int]
 ) -> None:
-    record = _run(store, tmp_path).records[1]
+    record = _run(store).records[1]
 
     assert record.answered_by is AnsweredBy.PM
     assert record.member.name == "lint-name"
@@ -230,7 +203,7 @@ def test_a_pm_record_for_a_question_that_never_waited_has_no_basis(
     with store.write() as transaction:
         add_pm_answer(transaction, key, "pm override", now=at(2), via=None)
 
-    first, second = _run(store, tmp_path).records
+    first, second = _run(store).records
 
     assert isinstance(first.based_on, AnswererBasis)
     assert second.answered_by is AnsweredBy.PM
@@ -248,7 +221,7 @@ def test_each_record_shows_the_door_that_carried_it_or_none(
         # No door: how every answer from before migration 004 reads.
         add_pm_answer(transaction, key, "from before", now=at(4), via=None)
 
-    records = _run(store, tmp_path).records
+    records = _run(store).records
 
     assert [record.via for record in records] == [None, Door.CLI, Door.MCP, None]
 
@@ -261,33 +234,28 @@ def test_a_pm_override_shows_the_answer_it_replaced(
     with store.write() as transaction:
         add_pm_answer(transaction, key, "pm override", now=at(2), via=None)
 
-    records = _run(store, tmp_path).records
+    records = _run(store).records
 
     assert [record.prior_answer_seq for record in records] == [None, automatic]
 
 
-def test_a_member_missing_from_the_names_is_a_context_forge_error(
-    store: Store, tmp_path: Path, seqs: list[int]
+def test_a_removed_members_decision_is_still_named(
+    store: Store, seqs: list[int]
 ) -> None:
-    rig, _calls = _rig(tmp_path, {CORE: "core-name"})
+    with store.write() as transaction:
+        assert remove_member(transaction, LINT, at(9))
 
-    with pytest.raises(ContextForgeError, match=LINT):
-        decisions(store, {}, names=cf_names(rig.deps))
+    records = _run(store).records
+
+    assert [(record.member.id, record.member.name) for record in records] == [
+        (CORE, "core-name"),
+        (LINT, "lint-name"),
+        (CORE, "core-name"),
+    ]
 
 
-def test_a_names_failure_raises_and_writes_nothing(
-    store: Store, tmp_path: Path, seqs: list[int]
-) -> None:
-    rig, _calls = _rig(tmp_path, CfCallFailed("cf is down"))
-
-    with pytest.raises(ContextForgeError, match="cf is down"):
-        decisions(store, {}, names=cf_names(rig.deps))
-
-    with store.read() as transaction:
-        marker = transaction.execute("SELECT last_seen_seq FROM pm_marker").fetchone()
-        count = transaction.execute("SELECT COUNT(*) FROM answers").fetchone()
-    assert marker[0] == 0
-    assert count[0] == len(seqs)
+def test_decisions_asks_cf_for_nothing(store: Store, seqs: list[int]) -> None:
+    assert len(_run(store).records) == len(seqs)
 
 
 def test_citations_stored_as_written_are_matched_as_the_gate_read_them(
@@ -308,7 +276,7 @@ def test_citations_stored_as_written_are_matched_as_the_gate_read_them(
     )
     assert isinstance(settled, Settled)
 
-    (record,) = _run(store, tmp_path).records
+    (record,) = _run(store).records
 
     assert isinstance(record.based_on, AnswererBasis)
     assert [passage.id for passage in record.based_on.cited] == ["r1"]
@@ -361,7 +329,7 @@ def test_an_answered_held_question_shows_its_request_citation_check_and_resume(
 ) -> None:
     seq = _answered_held(store)
 
-    result = _run(store, tmp_path)
+    result = _run(store)
 
     (record,) = result.records
     assert record.seq == seq
@@ -377,7 +345,7 @@ def test_an_answered_held_question_shows_its_request_citation_check_and_resume(
 def test_an_ordinary_answer_has_no_request_id_and_no_notice(
     store: Store, tmp_path: Path, seqs: list[int]
 ) -> None:
-    result = _run(store, tmp_path)
+    result = _run(store)
 
     assert [record.request_id for record in result.records] == [None, None, None]
     assert result.notice is None
@@ -407,7 +375,7 @@ def test_a_cited_standing_answer_shows_its_kind_and_source(
     )
     assert isinstance(settled, Settled)
 
-    (record,) = _run(store, tmp_path).records
+    (record,) = _run(store).records
 
     assert isinstance(record.based_on, AnswererBasis)
     (cited,) = record.based_on.cited

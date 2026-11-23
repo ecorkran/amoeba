@@ -18,15 +18,16 @@ from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.deps import Deps
-from amoeba.operations.list_view import ListResult, list_view
-from amoeba.operations.status import StatusResult, status
+from amoeba.operations.list_view import ListResult
+from amoeba.operations.status import StatusResult
 from amoeba.operations.status_models import MemberStatus
 from amoeba.store.models import Session
 from amoeba.store.programs import remove_member
 from amoeba.store.sessions import live_member_ids, upsert_session
 from amoeba.store.store import Store
-from operations.list_support import ListCf, names_of, project_entry
+from operations.list_support import ListCf, project_entry
 from operations.release_support import SettableClock
+from operations.status_placed import list_view, status
 from operations.status_support import CfAnswer, status_deps
 
 ELSEWHERE = Path("/work/elsewhere")
@@ -50,7 +51,7 @@ def clock() -> SettableClock:
 @pytest.fixture
 def deps(tmp_path: Path, clock: SettableClock) -> Deps:
     cf = ListCf(PROJECTS, {ELSEWHERE: CfAnswer.NOT_A_PROJECT})
-    base = status_deps(tmp_path, cf=cf, runs=[], names=names_of(PROJECTS))
+    base = status_deps(tmp_path, cf=cf, runs=[])
     return replace(base, clock=clock)
 
 
@@ -186,12 +187,7 @@ def test_live_member_ids_matches_the_confirmed_fresh_sessions_status_shows(
     )
     with store.write() as transaction:
         assert remove_member(transaction, "member-removed", clock.now)
-    projects = [
-        *PROJECTS,
-        project_entry("member-unconfirmed", "unconfirmed-name"),
-        project_entry("member-stale", "stale-name"),
-    ]
-    wide = replace(deps, project_names=lambda: names_of(projects))
+    wide = deps
 
     shown = {
         member_id

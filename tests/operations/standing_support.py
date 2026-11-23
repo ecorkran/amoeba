@@ -35,6 +35,10 @@ PROJECTS = [
 ]
 
 
+#: Each member's name; ``stranger`` has none because it is in no program.
+NAMES = {project_id: name for project_id, name in PROJECTS}
+
+
 class RecordingCf(FakeCf):
     """``FakeCf`` that also keeps each call's keyword arguments (``cwd`` among them)."""
 
@@ -71,6 +75,7 @@ def seeded_store(path: Path) -> Iterator[Store]:
                         authorize_deny=(),
                         registered_at=NOW,
                         updated_at=NOW,
+                        name=NAMES[member],
                     )
             remove_member(transaction, "gone-id", NOW)
         yield store

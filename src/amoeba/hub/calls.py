@@ -22,8 +22,6 @@ from amoeba.operations.errors import OPERATION_ERRORS
 from amoeba.operations.served import (
     SERVED,
     ServedEdges,
-    id_names,
-    id_resolver,
     result_document,
     run_served,
 )
@@ -213,8 +211,6 @@ def _operation_reply(  # noqa: PLR0913 - one call's parts
         edges = ServedEdges(
             clock=clock,
             load_config=lambda: _loaded(config),
-            names=id_names,
-            resolve_member=id_resolver(store),
         )
         reply = done_reply(
             result_document(run_served(request.name, store, checked.document, edges))

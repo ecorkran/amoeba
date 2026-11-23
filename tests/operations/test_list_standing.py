@@ -9,22 +9,21 @@ from pathlib import Path
 import pytest
 from user_configs import user_config
 
-from amoeba.operations.cf_readers import cf_member_resolver
 from amoeba.operations.list_registry import StandingView
-from amoeba.operations.list_view import ListOutcome, ListResult, list_view
+from amoeba.operations.list_view import ListOutcome, ListResult
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.standing import standing
 from amoeba.operations.withdraw import withdraw
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import StandingReach
-from operations.list_support import ListCf, names_of, project_entry
+from operations.list_support import ListCf, project_entry
 from operations.standing_support import (
     MAX_CHARS,
     NOW,
     PROJECTS,
-    RecordingCf,
     seeded_store,
 )
+from operations.status_placed import list_view
 from operations.status_support import CfAnswer, status_deps
 
 CF_PROJECTS = [project_entry(project_id, name) for project_id, name in PROJECTS]
@@ -41,7 +40,6 @@ def _give(store: Store, document: dict[str, str], minutes: int) -> int:
         store,
         document,
         max_chars=MAX_CHARS,
-        resolve_member=cf_member_resolver(RecordingCf()),
         now=NOW + timedelta(minutes=minutes),
     )
     assert given.standing_id is not None
@@ -52,7 +50,7 @@ def _list(
     store: Store, tmp_path: Path, document: dict[str, object], cf: ListCf | None = None
 ) -> ListOutcome:
     run = cf or ListCf(CF_PROJECTS, {DIRECTORY: CfAnswer.NOT_A_PROJECT})
-    deps = status_deps(tmp_path, cf=run, runs=[], names=names_of(CF_PROJECTS))
+    deps = status_deps(tmp_path, cf=run, runs=[])
     return list_view(store, user_config(), document, directory=DIRECTORY, deps=deps)
 
 

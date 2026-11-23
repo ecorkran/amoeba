@@ -20,12 +20,13 @@ from amoeba.operations.handle_pause import handle_pause
 from amoeba.operations.pause_models import HandlePauseOutcome
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
-from amoeba.operations.status import StatusResult, status
+from amoeba.operations.status import StatusResult
 from amoeba.store.errors import StoreBusyError
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
 from operations.handle_rig import RUN, world
+from operations.status_placed import status
 from operations.status_support import FakeCf, status_deps
 
 NAMES = {CORE: "core-name", LINT: "lint-name"}
@@ -70,7 +71,6 @@ def _status(
         tmp_path,
         cf=FakeCf({core_dir: CORE}),
         runs=[],
-        names=NAMES,
         answering_dir=state / "answering",
     )
     layout = replace(
@@ -93,7 +93,7 @@ def test_status_prunes_settled_and_orphan_scratch_and_keeps_an_open_ones(
 ) -> None:
     core_dir = tmp_path / "core"
     core_dir.mkdir()
-    probe = status_deps(tmp_path, cf=FakeCf({}), runs=[], names=NAMES).clock()
+    probe = status_deps(tmp_path, cf=FakeCf({}), runs=[]).clock()
     answering = tmp_path / "state" / "answering"
     _claim(store, OPEN_KEY, "scratch-open", probe)
     _claim(store, SETTLED_KEY, "scratch-settled", probe)

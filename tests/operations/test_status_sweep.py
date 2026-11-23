@@ -18,15 +18,13 @@ from store.question_support import NOW, claimed_question, waiting_question
 from store_open import open_local_store
 from user_configs import user_config
 
-from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.resume import resume_bound_seconds
-from amoeba.operations.status import StatusResult, status
+from amoeba.operations.status import StatusResult
 from amoeba.store.answers import add_pm_answer, latest_answer
 from amoeba.store.models import QuestionKey, QuestionRecord
 from amoeba.store.questions import get_question, insert_question
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ClosedReason, QuestionState, ResumeOutcome
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.run_list import (
     ListedCheckpoint,
@@ -34,6 +32,7 @@ from amoeba.upstream.squadron.run_list import (
     RunListProblem,
     list_runs,
 )
+from operations.status_placed import status
 from operations.status_support import FakeCf, status_deps
 
 NAMES = {CORE: "core-name", LINT: "lint-name"}
@@ -90,7 +89,7 @@ def _status(
     store: Store, tmp_path: Path, core_dir: Path, runs: list[ListedRun] | RunListProblem
 ) -> StatusResult:
     cf = FakeCf({core_dir: CORE})
-    deps = status_deps(tmp_path, cf=cf, runs=runs, names=NAMES)
+    deps = status_deps(tmp_path, cf=cf, runs=runs)
     return status(store, CONFIG, {}, directory=core_dir, deps=deps)
 
 
@@ -241,23 +240,6 @@ def test_a_failed_sweep_write_shows_everything_before_the_sweep_and_the_problem(
     assert _row(store, WAITING).state is QuestionState.WAITING_ON_PM
 
 
-def test_a_names_failure_raises_before_the_sweep_closes_anything(
-    store: Store, tmp_path: Path, core_dir: Path
-) -> None:
-    _waiting(store, WAITING)
-    deps = status_deps(
-        tmp_path,
-        cf=FakeCf({core_dir: CORE}),
-        runs=[_listed(WAITING.run_id, "completed", core_dir)],
-        names=CfCallFailed("cf is down"),
-    )
-
-    with pytest.raises(ContextForgeError, match="cf is down"):
-        status(store, CONFIG, {}, directory=core_dir, deps=deps)
-
-    assert _row(store, WAITING).state is QuestionState.WAITING_ON_PM
-
-
 def test_status_makes_one_listing_call_and_asks_for_all(
     store: Store,
     tmp_path: Path,
@@ -272,7 +254,7 @@ def test_status_makes_one_listing_call_and_asks_for_all(
         runs_list=FakeListing(stdout=_listing_json(core_dir), stderr="", exit_code=0),
     )
     monkeypatch.setenv("PATH", f"{fake.directory}:/usr/bin:/bin")
-    deps = status_deps(tmp_path, cf=FakeCf({core_dir: CORE}), runs=[], names=NAMES)
+    deps = status_deps(tmp_path, cf=FakeCf({core_dir: CORE}), runs=[])
     deps = replace(deps, list_runs=partial(list_runs, timeout_seconds=30))
 
     status(store, CONFIG, {}, directory=core_dir, deps=deps)

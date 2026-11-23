@@ -1,12 +1,14 @@
 """``amoeba standing`` and ``amoeba withdraw``: text, JSON and exit codes (slice 230).
 
-In-process through ``main``, with the autouse temporary ``AMOEBA_HOME``. The
-``--member`` lookup is stubbed at the operation's ``project_of``.
+In-process through ``main``, with the autouse temporary ``AMOEBA_HOME``. ``--member``
+is a name or id in the store; no ``cf`` runs.
 """
 
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from store.question_support import MEMBER_ID, seed_members
@@ -15,13 +17,13 @@ from user_configs import example_config_text
 
 from amoeba.cli.main import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE, main
 from amoeba.config.home import config_path, store_path
-from amoeba.operations import cf_readers
 from amoeba.operations import standing as standing_operation
 from amoeba.store.errors import StoreBusyError
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
-from amoeba.upstream.context_forge.project_of import CFProject
+from amoeba.store.member_names import set_member_name
 
 RULING = "CONCERNS reviews never block a merge."
+MEMBER_NAME = "member-name"
+NOW = datetime(2026, 11, 20, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture(autouse=True)
@@ -30,17 +32,8 @@ def _members() -> None:
     config_path().write_text(example_config_text(), encoding="utf-8")
     with open_local_store(store_path()) as store:
         seed_members(store)
-
-
-@pytest.fixture
-def known_member(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``cf`` knows ``member-name`` as the seeded member."""
-    project = CFProject(id=MEMBER_ID, name="member-name", project_path="/work/a")
-
-    def found(**_kwargs: object) -> CFProject:
-        return project
-
-    monkeypatch.setattr(cf_readers, "project_of", found)
+        with store.write() as transaction:
+            set_member_name(transaction, MEMBER_ID, MEMBER_NAME, NOW)
 
 
 def _run(capsys: pytest.CaptureFixture[str], *argv: str) -> tuple[int, str]:
@@ -63,7 +56,6 @@ def _count() -> int:
         (("--member", "member-name"), f"reach: member {MEMBER_ID}"),
     ],
 )
-@pytest.mark.usefixtures("known_member")
 def test_standing_prints_the_id_and_reach_and_exits_zero(
     capsys: pytest.CaptureFixture[str], flags: tuple[str, ...], reach: str
 ) -> None:
@@ -124,9 +116,10 @@ def test_withdraw_needs_no_config_file(capsys: pytest.CaptureFixture[str]) -> No
     )
 
 
-@pytest.mark.usefixtures("known_member")
 def test_json_carries_the_result_fields(capsys: pytest.CaptureFixture[str]) -> None:
-    code, out = _run(capsys, "standing", "-j", "--text", RULING, "--member", "x")
+    code, out = _run(
+        capsys, "standing", "-j", "--text", RULING, "--member", MEMBER_NAME
+    )
     given = json.loads(out)
     _, out = _run(capsys, "withdraw", "-j", "1", "--reason", "wrong")
     withdrawn = json.loads(out)
@@ -164,16 +157,39 @@ def test_a_store_error_exits_three_with_nothing_written(
     assert _count() == 0
 
 
-def test_a_cf_failure_exits_three_with_nothing_written(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+def test_standing_makes_no_cf_call(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
-    def failed(**_kwargs: object) -> CfCallFailed:
-        return CfCallFailed("cf broke")
+    """With no ``cf`` on ``PATH`` any call would fail with exit three."""
+    (tmp_path / "empty-bin").mkdir()
+    monkeypatch.setenv("PATH", str(tmp_path / "empty-bin"))
 
-    monkeypatch.setattr(cf_readers, "project_of", failed)
+    code, out = _run(capsys, "standing", "--text", RULING, "--member", MEMBER_NAME)
 
-    code = main(["standing", "--text", RULING, "--member", "member-name"])
+    assert code == EXIT_OK
+    assert f"reach: member {MEMBER_ID}" in out
 
-    assert code == EXIT_ERROR
-    assert "ContextForgeError" in capsys.readouterr().err
+
+def test_an_unknown_member_name_is_rejected_with_nothing_written(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code, out = _run(capsys, "standing", "--text", RULING, "--member", "nobody")
+
+    assert code == EXIT_REJECTED
+    assert "no_such_member" in out
     assert _count() == 0
+
+
+def test_decisions_makes_no_cf_call(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "empty-bin").mkdir()
+    monkeypatch.setenv("PATH", str(tmp_path / "empty-bin"))
+
+    code, _out = _run(capsys, "decisions")
+
+    assert code == EXIT_OK

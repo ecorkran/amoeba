@@ -22,10 +22,8 @@ from amoeba.operations.list_view import (
     ListRequest,
     ListResult,
     ListSubject,
-    list_view,
 )
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.operations.status import status
 from amoeba.operations.status_models import StatusOutcome
 from amoeba.store.answers import add_pm_answer, record_resume
 from amoeba.store.message_rejections import record_rejection
@@ -35,7 +33,8 @@ from amoeba.store.question_closing import close_question
 from amoeba.store.questions import get_question, insert_question
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ClosedReason, ResumeOutcome
-from operations.list_support import ListCf, names_of, project_entry
+from operations.list_support import ListCf, project_entry
+from operations.status_placed import list_view, status
 from operations.status_support import CfAnswer, status_deps
 
 ELSEWHERE = Path("/work/elsewhere")
@@ -55,7 +54,7 @@ def store(tmp_path: Path) -> Iterator[Store]:
 
 def _deps(tmp_path: Path) -> Deps:
     cf = ListCf(PROJECTS, {ELSEWHERE: CfAnswer.NOT_A_PROJECT})
-    return status_deps(tmp_path, cf=cf, runs=[], names=names_of(PROJECTS))
+    return status_deps(tmp_path, cf=cf, runs=[])
 
 
 def _list(
@@ -171,7 +170,7 @@ def test_settled_holds_what_ended_inside_the_window_with_names(
         (ANSWERED.run_id, AnsweredBy.PM),
         (RECENT.run_id, ClosedReason.DISMISSED),
     ]
-    assert [e.member_name for e in result.settled] == ["lint", "core"]
+    assert [e.member_name for e in result.settled] == ["lint-name", "core-name"]
     assert [e.program for e in result.settled] == [TOOLS, TRADING]
 
 

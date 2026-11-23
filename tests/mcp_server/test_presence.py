@@ -28,6 +28,7 @@ from amoeba.mcp.presence import (
     resolve_presence,
 )
 from amoeba.operations.errors import ContextForgeError
+from amoeba.store.checkouts import delete_checkouts_of_member
 from amoeba.store.errors import StoreBusyError, StoreCorruptError
 from amoeba.store.sessions import prune_stale_sessions
 from amoeba.upstream.context_forge.cli_call import CfRun
@@ -76,6 +77,22 @@ def test_a_non_member_directory_is_off_with_one_info_line(
     assert state.resolved.is_set()
     lines = [r for r in caplog.records if "is not a member" in r.getMessage()]
     assert [r.levelno for r in lines] == [logging.INFO]
+
+
+def test_a_member_with_no_checkout_here_is_a_non_member_in_the_log_line(
+    store_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with open_local_store(store_path) as store, store.write() as transaction:
+        delete_checkouts_of_member(transaction, MEMBER_ID)
+    clock = FakeClock()
+    state = PresenceState(started_at=clock())
+
+    with caplog.at_level(logging.INFO):
+        anyio.run(resolve_presence, state, make_deps(Opener(store_path), clock))
+
+    assert state.member_id is None
+    assert state.off_reason is not None and "is not a member" in state.off_reason
+    assert any("NotInProgram" in r.getMessage() for r in caplog.records)
 
 
 @pytest.mark.parametrize(

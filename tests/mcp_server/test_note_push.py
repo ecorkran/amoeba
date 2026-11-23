@@ -19,6 +19,7 @@ from operations.message_support import (
     seed_message_members,
     send_note_as_sender,
 )
+from operations.release_placed import report_release
 from operations.release_support import (
     PROVIDER_DIR,
     SettableClock,
@@ -26,13 +27,12 @@ from operations.release_support import (
     release_deps,
 )
 from store.message_support import PROGRAM
-from store.release_support import FULL_HASH, PROVIDER
+from store.release_support import FULL_HASH, PROVIDER, seed_checkout
 from store.seed import insert_member, insert_pair
 from store_open import open_local_store
 
 from amoeba.mcp.channel_event import channel_event
 from amoeba.operations.release_notes import RELEASE_NOTE_ID_PREFIX
-from amoeba.operations.report_release import report_release
 from amoeba.operations.report_release_models import ReportOutcome
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ConsumedMode, DeliveryEvent, MessageKind
@@ -60,6 +60,7 @@ def store(tmp_path: Path) -> Iterator[Store]:
                 registered_at=START,
                 updated_at=START,
             )
+            seed_checkout(transaction, PROVIDER)
             insert_pair(
                 transaction,
                 program_id=PROGRAM,

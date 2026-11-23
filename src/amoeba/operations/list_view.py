@@ -21,7 +21,7 @@ from pydantic import ValidationError, field_validator
 from amoeba.answering.values import AnsweredBy
 from amoeba.config.user_config import NonBlank, UserConfig
 from amoeba.operations.deps import Deps
-from amoeba.operations.errors import ContextForgeError
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.list_registry import (
     DependenciesView,
     MembersView,
@@ -40,10 +40,11 @@ from amoeba.operations.reject_codes import (
 from amoeba.operations.set_up_models import FrozenModel
 from amoeba.operations.status import status
 from amoeba.operations.status_models import StatusOutcome, StatusResult
+from amoeba.store.errors import StoreRowError
+from amoeba.store.programs import get_member_any
 from amoeba.store.settled import SettledQuestion, settled_since
-from amoeba.store.store import Store
+from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import ClosedReason
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
 
 
 class ListSubject(StrEnum):
@@ -131,9 +132,13 @@ def list_view(
     document: object,
     *,
     directory: Path,
+    here: HereCaller | HereNotAProject | None,
     deps: Deps,
 ) -> ListOutcome:
     """Apply the ``list`` request ``document``, which is validated here.
+
+    ``here`` is the caller's gathered project, needed by the default view only
+    (``needs_here`` says when); ``directory`` still places runs until 12.2.
 
     Raises:
         SquadronError: ``sq runs list --json`` gave no usable listing (default view).
@@ -145,7 +150,7 @@ def list_view(
     except ValidationError as error:
         return _rejected(RejectCode.MALFORMED, validation_problems(error))
     if request.subject is None:
-        return _default_view(store, config, request, directory, deps)
+        return _default_view(store, config, request, directory, here, deps)
     if request.all and request.subject in ALL_NOT_ACCEPTED:
         return _rejected(
             RejectCode.MALFORMED,
@@ -179,13 +184,17 @@ def _default_view(
     config: UserConfig,
     request: ListRequest,
     directory: Path,
+    here: HereCaller | HereNotAProject | None,
     deps: Deps,
 ) -> ListResult:
+    if here is None:
+        raise ValueError("the default list view needs the gathered caller")
     result = status(
         store,
         config,
         {} if request.program is None else {"program": request.program},
         directory=directory,
+        here=here,
         deps=deps,
     )
     if not request.all or result.outcome is StatusOutcome.REJECTED:
@@ -193,15 +202,36 @@ def _default_view(
     since = deps.clock() - timedelta(days=config.prune_after_days)
     with store.read() as transaction:
         settled = settled_since(transaction, since)
-    names = deps.project_names()
-    if isinstance(names, CfCallFailed):
-        raise ContextForgeError(names.detail)
+        names = {
+            item.member_id: _stored_name(transaction, item.member_id)
+            for item in settled
+        }
     return ListResult(
         status=result,
         settled=tuple(
             _entry(item, names) for item in settled if _in_scope(item, request.program)
         ),
     )
+
+
+def _stored_name(transaction: Transaction, member_id: str) -> str:
+    """The name the store holds for a member, removed members included."""
+    member = get_member_any(transaction, member_id)
+    if member is None:
+        raise StoreRowError(f"settled question of {member_id!r}, a member not in store")
+    return member.name
+
+
+def needs_here(document: object) -> bool:
+    """Whether the gathered caller is needed: the default view (no subject) only.
+
+    A document that does not parse needs nothing; ``list_view`` rejects it."""
+    try:
+        request = ListRequest.model_validate(document)
+    except ValidationError:
+        # Not a valid request: list_view returns the malformed rejection, no caller.
+        return False
+    return request.subject is None
 
 
 def _in_scope(item: SettledQuestion, program: str | None) -> bool:
@@ -212,7 +242,7 @@ def _entry(item: SettledQuestion, names: Mapping[str, str]) -> SettledEntry:
     return SettledEntry(
         program=item.program_id,
         member_id=item.member_id,
-        member_name=names.get(item.member_id),
+        member_name=names[item.member_id],
         run_id=item.key.run_id,
         paused_at=item.key.paused_at,
         question=item.question,

@@ -20,8 +20,6 @@ from amoeba.store.models import Member, MemberSettings
 from amoeba.store.programs import get_member, upsert_member, upsert_program
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import RulesFrom
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
-from amoeba.upstream.context_forge.projects import ProjectNames
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.upstream.squadron.run_list import ListedRun, RunListProblem
 from amoeba.upstream.squadron.run_outcome import RunPoll
@@ -118,10 +116,6 @@ class DepsRig:
     poller: FakePoller
 
 
-def _unused_project_names() -> ProjectNames | CfCallFailed:
-    raise AssertionError("this test gave no project_names reader")
-
-
 def _unused_list_runs() -> list[ListedRun] | RunListProblem:
     raise AssertionError("this test gave no list_runs reader")
 
@@ -171,7 +165,6 @@ def build_deps(
         calls_log_dir=tmp_path / "logs" / "calls",
         squadron_runs_dir=tmp_path / "runs",
         legacy_home=None,
-        project_names=_unused_project_names,
         list_runs=_unused_list_runs,
         prune=no_prune,
         amoeba_script=unused_amoeba_script,

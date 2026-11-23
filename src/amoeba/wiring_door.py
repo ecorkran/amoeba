@@ -23,7 +23,6 @@ from amoeba.config.home import (
     state_layout,
 )
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.cf_readers import cf_member_resolver, cf_names
 from amoeba.operations.deps import Deps
 from amoeba.operations.names import OperationName
 from amoeba.operations.served import ServedEdges, ServedResult
@@ -58,8 +57,6 @@ def local_served_edges(
     return ServedEdges(
         clock=deps.clock,
         load_config=load_config,
-        names=cf_names(deps),
-        resolve_member=cf_member_resolver(deps.cf_run),
     )
 
 

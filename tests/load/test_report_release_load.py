@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
+from operations.release_placed import report_release
 from operations.release_support import (
     PROVIDER_DIR,
     SettableClock,
@@ -33,7 +34,6 @@ from store.seed import insert_member, insert_pair
 from store_open import open_local_store
 
 from amoeba.operations.message_models import MAX_NOTES_PER_SENDER
-from amoeba.operations.report_release import report_release
 from amoeba.operations.report_release_models import ReportOutcome
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.store.vocabulary import ConsumedMode

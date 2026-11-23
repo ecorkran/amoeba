@@ -18,13 +18,13 @@ from amoeba.operations import note_room, release_notes
 from amoeba.operations import report_release as report_release_module
 from amoeba.operations.deps import Deps
 from amoeba.operations.release_notes import RELEASE_NOTE_ID_PREFIX
-from amoeba.operations.report_release import report_release
 from amoeba.operations.report_release_models import ReportOutcome, ReportReleaseResult
 from amoeba.store.errors import StoreIntegrityError
 from amoeba.store.models import Message
 from amoeba.store.notes import NewNote
 from amoeba.store.notes import insert_note as real_insert_note
 from amoeba.store.store import Store, Transaction
+from operations.release_placed import report_release
 from operations.release_support import (
     PROVIDER_DIR,
     RELEASE_CONSUMER,

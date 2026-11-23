@@ -11,14 +11,18 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
-from store.release_support import OTHER_PROVIDER, PROGRAM, PROVIDER, START
+from store.release_support import (
+    OTHER_PROVIDER,
+    PROGRAM,
+    PROVIDER,
+    START,
+    seed_checkout,
+)
 from store.seed import insert_member, insert_pair
 
 from amoeba.operations.deps import Deps
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ConsumedMode
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
-from amoeba.upstream.context_forge.projects import ProjectNames
 from operations.status_support import CfAnswer, FakeCf, status_deps
 
 PROVIDER_DIR = Path("/work/provider")
@@ -63,14 +67,12 @@ def release_deps(
     clock: SettableClock,
     *,
     cf: Callable[..., subprocess.CompletedProcess[str]] | None = None,
-    names: ProjectNames | CfCallFailed | None = None,
 ) -> Deps:
-    """``Deps`` with the release ``cf``, the given clock and the given names."""
+    """``Deps`` with the release ``cf`` and the given clock."""
     base = status_deps(
         tmp_path,
         cf=cf or release_cf(),
         runs=[],
-        names={} if names is None else names,
     )
     return replace(base, clock=clock)
 
@@ -91,6 +93,7 @@ def seed_pairs(store: Store) -> None:
                 registered_at=START,
                 updated_at=START,
             )
+            seed_checkout(transaction, member)
         for provider, consumer, consumed in (
             (OTHER_PROVIDER, PROVIDER, ConsumedMode.FROM_SOURCE),
             (PROVIDER, SOURCE_CONSUMER, ConsumedMode.FROM_SOURCE),

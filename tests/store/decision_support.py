@@ -15,7 +15,7 @@ from store.question_support import (
     claimed_question,
     waiting_question,
 )
-from store.seed import insert_member, insert_program
+from store.seed import insert_checkout, insert_member, insert_program
 
 TRADING = "trading"
 TOOLS = "tools"
@@ -30,8 +30,14 @@ def at(minutes: int) -> datetime:
     return NOW + timedelta(minutes=minutes)
 
 
+#: The name each seeded member holds.
+NAMES = {CORE: "core-name", LINT: "lint-name"}
+
+
 def seed_programs(opened: Store) -> None:
-    """Program ``trading`` with member ``CORE``, program ``tools`` with ``LINT``."""
+    """Program ``trading`` with member ``CORE``, program ``tools`` with ``LINT``, each
+    named and with a checkout whose Context Forge id is the member's own id (what the
+    status tests' stub ``cf`` answers for the member's directory)."""
     with opened.write() as transaction:
         for program, member in ((TRADING, CORE), (TOOLS, LINT)):
             insert_program(
@@ -51,6 +57,14 @@ def seed_programs(opened: Store) -> None:
                 authorize_deny=(),
                 registered_at=NOW,
                 updated_at=NOW,
+                name=NAMES[member],
+            )
+            insert_checkout(
+                transaction,
+                member_id=member,
+                cf_project_id=member,
+                path=f"/work/{member}",
+                now=NOW,
             )
 
 

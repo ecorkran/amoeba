@@ -21,21 +21,19 @@ from store.release_support import (
 from store.seed import insert_member, insert_pair
 from store_open import open_local_store
 
-from amoeba.operations.changes import changes
 from amoeba.operations.changes_models import (
     ChangesOutcome,
     ChangesResult,
-    ChangesWarningCode,
 )
 from amoeba.operations.deps import Deps
 from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.operations.report_release import report_release
 from amoeba.store import releases, sql
+from amoeba.store.member_names import set_member_name
 from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ConsumedMode
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
+from operations.release_placed import changes, report_release
 from operations.release_support import (
     CF_DOWN_DIR,
     GONE_PROVIDER,
@@ -68,6 +66,10 @@ def store(tmp_path: Path) -> Iterator[Store]:
     with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         seed_pairs(opened)
+        with opened.write() as transaction:
+            for member_id, name in NAMES.items():
+                if member_id != GONE_PROVIDER:
+                    set_member_name(transaction, member_id, name, at(0))
         yield opened
 
 
@@ -78,7 +80,7 @@ def clock() -> SettableClock:
 
 @pytest.fixture
 def deps(tmp_path: Path, clock: SettableClock) -> Deps:
-    return release_deps(tmp_path, clock, names=dict(NAMES))
+    return release_deps(tmp_path, clock)
 
 
 def _since(hours: int) -> dict[str, object]:
@@ -280,14 +282,6 @@ def test_a_malformed_since_is_rejected(store: Store, deps: Deps) -> None:
     assert "no UTC offset" in result.problems[0].detail
 
 
-def test_a_cf_names_failure_raises(
-    store: Store, tmp_path: Path, clock: SettableClock
-) -> None:
-    deps = release_deps(tmp_path, clock, names=CfCallFailed("cf is down"))
-    with pytest.raises(ContextForgeError, match="cf is down"):
-        _call(store, deps, SOURCE_CONSUMER_DIR)
-
-
 def test_a_cf_failure_finding_the_project_raises(store: Store, deps: Deps) -> None:
     with pytest.raises(ContextForgeError):
         _call(store, deps, CF_DOWN_DIR)
@@ -304,32 +298,6 @@ def test_names_are_filled_in_and_there_are_no_warnings(
     assert result.member.name == "source-consumer"
     assert result.pairs[0].provider.name == "provider"
     assert result.warnings == ()
-
-
-def test_a_provider_absent_from_the_names_is_listed_with_a_warning(
-    store: Store, tmp_path: Path, clock: SettableClock
-) -> None:
-    names = {key: value for key, value in NAMES.items() if key != PROVIDER}
-    deps = release_deps(tmp_path, clock, names=names)
-    result = _call(store, deps, SOURCE_CONSUMER_DIR)
-    assert result.outcome is ChangesOutcome.LISTED
-    assert result.pairs[0].provider.id == PROVIDER
-    assert result.pairs[0].provider.name is None
-    (warning,) = result.warnings
-    assert warning.code is ChangesWarningCode.NOT_IN_CONTEXT_FORGE
-    assert PROVIDER in warning.detail
-
-
-def test_the_members_own_id_absent_from_the_names_warns_once(
-    store: Store, tmp_path: Path, clock: SettableClock
-) -> None:
-    names = {key: value for key, value in NAMES.items() if key != SOURCE_CONSUMER}
-    deps = release_deps(tmp_path, clock, names=names)
-    result = _call(store, deps, SOURCE_CONSUMER_DIR)
-    assert result.member is not None
-    assert result.member.name is None
-    (warning,) = result.warnings
-    assert SOURCE_CONSUMER in warning.detail
 
 
 # --- changes writes nothing --------------------------------------------------

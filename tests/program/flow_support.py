@@ -16,16 +16,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from git_repo import git, head_of, make_repo
+from operations.release_placed import changes, report_release
 from operations.release_support import SettableClock, release_deps
 from operations.status_support import FakeCf
 from rule_blocks import real_rule_blocks
+from store.release_support import seed_checkout
 from store.seed import insert_member, insert_pair, insert_program
 from store_open import open_local_store
 
-from amoeba.operations.changes import changes
 from amoeba.operations.changes_models import ChangesResult
 from amoeba.operations.deps import Deps
-from amoeba.operations.report_release import report_release
 from amoeba.operations.report_release_models import ReportReleaseResult
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ConsumedMode
@@ -69,8 +69,7 @@ def flow_rig(
         }
     )
     clock = SettableClock(day(1))
-    names = {PROVIDER_ID: "provider", CONSUMER_ID: "consumer"}
-    deps = release_deps(tmp_path, clock, cf=cf, names=names)
+    deps = release_deps(tmp_path, clock, cf=cf)
     with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         _seed(store, consumed)
         yield FlowRig(store, deps, clock, provider_repo, consumer_repo)
@@ -97,6 +96,9 @@ def _seed(store: Store, consumed: ConsumedMode) -> None:
                 registered_at=day(1),
                 updated_at=day(1),
             )
+            # The stub ``cf`` gives each repo (and the consumer's other worktrees)
+            # the member's own id as its Context Forge id.
+            seed_checkout(transaction, member)
         insert_pair(
             transaction,
             program_id=PROGRAM,
