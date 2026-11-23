@@ -89,7 +89,13 @@ def test_program_unchanged_upsert_keeps_updated_at_and_changed_moves_it(
     assert upsert(FIRST, None, None)
     assert not upsert(LATER, None, None)
     with store.write() as transaction:
-        upsert_member(transaction, program_id="demo", settings=_settings(), now=FIRST)
+        upsert_member(
+            transaction,
+            program_id="demo",
+            settings=_settings(),
+            name="a",
+            now=FIRST,
+        )
     assert upsert(LATER, "a", CONCEPT)
 
     with store.read() as transaction:
@@ -132,6 +138,7 @@ def test_member_is_created_read_back_and_its_lists_replace_whole(store: Store) -
             transaction,
             program_id="demo",
             settings=_settings(rules_paths=("CLAUDE.md", "docs/*.md")),
+            name="a",
             now=FIRST,
         )
     with store.write() as transaction:
@@ -141,6 +148,7 @@ def test_member_is_created_read_back_and_its_lists_replace_whole(store: Store) -
             settings=_settings(
                 rules_paths=("AGENTS.md",), authorize_allow=("merge_to_main",)
             ),
+            name="a",
             now=LATER,
         )
     with store.read() as transaction:
@@ -162,10 +170,20 @@ def test_member_is_created_read_back_and_its_lists_replace_whole(store: Store) -
 def test_member_unchanged_upsert_keeps_updated_at(store: Store) -> None:
     _program(store)
     with store.write() as transaction:
-        upsert_member(transaction, program_id="demo", settings=_settings(), now=FIRST)
+        upsert_member(
+            transaction,
+            program_id="demo",
+            settings=_settings(),
+            name="a",
+            now=FIRST,
+        )
     with store.write() as transaction:
         changed = upsert_member(
-            transaction, program_id="demo", settings=_settings(), now=LATER
+            transaction,
+            program_id="demo",
+            settings=_settings(),
+            name="a",
+            now=LATER,
         )
     with store.read() as transaction:
         member = get_member(transaction, "a")
@@ -185,12 +203,22 @@ def test_a_member_in_a_second_program_is_refused(store: Store) -> None:
             concept_path=None,
             now=FIRST,
         )
-        upsert_member(transaction, program_id="demo", settings=_settings(), now=FIRST)
+        upsert_member(
+            transaction,
+            program_id="demo",
+            settings=_settings(),
+            name="a",
+            now=FIRST,
+        )
 
     with pytest.raises(StoreIntegrityError, match="belongs to program 'demo'"):
         with store.write() as transaction:
             upsert_member(
-                transaction, program_id="other", settings=_settings(), now=LATER
+                transaction,
+                program_id="other",
+                settings=_settings(),
+                name="a",
+                now=LATER,
             )
 
 
@@ -233,6 +261,7 @@ def test_pair_is_created_read_back_and_consumed_changes_in_place(store: Store) -
                 transaction,
                 program_id="demo",
                 settings=_settings(project_id),
+                name=project_id,
                 now=FIRST,
             )
 
@@ -284,6 +313,7 @@ def test_members_of_lists_one_program_in_id_order(store: Store) -> None:
                 transaction,
                 program_id=program_id,
                 settings=_settings(project_id),
+                name=project_id,
                 now=FIRST,
             )
     with store.read() as transaction:

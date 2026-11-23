@@ -370,8 +370,8 @@ def test_a_closed_question_needs_a_known_reason() -> None:
     )
     connection.execute(
         "INSERT INTO members (project_id, program_id, rules_paths, authorize_allow, "
-        "authorize_deny, registered_at, updated_at, removed_at, owner_id) "
-        f"VALUES ('m1', 'demo', '[]', '[]', '[]', 't', 't', NULL, {owner})"
+        "authorize_deny, registered_at, updated_at, removed_at, name, owner_id) "
+        f"VALUES ('m1', 'demo', '[]', '[]', '[]', 't', 't', NULL, 'm1', {owner})"
     )
     insert = (
         "INSERT INTO questions (run_id, paused_at, member_id, question, checkout, "

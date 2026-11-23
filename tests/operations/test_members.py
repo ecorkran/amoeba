@@ -53,6 +53,7 @@ def _register(store: Store, project_id: str) -> None:
                 rules_from=RulesFrom.NAMED,
                 wake_command=None,
             ),
+            name=project_id,
             now=NOW,
         )
 

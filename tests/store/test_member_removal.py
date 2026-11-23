@@ -205,6 +205,7 @@ def test_re_registering_clears_removed_at_and_makes_it_a_member_again(
             transaction,
             program_id=TRADING,
             settings=_settings(THIRD_MEMBER),
+            name=_settings(THIRD_MEMBER).project_id,
             now=at(3),
         )
 
@@ -227,6 +228,7 @@ def test_a_removed_member_can_be_re_registered_in_another_program(
             transaction,
             program_id=TOOLS,
             settings=_settings(THIRD_MEMBER),
+            name=_settings(THIRD_MEMBER).project_id,
             now=at(3),
         )
 
@@ -247,5 +249,6 @@ def test_an_active_member_in_another_program_is_still_refused(store: Store) -> N
             transaction,
             program_id=TOOLS,
             settings=_settings(THIRD_MEMBER),
+            name=_settings(THIRD_MEMBER).project_id,
             now=at(3),
         )

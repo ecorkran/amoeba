@@ -42,6 +42,9 @@ class ResolvedMember:
     #: Position in the request's ``members``, for problem details.
     index: int
     project_id: str
+    #: Interim (261 1.1, replaced in 9.9): the Context Forge name and path.
+    name: str
+    path: str
     #: ``None`` means omitted: leave the stored value.
     rules_paths: tuple[str, ...] | None
     #: Return the member to the config's default rules.
@@ -172,6 +175,8 @@ def resolve_request(request: SetUpRequest, directory: Path, run: CfRun) -> Resol
             ResolvedMember(
                 index=index,
                 project_id=project.id,
+                name=project.name,
+                path=project.project_path,
                 rules_paths=entry.rules_paths,
                 rules_default=entry.rules_default,
                 authorize_allow=entry.authorize_allow,

@@ -29,6 +29,8 @@ ACTIVE_READS = frozenset(
         "SELECT_PAIRS_CONSUMED_BY",
         "SELECT_PAIRS_PROVIDED_BY",  # 243
         "SELECT_PAIR",
+        "SELECT_MEMBER_BY_NAME",  # 261
+        "SELECT_MEMBER_BY_ORIGIN",  # 261
     }
 )
 #: Statements that name ``members`` and are not active-only reads.
@@ -39,6 +41,10 @@ OTHER_MEMBER_STATEMENTS = frozenset(
         "UPDATE_MEMBER",
         "REREGISTER_MEMBER",
         "REMOVE_MEMBER",
+        "SELECT_REMOVED_MEMBER_BY_ORIGIN",  # 261: a removed member is read on purpose
+        "SELECT_NAME_IS_OTHER_MEMBERS_ID",  # 261: any member, active or removed
+        "SET_MEMBER_NAME",  # 261
+        "SET_MEMBER_ORIGIN",  # 261
     }
 )
 #: The one named exception: the decisions join keeps removed members (D8).

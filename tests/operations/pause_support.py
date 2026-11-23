@@ -201,6 +201,7 @@ def register_member(
                 rules_from=RulesFrom.NAMED,
                 wake_command=None,
             ),
+            name=project_id,
             now=START,
         )
     with store.read() as transaction:

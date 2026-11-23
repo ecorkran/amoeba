@@ -42,6 +42,8 @@ MEMBER = Member(
     RUN_NOW,
     RUN_NOW,
     None,
+    "member-a",
+    None,
 )
 PAUSED = "demo-pause-1"
 RUNNING = "run-20261111-p6-fe470d63"

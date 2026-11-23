@@ -21,6 +21,7 @@ from pydantic import ValidationError
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.set_up_checks import check_request
+from amoeba.operations.set_up_interim import ensure_checkout, member_name_for_write
 from amoeba.operations.set_up_models import (
     Change,
     ChangeSubject,
@@ -246,12 +247,15 @@ def _write_member(
 ) -> list[Change]:
     stored = get_member(transaction, member.project_id)
     changes: list[Change] = []
+    name = member_name_for_write(transaction, member.project_id, member.name, now)
     changed = upsert_member(
         transaction,
         program_id=request.program_id,
         settings=_merged_settings(member, None if stored is None else stored.settings),
+        name=name,
         now=now,
     )
+    ensure_checkout(transaction, member.project_id, member.path, now)
     if changed:
         verb = ChangeVerb.ADDED if stored is None else ChangeVerb.UPDATED
         changes.append(

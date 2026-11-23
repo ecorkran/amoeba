@@ -23,6 +23,8 @@ MEMBER = Member(
     NOW,
     NOW,
     None,
+    MEMBER_ID,
+    None,
 )
 PAUSED = "demo-pause-1"
 PAUSED_OTHER_KIND = "run-20261004-p6-8bc5e634"

@@ -12,6 +12,7 @@ from datetime import datetime
 
 from amoeba.answering.values import AnsweredBy
 from amoeba.store import sql
+from amoeba.store.checkouts import insert_checkout as store_insert_checkout
 from amoeba.store.row_values import encode_string_list, encode_timestamp
 from amoeba.store.store import Transaction
 from amoeba.store.vocabulary import (
@@ -56,7 +57,11 @@ def insert_member(
     updated_at: datetime,
     rules_from: RulesFrom = RulesFrom.NAMED,
     wake_command: str | None = None,
+    name: str | None = None,
+    origin: str | None = None,
 ) -> None:
+    """Insert a member; with no ``name`` it is named by its id (naming's rule for a
+    member Context Forge does not know)."""
     transaction.execute(
         sql.INSERT_MEMBER,
         (
@@ -69,8 +74,30 @@ def insert_member(
             encode_timestamp(updated_at),
             rules_from,
             wake_command,
+            project_id if name is None else name,
+            origin,
             transaction.acting("members").owner_id,
         ),
+    )
+
+
+def insert_checkout(
+    transaction: Transaction,
+    *,
+    member_id: str,
+    cf_project_id: str,
+    path: str,
+    wake_command: str | None = None,
+    now: datetime,
+) -> None:
+    """Add a checkout on the acting machine; ``now`` is the row's ``added_at``."""
+    store_insert_checkout(
+        transaction,
+        member_id=member_id,
+        cf_project_id=cf_project_id,
+        path=path,
+        wake_command=wake_command,
+        now=now,
     )
 
 

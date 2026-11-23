@@ -127,7 +127,7 @@ def _inserts() -> dict[str, Callable[[Transaction], object]]:
             tx, program_id="other", concept_member=None, concept_path=None, now=NOW
         ),
         "members": lambda tx: upsert_member(
-            tx, program_id="demo", settings=settings, now=NOW
+            tx, program_id="demo", settings=settings, name="m3", now=NOW
         ),
         "dependency_pairs": lambda tx: upsert_pair(
             tx,
@@ -229,6 +229,7 @@ def test_records_written_through_the_local_opener_carry_the_owner_and_machine() 
             tx,
             program_id="demo",
             settings=MemberSettings("m1", (), (), (), RulesFrom.NAMED, None),
+            name="m1",
             now=NOW,
         )
         upsert_session(tx, Session("s1", "m1", "claude", "/c", NOW, NOW, None))
