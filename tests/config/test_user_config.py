@@ -219,7 +219,7 @@ def test_a_missing_file_says_where_to_look(tmp_path: Path) -> None:
     with pytest.raises(ConfigError) as error:
         load_user_config(path)
 
-    assert str(error.value) == f"no config at {path}; see docs/config-contract.md"
+    assert str(error.value) == f"no config at {path}; run `amoeba init` to create one"
 
 
 def test_a_file_that_is_not_utf8_names_the_file(tmp_path: Path) -> None:

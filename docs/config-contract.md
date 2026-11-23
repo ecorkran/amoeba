@@ -63,6 +63,9 @@ its target is the normal end of a run; a member that wants the extra protection 
 it with `amoeba add --deny merge_to_main`.
 Replace the two model aliases with your own Squadron aliases.
 
+`amoeba init` writes exactly this file on a machine that has none, and adds any of
+these keys that an older file lacks (`docs/cli-contract.md`).
+
 ```yaml
 answer_model: replace-with-answer-alias
 check_model: replace-with-check-alias

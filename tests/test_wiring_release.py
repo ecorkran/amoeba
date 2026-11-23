@@ -206,4 +206,5 @@ def test_a_config_that_cannot_load_for_the_start_is_logged_not_raised(
 
     assert wiring.invoke(OperationName.REPLY, {}, tmp_path, Door.CLI) is expected
     assert spawned.calls == []
-    assert "could not build the config or deps" in caplog.text
+    assert "held questions not started" in caplog.text
+    assert "Traceback" not in caplog.text

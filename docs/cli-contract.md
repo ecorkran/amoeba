@@ -69,6 +69,30 @@ the old store untouched.
 A Squadron or Context Forge failure is an exit 3, never a skip: "cannot tell" is not
 "not mine". Nothing is written before it.
 
+## `amoeba init`
+
+```
+amoeba init
+```
+
+Takes a machine from nothing to a working Amoeba. It is the first command on a new
+machine, and it is safe to repeat.
+
+- **Config.** With no `config.yaml` in the config home, it writes the starter config:
+  every key, with the values under Example in `docs/config-contract.md`. With a config
+  already there, it adds each required key the file lacks, from the same values, and
+  changes nothing else. It never overwrites a value.
+- **Store.** It creates the store in the state home, or brings an existing one up to
+  date.
+
+It prints one line for the config (`wrote`, `added <keys> to`, or `is already
+complete`), one for the store (`created` or `is already there`), and the next step.
+Exit 0. A config with a fault that adding keys does not fix (an unknown key, a bad
+value) is exit 3, naming the file and the key, and the file is left as it was.
+
+CLI-only, like `answer-first`: it has no MCP tool and no `-j`. Every other command that
+finds no config fails with exit 3 and says to run it.
+
 ## `amoeba add`
 
 ```

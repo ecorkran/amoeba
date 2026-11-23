@@ -9,6 +9,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).parents[1]
 BUILD_TIMEOUT_SECONDS = 300
 BASELINE_MIGRATION = "amoeba/store/schema/001_baseline.sql"
+STARTER_CONFIG = "amoeba/config/starter_config.yaml"
 ENTRY_POINT = "amoeba = amoeba.cli.main:main"
 
 
@@ -33,4 +34,5 @@ def test_wheel_contains_the_baseline_migration_and_the_entry_point(
             if name.endswith("entry_points.txt")
         )
     assert BASELINE_MIGRATION in names
+    assert STARTER_CONFIG in names
     assert ENTRY_POINT in entry_points

@@ -1,0 +1,42 @@
+# Amoeba's config, written by `amoeba init`. Every key is required; the code has
+# no default for any of them. Edit the values to suit this machine.
+# answer_model and check_model are placeholders: set them to Squadron model
+# aliases before Amoeba answers a paused pipeline run.
+answer_model: replace-with-answer-alias
+check_model: replace-with-check-alias
+max_cost_usd: 0.5
+answer_limit: 3
+passages_max_chars: 250000
+answering_wait_seconds: 600
+resume_wait_seconds: 60
+prune_after_days: 30
+request_open_ttl_hours: 72
+max_chain_depth: 3
+notify_poll_seconds: 5
+session_heartbeat_seconds: 30
+session_stale_seconds: 90
+wake_timeout_seconds: 1800
+max_wakes_per_day: 6
+default_rules_paths: [CLAUDE.md, AGENTS.md]
+default_consumed: from_source
+authorize_items:
+  - key: push
+    description: Pushing commits to a remote.
+    screen_phrases: ["git push", "push to origin"]
+    denied_by_default: true
+  - key: merge_to_main
+    description: Merging a branch into the main branch.
+    screen_phrases: ["merge to main", "merge into main"]
+    denied_by_default: false
+  - key: release
+    description: Cutting a release, tagging a version or publishing a package.
+    screen_phrases: ["cut a release", "publish the package"]
+    denied_by_default: true
+  - key: destructive_database_statement
+    description: Running a destructive database statement (DROP, TRUNCATE, DELETE, ALTER).
+    screen_phrases: ["drop table", "truncate table"]
+    denied_by_default: true
+  - key: policy_change
+    description: Changing project-wide policy or rules.
+    screen_phrases: ["change the policy", "change the rules"]
+    denied_by_default: true

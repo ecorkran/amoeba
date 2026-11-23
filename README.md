@@ -30,6 +30,14 @@ For Claude Code sessions, `amoeba answer-first install` turns on the answer-firs
 uv tool install amoeba-ai
 ```
 
+Then set the machine up, once:
+
+```
+amoeba init
+```
+
+It writes the starter config and creates the store, and is safe to run again.
+
 The package is `amoeba-ai` on PyPI; it installs the `amoeba` and `amoeba-mcp` commands. Amoeba calls `sq` (Squadron) and `cf` (Context Forge), which are installed separately.
 
 ## Updating the installed amoeba

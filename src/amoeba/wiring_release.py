@@ -52,10 +52,11 @@ def start_after(
         return
     try:
         loaded, built = config(), deps()
-    except (ConfigError, AmoebaHomeError):
+    except (ConfigError, AmoebaHomeError) as error:
         # Not re-raised: the operation's own work has committed, so raising would
         # report a failure for work that happened, or replace the operation's own
-        # error. The held rows are found again by the next call.
-        logger.exception("could not build the config or deps to start held questions")
+        # error. The held rows are found again by the next call. One line and no
+        # traceback: a missing or invalid config is the person's to fix, not a crash.
+        logger.error("held questions not started: %s", error)
         return
     start_ended_held(store, loaded, built)

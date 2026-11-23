@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import shutil
 import sqlite3
 import subprocess
@@ -33,18 +32,17 @@ from pathlib import Path
 from typing import Any
 
 import anyio
-import yaml
 from mcp import ClientSession, StdioServerParameters, stdio_client
 
 from amoeba.config.home import config_path, state_home, store_path
-from amoeba.config.user_config import ConfigError, UserConfig, load_user_config
+from amoeba.config.starter import fill_missing_keys, starter_values
+from amoeba.config.user_config import ConfigError
 from amoeba.operations.names import OperationName
 from amoeba.store import sql
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS
 
 CHECKOUT = Path(__file__).resolve().parents[1]
-CONFIG_CONTRACT = CHECKOUT / "docs" / "config-contract.md"
 BACKUPS_DIRNAME = "backups"
 STORE_BACKUP = "amoeba.sqlite3"
 CONFIG_BACKUP = "config.yaml"
@@ -97,34 +95,16 @@ def check_checkout() -> str:
 
 
 def example_values() -> dict[str, Any]:
-    """The yaml block under ``## Example`` in the config contract, parsed."""
-    text = CONFIG_CONTRACT.read_text(encoding="utf-8").split("## Example", 1)[1]
-    match = re.search(r"```yaml\n(.*?)```", text, re.DOTALL)
-    if match is None:
-        raise UpdateError(f"no yaml block under ## Example in {CONFIG_CONTRACT}")
-    values: dict[str, Any] = yaml.safe_load(match.group(1))
-    return values
+    """The starter config's values: what a key the live config lacks is filled from."""
+    return starter_values()
 
 
 def add_missing_keys(path: Path, examples: dict[str, Any]) -> list[str]:
     """Append each required key the config lacks; returns the keys added."""
-    text = path.read_text(encoding="utf-8")
-    present: dict[str, Any] = yaml.safe_load(text) or {}
-    missing = [key for key in UserConfig.model_fields if key not in present]
-    unknown = [key for key in missing if key not in examples]
-    if unknown:
-        raise UpdateError(f"config lacks {unknown} and the contract has no example")
-    if missing:
-        addition = yaml.safe_dump(
-            {key: examples[key] for key in missing}, sort_keys=False
-        )
-        separator = "" if text.endswith("\n") else "\n"
-        path.write_text(text + separator + addition, encoding="utf-8")
     try:
-        load_user_config(path)
+        return fill_missing_keys(path, examples)
     except ConfigError as error:
-        raise UpdateError(f"config does not validate: {error}") from error
-    return missing
+        raise UpdateError(f"config cannot be completed: {error}") from error
 
 
 def _read_only(path: Path) -> sqlite3.Connection:

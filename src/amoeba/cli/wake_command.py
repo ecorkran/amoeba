@@ -14,6 +14,7 @@ from typing import Any, Final
 
 from amoeba.cli.answer_first_install import ANSWER_FIRST_COMMAND
 from amoeba.cli.exit_codes import EXIT_ERROR, EXIT_OK, EXIT_REJECTED
+from amoeba.cli.init_command import INIT_COMMAND
 from amoeba.cli.stand_in_command import STAND_IN_COMMAND
 from amoeba.config.home import StateLayout
 from amoeba.operations.wake_run import WAKE_RUN_COMMAND, run_wake
@@ -22,7 +23,7 @@ from amoeba.wiring import default_deps, open_store
 
 #: Commands that are not operations: no ``OperationName``, no tool, no ``-j``.
 CLI_ONLY_COMMANDS: Final = frozenset(
-    {WAKE_RUN_COMMAND, STAND_IN_COMMAND, ANSWER_FIRST_COMMAND}
+    {WAKE_RUN_COMMAND, STAND_IN_COMMAND, ANSWER_FIRST_COMMAND, INIT_COMMAND}
 )
 
 #: The exit code of each way a wake is recorded (D6): the command's own exit code is

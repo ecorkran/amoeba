@@ -10,7 +10,7 @@ and the key. The default ``authorize_items`` list exists only as the example in
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Final
+from typing import Annotated, Final, cast
 
 import yaml
 from pydantic import (
@@ -30,7 +30,8 @@ from pydantic import (
 from amoeba.answering.settings import ModelAlias, RulesPath
 from amoeba.store.vocabulary import ConsumedMode
 
-CONTRACT_DOC: Final = "docs/config-contract.md"
+#: The command a missing config points at. It writes a complete starter config.
+INIT_HINT: Final = "amoeba init"
 #: The longest a request may stay open: ten years, in hours. Stated in the contract.
 MAX_REQUEST_OPEN_TTL_HOURS: Final = 24 * 365 * 10
 #: ``session_stale_seconds`` is at least this many heartbeats, so one missed beat
@@ -141,22 +142,31 @@ class UserConfig(BaseModel):
         return self
 
 
-def _read_document(path: Path) -> object:
-    """The parsed YAML at ``path``, or ``ConfigError``."""
+def read_config_text(path: Path) -> str:
+    """The text of the config at ``path``, or ``ConfigError``."""
     try:
         raw = path.read_bytes()
     except FileNotFoundError as error:
-        raise ConfigError(f"no config at {path}; see {CONTRACT_DOC}") from error
+        raise ConfigError(
+            f"no config at {path}; run `{INIT_HINT}` to create one"
+        ) from error
     except OSError as error:
         raise ConfigError(f"{path}: cannot read: {error}") from error
     try:
-        text = raw.decode("utf-8")
+        return raw.decode("utf-8")
     except UnicodeDecodeError as error:
         raise ConfigError(f"{path}: not UTF-8: {error}") from error
+
+
+def config_document(path: Path, text: str) -> dict[str, object]:
+    """``text`` parsed as a config mapping; ``path`` only names the file in errors."""
     try:
-        return yaml.safe_load(text)
+        document = yaml.safe_load(text)
     except yaml.YAMLError as error:
         raise ConfigError(f"{path}: not YAML: {error}") from error
+    if not isinstance(document, dict):
+        raise ConfigError(f"{path}: the top level must be a mapping of keys")
+    return cast("dict[str, object]", document)
 
 
 def _problems(path: Path, error: ValidationError) -> list[str]:
@@ -175,10 +185,16 @@ def load_user_config(path: Path) -> UserConfig:
             mapping, or a key is missing, unknown or has a bad value. Every
             problem found is listed, one per line.
     """
-    document = _read_document(path)
-    if not isinstance(document, dict):
-        raise ConfigError(f"{path}: the top level must be a mapping of keys")
+    return user_config_from_text(path, read_config_text(path))
+
+
+def user_config_from_text(path: Path, text: str) -> UserConfig:
+    """The config in ``text``; ``path`` only names the file in each problem.
+
+    Raises:
+        ConfigError: As ``load_user_config``, for everything but reading the file.
+    """
     try:
-        return UserConfig.model_validate(document)
+        return UserConfig.model_validate(config_document(path, text))
     except ValidationError as error:
         raise ConfigError("\n".join(_problems(path, error))) from error
