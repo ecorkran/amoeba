@@ -12,9 +12,9 @@ dateUpdated: 20261122
 
 ## 20261123
 
-### Release 0.2.8
+### Release 0.2.9
 
-Slices 260 (hub and door) and 261 (members by name): store schema 12, and `update_live` installs the release from PyPI.
+0.2.8 was tagged, but CI failed (tests needed `cf`), so nothing published. Slices 260 (hub and door) and 261 (members by name): store schema 12, and `update_live` installs the release from PyPI.
 
 ---
 
