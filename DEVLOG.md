@@ -12,7 +12,8 @@ dateUpdated: 20261122
 
 ## 20261122
 
-### Release 0.2.6
+### Release 0.2.7
+- Replaces 0.2.6, tagged but never published (a test needed Context Forge on the CI machine).
 - `amoeba init` sets up a new machine (starter config and store, safe to repeat), and a missing config is one line with no traceback (#47).
 
 ### Release 0.2.5

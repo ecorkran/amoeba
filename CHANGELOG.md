@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.6] - 2026-11-22
+## [0.2.7] - 2026-11-22
+
+Released in place of 0.2.6, which was tagged but never published: its tag failed CI on a test that needed Context Forge installed.
 
 ### Added
 

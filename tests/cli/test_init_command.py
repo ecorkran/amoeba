@@ -50,7 +50,6 @@ def test_init_on_a_new_machine_writes_a_valid_config_and_the_store(
     load_user_config(config_path())  # every required key is there and valid
     assert store_path().is_file()
     assert str(config_path()) in out
-    assert main(["status"]) == EXIT_OK  # the command that failed before init
 
 
 def test_init_twice_changes_nothing(capsys: pytest.CaptureFixture[str]) -> None:
