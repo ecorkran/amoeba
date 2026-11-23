@@ -51,7 +51,6 @@ SELECT_CHECKOUT_MACHINE: Final = (
     "JOIN machines ON machines.machine_id = checkouts.machine_id "
     "WHERE checkouts.checkout_id = ?"
 )
-SELECT_MACHINE_NAME: Final = "SELECT name FROM machines WHERE machine_id = ?"
 
 # The first-added checkout with a wake command (D9): one machine's, or any machine's.
 SELECT_WAKEABLE_CHECKOUT_ON: Final = (

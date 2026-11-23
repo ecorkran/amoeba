@@ -1,4 +1,4 @@
-"""``project_names`` against the real ``cf list projects --json`` recording."""
+"""``project_details`` against the real ``cf list projects --json`` recording."""
 
 from __future__ import annotations
 

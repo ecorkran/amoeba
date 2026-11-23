@@ -620,3 +620,52 @@ def test_the_previous_version_is_the_recorded_one_before_the_installed_one(
     assert update_live.main(["update", "--previous", "0.0.1"]) == 0
 
     assert seen == [PREVIOUS, "0.0.1"]
+
+
+def test_restore_checks_the_backup_before_overwriting_the_live_store(
+    old_live: FakeSteps,
+) -> None:
+    update_live.update(VERSION, PREVIOUS, old_live.steps(), NOW)
+    backup = update_live.newest_backup()
+    live_before = store_path().read_bytes()
+    config_before = config_path().read_bytes()
+    (backup / update_live.STORE_BACKUP).write_bytes(b"not a database at all" * 100)
+
+    with pytest.raises(update_live.UpdateError, match="nothing restored"):
+        update_live.restore(backup, old_live.steps())
+
+    assert store_path().read_bytes() == live_before
+    assert config_path().read_bytes() == config_before
+    assert old_live.installed[-1] == update_live.install_spec(VERSION)
+
+
+def test_restore_refuses_a_backup_missing_a_file_and_changes_nothing(
+    old_live: FakeSteps,
+) -> None:
+    update_live.update(VERSION, PREVIOUS, old_live.steps(), NOW)
+    backup = update_live.newest_backup()
+    (backup / update_live.PREVIOUS_VERSION).unlink()
+    live_before = store_path().read_bytes()
+
+    with pytest.raises(update_live.UpdateError, match="has no previous-version"):
+        update_live.restore(backup, old_live.steps())
+
+    assert store_path().read_bytes() == live_before
+
+
+def test_a_failed_read_back_prints_the_traceback_to_stderr(
+    old_live: FakeSteps, capsys: pytest.CaptureFixture[str]
+) -> None:
+    broken = update_live.Steps(
+        install=old_live.installed.append,
+        migrate=_failing_migrate,
+        cf_projects=lambda: old_live.cf_ids,
+        list_tools=lambda: ALL_TOOLS,
+    )
+
+    with pytest.raises(update_live.UpdateError):
+        update_live.update(VERSION, PREVIOUS, broken, NOW)
+
+    err = capsys.readouterr().err
+    assert "Traceback" in err
+    assert "_failing_migrate" in err

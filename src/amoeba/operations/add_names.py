@@ -24,15 +24,22 @@ def refusal(code: SetUpProblemCode, detail: str) -> SetUpProblem:
     return SetUpProblem(code=code, detail=detail)
 
 
-def name_is_taken(
+def name_holder(
     transaction: Transaction, name: str, member_id: str | None
-) -> Member | bool:
-    """The active member that has ``name`` (not ``member_id`` itself), ``True`` when it
-    equals another member's id, else ``False``."""
+) -> Member | None:
+    """The active member that has ``name``, other than ``member_id`` itself."""
     holder = active_member_by_name(transaction, name)
     if holder is not None and holder.project_id != member_id:
         return holder
-    return name_is_other_members_id(transaction, name, member_id or "")
+    return None
+
+
+def name_is_taken(transaction: Transaction, name: str, member_id: str | None) -> bool:
+    """Whether ``name`` is taken for ``member_id``: another active member has it, or it
+    equals another member's id (D1)."""
+    return name_holder(transaction, name, member_id) is not None or (
+        name_is_other_members_id(transaction, name, member_id or "")
+    )
 
 
 def check_given_name(
@@ -43,7 +50,7 @@ def check_given_name(
             SetUpProblemCode.MALFORMED,
             f"name {name!r} is not a member name: {NAME_RULE}",
         )
-    if name_is_taken(transaction, name, member_id) is not False:
+    if name_is_taken(transaction, name, member_id):
         return refusal(
             SetUpProblemCode.NAME_TAKEN,
             f"name {name!r} is another member's name or id; give another --name",

@@ -145,6 +145,9 @@ def resolve_request(  # noqa: PLR0913 - the request and what the call gathered
     concept = _concept(request, resolver, problems)
     members: list[ResolvedMember] = []
     first_seen: dict[str, int] = {}
+    #: Each name a member takes in this request (lower case) and the entry giving it,
+    #: so two entries cannot take one name, which the store's unique index would refuse.
+    claimed: dict[str, int] = {}
     unnamed: int | None = None
     for index, entry in enumerate(request.members):
         own = f"members.{index}"
@@ -188,6 +191,19 @@ def resolve_request(  # noqa: PLR0913 - the request and what the call gathered
                 )
             )
             continue
+        claimed_name = _name_given(rename_to, plan)
+        if claimed_name is not None:
+            other = claimed.get(claimed_name.lower())
+            if other is not None:
+                problems.append(
+                    SetUpProblem(
+                        code=SetUpProblemCode.NAME_TAKEN,
+                        detail=f"{own}.name: {claimed_name!r} is also given to "
+                        f"members.{other} in this request; a name is one member's",
+                    )
+                )
+                continue
+            claimed[claimed_name.lower()] = index
         first_seen[project_id] = index
         dependencies = _dependencies(entry.depends_on, own, resolver, problems)
         members.append(
@@ -268,6 +284,15 @@ def _dependencies(
             )
         )
     return resolved
+
+
+def _name_given(rename_to: str | None, plan: MemberPlan | None) -> str | None:
+    """The name an entry gives a member in this call, or ``None`` when it gives none."""
+    if rename_to is not None:
+        return rename_to
+    if plan is not None and (plan.is_new or plan.renamed_from is not None):
+        return plan.name
+    return None
 
 
 def _rename(

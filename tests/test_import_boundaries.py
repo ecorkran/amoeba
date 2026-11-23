@@ -241,7 +241,7 @@ CLIENT_PART_MODULES = (
     "amoeba.operations.add_gather",
 )
 #: The functions that run ``cf``; only the client part's modules import them.
-CF_CALL_FUNCTIONS = frozenset({"project_of", "project_details", "project_names"})
+CF_CALL_FUNCTIONS = frozenset({"project_of", "project_details"})
 CF_CALLERS = frozenset(
     {"operations/here.py", "operations/naming.py", "operations/run_gather.py"}
 )
@@ -267,7 +267,7 @@ def _reached_from_module(name: str) -> dict[str, str]:
 
 
 def test_only_the_client_part_imports_the_functions_that_run_cf() -> None:
-    """Direct imports of ``project_of``, ``project_details`` and ``project_names``
+    """Direct imports of ``project_of`` and ``project_details``
     (``operations.add_gather`` reaches them through ``here``). A type-only import
     (``CFProject``, ``CFProjectNotFound``) is allowed: ``working_directory`` keeps its
     ``CFProject`` shape."""

@@ -16,8 +16,9 @@ holds its one row and ``machines`` the one ``local`` row, that no member lacks a
 and every active member ``cf`` lists has a checkout here, and the MCP tool list).
 Anything that fails after the install, a failed ``amoeba list`` included, restores
 automatically: the store, the config and the previous version, and exits 1 saying what
-failed. ``restore`` puts the newest backup back and reinstalls the version that was
-installed before it.
+failed. ``restore`` checks the newest backup is whole, then puts it back and
+reinstalls the version that was installed before it. Everything written to the store or
+the config after the backup was taken is lost by a restore, automatic or not.
 
 Backups live in ``<state home>/backups/<stamp>/``; a successful update deletes
 every older one, so one set is kept, and records the version it installed in
@@ -39,6 +40,7 @@ import sqlite3
 import subprocess
 import sys
 import tomllib
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -221,11 +223,45 @@ def restore_spec(version: str) -> str:
     return f"{PACKAGE_NAME}=={version}"
 
 
+def check_backup(backup: Path) -> str:
+    """The previous version ``backup`` records, once the backup is whole: every file
+    is there and its store passes ``integrity_check`` with a schema version. Nothing
+    live is touched, so a damaged backup stops a restore before it overwrites anything.
+
+    Raises:
+        UpdateError: The backup is missing a file or its store is damaged.
+    """
+    for name in (STORE_BACKUP, CONFIG_BACKUP, PREVIOUS_VERSION):
+        if not (backup / name).is_file():
+            raise UpdateError(f"backup {backup.name} has no {name}; nothing restored")
+    try:
+        with _read_only(backup / STORE_BACKUP) as connection:
+            integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
+            version = connection.execute(
+                sql.SELECT_SCHEMA_VERSION, (sql.SCHEMA_META_ROW_ID,)
+            ).fetchone()
+    except sqlite3.Error as error:
+        raise UpdateError(
+            f"backup {backup.name} store cannot be read: {error}; nothing restored"
+        ) from error
+    if integrity != INTEGRITY_OK or version is None:
+        raise UpdateError(
+            f"backup {backup.name} store is damaged (integrity_check: {integrity}, "
+            f"schema version: {version}); nothing restored"
+        )
+    return (backup / PREVIOUS_VERSION).read_text(encoding="utf-8").strip()
+
+
 def restore(backup: Path, steps: Steps) -> str:
-    """Put ``backup`` back and reinstall its previous version; returns that version."""
+    """Put ``backup`` back and reinstall its previous version; returns that version.
+
+    The backup is checked first (:func:`check_backup`). Everything recorded in the
+    store or the config after the backup was taken is lost: a restore puts the files
+    back as they were then.
+    """
+    previous = check_backup(backup)
     copy_database(backup / STORE_BACKUP, store_path())
     shutil.copy2(backup / CONFIG_BACKUP, config_path())
-    previous = (backup / PREVIOUS_VERSION).read_text(encoding="utf-8").strip()
     steps.install(restore_spec(previous))
     record_installed(previous)
     return previous
@@ -310,7 +346,9 @@ def update(version: str, previous: str, steps: Steps, now: datetime) -> list[str
     except Exception as error:  # noqa: BLE001 - the update's process boundary: whatever
         # the migration or a read-back raises (a failed `amoeba list`, `cf`, the MCP
         # server) must restore before the script reports it; KeyboardInterrupt is not
-        # caught, which is the killed update the next run recovers from (#45).
+        # caught, which is the killed update the next run recovers from (#45). The
+        # traceback goes to stderr first: the `UpdateError` carries only the message.
+        traceback.print_exception(error, file=sys.stderr)
         restored = restore(backup, steps)
         raise UpdateError(
             f"{type(error).__name__} after the install: {error}; restored {restored}"

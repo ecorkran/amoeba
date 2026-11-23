@@ -19,6 +19,7 @@ from uuid import uuid4
 from amoeba.operations.add_names import (
     NAME_RULE,
     check_given_name,
+    name_holder,
     name_is_taken,
     refusal,
 )
@@ -30,6 +31,7 @@ from amoeba.store.checkouts import checkout_at, checkouts_of_member
 from amoeba.store.machines import acting_machine_id
 from amoeba.store.member_names import (
     active_member_by_origin,
+    name_is_other_members_id,
     removed_member_by_origin,
 )
 from amoeba.store.models import Member
@@ -241,11 +243,11 @@ def _create(  # noqa: PLR0913 - steps 4 and 5 and the flags
             "give --name",
         )
     else:
-        taken = name_is_taken(transaction, chosen, None)
-        if isinstance(taken, Member):
-            has_checkout = bool(checkouts_of_member(transaction, taken.project_id))
-            return _name_taken(taken, here, new_member, has_checkout)
-        if taken:
+        holder = name_holder(transaction, chosen, None)
+        if holder is not None:
+            has_checkout = bool(checkouts_of_member(transaction, holder.project_id))
+            return _name_taken(holder, here, new_member, has_checkout)
+        if name_is_other_members_id(transaction, chosen, ""):
             return refusal(
                 SetUpProblemCode.NAME_TAKEN,
                 f"the name {chosen!r} is another member's id; give --name",

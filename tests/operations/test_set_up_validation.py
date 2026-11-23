@@ -128,6 +128,30 @@ def test_a_member_listed_twice_by_name_and_id_is_malformed(store: Store) -> None
     assert "members.0" in result.problems[0].detail
 
 
+def test_two_entries_renaming_to_one_name_are_name_taken_not_a_store_error(
+    store: Store,
+) -> None:
+    """The store's unique index would refuse the second write; the engine says so
+    first, naming both entries, and writes nothing (261 review)."""
+    document = {
+        "program": "demo",
+        "members": [
+            _member(project="provider", name="shared"),
+            _member(project="consumer", name="Shared"),
+        ],
+    }
+
+    result = _rejected(
+        store, document, projects=[("provider-id", "provider"), ("c-id", "consumer")]
+    )
+
+    assert [problem.code for problem in result.problems] == [
+        SetUpProblemCode.NAME_TAKEN
+    ]
+    assert "members.1.name" in result.problems[0].detail
+    assert "members.0" in result.problems[0].detail
+
+
 def test_a_member_named_by_the_working_directory_and_by_name_is_malformed(
     store: Store,
 ) -> None:

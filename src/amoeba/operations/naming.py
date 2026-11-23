@@ -15,6 +15,7 @@ stdout and stderr appear in no log line.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -53,9 +54,34 @@ logger = logging.getLogger(__name__)
 NAMING_GIT_SECONDS: Final = 30.0
 
 
+def _git_root_within(path: Path, seconds: float) -> tuple[bool, Path | None]:
+    """``here.git_root(path)``, or ``(False, None)`` when the file system does not
+    answer within ``seconds``. The probe stats ``path``, which a hung mount can block
+    for good and no subprocess timeout reaches, so it runs in a daemon thread that is
+    left behind when it does not return."""
+    found: list[Path | None] = []
+    probe = threading.Thread(
+        target=lambda: found.append(here.git_root(path)), daemon=True
+    )
+    probe.start()
+    probe.join(seconds)
+    if probe.is_alive():
+        return False, None
+    return True, found[0]
+
+
 def _read_origin(path: Path, git: CfRun) -> str | None:
     """The reduced ``origin`` of the repo at ``path``, or ``None`` with a warning."""
-    if here.git_root(path) is None:
+    answered, root = _git_root_within(path, here.ORIGIN_READ_TIMEOUT_SECONDS)
+    if not answered:
+        logger.warning(
+            "naming: %s did not answer within %ss (a hung mount?); its member has no "
+            "origin",
+            path,
+            here.ORIGIN_READ_TIMEOUT_SECONDS,
+        )
+        return None
+    if root is None:
         logger.info("naming: %s is not a git repo; its member has no origin", path)
         return None
     answer = git_read(remote_origin_args(), path, git, here.ORIGIN_READ_TIMEOUT_SECONDS)
@@ -111,15 +137,26 @@ def _name_for(
     A removed member's name is for display only, so it skips the two clash checks.
     """
     detail = details.get(member.project_id)
-    if detail is None or not is_member_name(detail.name):
-        return member.project_id
+    if detail is None:
+        return _by_id(member, "Context Forge does not list its project")
+    if not is_member_name(detail.name):
+        return _by_id(member, f"{detail.name!r} is not a valid member name")
     if member.removed:
         return detail.name
     if active_member_by_name(transaction, detail.name) is not None:
-        return member.project_id
+        return _by_id(member, f"another member already has the name {detail.name!r}")
     if name_is_other_members_id(transaction, detail.name, member.project_id):
-        return member.project_id
+        return _by_id(member, f"{detail.name!r} is another member's id")
     return detail.name
+
+
+def _by_id(member: UnnamedMember, reason: str) -> str:
+    """The member's own id as its name, said in the log so ``list members`` showing an
+    id has a reason on record (``amoeba add --project ID --name NAME`` renames it)."""
+    logger.warning(
+        "naming: member %s is named by its id: %s", member.project_id, reason
+    )
+    return member.project_id
 
 
 def _origin_for(
@@ -179,6 +216,9 @@ def _retire_wake_command(
         return
     clear_member_wake_command(transaction, member.project_id)
     if not took:
+        # The command is logged whole on purpose: the column was its only copy and the
+        # store holds it in plain text already, so the log is no wider than the store.
+        # Without it the PM could not set it again.
         logger.warning(
             "naming: member %s has no checkout, so its wake command was dropped: %r",
             member.project_id,

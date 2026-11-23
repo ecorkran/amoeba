@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from amoeba.store import sql_checkouts
+from amoeba.store import sql_checkouts, sql_machines
 from amoeba.store.errors import StoreError
 from amoeba.store.row_values import (
     decode_timestamp,
@@ -195,7 +195,7 @@ def set_checkout_wake_command(
         raise StoreError(f"checkout {checkout_id} does not exist")
     if integer(row[0], "checkouts.machine_id") != acting.machine_id:
         acting_row = transaction.execute(
-            sql_checkouts.SELECT_MACHINE_NAME, (acting.machine_id,)
+            sql_machines.SELECT_MACHINE_NAME, (acting.machine_id,)
         ).fetchone()
         acting_name = "unknown" if acting_row is None else text(acting_row[0], "name")
         raise StoreError(

@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -111,16 +112,45 @@ def build_schema_11_store(path: Path, members: Sequence[OldMember]) -> None:
         _insert_pair_and_message(connection, members)
 
 
+#: Every table of schemas 11 and 12, so the count statements below are built from
+#: constants only (no table name comes from the database).
+TABLES: Final = (
+    "answers",
+    "call_results",
+    "checkouts",
+    "closed_mark",
+    "deliveries",
+    "dependency_pairs",
+    "machines",
+    "members",
+    "message_rejections",
+    "messages",
+    "owners",
+    "pm_marker",
+    "programs",
+    "questions",
+    "releases",
+    "schema_meta",
+    "sessions",
+    "standing_answers",
+    "wakes",
+)
+
+
 def row_counts(connection: sqlite3.Connection) -> dict[str, int]:
-    """The number of rows in every table the connection holds."""
-    tables = [
+    """The number of rows in every table the connection holds. A table not in
+    ``TABLES`` fails loudly, so a new one is added there on purpose."""
+    present = {
         row[0]
         for row in connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' "
             "AND name NOT LIKE 'sqlite_%'"
         )
-    ]
+    }
+    unknown = present - set(TABLES)
+    assert not unknown, f"add {sorted(unknown)} to schema_11.TABLES"
     return {
         table: int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-        for table in tables
+        for table in TABLES
+        if table in present
     }

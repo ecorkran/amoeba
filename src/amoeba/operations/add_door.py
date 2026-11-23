@@ -54,7 +54,15 @@ def _wake_command_locations(document: object) -> tuple[str, ...]:
 
 
 def refuse_door_fields(document: object, door: Door) -> SetUpResult | None:
-    """A ``rejected`` result naming each field ``door`` may not set, or ``None``."""
+    """A ``rejected`` result naming each field ``door`` may not set, or ``None``.
+
+    This is the client part's check, run before anything is gathered or sent: the hub
+    part takes no ``Door``, so a call that reaches it with ``wake_command`` is not
+    re-checked there. That is a policy about which of a machine's own interfaces may
+    set its own checkout's command, not a boundary between machines: a token holder
+    can set it through the CLI anyway, and the hub only ever sets it on the calling
+    machine's own checkout (261 D7).
+    """
     if door in WAKE_COMMAND_DOORS:
         return None
     locations = _wake_command_locations(document)

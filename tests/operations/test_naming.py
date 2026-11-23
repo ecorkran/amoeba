@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import subprocess
 import time
 from collections.abc import Callable, Iterator, Sequence
@@ -28,7 +29,7 @@ from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.naming import name_members
 from amoeba.operations.state_move import open_state_store
 from amoeba.store.checkouts import checkouts_of_member
-from amoeba.store.errors import StoreError
+from amoeba.store.errors import StoreError, StoreRowError
 from amoeba.store.models import Member
 from amoeba.store.programs import get_member_any
 from amoeba.store.store import Store, Transaction
@@ -461,10 +462,70 @@ def test_a_named_hub_store_opens_without_taking_the_write_lock(
     build_schema_11_store(layout.store_path, [OldMember("id-a")])
     open_hub_store(layout).close()
 
-    import sqlite3
-
     with closing(sqlite3.connect(layout.store_path, isolation_level=None)) as holder:
         holder.execute("BEGIN IMMEDIATE")
         with open_hub_store(layout):
             pass
         holder.execute("ROLLBACK")
+
+
+def test_each_fallback_to_the_id_is_logged_with_its_reason(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    opened = _world(tmp_path)
+    with caplog.at_level(logging.WARNING):
+        name_members(opened.store, opened.cf, subprocess.run)
+    opened.store.close()
+
+    lines = [
+        r.getMessage() for r in caplog.records if "named by its id" in r.getMessage()
+    ]
+    reasons = {line.split("member ")[1].split(" ")[0]: line for line in lines}
+    assert "does not list its project" in reasons["id-c"]
+    assert "not a valid member name" in reasons["id-e"]
+    assert "another member already has the name" in reasons["id-b"]
+    assert "is another member's id" in reasons["id-f"]
+    assert "id-a" not in reasons, (
+        "a member that got its Context Forge name says nothing"
+    )
+
+
+def test_a_path_the_file_system_never_answers_for_gives_no_origin_within_the_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A hung mount blocks the probe for ``.git``, which no subprocess timeout reaches
+    (261 review): naming goes on without waiting for it."""
+    monkeypatch.setattr(here, "ORIGIN_READ_TIMEOUT_SECONDS", 0.1)
+    opened = _world(tmp_path)
+
+    def never_answers(_path: Path) -> None:
+        time.sleep(2)  # the abandoned probe outlives the bound, and ends quietly
+
+    monkeypatch.setattr(here, "git_root", never_answers)
+    started = time.monotonic()
+    with caplog.at_level(logging.WARNING):
+        name_members(opened.store, opened.cf, _git_must_not_run)
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 3
+    assert "did not answer" in caplog.text
+    with opened.store.read() as transaction:
+        origins = transaction.execute("SELECT origin FROM members").fetchall()
+    assert all(row[0] is None for row in origins)
+    opened.store.close()
+
+
+def test_two_hub_ids_that_differ_only_in_case_fail_loudly_not_with_an_index_error(
+    tmp_path: Path,
+) -> None:
+    """The name index compares without case, so naming both by their ids would clash
+    (261 review): the opener says which two members, and names neither."""
+    layout = make_layout(tmp_path)
+    build_schema_11_store(layout.store_path, [OldMember("Abc"), OldMember("abc")])
+
+    with pytest.raises(StoreRowError, match="already has that name in another case"):
+        open_hub_store(layout)
+
+    with closing(sqlite3.connect(layout.store_path)) as connection:
+        names = connection.execute("SELECT name FROM members").fetchall()
+    assert names == [(None,), (None,)], "the write rolled back as a whole"
