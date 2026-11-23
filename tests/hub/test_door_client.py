@@ -4,12 +4,16 @@ answers for the directory, or fails, and a hub call counter."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import json
+import subprocess
+from collections.abc import Iterator, Sequence
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 from cf_fixtures import fake_cf_run
+from git_repo import git, make_repo
 from operations.pause_support import build_deps
 from operations.status_support import FakeCf
 from store.decision_support import CORE, LINT, NAMES
@@ -17,6 +21,7 @@ from store.release_support import FULL_HASH
 
 from amoeba import wiring
 from amoeba.cli.main import EXIT_ERROR, main
+from amoeba.client import call as client_call
 from amoeba.config.home import StateLayout
 from amoeba.hub.calls import DoorHooks
 from amoeba.operations.deps import Deps
@@ -241,3 +246,51 @@ def test_a_failing_cf_exits_three_from_the_cli_with_no_hub_call(
     assert code == EXIT_ERROR
     assert "ContextForgeError" in capsys.readouterr().err
     assert counter.calls == 0
+
+
+def test_a_raw_origin_with_a_password_is_in_no_call_body_and_the_hub_records_it_reduced(
+    layout: StateLayout,
+    hub: InProcessHub,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "hunter2-the-password"
+    repo = make_repo(tmp_path / "pw-repo")
+    git(repo, "remote", "add", "origin", f"https://user:{secret}@github.com/org/pw.git")
+    document = json.dumps({"id": "cf-pw", "name": "pw-repo", "projectPath": str(repo)})
+
+    def cf(argv: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(list(argv), 0, document, "")
+
+    deps = replace(
+        build_deps(tmp_path / "client", polls={}, spawns=[]).deps,
+        cf_run=cf,
+        git_run=subprocess.run,
+        list_runs=_no_runs,
+    )
+
+    def stub(_layout: StateLayout) -> Deps:
+        return deps
+
+    monkeypatch.setattr(wiring, "default_deps", stub)
+    bodies: list[bytes] = []
+    real_attempt = getattr(client_call, "_attempt")  # noqa: B009
+
+    def recording(*args: Any) -> Any:
+        bodies.append(args[3])
+        return real_attempt(*args)
+
+    monkeypatch.setattr(client_call, "_attempt", recording)
+
+    added = wiring.invoke(OperationName.ADD, {}, repo, Door.CLI)
+
+    assert isinstance(added, SetUpResult)
+    assert added.outcome.value == "applied"
+    assert bodies and not any(secret.encode() in body for body in bodies)
+    assert any(b"github.com/org/pw" in body for body in bodies)
+    rows = hub.rig.rows("SELECT origin FROM members WHERE name = 'pw-repo'")
+    assert rows == [("github.com/org/pw",)]
+    stored = "".join(
+        str(cell) for row in hub.rig.rows("SELECT * FROM members") for cell in row
+    )
+    assert secret not in stored

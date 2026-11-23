@@ -24,6 +24,8 @@ from git_repo import git, make_repo
 
 PROJECTS_FILE: Final = "cf-projects.json"
 RUNS_FILE: Final = "sq-runs.json"
+#: Every call the stub ``cf`` got, one line each: the arguments and the directory.
+CF_CALLS_FILE: Final = "cf-calls.log"
 BIN_DIRECTORY: Final = "bin"
 #: The origin forms of one repo: what each machine's clone says (D3).
 SSH_ORIGIN: Final = "git@github.com:org/shared-repo.git"
@@ -35,6 +37,8 @@ from pathlib import Path
 
 home = Path({home!r})
 args = sys.argv[1:]
+with (home / {calls!r}).open("a") as log:
+    log.write(" ".join(args) + " in " + os.getcwd() + "\\n")
 if args[:1] != ["get"]:
     sys.stderr.write("stub cf: unexpected command " + " ".join(args) + "\\n")
     sys.exit(1)
@@ -79,6 +83,7 @@ def install_client_tools(home: Path) -> Path:
             python=sys.executable,
             home=str(home),
             projects=PROJECTS_FILE,
+            calls=CF_CALLS_FILE,
             missing=missing,
         ),
     )
@@ -139,3 +144,9 @@ def add_worktree(home: Path, repo: Path, name: str) -> Path:
 def set_runs(home: Path, runs: list[dict[str, object]]) -> None:
     """What the stub ``sq runs list --json --all`` prints in ``home``."""
     (home / RUNS_FILE).write_text(json.dumps(runs), encoding="utf-8")
+
+
+def cf_calls(home: Path) -> list[str]:
+    """The calls the stub ``cf`` of ``home`` has had, oldest first."""
+    log = home / CF_CALLS_FILE
+    return log.read_text(encoding="utf-8").splitlines() if log.exists() else []

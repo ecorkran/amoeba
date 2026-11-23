@@ -467,24 +467,30 @@ Before `add`'s rewrite, so a command is never written to a checkout while the cl
 
 **Commit**: `test: give the two-machine fixture per-machine Context Forge and clones`
 
-- [ ] **15.2 `tests/hub/test_chain.py`**
-  - [ ] 240's three-repo chain (`tests/cli/test_requests_scenario.py`) by CLI, the repos split across the machines, each step followed by `inbox` from the other; no wake commands, so every `send`, the child with its `parent`, is served
-  - [ ] Success: passes in the normal tier
-- [ ] **15.3 `tests/hub/test_members_door.py`**, through the door, one test each:
-  - [ ] `add` on `alpha` (SSH) then `beta` (HTTPS) gives one member with two checkouts, seen from both, also after a rename in between; the recorded `origin` equals the reduced form sent, port kept
-  - [ ] `add` of another repo under a taken name is `name_taken` with both remotes, then `--name` creates it; a second checkout with no `origin` is `no_origin`; `add --project <name> --wake-command x` is refused from either machine
-  - [ ] An `add` body with an unreduced `origin` (260's client call directly) is `malformed_call` and writes nothing; a call lacking `here` or `runs` is `malformed_call` with the touch committed
-  - [ ] `list members`, `rm <name>`, `rm --checkout` and `add --project` send no `here` and make no `cf` call; the `add --project` and `rm <name>` results have `working_directory` null
-  - [ ] Two worktrees of one clone and the clone on the other machine read one request from `inbox`; of two `reply` accepts the first wins and the second is told so
-  - [ ] `status` and `list` from a client show its runs under the right members (an `sq` stub in the client home)
-  - [ ] A raw `origin` with a password is in no call body, hub log, result, log or store row
-  - [ ] A hub started on a `tests/store/schema_11.py` store names each member by its id; then `add --project <id> --name`, `add --attach-to <id>` and `rm <id>` each work
-  - [ ] Success: passes
-- [ ] **15.4 Load and live**
-  - [ ] `tests/load/test_door_load.py` adds `send` and `inbox` callers and keeps both bounds (each call within 2 seconds with 16 clients; median of 100 idle calls under 200 ms). Note the measured figures
-  - [ ] The CI gate for the load bounds is the `Tests` step of `.github/workflows/ci.yml`, which runs a bare `uv run pytest` over everything `addopts` in `pyproject.toml` does not ignore (only `tests/live`). `tests/test_ci_gates_load.py` pins it: it parses both files and fails if that step's command names paths or markers that leave `tests/load` out, or if `addopts` ignores or deselects `tests/load`
-  - [ ] `tests/live/messaging/test_messaging_live.py`: a CLI-only variant of walkthrough steps 3 to 8 with the repos on two fixture machines, each with its own Context Forge data directory and real `cf` and `git`
-  - [ ] Success: the load test passes; the live variant passes with `uv run pytest tests/live/messaging` and the `AMOEBA_LIVE_*` variables set (a bare `uv run pytest` skips `tests/live`), and its result is noted
+- [x] **15.2 `tests/hub/test_chain.py`**
+  - [x] 240's three-repo chain (`tests/cli/test_requests_scenario.py`) by CLI, the repos split across the machines, each step followed by `inbox` from the other; no wake commands, so every `send`, the child with its `parent`, is served
+  - [x] Success: passes in the normal tier
+
+  Note: `tests/hub/test_chain.py` puts squadron and ai-project-guide on alpha and context-forge on beta, with no wake commands. Each step is followed by `inbox` from the other machine, the child with its parent is served, and a rejection case is included. It passed on the first run.
+- [x] **15.3 `tests/hub/test_members_door.py`**, through the door, one test each:
+  - [x] `add` on `alpha` (SSH) then `beta` (HTTPS) gives one member with two checkouts, seen from both, also after a rename in between; the recorded `origin` equals the reduced form sent, port kept
+  - [x] `add` of another repo under a taken name is `name_taken` with both remotes, then `--name` creates it; a second checkout with no `origin` is `no_origin`; `add --project <name> --wake-command x` is refused from either machine
+  - [x] An `add` body with an unreduced `origin` (260's client call directly) is `malformed_call` and writes nothing; a call lacking `here` or `runs` is `malformed_call` with the touch committed
+  - [x] `list members`, `rm <name>`, `rm --checkout` and `add --project` send no `here` and make no `cf` call; the `add --project` and `rm <name>` results have `working_directory` null
+  - [x] Two worktrees of one clone and the clone on the other machine read one request from `inbox`; of two `reply` accepts the first wins and the second is told so
+  - [x] `status` and `list` from a client show its runs under the right members (an `sq` stub in the client home)
+  - [x] A raw `origin` with a password is in no call body, hub log, result, log or store row
+  - [x] A hub started on a `tests/store/schema_11.py` store names each member by its id; then `add --project <id> --name`, `add --attach-to <id>` and `rm <id>` each work
+  - [x] Success: passes
+
+  Note: `tests/hub/test_members_door.py` runs a real hub process and the real CLI, with a stub `cf` per machine. The add on `alpha` then `beta` gives one member, with `origin` `github.com/org/shared-repo`; the port is kept (`git.example:8443/org/ported`). A body with an unreduced `origin` is `malformed_call` and no password appears in any message; a call lacking `here` or `runs` is `malformed_call` with `last_called_at` changed. The no-call commands are checked against `cf-calls.log`, which `tests/hub_clients.py` now fills through a new `cf_calls` call log. The raw-origin check covers the repo's own `.git/config` as the one exception, and `tests/hub/test_door_client.py` checks that no call body holds it.
+- [x] **15.4 Load and live**
+  - [x] `tests/load/test_door_load.py` adds `send` and `inbox` callers and keeps both bounds (each call within 2 seconds with 16 clients; median of 100 idle calls under 200 ms). Note the measured figures
+  - [x] The CI gate for the load bounds is the `Tests` step of `.github/workflows/ci.yml`, which runs a bare `uv run pytest` over everything `addopts` in `pyproject.toml` does not ignore (only `tests/live`). `tests/test_ci_gates_load.py` pins it: it parses both files and fails if that step's command names paths or markers that leave `tests/load` out, or if `addopts` ignores or deselects `tests/load`
+  - [x] `tests/live/messaging/test_messaging_live.py`: a CLI-only variant of walkthrough steps 3 to 8 with the repos on two fixture machines, each with its own Context Forge data directory and real `cf` and `git`
+  - [x] Success: the load test passes; the live variant passes with `uv run pytest tests/live/messaging` and the `AMOEBA_LIVE_*` variables set (a bare `uv run pytest` skips `tests/live`), and its result is noted
+
+  Note: `tests/load/test_door_load.py` runs 16 threads: 5 `decisions` readers, 5 writers, 3 `send` callers and 3 `inbox` callers. Measured: 16 clients, 260 calls in 8.1 s, slowest 0.158 s (bound 2 s), median 7 ms. Idle, 100 calls each: `decisions` median 2.5 ms, `inbox` 2.5 ms, `send` 4.3 ms (bound 200 ms). `tests/test_ci_gates_load.py` is new. The live variant is `tests/live/messaging/test_two_machines_live.py` (the file name in the sub-item above is the planned one), a real hub process with two client homes, each with its own `CONTEXT_FORGE_DATA_DIR`, real `cf` and `git`, and the chain of walkthrough steps 3 to 8 over the CLI. `uv run pytest tests/live/messaging` with the `AMOEBA_LIVE_*` variables set: 6 passed in 41.6 s (the two new tests and the four existing ones). The existing live harnesses in `tests/live/pause/harness.py`, `tests/live/messaging/repos.py` and `tests/live/program/consumer.py` now run a bare `add --program`, since `add --project <name>` is now `not_a_member`; their other steps were not run.
 
 **Commit**: `test: run the request chain and member registration across two machines`
 

@@ -30,6 +30,7 @@ from hub.start_support import free_port
 from hub_clients import (
     BIN_DIRECTORY,
     add_worktree,
+    cf_calls,
     clone_repo,
     install_client_tools,
     set_runs,
@@ -135,6 +136,10 @@ class ClientHome:
     def set_runs(self, runs: list[dict[str, object]]) -> None:
         set_runs(self.home, runs)
 
+    def cf_calls(self) -> list[str]:
+        """What the stub ``cf`` of this machine has been asked so far."""
+        return cf_calls(self.home)
+
 
 class FixtureHub:
     """A hub process on a hub home, and the machines joined to it."""
@@ -172,6 +177,9 @@ class FixtureHub:
         self.stdout_lines: list[str] = []
         self.tokens: dict[str, str] = {}
         self.clients: dict[str, ClientHome] = {}
+        #: Variables set last in a home's environment, replacing its stubs (the live
+        #: tier gives a client the real ``cf`` and its own data directory).
+        self.home_environment: dict[Path, dict[str, str]] = {}
 
     def write_hub_yaml(self) -> None:
         self.layout.hub_file.write_text(yaml.safe_dump(self.settings), encoding="utf-8")
@@ -187,7 +195,8 @@ class FixtureHub:
             path = hub_path()
         else:
             path = os.pathsep.join([str(home / BIN_DIRECTORY), safe_path()])
-        return {"AMOEBA_HOME": str(home), "PATH": path, "HOME": str(self.root)}
+        base = {"AMOEBA_HOME": str(home), "PATH": path, "HOME": str(self.root)}
+        return {**base, **self.home_environment.get(home, {})}
 
     def run_in(
         self,

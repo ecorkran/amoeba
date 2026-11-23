@@ -62,7 +62,7 @@ def build_repo(parent: Path, base: PauseWorld, name: str) -> PauseWorld:
     if git(repo, "status", "--porcelain").stdout.strip():
         git(repo, "commit", "-q", "-m", "cf init")
     world = dataclasses.replace(base, repo=repo)
-    added = run_amoeba(world, "add", "--program", PROGRAM_ID, "--project", name)
+    added = run_amoeba(world, "add", "--program", PROGRAM_ID)
     assert added.returncode == 0, added.stderr + added.stdout
     return world
 

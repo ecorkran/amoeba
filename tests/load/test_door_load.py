@@ -1,9 +1,11 @@
 """The door under load: 16 clients against a real hub (slice 260, D18).
 
-Half the threads read ``decisions`` over 500 seeded answers; half write (``standing``,
-``withdraw``, ``mark_read``). No call may be refused or unknown and every one must
-finish within ``MAX_CALL_SECONDS``. A second case makes 100 calls from one thread
-against the idle hub and holds the median under ``MEDIAN_CALL_SECONDS``.
+Five threads read ``decisions`` over 500 seeded answers, five write (``standing``,
+``withdraw``, ``mark_read``), three ``send`` requests and three read ``inbox`` (slice
+261: the caller's ``here`` travels with each). No call may be refused or unknown and
+every one must finish within ``MAX_CALL_SECONDS``. A second case makes 100 calls from
+one thread against the idle hub and holds the median under ``MEDIAN_CALL_SECONDS``,
+for ``decisions``, ``inbox`` and ``send`` each.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from hub_fixture import FIRST, SECOND, FixtureHub, two_machine_hub
-from store.decision_support import CORE, seed_programs
+from store.decision_support import CORE, LINT, NAMES, seed_programs
 from store.question_support import ANSWERING_RUN, claimed_question
 
 from amoeba.answering.values import AnsweringEvidence
@@ -29,6 +31,7 @@ from amoeba.wire.times import DoorTimes
 
 SEEDED_ANSWERS = 500
 THREADS = 16
+READERS, WRITERS, SENDERS, INBOX_READERS = 5, 5, 3, 3
 ROUNDS = 10
 MAX_CALL_SECONDS = 2.0
 SINGLE_THREAD_CALLS = 100
@@ -86,6 +89,24 @@ def _timed(
 ) -> tuple[float, dict[str, object]]:
     began = time.monotonic()
     result = call(client, cert, name, document, DoorTimes())
+    took = time.monotonic() - began
+    time.sleep(think_seconds)
+    return took, result
+
+
+#: What the client sends beside the document: the caller is ``CORE`` on ``alpha``.
+CALLER_HERE: dict[str, object] = {"here": {"project_id": CORE}}
+
+
+def _timed_with_here(
+    client: ClientFile,
+    cert: Path,
+    name: str,
+    document: object,
+    think_seconds: float = THINK_SECONDS,
+) -> tuple[float, dict[str, object]]:
+    began = time.monotonic()
+    result = call(client, cert, name, document, DoorTimes(), extra=CALLER_HERE)
     took = time.monotonic() - began
     time.sleep(think_seconds)
     return took, result
@@ -149,12 +170,43 @@ def test_sixteen_clients_none_refused_and_each_call_within_the_bound(
 
             return run
 
-        bodies = [
-            reader(FIRST if number % 2 else SECOND) for number in range(THREADS // 2)
-        ] + [
-            writer(FIRST if number % 2 else SECOND, number)
-            for number in range(THREADS // 2)
-        ]
+        def sender(number: int) -> Callable[[], list[float]]:
+            def run() -> list[float]:
+                client, cert = _client(hub, FIRST)
+                times: list[float] = []
+                for round_number in range(ROUNDS):
+                    document = {
+                        "id": f"load-{number}-{round_number}",
+                        "to": NAMES[LINT],
+                        "subject": "load",
+                        "body": "a request under load",
+                    }
+                    took, sent = _timed_with_here(client, cert, "send", document)
+                    assert sent["outcome"] == "sent", sent
+                    times.append(took)
+                return times
+
+            return run
+
+        def inbox_reader() -> Callable[[], list[float]]:
+            def run() -> list[float]:
+                client, cert = _client(hub, FIRST)
+                times: list[float] = []
+                for _ in range(ROUNDS):
+                    took, listed = _timed_with_here(client, cert, "inbox", {})
+                    assert listed["outcome"] == "listed", listed
+                    times.append(took)
+                return times
+
+            return run
+
+        bodies = (
+            [reader(FIRST if n % 2 else SECOND) for n in range(READERS)]
+            + [writer(FIRST if n % 2 else SECOND, n) for n in range(WRITERS)]
+            + [sender(n) for n in range(SENDERS)]
+            + [inbox_reader() for _ in range(INBOX_READERS)]
+        )
+        assert len(bodies) == THREADS
         threads = [
             threading.Thread(
                 target=_worker,
@@ -193,3 +245,39 @@ def test_one_thread_on_the_idle_hub_has_a_median_under_the_bound(
         median = statistics.median(seconds)
         print(f"LOAD: {SINGLE_THREAD_CALLS} calls, median {median * 1000:.1f} ms")
         assert median < MEDIAN_CALL_SECONDS
+
+
+def test_inbox_and_send_on_the_idle_hub_have_a_median_under_the_bound(
+    tmp_path: Path,
+) -> None:
+    with two_machine_hub(tmp_path) as hub:
+        hub.stop()
+        hub.seed(seed_programs)
+        hub.start()
+        client, cert = _client(hub, FIRST)
+
+        inbox = [
+            _timed_with_here(client, cert, "inbox", {}, think_seconds=0)[0]
+            for _ in range(SINGLE_THREAD_CALLS)
+        ]
+        sends = [
+            _timed_with_here(
+                client,
+                cert,
+                "send",
+                {
+                    "id": f"idle-{number}",
+                    "to": NAMES[LINT],
+                    "subject": "s",
+                    "body": "b",
+                },
+                think_seconds=0,
+            )[0]
+            for number in range(SINGLE_THREAD_CALLS)
+        ]
+
+        for name, seconds in (("inbox", inbox), ("send", sends)):
+            median = statistics.median(seconds)
+            shown = f"median {median * 1000:.1f} ms"
+            print(f"LOAD: {name} {SINGLE_THREAD_CALLS} calls, {shown}")
+            assert median < MEDIAN_CALL_SECONDS
