@@ -212,3 +212,18 @@ def test_only_the_newest_kept_replaced_directories_stay(
 
     left = sorted(p for p in state.iterdir() if p.name.startswith(REPLACED_PREFIX))
     assert left == sorted(made[-KEPT:])
+
+
+def test_a_backup_given_as_a_relative_path_restores(
+    tmp_path: Path,
+    source: tuple[StateLayout, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _layout, _backup_dir, backup = source
+    state = _empty_state(tmp_path)
+    monkeypatch.chdir(backup.parent)
+
+    replaced = restore_from_backup(Path(backup.name), state, NOW, KEPT)
+
+    assert replaced is None
+    assert _rows(state / "amoeba.sqlite3") == ["demo"]

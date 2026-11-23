@@ -133,6 +133,7 @@ def restore_from_backup(  # noqa: PLR0913 - the backup, its target, the clock an
             directory holds a working hub (nothing changed), or a file operation
             failed (running the same command again finishes the restore).
     """
+    backup = backup.absolute()  # a relative ``--from-backup`` has no file URI
     _check_backup(backup)
     partial = state_dir / PARTIAL_DIR_NAME
     if _state_holds_a_working_hub(state_dir) and not partial.exists():
