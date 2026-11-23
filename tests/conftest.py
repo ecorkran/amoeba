@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import pytest
+from cf_fixtures import OUTSIDE_ANY_PROJECT, write_fake_cf_with_projects
 from process_containment import reap_orphans
 
 #: The one variable the code reads to locate the store and config (slice 222, D1).
@@ -24,6 +26,22 @@ def amoeba_home(
     home = tmp_path_factory.mktemp("amoeba_home")
     monkeypatch.setenv(AMOEBA_HOME_VARIABLE, str(home))
     return home
+
+
+@pytest.fixture(autouse=True)
+def fake_cf_on_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Put a recorded ``cf`` first on ``PATH`` for every test.
+
+    Context Forge is not installed on the CI machine, and commands that read the
+    caller's project (``status``, ``changes``, naming at open) run ``cf``. This one
+    answers from recordings, so no test depends on the machine's real ``cf``. A test
+    that wants another ``cf``, or none, sets its own ``PATH``.
+    """
+    bin_dir = tmp_path_factory.mktemp("fake_cf_bin")
+    write_fake_cf_with_projects(bin_dir, OUTSIDE_ANY_PROJECT)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:
