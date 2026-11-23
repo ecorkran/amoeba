@@ -7,14 +7,18 @@ function takes an open transaction. A name is compared without regard to case;
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
 from amoeba.store import sql
+from amoeba.store.errors import StoreRowError
 from amoeba.store.models import Member
 from amoeba.store.programs import member_from_row
 from amoeba.store.row_values import encode_timestamp, integer, optional_text, text
 from amoeba.store.store import Transaction
+
+logger = logging.getLogger(__name__)
 
 
 def active_member_by_name(transaction: Transaction, name: str) -> Member | None:
@@ -87,3 +91,41 @@ def unnamed_members(transaction: Transaction) -> tuple[UnnamedMember, ...]:
 def clear_member_wake_command(transaction: Transaction, member_id: str) -> None:
     """Set the retired ``members.wake_command`` to null (D4)."""
     transaction.execute(sql.CLEAR_MEMBER_WAKE_COMMAND, (member_id,))
+
+
+def refuse_id_clash(transaction: Transaction, member: UnnamedMember) -> None:
+    """Refuse naming ``member`` by its own id when the name index would: an active
+    member already has that name in another case. The index compares without case, so
+    the write would fail with its raw error and so would every command, until someone
+    read it; this says which two members instead.
+
+    Raises:
+        StoreRowError: An active member already has the id as its name, in another case.
+    """
+    if member.removed:
+        return  # a removed member's name is not in the index
+    holder = active_member_by_name(transaction, member.project_id)
+    if holder is not None and holder.project_id != member.project_id:
+        raise StoreRowError(
+            f"member {member.project_id!r} cannot be named by its id: member "
+            f"{holder.project_id!r} already has that name in another case"
+        )
+
+
+def retire_wake_command(
+    transaction: Transaction, member: UnnamedMember, took: bool
+) -> None:
+    """Null the member's old command now that nothing reads it (D2, D4). ``took`` says a
+    checkout took it. A command no checkout took is dropped, and the log line keeps it
+    so it can be set again with ``amoeba add --wake-command`` once the member has a
+    checkout. It is logged whole on purpose (261 D4): the column was its only copy and
+    the store holds it in plain text already, so the log is no wider than the store."""
+    if member.wake_command is None:
+        return
+    clear_member_wake_command(transaction, member.project_id)
+    if not took:
+        logger.warning(
+            "naming: member %s has no checkout, so its wake command was dropped: %r",
+            member.project_id,
+            member.wake_command,
+        )

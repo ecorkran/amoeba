@@ -203,7 +203,7 @@ shows it, compared as text with trailing slashes dropped from both sides and not
 resolved against the disk, because the directory may be gone; a path that is not
 absolute is `malformed`. If two checkouts here hold that path, both go. A path with no
 checkout on this machine is `not_a_checkout`, and the detail lists this machine's stored
-paths. It cannot be combined with members, `--pair` or `--concept` (`malformed`). The
+paths. It cannot be combined with members, `--pair`, `--concept` or `--program` (`malformed`). The
 result's change record is `removed checkout PATH`. Removing the last checkout leaves a
 member with none, which `list members` marks.
 

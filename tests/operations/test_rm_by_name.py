@@ -173,6 +173,7 @@ def test_an_unknown_checkout_is_not_a_checkout_listing_the_stored_paths(
         {"checkout": "/work/forge", "members": ["forge"]},
         {"checkout": "/work/forge", "pairs": ["a:b"]},
         {"checkout": "/work/forge", "concept": True},
+        {"checkout": "/work/forge", "program": "demo"},
     ],
 )
 def test_a_relative_or_combined_checkout_is_malformed(

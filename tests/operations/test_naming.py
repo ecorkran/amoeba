@@ -529,3 +529,21 @@ def test_two_hub_ids_that_differ_only_in_case_fail_loudly_not_with_an_index_erro
     with closing(sqlite3.connect(layout.store_path)) as connection:
         names = connection.execute("SELECT name FROM members").fetchall()
     assert names == [(None,), (None,)], "the write rolled back as a whole"
+
+
+def test_naming_by_id_refuses_a_case_only_clash_loudly_and_names_nobody(
+    tmp_path: Path,
+) -> None:
+    """Two members cf does not list, with ids that differ only in case: the second's id
+    would clash in the name index, so naming says which two (261 review)."""
+    database = tmp_path / "old.sqlite3"
+    build_schema_11_store(database, [OldMember("Abc"), OldMember("abc")])
+    opened = open_local_store(database)
+
+    with pytest.raises(StoreRowError, match="already has that name in another case"):
+        name_members(opened, cf_listing(), subprocess.run)
+
+    with opened.read() as transaction:
+        names = transaction.execute("SELECT name FROM members").fetchall()
+    assert names == [(None,), (None,)]
+    opened.close()

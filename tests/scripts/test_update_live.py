@@ -365,8 +365,7 @@ def old_live(
 
 
 def _backups() -> list[Path]:
-    root = update_live.backups_root()
-    return sorted(path for path in root.iterdir() if path.is_dir())
+    return update_live.backup_sets()
 
 
 def _installed_record() -> str | None:
@@ -653,8 +652,8 @@ def test_restore_refuses_a_backup_missing_a_file_and_changes_nothing(
     assert store_path().read_bytes() == live_before
 
 
-def test_a_failed_read_back_prints_the_traceback_to_stderr(
-    old_live: FakeSteps, capsys: pytest.CaptureFixture[str]
+def test_a_failed_read_back_logs_the_traceback(
+    old_live: FakeSteps, caplog: pytest.LogCaptureFixture
 ) -> None:
     broken = update_live.Steps(
         install=old_live.installed.append,
@@ -666,6 +665,54 @@ def test_a_failed_read_back_prints_the_traceback_to_stderr(
     with pytest.raises(update_live.UpdateError):
         update_live.update(VERSION, PREVIOUS, broken, NOW)
 
-    err = capsys.readouterr().err
-    assert "Traceback" in err
-    assert "_failing_migrate" in err
+    (record,) = [r for r in caplog.records if r.exc_info is not None]
+    assert record.exc_info is not None
+    assert record.exc_info[0] is subprocess.CalledProcessError
+
+
+def test_a_failed_install_puts_the_config_back_and_the_store_is_untouched(
+    old_live: FakeSteps,
+) -> None:
+    _drop_key("prune_after_days")
+    config_before = config_path().read_bytes()
+    store_before = store_path().read_bytes()
+
+    def install_fails(_spec: str) -> None:
+        raise update_live.UpdateError("uv could not install: exit 1")
+
+    steps = update_live.Steps(
+        install=install_fails,
+        migrate=old_live._migrate,  # pyright: ignore[reportPrivateUsage]
+        cf_projects=lambda: old_live.cf_ids,
+        list_tools=lambda: ALL_TOOLS,
+    )
+
+    with pytest.raises(update_live.UpdateError, match="uv could not install"):
+        update_live.update(VERSION, PREVIOUS, steps, NOW)
+
+    assert config_path().read_bytes() == config_before, "the added key is undone"
+    assert store_path().read_bytes() == store_before
+    assert old_live.migrations == 0
+
+
+def test_a_backup_killed_mid_copy_leaves_nothing_that_blocks_the_next_update(
+    old_live: FakeSteps, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def die_copying(_source: Path, _destination: Path) -> None:
+        raise KeyboardInterrupt
+
+    with monkeypatch.context() as patch:
+        patch.setattr(update_live, "copy_database", die_copying)
+        with pytest.raises(KeyboardInterrupt):
+            update_live.update(VERSION, PREVIOUS, old_live.steps(), NOW)
+
+    assert _backups() == [], "an unfinished copy is not a backup"
+    assert old_live.installed == []
+
+    update_live.update(VERSION, PREVIOUS, old_live.steps(), NOW)
+
+    (only,) = _backups()
+    assert only.name == NOW.strftime("%Y%m%dT%H%M%S")
+    assert _version(only / update_live.STORE_BACKUP) == SCHEMA_ELEVEN
+    leftovers = [p.name for p in update_live.backups_root().iterdir() if p.is_dir()]
+    assert leftovers == [only.name], "the success cleanup removed the partial one"

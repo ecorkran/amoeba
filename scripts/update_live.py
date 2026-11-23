@@ -34,14 +34,15 @@ Paths honour ``AMOEBA_HOME`` exactly as amoeba does.
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import shutil
 import sqlite3
 import subprocess
 import sys
 import tomllib
-import traceback
 from collections.abc import Callable
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,6 +62,7 @@ from amoeba.store.store import BUSY_TIMEOUT_SECONDS
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.projects import project_details
 
+logger = logging.getLogger("update_live")
 CHECKOUT = Path(__file__).resolve().parents[1]
 PACKAGE_NAME = "amoeba-ai"
 BACKUPS_DIRNAME = "backups"
@@ -69,6 +71,8 @@ CONFIG_BACKUP = "config.yaml"
 PREVIOUS_VERSION = "previous-version"
 #: The version the last successful update (or restore) left installed, written last.
 INSTALLED_VERSION_RECORD = "installed-version"
+#: A backup still being copied is under this prefix; no lookup reads such a directory.
+PARTIAL_PREFIX = "."
 MCP_LIST_TIMEOUT_SECONDS = 30
 INTEGRITY_OK = "ok"
 SELECT_OWNER_COUNT = "SELECT count(*) FROM owners"
@@ -133,8 +137,14 @@ def add_missing_keys(path: Path, examples: dict[str, Any]) -> list[str]:
         raise UpdateError(f"config cannot be completed: {error}") from error
 
 
-def _read_only(path: Path) -> sqlite3.Connection:
+def _connect_read_only(path: Path) -> sqlite3.Connection:
     return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+
+
+def _read_only(path: Path) -> closing[sqlite3.Connection]:
+    """A read-only connection that is closed on leaving the ``with`` (a bare
+    ``with connection`` only ends a transaction and leaves it open)."""
+    return closing(_connect_read_only(path))
 
 
 def member_count(path: Path) -> int:
@@ -152,7 +162,7 @@ def copy_database(source_path: Path, destination_path: Path) -> None:
     the store open (a plain file copy over a WAL database corrupts it), and
     their connections see the copied content afterwards.
     """
-    source = _read_only(source_path)
+    source = _connect_read_only(source_path)
     destination = sqlite3.connect(destination_path, timeout=BUSY_TIMEOUT_SECONDS)
     try:
         source.backup(destination)
@@ -163,11 +173,19 @@ def copy_database(source_path: Path, destination_path: Path) -> None:
 
 def take_backup(previous: str, now: datetime) -> Path:
     """Copy the store (SQLite backup, safe with readers) and config; return the dir."""
-    target = backups_root() / now.strftime("%Y%m%dT%H%M%S")
-    target.mkdir(parents=True)
-    copy_database(store_path(), target / STORE_BACKUP)
-    shutil.copy2(config_path(), target / CONFIG_BACKUP)
-    (target / PREVIOUS_VERSION).write_text(previous + "\n", encoding="utf-8")
+    stamp = now.strftime("%Y%m%dT%H%M%S")
+    target = backups_root() / stamp
+    # Built under a name no backup lookup reads and renamed whole, so a copy that fails
+    # or is killed leaves nothing a later update mistakes for a backup; the leftover is
+    # cleared here, and by a successful update's cleanup.
+    partial = backups_root() / f"{PARTIAL_PREFIX}{stamp}"
+    if partial.exists():
+        shutil.rmtree(partial)
+    partial.mkdir(parents=True)
+    copy_database(store_path(), partial / STORE_BACKUP)
+    shutil.copy2(config_path(), partial / CONFIG_BACKUP)
+    (partial / PREVIOUS_VERSION).write_text(previous + "\n", encoding="utf-8")
+    partial.rename(target)
     return target
 
 
@@ -267,8 +285,17 @@ def restore(backup: Path, steps: Steps) -> str:
     return previous
 
 
+def backup_sets() -> list[Path]:
+    """The finished backups, oldest first (one still being copied is not one)."""
+    return sorted(
+        p
+        for p in backups_root().iterdir()
+        if p.is_dir() and not p.name.startswith(PARTIAL_PREFIX)
+    )
+
+
 def newest_backup() -> Path:
-    stamps = sorted(p for p in backups_root().iterdir() if p.is_dir())
+    stamps = backup_sets()
     if not stamps:
         raise UpdateError(f"no backup in {backups_root()}")
     return stamps[-1]
@@ -303,7 +330,7 @@ def reusable_backup(previous: str) -> Path | None:
     that follows a success would delete the only one the old code can read."""
     if not backups_root().exists():
         return None
-    stamps = sorted(p for p in backups_root().iterdir() if p.is_dir())
+    stamps = backup_sets()
     if not stamps:
         return None
     newest = stamps[-1]
@@ -340,15 +367,21 @@ def update(version: str, previous: str, steps: Steps, now: datetime) -> list[str
             f"{backup.name} as the restore point and taking no new backup"
         )
     added = add_missing_keys(config_path(), example_values())
-    steps.install(install_spec(version))
+    try:
+        steps.install(install_spec(version))
+    except Exception:  # noqa: BLE001 - re-raised: the config keys were added above, and
+        # an install that failed migrated nothing, so only the config goes back.
+        logger.exception("the install failed; putting the config back")
+        shutil.copy2(backup / CONFIG_BACKUP, config_path())
+        raise
     try:
         failures = _read_back(expected_members, steps)
     except Exception as error:  # noqa: BLE001 - the update's process boundary: whatever
         # the migration or a read-back raises (a failed `amoeba list`, `cf`, the MCP
         # server) must restore before the script reports it; KeyboardInterrupt is not
         # caught, which is the killed update the next run recovers from (#45). The
-        # traceback goes to stderr first: the `UpdateError` carries only the message.
-        traceback.print_exception(error, file=sys.stderr)
+        # traceback is logged first: the `UpdateError` carries only the message.
+        logger.exception("the update failed after the install")
         restored = restore(backup, steps)
         raise UpdateError(
             f"{type(error).__name__} after the install: {error}; restored {restored}"
@@ -449,6 +482,7 @@ def main(argv: list[str] | None = None) -> int:
     up.add_argument("--previous", help="version to restore to if the update fails")
     sub.add_parser("restore", help="put the newest backup back")
     args = parser.parse_args(argv)
+    logging.basicConfig(format="%(message)s")
     try:
         if args.command == "update":
             version = check_checkout()

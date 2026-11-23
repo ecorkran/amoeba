@@ -130,9 +130,9 @@ def rm(
 def _remove_checkout(store: Store, request: RmRequest) -> SetUpResult:
     """``--checkout PATH`` (D8): one checkout of this machine; the member stays."""
     path = request.checkout or ""
-    if request.members or request.pairs or request.concept:
+    if request.members or request.pairs or request.concept or request.program:
         return _malformed(
-            "checkout: cannot be combined with members, --pair or --concept"
+            "checkout: cannot be combined with members, --pair, --concept or --program"
         )
     if not path.startswith("/"):
         return _malformed(f"checkout: {path!r} is not an absolute path")

@@ -31,8 +31,9 @@ from amoeba.store.member_names import (
     UnnamedMember,
     active_member_by_name,
     active_member_by_origin,
-    clear_member_wake_command,
     name_is_other_members_id,
+    refuse_id_clash,
+    retire_wake_command,
     set_member_name,
     set_member_origin,
     unnamed_members,
@@ -138,21 +139,27 @@ def _name_for(
     """
     detail = details.get(member.project_id)
     if detail is None:
-        return _by_id(member, "Context Forge does not list its project")
+        return _by_id(transaction, member, "Context Forge does not list its project")
     if not is_member_name(detail.name):
-        return _by_id(member, f"{detail.name!r} is not a valid member name")
+        return _by_id(
+            transaction, member, f"{detail.name!r} is not a valid member name"
+        )
     if member.removed:
         return detail.name
     if active_member_by_name(transaction, detail.name) is not None:
-        return _by_id(member, f"another member already has the name {detail.name!r}")
+        return _by_id(
+            transaction, member, f"another member already has the name {detail.name!r}"
+        )
     if name_is_other_members_id(transaction, detail.name, member.project_id):
-        return _by_id(member, f"{detail.name!r} is another member's id")
+        return _by_id(transaction, member, f"{detail.name!r} is another member's id")
     return detail.name
 
 
-def _by_id(member: UnnamedMember, reason: str) -> str:
+def _by_id(transaction: Transaction, member: UnnamedMember, reason: str) -> str:
     """The member's own id as its name, said in the log so ``list members`` showing an
-    id has a reason on record (``amoeba add --project ID --name NAME`` renames it)."""
+    id has a reason on record (``amoeba add --project ID --name NAME`` renames it). An
+    id the name index would refuse is refused here, naming both members."""
+    refuse_id_clash(transaction, member)
     logger.warning(
         "naming: member %s is named by its id: %s", member.project_id, reason
     )
@@ -203,27 +210,7 @@ def _write_member(
                 now=now,
             )
             took = True
-    _retire_wake_command(transaction, member, took)
-
-
-def _retire_wake_command(
-    transaction: Transaction, member: UnnamedMember, took: bool
-) -> None:
-    """Null the member's old command now that nothing reads it (D2, D4). A command no
-    checkout took is dropped, and the log line keeps it so it can be set again with
-    ``amoeba add --wake-command`` once the member has a checkout."""
-    if member.wake_command is None:
-        return
-    clear_member_wake_command(transaction, member.project_id)
-    if not took:
-        # The command is logged whole on purpose: the column was its only copy and the
-        # store holds it in plain text already, so the log is no wider than the store.
-        # Without it the PM could not set it again.
-        logger.warning(
-            "naming: member %s has no checkout, so its wake command was dropped: %r",
-            member.project_id,
-            member.wake_command,
-        )
+    retire_wake_command(transaction, member, took)
 
 
 def name_members(
