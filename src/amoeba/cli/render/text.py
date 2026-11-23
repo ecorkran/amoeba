@@ -91,10 +91,13 @@ def how_long(since: datetime, now: datetime) -> str:
     return f"{minutes}m" if minutes else "<1m"
 
 
-def rules_text(entries: Sequence[str], *, default: bool) -> str:
+def rules_text(entries: Sequence[str] | None, *, default: bool) -> str:
     """A member's rules: ``default (A, B)`` for the config default, else the named
-    entries, or ``none`` when there are none."""
-    joined = ", ".join(entries)
+    entries, or ``none`` when there are none. ``entries`` is ``None`` when the config
+    that holds the default is not on this machine (a joined one): ``default`` alone."""
+    if default and entries is None:
+        return DEFAULT_RULES_LABEL
+    joined = ", ".join(entries or ())
     if default:
         return f"{DEFAULT_RULES_LABEL} ({joined})"
     return joined or NONE

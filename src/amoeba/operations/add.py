@@ -22,12 +22,7 @@ from amoeba.config.user_config import UserConfig
 from amoeba.operations.add_member import MemberPlan, plan_member
 from amoeba.operations.caller import find_member
 from amoeba.operations.here_document import HereNotAProject
-from amoeba.operations.set_up import (
-    apply_set_up,
-    malformed_result,
-    set_up,
-    working_directory_of,
-)
+from amoeba.operations.set_up import apply_set_up, set_up
 from amoeba.operations.set_up_models import (
     ConceptRequest,
     DependsOnRequest,
@@ -43,6 +38,7 @@ from amoeba.operations.set_up_models import (
     rejected_result,
 )
 from amoeba.operations.set_up_resolve import RUN_ADD_THERE, Gathered
+from amoeba.operations.set_up_state import malformed_result, working_directory_of
 from amoeba.store.programs import get_member_any
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import ConsumedMode

@@ -62,7 +62,7 @@ def render_result(
     result: OperationResult,
     *,
     now: datetime,
-    default_rules: tuple[str, ...],
+    default_rules: tuple[str, ...] | None,
     removing: bool = False,
     paint: Painter = PLAIN,
 ) -> str:

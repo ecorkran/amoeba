@@ -72,9 +72,10 @@ TOOLS: Final = (
         takes_directory=True,
         mode=RunMode.IN_PROCESS,
         description=(
-            "Remove members, dependency pairs or a program's concept; with nothing "
-            "named, the repository at `directory`. Same request and result as "
-            "`amoeba rm`."
+            "Remove members (each by name or id, from any directory), dependency "
+            "pairs or a program's concept, or with `checkout` one of this machine's "
+            "checkouts, leaving its member; with nothing named, the repository at "
+            "`directory`. Same request and result as `amoeba rm`."
         ),
         timeout_advice=WRITE_ADVICE,
     ),

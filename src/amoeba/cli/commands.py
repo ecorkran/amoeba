@@ -45,6 +45,7 @@ from amoeba.wiring import (
     open_store,
     result_document,
 )
+from amoeba.wiring_door import joined
 
 STDIN_SOURCE: Final = "-"
 STDIN_NAME: Final = "<stdin>"
@@ -194,9 +195,13 @@ def run_invoked(name: OperationName, arguments: argparse.Namespace) -> int:
 
 def _text_of(result: OperationResult, *, removing: bool) -> str:
     """The text of a result; ``add`` and ``rm`` also read the default rules."""
-    default_rules: tuple[str, ...] = ()
+    default_rules: tuple[str, ...] | None = ()
     if isinstance(result, SetUpResult):
-        default_rules = load_config().default_rules_paths
+        # A joined machine's config is not the one that applies (the hub's is), and it
+        # may have none: the text says ``default`` alone there (261 walkthrough).
+        default_rules = (
+            None if joined() is not None else load_config().default_rules_paths
+        )
     return render_result(
         result,
         now=datetime.now(UTC),

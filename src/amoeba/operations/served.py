@@ -18,39 +18,25 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, is_dataclass
-from datetime import datetime
-from enum import StrEnum
 from typing import Final
 
-from pydantic import BaseModel, TypeAdapter, ValidationError
+from pydantic import BaseModel, TypeAdapter
 
-from amoeba.config.user_config import UserConfig
-from amoeba.operations import list_view as list_view_module
-from amoeba.operations import rm as rm_module
-from amoeba.operations.add import AddRequest, add, names_no_member
-from amoeba.operations.cancel import cancel
-from amoeba.operations.changes import changes
 from amoeba.operations.changes_models import ChangesResult
-from amoeba.operations.decisions import DecisionsResult, decisions
-from amoeba.operations.deps import Deps
-from amoeba.operations.dismiss import DismissResult, dismiss
+from amoeba.operations.decisions import DecisionsResult
+from amoeba.operations.dismiss import DismissResult
 from amoeba.operations.here_document import (
     HERE_KEY,
-    Here,
-    HereCaller,
-    HereCheckout,
-    HereNotAProject,
     parse_here,
 )
-from amoeba.operations.inbox import inbox
 from amoeba.operations.list_registry import (
     DependenciesView,
     MembersView,
     ProgramsView,
     StandingView,
 )
-from amoeba.operations.list_view import ListRequest, ListResult, ListSubject, list_view
-from amoeba.operations.mark_read import MarkReadResult, mark_read
+from amoeba.operations.list_view import ListRequest, ListResult, ListSubject
+from amoeba.operations.mark_read import MarkReadResult
 from amoeba.operations.message_results import (
     CancelResult,
     InboxResult,
@@ -58,264 +44,45 @@ from amoeba.operations.message_results import (
     SendResult,
 )
 from amoeba.operations.names import OperationName
-from amoeba.operations.reply import reply
-from amoeba.operations.report_release import report_release_swept
 from amoeba.operations.report_release_models import ReportReleaseResult
-from amoeba.operations.retract import RetractResult, retract
-from amoeba.operations.rm import rm
-from amoeba.operations.runs_document import RUNS_KEY, RunsDocument, parse_runs
-from amoeba.operations.send import send
-from amoeba.operations.set_up_models import SetUpResult
-from amoeba.operations.standing import standing
-from amoeba.operations.standing_models import StandingResult, WithdrawResult
-from amoeba.operations.status import StatusResult, status
-from amoeba.operations.withdraw import withdraw
-from amoeba.store.store import Store
-
-type ServedResult = (
-    DecisionsResult
-    | MarkReadResult
-    | DismissResult
-    | RetractResult
-    | StandingResult
-    | WithdrawResult
-    | SetUpResult
-    | ListResult
-    | ProgramsView
-    | MembersView
-    | DependenciesView
-    | StandingView
-    | StatusResult
-    | InboxResult
-    | ReplyResult
-    | CancelResult
-    | SendResult
-    | ChangesResult
-    | ReportReleaseResult
+from amoeba.operations.retract import RetractResult
+from amoeba.operations.runs_document import RUNS_KEY, parse_runs
+from amoeba.operations.served_runners import (
+    Runner,
+    gather_add,
+    gather_caller_always,
+    gather_list,
+    gather_rm,
+    gather_status,
+    run_add,
+    run_cancel,
+    run_changes,
+    run_decisions,
+    run_dismiss,
+    run_inbox,
+    run_list,
+    run_mark_read,
+    run_reply,
+    run_report_release,
+    run_retract,
+    run_rm,
+    run_send,
+    run_standing,
+    run_status,
+    run_withdraw,
 )
-
-
-@dataclass(frozen=True)
-class ServedEdges:
-    """What the served operations read from outside the store."""
-
-    clock: Callable[[], datetime]
-    #: Called only by an operation that needs config (``needs_config``).
-    load_config: Callable[[], UserConfig]
-    #: The machine's own edges, present with no client file. ``None`` on the hub, which
-    #: starts no wake and no run, sweeps no question and prunes nothing: those read and
-    #: change the files of the machine that ran ``sq`` (261 D9, D11).
-    local: Deps | None = None
-
-
-@dataclass(frozen=True)
-class ClientValues:
-    """What the client part gathered, parsed: the caller's project (or the checkout,
-    for ``add``) and the machine's runs. ``None`` for what the call does not need."""
-
-    here: Here | None = None
-    runs: RunsDocument | None = None
-
-
-class HereKind(StrEnum):
-    """Which gathered shape an operation needs (D5)."""
-
-    CALLER = "caller"
-    CHECKOUT = "checkout"
-
-
-@dataclass(frozen=True)
-class Gather:
-    """What a call needs the client to gather."""
-
-    here: HereKind | None = None
-    runs: bool = False
-
-
-NOTHING_GATHERED: Final = Gather()
-_CALLER: Final = Gather(here=HereKind.CALLER)
-
-
-def _gather_caller_always(document: object) -> Gather:
-    return _CALLER
-
-
-def _gather_status(document: object) -> Gather:
-    return Gather(here=HereKind.CALLER, runs=True)
-
-
-def _gather_add(document: object) -> Gather:
-    try:
-        request = AddRequest.model_validate(document)
-    except ValidationError:
-        # Not a valid request: add rejects it as malformed, and needs no gather.
-        return NOTHING_GATHERED
-    return Gather(here=HereKind.CHECKOUT if names_no_member(request) else None)
-
-
-def _gather_rm(document: object) -> Gather:
-    return _CALLER if rm_module.needs_here(document) else NOTHING_GATHERED
-
-
-def _gather_list(document: object) -> Gather:
-    if not list_view_module.needs_here(document):
-        return NOTHING_GATHERED
-    return Gather(here=HereKind.CALLER, runs=True)
-
-
-type _Runner = Callable[[Store, object, ServedEdges, ClientValues], ServedResult]
-
-
-def _caller(values: ClientValues) -> HereCaller | HereNotAProject:
-    here = values.here
-    if isinstance(here, HereCaller | HereNotAProject):
-        return here
-    raise AssertionError("the operation needs the gathered caller; none was parsed")
-
-
-def _runs(values: ClientValues) -> RunsDocument:
-    if values.runs is None:
-        raise AssertionError("the operation needs the gathered runs; none was parsed")
-    return values.runs
-
-
-def _decisions(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return decisions(store, document)
-
-
-def _mark_read(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return mark_read(store, document)
-
-
-def _dismiss(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return dismiss(store, document, clock=edges.clock)
-
-
-def _retract(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return retract(store, document, clock=edges.clock)
-
-
-def _standing(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return standing(
-        store,
-        document,
-        max_chars=edges.load_config().passages_max_chars,
-        now=edges.clock(),
-    )
-
-
-def _withdraw(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return withdraw(store, document, now=edges.clock())
-
-
-def _add(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    here = values.here
-    if here is not None and not isinstance(here, HereCheckout | HereNotAProject):
-        raise AssertionError("add was given the caller, not the checkout")
-    return add(store, edges.load_config(), document, here=here)
-
-
-def _rm(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    here = values.here
-    if here is not None and not isinstance(here, HereCaller | HereNotAProject):
-        raise AssertionError("rm was given a checkout, not the caller")
-    return rm(store, edges.load_config(), document, here=here)
-
-
-def _list(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    here = values.here
-    if here is not None and not isinstance(here, HereCaller | HereNotAProject):
-        raise AssertionError("list was given a checkout, not the caller")
-    return list_view(
-        store,
-        edges.load_config(),
-        document,
-        here=here,
-        runs=values.runs,
-        clock=edges.clock,
-        local=edges.local,
-    )
-
-
-def _status(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return status(
-        store,
-        edges.load_config(),
-        document,
-        here=_caller(values),
-        runs=_runs(values),
-        clock=edges.clock,
-        local=edges.local,
-    )
-
-
-def _inbox(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return inbox(store, document, here=_caller(values), clock=edges.clock)
-
-
-def _send(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return send(
-        store,
-        edges.load_config(),
-        document,
-        here=_caller(values),
-        clock=edges.clock,
-        local=edges.local,
-    )
-
-
-def _reply(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return reply(
-        store, edges.load_config(), document, here=_caller(values), clock=edges.clock
-    )
-
-
-def _cancel(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return cancel(
-        store, edges.load_config(), document, here=_caller(values), clock=edges.clock
-    )
-
-
-def _changes(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return changes(store, document, here=_caller(values))
-
-
-def _report_release(
-    store: Store, document: object, edges: ServedEdges, values: ClientValues
-) -> ServedResult:
-    return report_release_swept(
-        store, edges.load_config(), document, here=_caller(values), clock=edges.clock
-    )
+from amoeba.operations.served_types import (
+    NOTHING_GATHERED,
+    ClientValues,
+    Gather,
+    HereKind,
+    ServedEdges,
+    ServedResult,
+)
+from amoeba.operations.set_up_models import SetUpResult
+from amoeba.operations.standing_models import StandingResult, WithdrawResult
+from amoeba.operations.status import StatusResult
+from amoeba.store.store import Store
 
 
 @dataclass(frozen=True)
@@ -323,7 +90,7 @@ class ServedOperation:
     """What the door needs to know about one served operation: how to run it, what it
     needs gathered, and how its result document is read back."""
 
-    run: _Runner
+    run: Runner
     #: The type the result document is read as; for ``list`` the request's subject
     #: decides, so ``result_for`` is used instead.
     result_type: type[ServedResult]
@@ -340,46 +107,46 @@ class ServedOperation:
 #: entry here. ``tests/operations/test_served.py`` and ``tests/wire/test_protocol.py``
 #: fail, naming what is missing, when they disagree.
 SERVED: Final[dict[str, ServedOperation]] = {
-    OperationName.DECISIONS: ServedOperation(_decisions, DecisionsResult),
-    OperationName.MARK_READ: ServedOperation(_mark_read, MarkReadResult),
-    OperationName.DISMISS: ServedOperation(_dismiss, DismissResult),
-    OperationName.RETRACT: ServedOperation(_retract, RetractResult),
+    OperationName.DECISIONS: ServedOperation(run_decisions, DecisionsResult),
+    OperationName.MARK_READ: ServedOperation(run_mark_read, MarkReadResult),
+    OperationName.DISMISS: ServedOperation(run_dismiss, DismissResult),
+    OperationName.RETRACT: ServedOperation(run_retract, RetractResult),
     OperationName.STANDING: ServedOperation(
-        _standing, StandingResult, needs_config=True
+        run_standing, StandingResult, needs_config=True
     ),
-    OperationName.WITHDRAW: ServedOperation(_withdraw, WithdrawResult),
+    OperationName.WITHDRAW: ServedOperation(run_withdraw, WithdrawResult),
     OperationName.ADD: ServedOperation(
-        _add, SetUpResult, needs_config=True, gathers=_gather_add
+        run_add, SetUpResult, needs_config=True, gathers=gather_add
     ),
     OperationName.RM: ServedOperation(
-        _rm, SetUpResult, needs_config=True, gathers=_gather_rm
+        run_rm, SetUpResult, needs_config=True, gathers=gather_rm
     ),
     OperationName.LIST: ServedOperation(
-        _list, ListResult, needs_config=True, gathers=_gather_list
+        run_list, ListResult, needs_config=True, gathers=gather_list
     ),
     OperationName.STATUS: ServedOperation(
-        _status, StatusResult, needs_config=True, gathers=_gather_status
+        run_status, StatusResult, needs_config=True, gathers=gather_status
     ),
     OperationName.INBOX: ServedOperation(
-        _inbox, InboxResult, gathers=_gather_caller_always
+        run_inbox, InboxResult, gathers=gather_caller_always
     ),
     OperationName.SEND: ServedOperation(
-        _send, SendResult, needs_config=True, gathers=_gather_caller_always
+        run_send, SendResult, needs_config=True, gathers=gather_caller_always
     ),
     OperationName.REPLY: ServedOperation(
-        _reply, ReplyResult, needs_config=True, gathers=_gather_caller_always
+        run_reply, ReplyResult, needs_config=True, gathers=gather_caller_always
     ),
     OperationName.CANCEL: ServedOperation(
-        _cancel, CancelResult, needs_config=True, gathers=_gather_caller_always
+        run_cancel, CancelResult, needs_config=True, gathers=gather_caller_always
     ),
     OperationName.CHANGES: ServedOperation(
-        _changes, ChangesResult, gathers=_gather_caller_always
+        run_changes, ChangesResult, gathers=gather_caller_always
     ),
     OperationName.REPORT_RELEASE: ServedOperation(
-        _report_release,
+        run_report_release,
         ReportReleaseResult,
         needs_config=True,
-        gathers=_gather_caller_always,
+        gathers=gather_caller_always,
     ),
 }
 

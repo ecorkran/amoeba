@@ -174,7 +174,8 @@ def test_checkout_with_no_such_path_is_rejected_and_lists_the_paths(
     )
 
     assert text.returncode == EXIT_REJECTED
-    assert text.stdout.startswith("rejected: not_a_checkout: ")
+    assert text.stdout.startswith("rejected: not_a_checkout:\n")
+    assert PROJECT_PATH in text.stdout, "the text lists the stored paths, uncut"
     (problem,) = document["problems"]
     assert problem["code"] == "not_a_checkout"
     assert PROJECT_PATH in problem["detail"]

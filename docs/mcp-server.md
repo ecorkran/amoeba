@@ -84,7 +84,7 @@ on the CLI; it is not an error.
 | Tool | Notes |
 |---|---|
 | `add` | Registers a repo in a program. Takes `directory` (the caller's checkout, an absolute path) and the single-member fields (`program`, `project` (an existing member's name or id), `name`, `attach_to`, `new_member`, `rules_paths`, `rules_default`, `authorize_allow`, `authorize_deny`, `depends_on`, `concept`) or `bulk`, a whole multi-member request, never both. It does not take `wake_command` (the command Amoeba starts for a request when no agent is live in a repo): that is the PM's CLI setting, `amoeba add --wake-command`, and a call that passes it is rejected as an unknown field. |
-| `rm` | Removes members, pairs (`PROVIDER:CONSUMER`) or the concept (`concept: true`). Also takes `directory`; with nothing named it removes that repo. |
+| `rm` | Removes members (each by name or id, from any directory), pairs (`PROVIDER:CONSUMER`) or the concept (`concept: true`), or, with `checkout` (an absolute path), one of this machine's checkouts and leaves its member. Also takes `directory`, which is read only when nothing says which program or checkout is meant: with nothing named it removes that repo's member. |
 | `list` | What needs the PM: with no `subject`, the same document as `status` (and `all` adds `settled`); `programs`, `members` and `dependencies` show what is registered, and `standing` the standing answers (`all` adds withdrawn ones). Also takes `directory`. Like `status`, it then starts `handle_pause` for each held question whose request has ended (slice 242). |
 | `status` | Also takes `directory`. Its listing gives each run's `run_id` and `directory` for `handle_pause`, and the question key for `answer`. After its listing it starts `handle_pause` for each held question whose request has ended (slice 242); the result does not change, and a held run (`waiting_on_request`) needs no call from you. A member with a wake command also has a `wake` object (slice 244: `command`, `running`, `stopped`, `last_problem`; `cli-contract.md`), shown in plain text. |
 | `decisions` | `read_through` goes to `mark_read`. Each record shows `via`, the door that carried a PM answer (`cli` or `mcp`). |
@@ -318,7 +318,7 @@ message text:
 
 | Field | Meaning |
 |---|---|
-| `member` | The member this server serves (its Context Forge project id). |
+| `member` | The member this server serves (its id; its name is in `amoeba list members`). |
 | `as_of_seq` | The highest delivery number ever assigned: the number `inbox` returns as `as_of_seq`. |
 
 ## Start-up
@@ -346,8 +346,11 @@ when it ends. It ends when the client closes its end.
 A machine joined to a hub (`amoeba join`) has no local store. `amoeba-mcp` does not
 start there (see "Start-up"). A server that was already running when the machine
 joined keeps serving its tools, and each tool call goes through `wiring.invoke` like
-the CLI's: the six operations the door serves (`decisions`, `mark_read`, `dismiss`,
-`retract`, `standing`, `withdraw`) go to the hub, and any other tool returns an error
+the CLI's: the operations the door serves (`decisions`, `mark_read`, `dismiss`,
+`retract`, `standing`, `withdraw`, and since slice 261 `add`, `rm`, `list`, `status`,
+`send`, `inbox`, `reply`, `cancel`, `changes`, `report_release`) go to the hub, each
+after the client part has gathered the caller's project (and the runs, or the checkout)
+here, and any other tool returns an error
 result naming `NotServedError`. The `answer` deadline check, which reads the local
 config, runs only when the machine is not joined. Presence and push stop with a log
 line (the heartbeat's and the inbox watcher's next store read raises

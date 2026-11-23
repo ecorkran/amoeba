@@ -23,7 +23,7 @@ from amoeba.operations.caller import (
     find_member_for_removal,
 )
 from amoeba.operations.here_document import HereCaller, HereNotAProject
-from amoeba.operations.set_up import malformed_result, set_up
+from amoeba.operations.set_up import set_up
 from amoeba.operations.set_up_models import (
     Change,
     ChangeSubject,
@@ -36,6 +36,7 @@ from amoeba.operations.set_up_models import (
     SetUpResult,
     rejected_result,
 )
+from amoeba.operations.set_up_state import malformed_result
 from amoeba.store.checkouts import checkouts_on_machine, delete_checkouts_at_path
 from amoeba.store.machines import acting_machine_id
 from amoeba.store.programs import get_program

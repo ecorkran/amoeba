@@ -11,7 +11,7 @@ none. The placement, classification and waiting-question steps are in
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -28,9 +28,6 @@ from amoeba.operations.deps import Deps
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_sweep import sweep_messages
 from amoeba.operations.pause_class import PauseClass
-from amoeba.operations.prune_models import PruneReport
-from amoeba.operations.question_sweep import SweepResult
-from amoeba.operations.question_sweep_scope import sweep_scope
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import (
     RejectCode,
@@ -39,12 +36,16 @@ from amoeba.operations.reject_codes import (
 )
 from amoeba.operations.runs_document import (
     RunsDocument,
-    RunStanding,
-    left_out_text,
     standings,
 )
 from amoeba.operations.status_calls import attach_last_calls
 from amoeba.operations.status_closed import closed_now_entries
+from amoeba.operations.status_local import (
+    file_problems,
+    joined,
+    prune_if_local,
+    sweep_if_local,
+)
 from amoeba.operations.status_models import (
     MemberStatus,
     ProgramStatus,
@@ -66,7 +67,7 @@ from amoeba.operations.wake_status import read_member_wakes
 from amoeba.store.checkouts import checkouts_on_machine
 from amoeba.store.errors import StoreRowError
 from amoeba.store.machines import acting_machine_id
-from amoeba.store.models import Member, QuestionRecord
+from amoeba.store.models import Member
 from amoeba.store.programs import get_program, list_programs, members_of
 from amoeba.store.questions import (
     latest_rows_by_run,
@@ -200,7 +201,7 @@ def status(
     member_runs = with_calls.runs
     names = _names(members)
     standing = standings(runs)
-    swept = _sweep(store, config, candidates, standing, local, clock())
+    swept = sweep_if_local(store, config, candidates, standing, local, clock())
     # What is still open after the sweep. After a failed write that is everything,
     # shown as before the sweep.
     with store.read() as transaction:
@@ -214,7 +215,7 @@ def status(
     program_of = {
         m.project_id: entry.program_id for entry in scope for m in entry.members
     }
-    pruned = _prune(store, config, local, clock())
+    pruned = prune_if_local(store, config, local, clock())
     return StatusResult(
         outcome=StatusOutcome.LISTED,
         notice=QUOTED_DATA_NOTICE
@@ -228,46 +229,9 @@ def status(
         ),
         unplaced_runs=placement.unplaced,
         closed_now=closed_now_entries(swept, program_of, names),
-        sweep_problem=_joined(message_problem, swept.problem),
-        file_problems=_file_problems(runs, with_calls.problems, pruned.problems),
+        sweep_problem=joined(message_problem, swept.problem),
+        file_problems=file_problems(runs, with_calls.problems, pruned.problems),
     )
-
-
-def _sweep(  # noqa: PLR0913 - the pieces status already has in hand
-    store: Store,
-    config: UserConfig,
-    candidates: Sequence[QuestionRecord],
-    standing: Mapping[str, RunStanding],
-    local: Deps | None,
-    now: datetime,
-) -> SweepResult:
-    if local is None:
-        return SweepResult()
-    return sweep_scope(
-        store, config, candidates, standing, local.squadron_runs_dir, now
-    )
-
-
-def _prune(
-    store: Store, config: UserConfig, local: Deps | None, now: datetime
-) -> PruneReport:
-    if local is None:
-        return PruneReport(removed=0, problems=())
-    return local.prune(store, now=now, after_days=config.prune_after_days)
-
-
-def _file_problems(
-    runs: RunsDocument, call_problems: tuple[str, ...], prune_problems: tuple[str, ...]
-) -> tuple[str, ...]:
-    """The call-log and prune problems, and the sentence for a cut document."""
-    cut = left_out_text(runs.left_out)
-    return (*call_problems, *(() if cut is None else (cut,)), *prune_problems)
-
-
-def _joined(*problems: str | None) -> str | None:
-    """The sweep problems that happened, one text, or ``None`` when none did."""
-    found = [problem for problem in problems if problem is not None]
-    return "; ".join(found) if found else None
 
 
 def _shows_others_text(

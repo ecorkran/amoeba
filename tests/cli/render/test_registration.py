@@ -261,6 +261,34 @@ def test_a_long_detail_is_cut_to_the_width() -> None:
     assert first.endswith("…")
 
 
+def test_a_refusal_that_holds_the_way_on_is_wrapped_in_full_never_cut() -> None:
+    """``name_taken`` and its kin name the remotes and the flags to give; the operator
+    has nothing else to read them from, so the whole detail is shown (261 D7)."""
+    way_on = "give a free name with `amoeba add --name NAME` or attach it"
+    detail = (
+        "member 'widget' has this name; " + "its origin is somewhere " * 12 + way_on
+    )
+    result = _rejected(SetUpProblem(code=SetUpProblemCode.NAME_TAKEN, detail=detail))
+
+    lines = _text(result).splitlines()
+
+    assert lines[0] == "rejected: name_taken:"
+    assert all(len(line) <= COLUMNS for line in lines)
+    assert "…" not in "\n".join(lines)
+    assert " ".join(part.strip() for part in lines[1:]) == detail
+
+
+def test_a_default_member_on_a_joined_machine_says_default_alone() -> None:
+    result = _applied(
+        "core", (_member("core"),), "added program core", "added member core"
+    )
+
+    text = render_registration(result, default_rules=None)
+
+    assert text.endswith("    rules: default\n")
+    assert "CLAUDE.md" not in text
+
+
 def test_removing_a_concept_member_says_to_clear_the_concept_first() -> None:
     result = _rejected(
         SetUpProblem(

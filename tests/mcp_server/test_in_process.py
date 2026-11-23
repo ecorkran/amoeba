@@ -31,7 +31,7 @@ from amoeba.mcp.tools import (
     ToolSpec,
     prepare_arguments,
 )
-from amoeba.operations import served
+from amoeba.operations import served_runners
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
 from amoeba.operations.names import Door, OperationName
 from amoeba.store.standing import list_standing
@@ -253,7 +253,7 @@ def test_the_abandoned_worker_closes_its_store_when_it_finishes(
         assert release.wait(WAIT_SECONDS), "the test never released the worker"
         return STUB_RESULT
 
-    monkeypatch.setattr(served, "mark_read", slow_mark_read)
+    monkeypatch.setattr(served_runners, "mark_read", slow_mark_read)
     monkeypatch.setattr(in_process, "MCP_CALL_DEADLINE_SECONDS", 0.2)
 
     async def scenario() -> None:
@@ -284,7 +284,7 @@ def test_the_store_is_closed_after_a_normal_call_and_after_one_that_raises(
     def raising(store: Store, document: object) -> MarkReadResult:
         raise SquadronError("sq down")
 
-    monkeypatch.setattr(served, "mark_read", raising)
+    monkeypatch.setattr(served_runners, "mark_read", raising)
 
     async def failing() -> None:
         with pytest.raises(SquadronError):

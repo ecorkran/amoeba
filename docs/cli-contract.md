@@ -152,6 +152,9 @@ Each problem has a `code`, a `detail` naming the field at fault, and `open_quest
 `unknown_provider`, `self_dependency`, `unknown_authorize_item`,
 `concept_member_not_member`, `member_has_open_questions`, `not_a_member`, and from slice
 261 `name_taken`, `origin_taken`, `no_origin`, `member_has_checkouts` and `not_a_checkout`.
+Those five carry the way on in their `detail` (the remotes, the flags to give), and the text
+prints the whole detail, wrapped, never cut; on a joined machine the text of `add` and `rm`
+says `rules: default` alone, since the config that applies is the hub's.
 Any problem rejects the whole request and writes nothing. A new member needs no rules: it gets the
 default.
 
@@ -1065,10 +1068,29 @@ check is made on every call, before anything local is read or written.
 
 | On a joined machine | Result |
 |---|---|
-| `decisions`, `mark-read`, `dismiss`, `retract`, `standing`, `withdraw` | Run on the hub's store. The text, `-j` JSON and exit codes are the ones the local way gives. Members show by their ids until slice 261 |
+| `decisions`, `mark-read`, `dismiss`, `retract`, `standing`, `withdraw`, and (slice 261) `add`, `rm`, `list`, `status`, `send`, `inbox`, `reply`, `cancel`, `changes`, `report-release` | Run on the hub's store. The text, `-j` JSON and exit codes are the ones the local way gives. Members show by name |
 | any other command, `handle-pause`, `wake-run`, `amoeba-mcp` start | `NotServedError`: this machine is joined to the hub at `<address>`, and the door does not serve `<operation>` yet. Exit 3, nothing local is read or written |
 | `amoeba hub ...` | `LocalStoreClosedError` naming the hub, before `hub.yaml` is read or any file is written |
 | `amoeba join`, `amoeba leave` | Run (below) |
+
+**What the client does first (slice 261).** The operations that need something only this
+machine can read gather it before any hub call, and a failure raises `ContextForgeError`
+(exit 3) with nothing sent: the caller's Context Forge project (`cf get --json` in the
+current directory) for `send`, `inbox`, `reply`, `cancel`, `changes`, `report-release`,
+`status`, `list` with no subject, and `rm` with nothing named; the checkout (the project's
+id, name and path and the repo's reduced `origin`, from `git remote get-url origin`) for
+`add` when an entry names no member; and the machine's Squadron runs (`sq runs list`, each
+run's directory's project, a paused run's run file and the calls log) for `status` and
+`list` with no subject. They travel beside the document as the body keys `here` and `runs`;
+a call that does not need one sends none, and the hub ignores one it is sent. A key the
+call needs that is missing or does not parse is refused as `malformed_call`, and so is an
+`origin` that is not in its reduced form: the raw address can hold a password and never
+leaves the client. The hub does not start wakes yet (slice 262): a `send` to a member a
+wake is due for on any machine is refused as `not_served`, naming the member and the
+machines with a wake command, with nothing written; remove the wake command
+(`amoeba add --no-wake-command` in that checkout) to send. The hub does not run the close
+sweep, pruning or run starts for `status` and `list`: they read the files of the machine
+that ran `sq`.
 
 On a **hub home** (the config home holds `hub.yaml`) every command that opens the
 local store, and `amoeba join`, refuse with `HubHomeError` / `JoinError`: the hub's

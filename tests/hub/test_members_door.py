@@ -350,3 +350,20 @@ def test_a_hub_on_a_schema_11_store_names_each_member_by_its_id_and_they_work(
     assert list(remaining) == ["old-guide"]
     (checkout,) = remaining["old-guide"]["checkouts"]
     assert checkout["path"] == str(repo)
+
+
+def test_add_and_rm_text_needs_no_config_on_a_joined_machine(hub: FixtureHub) -> None:
+    """The text of ``add`` and ``rm`` read the local config's default rules, but a
+    joined machine's config is not the one that applies (the hub's is) and may not
+    exist: the change was already applied on the hub, so the text says ``default``
+    alone and the command succeeds (found running the walkthrough)."""
+    (alpha, on_alpha), _ = _shared(hub)
+    assert not (alpha.home / "config.yaml").exists()
+
+    added = alpha.run_in(on_alpha, "add")
+    removed = alpha.run_in(on_alpha, "rm", NAME)
+
+    assert added.code == 0, added.err
+    assert f"added member {NAME}" in added.out
+    assert "rules: default\n" in added.out
+    assert removed.code == 0, removed.err

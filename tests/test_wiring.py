@@ -25,7 +25,7 @@ from amoeba.client.errors import (
 )
 from amoeba.config.home import AmoebaHomeError, config_path, state_layout
 from amoeba.config.user_config import ConfigError
-from amoeba.operations import served
+from amoeba.operations import served, served_runners
 from amoeba.operations.answer import AnswerOutcome, AnswerResult
 from amoeba.operations.changes_models import (
     ChangesOutcome,
@@ -172,7 +172,7 @@ def test_invoke_closes_the_store_when_the_operation_raises(
     def raising(*_arguments: object, **_keywords: object) -> object:
         raise SquadronError("sq down")
 
-    monkeypatch.setattr(served, "mark_read", raising)
+    monkeypatch.setattr(served_runners, "mark_read", raising)
 
     with pytest.raises(SquadronError):
         wiring.invoke(OperationName.MARK_READ, {"through": 0}, None, Door.MCP)
