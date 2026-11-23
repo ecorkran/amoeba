@@ -6,7 +6,7 @@ slice: members-by-name
 conventionsSource: AGENTS.md
 projectRules: [general.md, python.md, sql.md, testing.md]
 project: amoeba
-verdict: FAIL
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/261-slice.members-by-name.md
 aiModel: claude-haiku-5-5
@@ -14,11 +14,12 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261123
 dateUpdated: 20261123
-reviewedSha: 4af4d12caa2284311a97b643d85c4f195fb91623
-reviewedBlob: 77860aa127b303940a03767ab70df526b1c97f4d
+reviewedSha: 8038ab876ed56c1e12a914d4953a64e75d86df01
+reviewedBlob: 15a494270f008458be5eda5a31dee428b060cb70
 reviewedBlobCurrent: true
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 75
+toolCallsMade: 59
 injected:
   - key: conventions
     path: "AGENTS.md"
@@ -26,78 +27,63 @@ injected:
     sha256: 2387512002bb2a73aa247bc36bc98d7162c5b5110ded41f56319d098d282ddbc
     whole: true
 filesRead:
+  - ".git/HEAD"
   - "src/amoeba/store/schema/012_members_by_name.sql"
   - "src/amoeba/store/member_names.py"
   - "src/amoeba/store/migrations.py"
-  - "src/amoeba/store/checkouts.py"
-  - "src/amoeba/store/machines.py"
-  - "src/amoeba/store/sql_checkouts.py"
-  - "src/amoeba/operations/naming.py"
-  - "src/amoeba/operations/add_names.py"
-  - "src/amoeba/operations/add_member.py"
-  - "src/amoeba/upstream/git_read.py"
-  - "src/amoeba/operations/origin.py"
-  - "src/amoeba/operations/add_origin.py"
-  - "src/amoeba/operations/state_move.py"
-  - "tests/store/test_migration_012.py"
-  - "tests/store/schema_11.py"
-  - "tests/store/test_member_names.py"
-  - ".git/HEAD"
-  - "src/amoeba/operations/name_by_id.py"
-  - "src/amoeba/operations/here_document.py"
-  - "src/amoeba/operations/set_up_plan.py"
-  - "src/amoeba/hub/store_open.py"
   - "scripts/update_live.py"
-  - "tests/scripts/test_update_live.py"
-  - "src/amoeba/operations/add.py"
-  - "src/amoeba/operations/add_gather.py"
-  - "src/amoeba/operations/set_up_remove.py"
-  - "src/amoeba/wiring_gather.py"
-  - "src/amoeba/operations/set_up_resolve.py"
   - "src/amoeba/store/sql.py"
+  - "src/amoeba/operations/naming.py"
+  - "src/amoeba/store/checkouts.py"
+  - "src/amoeba/store/sql_checkouts.py"
+  - "src/amoeba/operations/add.py"
+  - "src/amoeba/operations/add_names.py"
+  - "src/amoeba/operations/origin.py"
+  - "src/amoeba/operations/add_member.py"
+  - "src/amoeba/operations/rm.py"
+  - "src/amoeba/operations/add_origin.py"
   - "src/amoeba/operations/caller.py"
-  - "tests/upstream/context_forge/test_projects.py"
-  - "src/amoeba/upstream/context_forge/projects.py"
+  - "src/amoeba/store/models.py"
+  - "src/amoeba/store/programs.py"
+  - "src/amoeba/operations/set_up_plan.py"
+  - "src/amoeba/operations/name_by_id.py"
   - "src/amoeba/operations/set_up.py"
-  - "src/amoeba/store/store.py"
+  - "src/amoeba/operations/set_up_resolve.py"
+  - "src/amoeba/operations/state_move.py"
+  - "tests/scripts/test_update_live.py"
+  - "tests/store/test_migration_012.py"
+  - "src/amoeba/operations/add_door.py"
+  - "src/amoeba/operations/add_gather.py"
+  - "src/amoeba/cli/registration_arguments.py"
+  - "src/amoeba/upstream/git_read.py"
+  - "tests/operations/test_naming.py"
+  - "src/amoeba/config/starter.py"
+  - "tests/store/test_members_queried_in_one_place.py"
+  - "src/amoeba/operations/names.py"
 searches:
-  - "grep SELECT_UNNAMED_MEMBERS|SELECT_MEMBER_BY_NAME|SELECT_MEMBER_BY_ORIGIN|SELECT_REMOVED_MEMBER_BY_ORIGIN|SELECT_NAME_IS_OTHER_MEMBERS_ID|SET_MEMBER_NAME|SET_MEMBER_ORIGIN|CLEAR_MEMBER_WAKE_COMMAND|f\"|f' in /Users/manta/source/repos/manta/amoeba/src/amoeba/store/sql.py"
-  - "grep CREATE TABLE (IF NOT EXISTS )?(members|owners|machines)\\b|project_id\\s+TEXT|machine_id\\s+INTEGER|owner_id\\s+INTEGER|UNIQUE|PRIMARY KEY in /Users/manta/source/repos/manta/amoeba/src/amoeba/store/schema"
-  - "list_files src/amoeba/store/schema/*.sql in /Users/manta/source/repos/manta/amoeba"
-  - "grep name_members\\(|def open_state_store|ContextForgeError in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep def run_cf|class CfCallFailed|class CfRun|def output_head|detail=|CfCallFailed\\(|TimeoutExpired|OSError|CfRun\\s*= in /Users/manta/source/repos/manta/amoeba/src/amoeba/upstream/context_forge/cli_call.py"
-  - "grep is_reduced_origin|is_member_name\\(|set_member_origin\\(|set_member_name\\(|insert_member\\(|count_rows\\(|select_all_rows\\(|row_counts\\( in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep is_reduced_origin|count_rows\\(|row_counts\\( in /Users/manta/source/repos/manta/amoeba/tests"
-  - "grep MEMBER_NAME|def is_member_name|_NAME_PATTERN|re\\.compile in /Users/manta/source/repos/manta/amoeba/src/amoeba/store/vocabulary.py"
-  - "grep name_by_id\\(|name_members\\(|act_as_local\\(|from_backup|open_hub_store|def open_hub in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep project_id|PROJECT_ID|id_pattern|re\\.compile in /Users/manta/source/repos/manta/amoeba/src/amoeba/upstream/context_forge/projects.py"
-  - "grep cf list projects|cf is down|cf fails|cf failed|cannot name|every command in /Users/manta/source/repos/manta/amoeba/project-documents"
-  - "grep ^### \\[ in /Users/manta/source/repos/manta/amoeba/project-documents/user/reviews"
-  - "grep ^ in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep AMOEBA_HOME|monkeypatch|store_path|state_home|config_path in /Users/manta/source/repos/manta/amoeba/tests/scripts"
-  - "grep def amoeba_home|AMOEBA_HOME|XDG_STATE_HOME|XDG_CONFIG_HOME|HOME\" in /Users/manta/source/repos/manta/amoeba/tests"
-  - "grep def state_home|def config_path|def store_path|def state_layout|AMOEBA_HOME|XDG_STATE_HOME|XDG_CONFIG_HOME in /Users/manta/source/repos/manta/amoeba/src/amoeba/config/home.py"
-  - "grep DELETE FROM members|DELETE_MEMBER\\b|delete_checkouts_of_member\\(|REMOVE_MEMBER|REMOVE_MEMBER\\b|def remove_member|UPDATE members SET removed_at in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep remove_member\\( in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep here|wake_command|machine|origin|name in /Users/manta/source/repos/manta/amoeba/src/amoeba/hub/calls.py"
-  - "grep wake_command|def refuse_door_fields|WAKE in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations/add_door.py"
-  - "grep refuse_door_fields|gather_add|def run_served|def _add|add\\(|Door\\.|wake_command in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep name_by_id|delete_checkouts_at_path|remove_machine|first_wakeable_checkout|set_checkout_wake_command|clear_member_wake_command|checkout_listing|SELECT_ACTIVE_MEMBERS_WITHOUT_CHECKOUT_ON|active_members_without|first_checkout_on|checkouts_on_machine in /Users/manta/source/repos/manta/amoeba/tests"
-  - "grep def test_|parametrize in /Users/manta/source/repos/manta/amoeba/tests/operations/test_naming.py"
-  - "grep rename_to|name_is_taken|check_given_name|is_member_name in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations"
-  - "grep IntegrityError|except sqlite3|def write\\(|def apply_set_up|def set_up\\( in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep INSERT_MEMBER|UPSERT|def insert_member|def upsert_member|def member_from_row|def _member_insert in /Users/manta/source/repos/manta/amoeba/src/amoeba/store/programs.py"
-  - "grep def _member_name|ACTIVE_MEMBER: Final|_MEMBER_COLUMNS: Final in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "list_files **/member_reference*.py in /Users/manta/source/repos/manta/amoeba"
-  - "grep member_reference|MemberReference in /Users/manta/source/repos/manta/amoeba"
-  - "grep operations\\.members\\b|operations import members|from amoeba\\.operations\\.members|project_lookup|project_names|_project_names|test_members\\b in /Users/manta/source/repos/manta/amoeba"
-  - "grep def git_root|rev-parse|ORIGIN_READ_TIMEOUT_SECONDS|NO_SUCH_REMOTE_EXIT_CODE|timeout|subprocess in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations/here.py"
-  - "grep checkout|delete_checkouts_at_path|def  in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations/rm.py"
-  - "grep name_before_write|upsert_member\\(|apply_plan\\(|_write_member\\( in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations/set_up.py"
-  - "grep rename|renam|same name|NAME_TAKEN in /Users/manta/source/repos/manta/amoeba/tests/operations"
-  - "grep first_checkout_on|checkout_listing|first_wakeable_checkout|set_checkout_wake_command|checkouts_on_machine|delete_checkout\\b|delete_checkout\\(|acting_machine_id|machine_name\\(|clear_member_wake_command|SELECT_CHECKOUT_MACHINE|SELECT_MACHINE_NAME in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep first_checkout_on|checkout_listing|first_wakeable_checkout|set_checkout_wake_command|SELECT_FIRST_CHECKOUT_ON|SELECT_CHECKOUT_LISTING|SELECT_WAKEABLE_CHECKOUT in /Users/manta/source/repos/manta/amoeba"
-  - "grep SELECT_MACHINE_NAME\\b|SELECT_MACHINE_BY_NAME\\b|SELECT name FROM machines in /Users/manta/source/repos/manta/amoeba/src/amoeba/store"
+  - "grep SELECT_UNNAMED_MEMBERS|SELECT_MEMBER_BY_NAME|SELECT_MEMBER_BY_ORIGIN|SELECT_REMOVED_MEMBER_BY_ORIGIN|SELECT_NAME_IS_OTHER_MEMBERS_ID|SET_MEMBER_NAME|SET_MEMBER_ORIGIN|CLEAR_MEMBER_WAKE_COMMAND|SELECT_ACTIVE_MEMBERS_WITHOUT_CHECKOUT_ON|^ACTIVE_MEMBER|UPSERT_SCHEMA_VERSION|SELECT_SCHEMA_VERSION|TABLE_\u2026 in /Users/manta/source/repos/manta/amoeba/src/amoeba/store/sql.py"
+  - "list_files src/amoeba/store/*.py in /Users/manta/source/repos/manta/amoeba"
+  - "list_files src/amoeba/operations/*naming*.py in /Users/manta/source/repos/manta/amoeba"
+  - "grep upsert_member\\(|set_member_name\\(|set_member_origin\\(|delete_checkouts_of_member\\(|delete_checkout\\(|insert_checkout\\(|remove_member\\(|clear_member_wake_command|name_members\\(|renamed_from|stale_checkout_id|IntegrityError in /Users/manta/source/repos/manta/amoeba/src"
+  - "grep removed|reregister|name_is_taken|check_given_name|NAME_TAKEN|ORIGIN_TAKEN|origin in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations/set_up_resolve.py"
+  - "grep removed|reregister|name_is_taken|check_given_name|NAME_TAKEN|ORIGIN_TAKEN|active_member_by_name|rename_to|origin in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations/set_up_checks.py"
+  - "grep CREATE TABLE (IF NOT EXISTS )?(members|machines|owners)\\b|project_id\\s+TEXT\\s+PRIMARY KEY|owner_id\\s+INTEGER|machine_id\\s+INTEGER\\s+PRIMARY|name_members|name_by_id\\( in /Users/manta/source/repos/manta/amoeba/src"
+  - "grep FileHandler|basicConfig|RotatingFileHandler|getLogger\\(|log_path|\\.log\"|logs_dir|logging\\. in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep wake_command|WakeCommand in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations/set_up_models.py"
+  - "grep refuse_door_fields|def refuse|\"checkout\"|\"wake_command\"|\"attach_to\"|\"new_member\"|\"project\"|REFUSED_FROM|_DOOR_FIELDS|door_fields in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep WAKE_COMMAND_DOORS|refuse_door_fields|wake_command|WAKE_FROM_OWN_CHECKOUT in /Users/manta/source/repos/manta/amoeba/src"
+  - "grep set_up|SET_UP|gather_add|refuse_door|door= in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep OperationName\\.SET_UP|\"set_up\"|set_up\\b|set_up\\( in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep ^def (integer|optional_text|text|encode_timestamp|acting_machine_id|is_member_name|project_details|git_read|remote_origin_args|git_root|starter_values|fill_missing_keys|state_home|config_path|store_path|state_layout|logs_dir|starter_values|checkout_listing|acting)\\b|^(class (Transaction|CfCallFailed\u2026 in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep detail|def run_cf|def output_head|TimeoutExpired|OSError|stderr|stdout in /Users/manta/source/repos/manta/amoeba/src/amoeba/upstream/context_forge/cli_call.py"
+  - "grep by its id|by id|clash|IntegrityError|collid|same name|another member already in /Users/manta/source/repos/manta/amoeba/tests"
+  - "grep IntegrityError in /Users/manta/source/repos/manta/amoeba/src/amoeba/store/errors.py"
+  - "grep id|uuid|slug in /Users/manta/source/repos/manta/amoeba/src/amoeba/upstream/context_forge/projects.py"
+  - "grep wake_command|\\bname\\b\\s+TEXT|origin|CREATE TABLE (wakes|checkouts) in /Users/manta/source/repos/manta/amoeba/src/amoeba/store/schema"
+  - "grep extra=|forbid|unknown key|Extra inputs|model_config in /Users/manta/source/repos/manta/amoeba/src/amoeba/config"
+  - "grep checkout in /Users/manta/source/repos/manta/amoeba/src/amoeba/cli/registration_arguments.py"
+  - "grep cannot be combined|parser\\.error in /Users/manta/source/repos/manta/amoeba/src/amoeba/cli/registration_arguments.py"
+  - "grep TODO|FIXME|XXX|later slice|deferred|for now|follow-up|print\\(|breakpoint\\(|pdb in /Users/manta/source/repos/manta/amoeba/src/amoeba"
 diffTruncated: true
 diffCutFiles:
   - "scripts/update_live.py"
@@ -115,6 +101,7 @@ diffCutFiles:
   - "src/amoeba/hub/store_open.py"
   - "src/amoeba/mcp/tools.py"
   - "src/amoeba/operations/add.py"
+  - "src/amoeba/operations/add_door.py"
   - "src/amoeba/operations/add_gather.py"
   - "src/amoeba/operations/add_member.py"
   - "src/amoeba/operations/add_names.py"
@@ -388,111 +375,76 @@ diffCutFiles:
   - "tests/upstream/test_git_read.py"
   - "tests/wire/test_protocol.py"
 effort: xhigh
-turns: 76
-promptTokens: 6618987
-cachedTokens: 6379539
-cacheWriteTokens: 239364
-completionTokens: 105025
-durationSeconds: 466.6
-costUsd: 0.686034
+turns: 60
+promptTokens: 4592942
+cachedTokens: 4402263
+cacheWriteTokens: 190613
+completionTokens: 73021
+durationSeconds: 327.0
+costUsd: 0.500444
 costBasis: provider
 runId: run-20261123-p6-ca3ac353
 squadronVersion: 0.24.37
 categoriesNormalized: true
 findings:
   - id: F001
-    severity: fail
+    severity: concern
     category: correctness
-    summary: "`restore` overwrites the live store before it checks the backup"
-    location: "scripts/update_live.py:224"
+    summary: "update_live writes the config before install, and an install failure is not restored"
+    location: "scripts/update_live.py:342-343"
   - id: F002
     severity: concern
-    category: correctness
-    summary: "Two renames to one name in one request surface as a raw store error"
-    location: "src/amoeba/operations/set_up_resolve.py:172"
+    category: error-handling-observability
+    summary: "A backup killed or failed mid-copy blocks every later update"
+    location: "scripts/update_live.py:310"
   - id: F003
     severity: concern
-    category: error-handling-observability
-    summary: "Naming's fallback to the member's id is silent"
-    location: "src/amoeba/operations/naming.py:104"
+    category: correctness
+    summary: "Naming falls back to a member id with no clash check, so the write fails and every command with it"
+    location: "src/amoeba/operations/naming.py:139-159"
   - id: F004
     severity: concern
-    category: error-handling-observability
-    summary: "The update's failure handler drops the traceback"
-    location: "scripts/update_live.py:310"
+    category: architectural-decay
+    summary: "The \"wake command dropped\" logic is duplicated in two modules"
+    location: "src/amoeba/operations/name_by_id.py:64-73"
   - id: F005
-    severity: concern
+    severity: note
     category: security-hygiene
-    summary: "A test helper builds SQL from a runtime table name"
-    location: "tests/store/schema_11.py:124"
+    summary: "The wake command text is written to the log verbatim"
+    location: "src/amoeba/operations/naming.py:222-226"
   - id: F006
     severity: note
     category: correctness
-    summary: "`name_by_id`'s \"cannot clash\" claim ignores the case-insensitive index"
-    location: "src/amoeba/operations/name_by_id.py:32"
+    summary: "`rm --checkout` silently ignores `--program`"
+    location: "src/amoeba/operations/rm.py:130-138"
   - id: F007
     severity: note
-    category: security-hygiene
-    summary: "The hub's `add` relies on a client-side check for `wake_command`"
-    location: "src/amoeba/operations/add_door.py:56"
+    category: error-handling-observability
+    summary: "The update's blanket catch restores and re-raises, but does not log through logger.exception"
+    location: "scripts/update_live.py:346-355"
   - id: F008
     severity: note
-    category: correctness
-    summary: "Writes made during the update are lost on a restore, and the docstring does not say so"
-    location: "scripts/update_live.py:162"
+    category: performance-resource
+    summary: "`with` on a sqlite3 connection does not close it"
+    location: "scripts/update_live.py:136-137"
   - id: F009
-    severity: note
-    category: security-hygiene
-    summary: "Wake commands are logged verbatim"
-    location: "src/amoeba/operations/naming.py:182"
-  - id: F010
-    severity: note
-    category: architectural-decay
-    summary: "`SELECT_MACHINE_NAME` is defined twice"
-    location: "src/amoeba/store/sql_checkouts.py:54"
-  - id: F011
-    severity: note
-    category: architectural-decay
-    summary: "`store/sql.py` is 543 lines"
-    location: "src/amoeba/store/sql.py"
-  - id: F012
-    severity: note
-    category: documentation-drift
-    summary: "Docstrings and an import guard still name the removed `project_names`"
-    location: "tests/upstream/context_forge/test_projects.py:1"
-  - id: F013
-    severity: note
-    category: performance-resource
-    summary: "A hung mount can block naming before the time budget applies"
-    location: "src/amoeba/operations/naming.py:58"
-  - id: F014
-    severity: note
-    category: type-contract-debt
-    summary: "`name_is_taken` returns `Member | bool`"
-    location: "src/amoeba/operations/add_names.py:27"
-  - id: F015
     severity: pass
     category: correctness
-    summary: "Migration 012's foreign keys and column order check out"
-    location: "src/amoeba/store/schema/012_members_by_name.sql:29"
-  - id: F016
-    severity: pass
-    category: performance-resource
-    summary: "No `cf` or `git` call runs inside a write transaction"
-    location: "src/amoeba/operations/naming.py:203"
-  - id: F017
+    summary: "Migration 012 is additive, with correct name and origin uniqueness and the checkouts table"
+    location: "src/amoeba/store/schema/012_members_by_name.sql:15-48"
+  - id: F010
     severity: pass
     category: security-hygiene
-    summary: "Origin input is checked at the trust boundary"
-    location: "src/amoeba/operations/here_document.py:44"
+    summary: "The wake-command door check covers both places `add` can carry the field"
+    location: "src/amoeba/operations/add_door.py:56-83"
 ---
 
 # Review: code — slice 261
 
-**Verdict:** FAIL
+**Verdict:** CONCERNS
 **Model:** claude-haiku-5-5
-**Diff:** truncated: 0 of 1014565 characters reached the model
-  - scripts/update_live.py: omitted (0 of 11034 characters)
+**Diff:** truncated: 0 of 1028553 characters reached the model
+  - scripts/update_live.py: omitted (0 of 13480 characters)
   - src/amoeba/cli/commands.py: omitted (0 of 2875 characters)
   - src/amoeba/cli/registration_arguments.py: omitted (0 of 3109 characters)
   - src/amoeba/cli/render/dispatch.py: omitted (0 of 1509 characters)
@@ -507,9 +459,10 @@ findings:
   - src/amoeba/hub/store_open.py: omitted (0 of 985 characters)
   - src/amoeba/mcp/tools.py: omitted (0 of 2232 characters)
   - src/amoeba/operations/add.py: omitted (0 of 11402 characters)
+  - src/amoeba/operations/add_door.py: omitted (0 of 1114 characters)
   - src/amoeba/operations/add_gather.py: omitted (0 of 2136 characters)
-  - src/amoeba/operations/add_member.py: omitted (0 of 11841 characters)
-  - src/amoeba/operations/add_names.py: omitted (0 of 2073 characters)
+  - src/amoeba/operations/add_member.py: omitted (0 of 11928 characters)
+  - src/amoeba/operations/add_names.py: omitted (0 of 2312 characters)
   - src/amoeba/operations/add_origin.py: omitted (0 of 2478 characters)
   - src/amoeba/operations/caller.py: omitted (0 of 3003 characters)
   - src/amoeba/operations/cancel.py: omitted (0 of 1801 characters)
@@ -528,8 +481,8 @@ findings:
   - src/amoeba/operations/member_reference.py: omitted (0 of 1653 characters)
   - src/amoeba/operations/members.py: omitted (0 of 2053 characters)
   - src/amoeba/operations/message_member.py: omitted (0 of 8274 characters)
-  - src/amoeba/operations/name_by_id.py: omitted (0 of 2481 characters)
-  - src/amoeba/operations/naming.py: omitted (0 of 8095 characters)
+  - src/amoeba/operations/name_by_id.py: omitted (0 of 3447 characters)
+  - src/amoeba/operations/naming.py: omitted (0 of 9907 characters)
   - src/amoeba/operations/origin.py: omitted (0 of 4071 characters)
   - src/amoeba/operations/pause_claim.py: omitted (0 of 432 characters)
   - src/amoeba/operations/pause_context.py: omitted (0 of 4202 characters)
@@ -553,7 +506,7 @@ findings:
   - src/amoeba/operations/set_up_plan.py: omitted (0 of 3106 characters)
   - src/amoeba/operations/set_up_remove.py: omitted (0 of 1927 characters)
   - src/amoeba/operations/set_up_remove_resolve.py: omitted (0 of 2303 characters)
-  - src/amoeba/operations/set_up_resolve.py: omitted (0 of 14828 characters)
+  - src/amoeba/operations/set_up_resolve.py: omitted (0 of 15933 characters)
   - src/amoeba/operations/set_up_state.py: omitted (0 of 4641 characters)
   - src/amoeba/operations/set_up_wake.py: omitted (0 of 2543 characters)
   - src/amoeba/operations/standing.py: omitted (0 of 4195 characters)
@@ -569,7 +522,7 @@ findings:
   - src/amoeba/operations/wake.py: omitted (0 of 3694 characters)
   - src/amoeba/operations/wake_door.py: omitted (0 of 2319 characters)
   - src/amoeba/operations/wake_status.py: omitted (0 of 979 characters)
-  - src/amoeba/store/checkouts.py: omitted (0 of 7063 characters)
+  - src/amoeba/store/checkouts.py: omitted (0 of 7076 characters)
   - src/amoeba/store/machines.py: omitted (0 of 2189 characters)
   - src/amoeba/store/member_names.py: omitted (0 of 3558 characters)
   - src/amoeba/store/migrations.py: omitted (0 of 611 characters)
@@ -577,7 +530,7 @@ findings:
   - src/amoeba/store/programs.py: omitted (0 of 4463 characters)
   - src/amoeba/store/schema/012_members_by_name.sql: omitted (0 of 2411 characters)
   - src/amoeba/store/sql.py: omitted (0 of 4689 characters)
-  - src/amoeba/store/sql_checkouts.py: omitted (0 of 3483 characters)
+  - src/amoeba/store/sql_checkouts.py: omitted (0 of 3404 characters)
   - src/amoeba/store/vocabulary.py: omitted (0 of 1077 characters)
   - src/amoeba/store/wakes.py: omitted (0 of 6584 characters)
   - src/amoeba/upstream/context_forge/project_of.py: omitted (0 of 2940 characters)
@@ -691,7 +644,7 @@ findings:
   - tests/operations/test_message_member.py: omitted (0 of 10999 characters)
   - tests/operations/test_message_names.py: omitted (0 of 4491 characters)
   - tests/operations/test_message_sweep_wrapper.py: omitted (0 of 1977 characters)
-  - tests/operations/test_naming.py: omitted (0 of 16790 characters)
+  - tests/operations/test_naming.py: omitted (0 of 19463 characters)
   - tests/operations/test_origin.py: omitted (0 of 3865 characters)
   - tests/operations/test_pause_cf_ids.py: omitted (0 of 4242 characters)
   - tests/operations/test_pause_eligibility.py: omitted (0 of 2607 characters)
@@ -722,7 +675,7 @@ findings:
   - tests/operations/test_set_up_remove.py: omitted (0 of 5548 characters)
   - tests/operations/test_set_up_remove_request.py: omitted (0 of 1492 characters)
   - tests/operations/test_set_up_rules.py: omitted (0 of 2644 characters)
-  - tests/operations/test_set_up_validation.py: omitted (0 of 4394 characters)
+  - tests/operations/test_set_up_validation.py: omitted (0 of 5258 characters)
   - tests/operations/test_standing.py: omitted (0 of 4603 characters)
   - tests/operations/test_status.py: omitted (0 of 3698 characters)
   - tests/operations/test_status_calls.py: omitted (0 of 2314 characters)
@@ -742,11 +695,11 @@ findings:
   - tests/operations/wake_run_support.py: omitted (0 of 788 characters)
   - tests/operations/wake_send_support.py: omitted (0 of 1457 characters)
   - tests/program/flow_support.py: omitted (0 of 1925 characters)
-  - tests/scripts/test_update_live.py: omitted (0 of 15116 characters)
+  - tests/scripts/test_update_live.py: omitted (0 of 16906 characters)
   - tests/store/decision_support.py: omitted (0 of 1598 characters)
   - tests/store/message_support.py: omitted (0 of 1202 characters)
   - tests/store/release_support.py: omitted (0 of 1133 characters)
-  - tests/store/schema_11.py: omitted (0 of 4817 characters)
+  - tests/store/schema_11.py: omitted (0 of 5591 characters)
   - tests/store/seed.py: omitted (0 of 1814 characters)
   - tests/store/test_acting_machine.py: omitted (0 of 2631 characters)
   - tests/store/test_checkouts.py: omitted (0 of 8297 characters)
@@ -768,7 +721,7 @@ findings:
   - tests/test_cf_ids_never_member_ids.py: omitted (0 of 2128 characters)
   - tests/test_ci_gates_load.py: omitted (0 of 3590 characters)
   - tests/test_contract_docs.py: omitted (0 of 543 characters)
-  - tests/test_import_boundaries.py: omitted (0 of 4706 characters)
+  - tests/test_import_boundaries.py: omitted (0 of 4670 characters)
   - tests/test_message_timing.py: omitted (0 of 8132 characters)
   - tests/test_read_side_defined_once.py: omitted (0 of 1036 characters)
   - tests/test_report_release_sweep.py: omitted (0 of 1868 characters)
@@ -776,104 +729,72 @@ findings:
   - tests/test_wiring_release.py: omitted (0 of 2804 characters)
   - tests/test_wiring_results.py: omitted (0 of 1110 characters)
   - tests/upstream/context_forge/test_project_of.py: omitted (0 of 1594 characters)
-  - tests/upstream/context_forge/test_projects.py: omitted (0 of 2449 characters)
+  - tests/upstream/context_forge/test_projects.py: omitted (0 of 2669 characters)
   - tests/upstream/test_git_read.py: omitted (0 of 2587 characters)
   - tests/wire/test_protocol.py: omitted (0 of 1960 characters)
-**Evidence:** 71 successful tool call(s) of 75 made; 0 of 1014565 diff characters reached the model
+**Evidence:** 56 successful tool call(s) of 59 made; 0 of 1028553 diff characters reached the model
 
 ## Findings
 
-### [FAIL] `restore` overwrites the live store before it checks the backup
+### [CONCERN] update_live writes the config before install, and an install failure is not restored
 
-`restore()` copies the backup's store over `store_path()` (line 226) and its config (227) before it reads `PREVIOUS_VERSION` (228). `take_backup()` writes that file last (168), so a backup whose take was interrupted has no version file, and its store copy may be partial (166). `restore` then overwrites the live store with that file, and `copy_database` writes into the live store page by page, so a copy that fails partway leaves no guarantee the live store is intact. The script then dies with an uncaught `FileNotFoundError`, because `main` catches only `UpdateError` (423).
+`update()` calls `add_missing_keys` (which writes the config, `src/amoeba/config/starter.py:94`) before `steps.install(...)`. The `try` that restores on failure begins only after the install. If `uv tool install` fails, for example because the version is not on PyPI yet, `UpdateError` propagates with the config already changed and nothing restored. `UserConfig` is `extra="forbid"` (`src/amoeba/config/user_config.py:73`). When the release has added a required key, the still-installed previous version then rejects its config on every command, and the message says only that uv could not install. `test_a_version_not_on_pypi_is_an_update_error_not_a_traceback` covers only `_uv_install`, not the config left behind. Fix: restore `backup/CONFIG_BACKUP` when the install fails, or put the install and the config write inside the restore path.
 
-The same state stalls the next `update`: `reusable_backup()` reads that file without checking it exists (274), so every later run crashes. The natural next step is `restore`, which picks the same directory (`newest_backup`, 234). Nothing in the script clears the directory, so the only way out is deleting files by hand. That breaks the Amoeba rule that every state has an exit.
+### [CONCERN] A backup killed or failed mid-copy blocks every later update
 
-The tool should validate the backup before it writes anything: the version file exists, the store opens, `integrity_check` is `ok`, and the schema is one it knows. Only then should it copy. `restore` also reads its target from the environment (`store_path()`), where the sql.md rule asks maintenance tools to take an explicit argument. The kill tests (`tests/scripts/test_update_live.py:498` and `:533`) cover a kill after the migration and a kill before it, but not a kill during `take_backup`. This finding rests on reading the code; I did not run it.
+`take_backup` (lines 164-171) creates the directory, copies the store, copies the config, and writes `previous-version` last. A failure or kill during the copy leaves a directory with no `previous-version`. The next `update` reaches `reusable_backup`, which reads `newest / PREVIOUS_VERSION` at line 310 with no guard. The result is an uncaught `FileNotFoundError` before anything else runs, since `main` catches only `UpdateError`. `restore` also refuses, because `check_backup` finds no previous-version in the newest backup. The only exit is deleting the directory by hand, which breaks the design rule that every state has an exit. No test covers an incomplete backup directory; the kill tests interrupt after the backup is complete. Fix: write the backup into a temporary directory and rename it into place only when complete, or treat an incomplete newest backup as absent and let a successful update delete it.
 
-### [CONCERN] Two renames to one name in one request surface as a raw store error
+### [CONCERN] Naming falls back to a member id with no clash check, so the write fails and every command with it
 
-`resolve_request` checks each rename with `_rename` against committed names only (173). Nothing records names that an earlier entry in the same request claims. Two entries that rename two members to the same free name both pass. `apply` then writes the first rename, and the second hits `members_active_name` (set_up.py:160-161). `Transaction.execute` turns that into a `StoreIntegrityError`, the write rolls back, and the caller sees a store error with a logged traceback instead of a `NAME_TAKEN` refusal. A rename that takes the name a new member is being given fails the same way. Nothing is corrupted, but the one free-or-taken rule is bypassed for bulk requests. No test covers two renames in one request. Track claimed names in `resolve_request` and refuse them as `NAME_TAKEN`.
+`_name_for` falls back to `_by_id` in four cases: no listing, an invalid Context Forge name, an active name clash, or another member's id. `_by_id` returns the member's own id without checking D1. If an active member already has that id as its name, ignoring case, `set_member_name` violates `members_active_name`, and `errors.py:91-92` maps that to `StoreIntegrityError`. The write rolls back, `open_state_store` closes the store and re-raises, and naming runs again on every open, so every command fails until the data changes. The hub path has the check (`src/amoeba/operations/name_by_id.py:32-40`, `_refuse_a_clash`), but the Context Forge path does not. `tests/operations/test_naming.py:472-490` checks the fallback reasons but never an id that clashes. The trigger is rare: an unlisted or unnamed member whose id matches another project's name, ignoring case. Fix: apply the D1 check to the id before falling back, refuse with a message that names both members, as the hub path does, and add a test for the collision.
 
-### [CONCERN] Naming's fallback to the member's id is silent
+### [CONCERN] The "wake command dropped" logic is duplicated in two modules
 
-`_name_for` returns the project id with no log line in three cases: cf does not list the project (115), the cf name fails `is_member_name` (114-115), or another active member holds the name (118-121). The origin fallback in the same module logs a warning (134-138), and `name_by_id` logs each id it uses (name_by_id.py:42). A user whose `list` shows opaque ids gets no explanation in the log. Log each fallback with its reason.
+`name_by_id` clears the retired wake command and logs the same warning text as `naming._retire_wake_command` (`src/amoeba/operations/naming.py:215-226`). The modules are kept apart so the hub does not import the client part, as the docstring says. That reason does not apply to `src/amoeba/store/member_names.py`, which both modules can import. Fix: move a shared helper into `member_names.py` and call it from both.
 
-### [CONCERN] The update's failure handler drops the traceback
+### [NOTE] The wake command text is written to the log verbatim
 
-`update()` catches `Exception`, restores, and re-raises `UpdateError ... from error` (315-317). The `noqa` comment calls this the process boundary, but `update()` is not one; `main()` is. The handler does not log the exception, and `main` prints only `str(error)` (424), so the failing frame is lost. That frame is what an operator needs to diagnose a failed migration. Print or log the traceback to stderr before the restore.
+Both naming paths log the retired `wake_command` (`naming.py:222-226`, `name_by_id.py:68-73`). Those warnings reach the hub's rotating `hub.log` (`src/amoeba/hub/hub_log.py`) and the MCP server's stderr. The design accepts this because the store already holds the text in plain text. `src/amoeba/cli/registration_arguments.py:46-53` says wake commands are shown in plain text and must carry no secret. `tests/operations/test_naming.py:452-455` asserts the text is logged. This is a decision rather than a defect, but logs are copied and kept differently from the database, so a token in a command would spread further. Consider logging only the first token.
 
-### [CONCERN] A test helper builds SQL from a runtime table name
+### [NOTE] `rm --checkout` silently ignores `--program`
 
-`row_counts` builds `SELECT COUNT(*) FROM {table}` from names read out of `sqlite_master`. The Amoeba rule "SQL composes from constants only" allows f-strings only over module-level constants, never runtime values. The input here is trusted, so this is a rule breach, not an injection risk. `store/sql.py:47-54` already has `count_rows` and `select_all_rows` for this job, so the helper should use them. Those two functions use the same runtime-table pattern, so the rule's wording may need an explicit exception for `sqlite_master` identifiers.
+`_remove_checkout` rejects members, pairs, and the concept with `--checkout`, but not `program`. The CLI does not reject the combination either (`src/amoeba/cli/registration_arguments.py:202-208, 308-311`), so `amoeba rm --checkout /p --program X` removes the checkout and never uses `X`. Reject it as malformed, as the other flags are rejected.
 
-### [NOTE] `name_by_id`'s "cannot clash" claim ignores the case-insensitive index
+### [NOTE] The update's blanket catch restores and re-raises, but does not log through logger.exception
 
-Names compare case-insensitively (the index collation is NOCASE), but ids compare case-sensitively. Two unnamed members whose ids differ only by case, such as `Abc` and `abc`, would make the second write fail, and hub start fails with it, because `open_hub_store` calls `name_by_id` (store_open.py:92). The fixtures use lowercase ids, so this is unlikely, but the docstring's guarantee is false. The function also does not check that an id meets the name pattern, which `naming._name_for` does for cf names. Check both, or correct the docstring.
+The `except Exception` after install is deliberate and documented. It restores the previous state, prints the traceback to stderr, and raises `UpdateError ... from error`, which meets the intent. It does not meet the repo's rule (a) as written, which requires `logger.exception` and a re-raise. The script has no logger. Either accept it as a process-boundary handler and say so in the rules, or log through `logger.exception`.
 
-### [NOTE] The hub's `add` relies on a client-side check for `wake_command`
+### [NOTE] `with` on a sqlite3 connection does not close it
 
-`refuse_door_fields` runs only on the client (`add_gather.py:38`, reached from `wiring_gather.py:62`). The hub's served `add` never sees the door and does not repeat the check, so a hand-built request to the hub can set a wake command on the caller's own checkout. The docstring says the check "rejects a call that passes it anyway," which holds only on the client. The CLI can set wake commands anyway, so the practical exposure is small. If the refusal is meant as a boundary, the hub needs the check too.
+`_read_only` returns a `sqlite3.Connection`, and callers use `with _read_only(...) as connection:` (lines 141, 177, 238, 291). The sqlite3 context manager commits but does not close. CPython closes the connection when the function returns, so nothing leaks in practice. The repo's convention, visible in the tests, is `contextlib.closing`. Switch the callers to `closing`.
 
-### [NOTE] Writes made during the update are lost on a restore, and the docstring does not say so
+### [PASS] Migration 012 is additive, with correct name and origin uniqueness and the checkouts table
 
-`take_backup` runs before the install, the migration and the read-back. Running `amoeba-mcp` servers keep writing throughout (they are only listed at the end, 426-429). A failed read-back calls `restore`, which overwrites the live store and discards every write made in between. The docstring says the update "restores automatically" and does not mention this. Say so in the docstring.
+I read the migration against the schema it depends on: `members.project_id` is the primary key, and `owners` and `machines` exist from migration 011. The name index uses the NOCASE column and covers active members only. Origin is unique among active members. The trigger refuses a new member with no name. `tests/store/test_migration_012.py` covers each of these. I did not run it.
 
-### [NOTE] Wake commands are logged verbatim
+### [PASS] The wake-command door check covers both places `add` can carry the field
 
-`_retire_wake_command` logs the command with `%r` at WARNING, and `name_by_id.py:47-51` does the same. A command can carry an inline credential, such as a webhook URL with a token, and the log keeps it. The same module reduces git addresses so that passwords stay out of logs. Either redact the command in the log, or record that these commands are the PM's own and may be logged.
-
-### [NOTE] `SELECT_MACHINE_NAME` is defined twice
-
-The same query text is in `sql_machines.py:41`, and `checkouts.py:198` uses the copy in `sql_checkouts`. `sql_checkouts` can import `sql_machines` without a cycle, so use that constant.
-
-### [NOTE] `store/sql.py` is 543 lines
-
-The guidance is about 300 lines. The slice already split out `sql_checkouts.py` and `member_names.py`, and the members section could follow the same pattern. `add_member.py` (305), `programs.py` (313) and `set_up_resolve.py` (313) are also just over.
-
-### [NOTE] Docstrings and an import guard still name the removed `project_names`
-
-The task file removed `projects.project_names`, but this module's docstring still says it tests that function. The test imports only `project_details`, so it runs. `tests/test_import_boundaries.py:244` still lists the removed name in `CF_CALL_FUNCTIONS`. Update both.
-
-### [NOTE] A hung mount can block naming before the time budget applies
-
-`_gather_origins` bounds the git time, but `here.git_root(path)` runs first and calls `path.resolve()` and `.exists()` (here.py:78-80) with no bound. Those stats can hang on a stale network mount, which the naming docstring names as a case to handle. I have not verified this on a real mount; a bound would need a thread or a timeout on the stat.
-
-### [NOTE] `name_is_taken` returns `Member | bool`
-
-Callers branch on `is not False` (add_names.py:46), on `isinstance(taken, Member)` (add_member.py:245), and on truthiness (add_member.py:248). Return a small result type with explicit kinds, so changing one return value cannot quietly change the others.
-
-### [PASS] Migration 012's foreign keys and column order check out
-
-`members.project_id` is the primary key (001_baseline.sql:20), so the `checkouts` foreign key is valid. `_MEMBER_COLUMNS` (sql.py:93-96) matches the indexes `member_from_row` reads (8 `rules_from`, 9 `name`, 10 `origin`). The 11 bind values in `upsert_member` (programs.py:207-221) match `_MEMBER_INSERT_COLUMNS`. `removed_at IS NOT NULL` yields an integer that `unnamed_members` reads with `integer()`. `RTRIM` in SQL and `rstrip("/")` in Python agree (sql_checkouts.py:42, checkouts.py:175). `test_migration_012.py` runs against a real schema-11 store with legacy rows.
-
-### [PASS] No `cf` or `git` call runs inside a write transaction
-
-`name_members` reads, then calls `cf` and `git`, then writes (203-215). `add` gathers before its write (add.py:174, add_gather.py:48). `test_no_cf_or_git_runs_while_the_write_lock_is_held` (tests/operations/test_naming.py:353) guards this.
-
-### [PASS] Origin input is checked at the trust boundary
-
-The `HereCheckout` `origin` validator runs `is_reduced_origin` on every parsed `here` document (44-49). The checkout's machine comes from the token (`store.act_as`, hub/calls.py). `set_checkout_wake_command` checks the machine against the acting one (checkouts.py:190-204), and `rm --checkout` deletes only the acting machine's rows (rm.py:141). The deleted modules `operations/member_reference.py`, `members.py` and `project_lookup.py` have no remaining importers in `src` or `tests`.
+The MCP door reaches only `add` and `rm` (`src/amoeba/operations/names.py`), and `set_up` has no door entry point. So the `add` check is the only one that matters. `refuse_door_fields` checks the top-level document and each `bulk.members` entry, and `add_gather.py` runs it before anything is gathered.
 
 ### Run Digest
 
-- Response length: 22430 chars
+- Response length: 14896 chars
 - Response is newline-free: no
-- Tool calls made: 75
-- Tool calls failed: 4
+- Tool calls made: 59
+- Tool calls failed: 3
 - Stop reason: end_turn
 - Output budget: backend default
 - System prompt: preset+append
 - Settings sources: none
 - Reasoning characters: 0
 - Effort: xhigh
-- Turns: 76
-- Tokens — prompt / cached / cache write / completion / reasoning: 6618987 / 6379539 / 239364 / 105025 / not computed
-- Duration: 466.6 s
-- Cost: $0.69 (provider)
+- Turns: 60
+- Tokens — prompt / cached / cache write / completion / reasoning: 4592942 / 4402263 / 190613 / 73021 / not computed
+- Duration: 327.0 s
+- Cost: $0.50 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 17
+- Finding-shaped matches — whole response: 10
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 17
-- Finding-shaped matches — surviving validation: 17
+- Finding-shaped matches — in findings section: 10
+- Finding-shaped matches — surviving validation: 10
