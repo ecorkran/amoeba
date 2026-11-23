@@ -178,7 +178,6 @@ def _settings_of(allow: tuple[str, ...]) -> AnswererSettings:
         authorize_allow=allow,
         authorize_deny=(),
         rules_from=RulesFrom.NAMED,
-        wake_command=None,
     )
     return answering_for(member, user_config()).settings
 

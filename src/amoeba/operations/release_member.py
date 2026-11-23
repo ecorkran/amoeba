@@ -7,15 +7,11 @@ rejection with a detail that says which case it is, so the agent can record it.
 
 from __future__ import annotations
 
-from amoeba.operations.caller import (
-    NotAProject,
-    NotInProgram,
-    acting_machine_id,
-    find_caller,
-)
+from amoeba.operations.caller import NotAProject, NotInProgram, find_caller
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.report_release_models import ReleaseProblem
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Member
 from amoeba.store.store import Store
 

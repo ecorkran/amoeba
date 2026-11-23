@@ -36,7 +36,7 @@ from amoeba.store.vocabulary import (
     StandingReach,
 )
 from amoeba.store.wakes import WakeLimits, claim_wake
-from store.seed import insert_member, insert_program
+from store.seed import insert_checkout, insert_member, insert_program
 from store.seed import insert_question as seed_question
 
 NOW = datetime(2026, 11, 20, 12, 0, tzinfo=UTC)
@@ -70,7 +70,14 @@ def _seed(path: Path) -> None:
                 authorize_deny=(),
                 registered_at=NOW,
                 updated_at=NOW,
+            )
+            insert_checkout(
+                transaction,
+                member_id=member,
+                cf_project_id=member,
+                path=f"/work/{member}",
                 wake_command=command,
+                now=NOW,
             )
         seed_question(
             transaction,
@@ -119,7 +126,6 @@ def _inserts() -> dict[str, Callable[[Transaction], object]]:
         authorize_allow=(),
         authorize_deny=(),
         rules_from=RulesFrom.NAMED,
-        wake_command=None,
     )
     session = Session("s1", "m1", "claude", "/c", NOW, NOW, None)
     return {
@@ -162,7 +168,7 @@ def _inserts() -> dict[str, Callable[[Transaction], object]]:
             tx, "m1", "send", None, None, None, "c", "d", NOW
         ),
         "sessions": lambda tx: upsert_session(tx, session),
-        "wakes": lambda tx: claim_wake(tx, "m2", NOW, LIMITS, "w1", "/d", "/log"),
+        "wakes": lambda tx: claim_wake(tx, "m2", NOW, LIMITS, "w1", "/log"),
     }
 
 
@@ -228,7 +234,7 @@ def test_records_written_through_the_local_opener_carry_the_owner_and_machine() 
         upsert_member(
             tx,
             program_id="demo",
-            settings=MemberSettings("m1", (), (), (), RulesFrom.NAMED, None),
+            settings=MemberSettings("m1", (), (), (), RulesFrom.NAMED),
             name="m1",
             now=NOW,
         )

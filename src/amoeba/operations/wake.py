@@ -2,10 +2,10 @@
 
 ``send`` calls ``wake_for_sent_request`` after a request's transaction has committed,
 so the request is durable before any wake work and nothing here can lose or change it.
-Most sends do no wake work: a recipient with no wake command ends the step at once,
-with no store transaction. For one with a command, a read transaction checks the
-conditions first (no write lock when they fail), then one write transaction claims the
-wake, then the wrapper is started detached and the step returns without waiting.
+Most sends do no wake work: a read transaction checks the conditions first (a recipient
+with no wake command on a checkout here fails them, with no write lock), then one write
+transaction claims the wake from that checkout, then the wrapper is started detached and
+the step returns without waiting (261 D9).
 
 The step makes no ``cf`` call and no ``ps`` call. A ``StoreError`` is returned as one
 line, because the request is already written and a failed ``send`` would report a
@@ -84,8 +84,6 @@ def wake_after_send(
 
     Returns without waiting for the wrapper.
     """
-    if recipient.wake_command is None:
-        return None
     try:
         return _claim_and_start(store, config, deps, recipient)
     except StoreError as error:
@@ -109,20 +107,10 @@ def _claim_and_start(
     if not wakeable:
         return None
     wake_id = uuid4().hex
-    log_stem = (
-        None
-        if recipient.project_path is None
-        else str(deps.logs_dir / WAKE_LOG_DIRECTORY / wake_id)
-    )
+    log_stem = str(deps.logs_dir / WAKE_LOG_DIRECTORY / wake_id)
     with store.write() as transaction:
         wake = claim_wake(
-            transaction,
-            recipient.member_id,
-            now,
-            limits,
-            wake_id,
-            recipient.project_path,
-            log_stem,
+            transaction, recipient.member_id, now, limits, wake_id, log_stem
         )
     if wake is None:
         return None
@@ -133,7 +121,7 @@ def _start_wrapper(store: Store, deps: Deps, wake: Wake) -> str | None:
     """Start ``amoeba wake-run`` for the claimed row, detached. A start that fails is
     recorded on the row and logged, and the request stays ``open`` (D5)."""
     if wake.directory is None or wake.log_stem is None:
-        raise AssertionError("a claimed wake has a checkout and a log stem")
+        raise AssertionError("a claimed wake has a directory and a log stem")
     try:
         script = deps.amoeba_script()
     except AmoebaScriptMissing as error:

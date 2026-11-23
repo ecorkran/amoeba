@@ -1,4 +1,7 @@
-"""`resolve_recipient` returns the checkout path and the wake command (244, D4; 261)."""
+"""`resolve_recipient` finds the active member by name or id (244, D4; 261, D6, D9).
+
+The recipient carries only the member's id: the wake path and command come from a
+checkout inside the claim (``tests/store/test_wake_on_checkout.py``)."""
 
 from __future__ import annotations
 
@@ -11,14 +14,14 @@ from store.message_support import NOW, seed_members
 from store.seed import insert_checkout
 from store_open import open_local_store
 
-from amoeba.operations.caller import acting_machine_id
 from amoeba.operations.message_member import (
     Recipient,
+    Refusal,
     recipient_of,
     resolve_recipient,
 )
 from amoeba.store.store import Store
-from operations.wake_send_support import CHECKOUT, COMMAND
+from operations.wake_send_support import CHECKOUT
 
 KNOWN_ID = "known-project-id"
 KNOWN_NAME = "known-project-name"
@@ -42,47 +45,25 @@ def store(tmp_path: Path) -> Iterator[Store]:
                 path=str(CHECKOUT),
                 now=NOW,
             )
-            transaction.execute(
-                "UPDATE members SET wake_command = ? WHERE project_id = ?",
-                (COMMAND, KNOWN_ID),
-            )
         yield opened
 
 
-@pytest.mark.parametrize("reference", [KNOWN_ID, KNOWN_NAME])
-def test_the_path_is_returned_for_a_member_with_a_checkout_here(
+@pytest.mark.parametrize("reference", [KNOWN_ID, KNOWN_NAME, KNOWN_NAME.upper()])
+def test_a_member_is_found_by_name_in_any_case_or_by_id(
     store: Store, reference: str
 ) -> None:
-    recipient = recipient_of(store, reference)
-
-    assert recipient == Recipient(KNOWN_ID, str(CHECKOUT), COMMAND)
+    assert recipient_of(store, reference) == Recipient(KNOWN_ID)
 
 
-def test_the_path_is_null_for_a_member_with_no_checkout_on_this_machine(
-    store: Store,
-) -> None:
-    recipient = recipient_of(store, WITH_NO_CHECKOUT)
-
-    assert recipient == Recipient(WITH_NO_CHECKOUT, None, None)
+def test_a_member_with_no_checkout_here_is_still_a_recipient(store: Store) -> None:
+    assert recipient_of(store, WITH_NO_CHECKOUT) == Recipient(WITH_NO_CHECKOUT)
 
 
-def test_the_first_added_checkout_here_gives_the_path(store: Store) -> None:
-    with store.write() as transaction:
-        insert_checkout(
-            transaction,
-            member_id=KNOWN_ID,
-            cf_project_id="second-project",
-            path="/work/second",
-            now=NOW.replace(year=2027),
-        )
-        recipient = resolve_recipient(
-            transaction, acting_machine_id(transaction), KNOWN_NAME
-        )
-
-    assert recipient == Recipient(KNOWN_ID, str(CHECKOUT), COMMAND)
+def test_an_unknown_reference_is_refused(store: Store) -> None:
+    assert isinstance(recipient_of(store, "nobody"), Refusal)
 
 
-def test_the_member_is_read_once_for_the_id_the_path_and_the_command(
+def test_the_member_is_read_in_one_transaction(
     store: Store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     reads = 0
@@ -98,3 +79,8 @@ def test_the_member_is_read_once_for_the_id_the_path_and_the_command(
     recipient_of(store, KNOWN_NAME)
 
     assert reads == 1
+
+
+def test_resolve_recipient_runs_in_the_callers_transaction(store: Store) -> None:
+    with store.read() as transaction:
+        assert resolve_recipient(transaction, KNOWN_NAME) == Recipient(KNOWN_ID)

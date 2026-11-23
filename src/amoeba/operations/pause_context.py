@@ -30,7 +30,6 @@ from amoeba.answering.source_reads import (
     read_committed_sources,
 )
 from amoeba.answering.values import PassageRef
-from amoeba.operations.caller import acting_machine_id
 from amoeba.operations.program_sources import (
     AskerReads,
     ProgramRead,
@@ -40,6 +39,7 @@ from amoeba.operations.program_sources import (
 from amoeba.operations.standing_sources import standing_answers_of
 from amoeba.store.answers import pm_precedent
 from amoeba.store.checkouts import Checkout, first_checkout_on
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Member, PmPrecedent, Program, StandingAnswerRow
 from amoeba.store.programs import get_program, members_of
 from amoeba.store.standing import standing_reaching

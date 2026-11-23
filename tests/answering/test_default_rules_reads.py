@@ -133,7 +133,6 @@ def test_a_default_member_reads_the_configs_entries_as_they_are_at_the_time(
         authorize_allow=(),
         authorize_deny=(),
         rules_from=RulesFrom.CONFIG_DEFAULT,
-        wake_command=None,
     )
     config = user_config()
     edited = config.model_copy(update={"default_rules_paths": ("AGENTS.md",)})

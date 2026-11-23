@@ -21,7 +21,7 @@ from amoeba.operations.status_models import (
 from amoeba.store.models import Member, Wake
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import WakeOutcome
-from amoeba.store.wakes import WakeSummary, wake_summary
+from amoeba.store.wakes import WakeSummary, wake_command_of, wake_summary
 
 
 def read_member_wakes(
@@ -38,8 +38,8 @@ def read_member_wakes(
                 wake_summary(transaction, project_id, now),
                 max_wakes_per_day,
             )
-            for project_id, member in members.items()
-            if (command := member.settings.wake_command) is not None
+            for project_id in members
+            if (command := wake_command_of(transaction, project_id)) is not None
         }
 
 

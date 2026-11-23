@@ -118,7 +118,6 @@ def test_a_re_registered_member_keeps_its_retained_history(store: Store) -> None
                 authorize_allow=(),
                 authorize_deny=(),
                 rules_from=RulesFrom.NAMED,
-                wake_command=None,
             ),
             name=ADDRESSEE,
             now=LATER,

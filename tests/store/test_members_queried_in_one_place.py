@@ -45,6 +45,7 @@ OTHER_MEMBER_STATEMENTS = frozenset(
         "SELECT_NAME_IS_OTHER_MEMBERS_ID",  # 261: any member, active or removed
         "SET_MEMBER_NAME",  # 261
         "SET_MEMBER_ORIGIN",  # 261
+        "CLEAR_MEMBER_WAKE_COMMAND",  # 261: naming retires the old column
         "SELECT_UNNAMED_MEMBERS",  # 261: naming reads rows no one has named yet
     }
 )

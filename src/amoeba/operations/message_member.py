@@ -11,17 +11,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from amoeba.operations.caller import (
-    NotAProject,
-    NotInProgram,
-    acting_machine_id,
-    find_caller,
-    find_member,
-)
+from amoeba.operations.caller import NotAProject, NotInProgram, find_caller, find_member
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.release_member import not_a_member_detail
-from amoeba.store.checkouts import first_checkout_on
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.store import Store, Transaction
 
 __all__ = [
@@ -50,11 +44,6 @@ class Recipient:
     """The active member a request is addressed to."""
 
     member_id: str
-    #: The path of the recipient's first-added checkout on the acting machine, where a
-    #: wake runs (244 D4); ``None`` when it has none there.
-    project_path: str | None
-    #: The member's wake command as read now; ``None`` means no wake step (244 D2).
-    wake_command: str | None
 
 
 @dataclass(frozen=True)
@@ -130,11 +119,8 @@ def resolve_actor(
     return caller
 
 
-def resolve_recipient(
-    transaction: Transaction, machine_id: int, reference: str
-) -> Recipient | Refusal:
-    """The active member ``reference`` names, in any program, with its checkout path
-    and wake command (until the command moves to the checkout, 261 D9)."""
+def resolve_recipient(transaction: Transaction, reference: str) -> Recipient | Refusal:
+    """The active member ``reference`` names, by name or id, in any program."""
     member = find_member(transaction, reference)
     if member is None:
         return Refusal(
@@ -142,12 +128,7 @@ def resolve_recipient(
             f"{reference!r} is not an active member of any program",
             record_under=None,
         )
-    checkout = first_checkout_on(transaction, member.project_id, machine_id)
-    return Recipient(
-        member.project_id,
-        None if checkout is None else checkout.path,
-        member.settings.wake_command,
-    )
+    return Recipient(member.project_id)
 
 
 def caller_of(
@@ -169,4 +150,4 @@ def actor_of(
 def recipient_of(store: Store, reference: str) -> Recipient | Refusal:
     """``resolve_recipient`` in its own read transaction on the acting machine."""
     with store.read() as transaction:
-        return resolve_recipient(transaction, acting_machine_id(transaction), reference)
+        return resolve_recipient(transaction, reference)

@@ -102,7 +102,7 @@ def claimed_store(
     )
     with store.write() as transaction:
         seed_members(transaction)
-        seed_waking_member(transaction, ADDRESSEE, command)
+        seed_waking_member(transaction, ADDRESSEE, command, str(checkout))
         claimed = claim_wake(
             transaction,
             ADDRESSEE,
@@ -113,7 +113,6 @@ def claimed_store(
                 session_stale_seconds=90,
             ),
             wake_id,
-            str(checkout),
             str(tmp_path / "logs" / wake_id),
         )
         assert claimed is not None

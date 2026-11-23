@@ -198,7 +198,6 @@ def register_member(
                 authorize_allow=(),
                 authorize_deny=(),
                 rules_from=RulesFrom.NAMED,
-                wake_command=None,
             ),
             name=project_id,
             now=START,

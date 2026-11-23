@@ -51,3 +51,13 @@ SELECT_CHECKOUT_MACHINE: Final = (
     "WHERE checkouts.checkout_id = ?"
 )
 SELECT_MACHINE_NAME: Final = "SELECT name FROM machines WHERE machine_id = ?"
+
+# The first-added checkout with a wake command (D9): one machine's, or any machine's.
+SELECT_WAKEABLE_CHECKOUT_ON: Final = (
+    f"SELECT {_COLUMNS} FROM checkouts WHERE member_id = ? AND machine_id = ? "
+    f"AND wake_command IS NOT NULL {_ADDED_ORDER} LIMIT 1"
+)
+SELECT_WAKEABLE_CHECKOUT_ANYWHERE: Final = (
+    f"SELECT {_COLUMNS} FROM checkouts WHERE member_id = ? "
+    f"AND wake_command IS NOT NULL {_ADDED_ORDER} LIMIT 1"
+)

@@ -23,7 +23,7 @@ from amoeba.store.programs import remove_member
 from amoeba.store.sessions import upsert_session
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, RequestState, WakeOutcome
-from amoeba.store.wakes import WAKE_WINDOW, get_wake, wake_summary
+from amoeba.store.wakes import WAKE_WINDOW, wake_summary
 from amoeba.upstream.squadron.faults import LaunchFailure
 from amoeba.upstream.squadron.launch import LaunchError
 from operations.message_support import (
@@ -36,7 +36,6 @@ from operations.message_support import (
 from operations.pause_support import FakeChild
 from operations.wake_send_support import (
     CHECKOUT,
-    COMMAND,
     GHOST,
     MAX_WAKES,
     SCRIPT,
@@ -181,7 +180,7 @@ def test_a_note_to_a_member_with_a_command_starts_nothing(
     assert _wakes(store) == []
 
 
-def test_no_checkout_path_inserts_a_start_failed_row_and_the_request_stays_open(
+def test_no_checkout_here_gets_no_wake_row_and_the_request_stays_open(
     store: Store, rig: WakeRig
 ) -> None:
     with store.write() as transaction:
@@ -194,20 +193,16 @@ def test_no_checkout_path_inserts_a_start_failed_row_and_the_request_stays_open(
             authorize_deny=(),
             registered_at=NOW,
             updated_at=NOW,
-            wake_command=COMMAND,
         )
 
     result = send_request(store, rig, "ask", to=GHOST)
 
+    # The member has no checkout on this machine, so no wake is claimed (261 D9, a
+    # departure from 244, where the claim ended as ``start_failed``).
     assert result.outcome is SendOutcome.SENT
     assert rig.spawner.calls == []
-    ((wake_id, outcome, detail),) = _wakes(store)
-    assert outcome == WakeOutcome.START_FAILED.value
-    assert detail is not None
-    assert "Context Forge" in detail
+    assert _wakes(store) == []
     assert _request_state(store, "ask") is RequestState.OPEN
-    with store.read() as transaction:
-        assert get_wake(transaction, wake_id) is not None
 
 
 def test_a_launch_error_ends_the_row_start_failed_and_the_request_stays_open(
@@ -404,7 +399,7 @@ class _TransactionCounts:
         return begin
 
 
-def test_a_recipient_with_no_command_takes_no_transaction_in_the_wake_step(
+def test_a_recipient_with_no_command_reads_once_and_takes_no_write_lock(
     store: Store, rig: WakeRig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     give_command(store, RECIPIENT, None)
@@ -412,7 +407,9 @@ def test_a_recipient_with_no_command_takes_no_transaction_in_the_wake_step(
 
     send_request(store, rig, "ask")
 
-    assert (counts.reads, counts.writes) == (0, 0)
+    # The command is on a checkout now (261 D9), so even "no command" is found by the
+    # one pre-check read, never by a write.
+    assert (counts.reads, counts.writes) == (1, 0)
 
 
 def test_a_failed_pre_check_reads_once_and_never_takes_the_write_lock(

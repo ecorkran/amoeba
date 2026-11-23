@@ -25,10 +25,12 @@ from amoeba.operations import here
 from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.origin import reduce_origin
 from amoeba.store.checkouts import checkout_at, insert_checkout
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.member_names import (
     UnnamedMember,
     active_member_by_name,
     active_member_by_origin,
+    clear_member_wake_command,
     name_is_other_members_id,
     set_member_name,
     set_member_origin,
@@ -151,17 +153,36 @@ def _write_member(
     if origin is not None:
         set_member_origin(transaction, member.project_id, origin, now)
     detail = details.get(member.project_id)
-    if member.removed or detail is None or detail.path is None:
+    took = False
+    if not (member.removed or detail is None or detail.path is None):
+        machine_id = acting_machine_id(transaction)
+        if checkout_at(transaction, machine_id, member.project_id) is None:
+            insert_checkout(
+                transaction,
+                member_id=member.project_id,
+                cf_project_id=member.project_id,
+                path=detail.path,
+                wake_command=member.wake_command,
+                now=now,
+            )
+            took = True
+    _retire_wake_command(transaction, member, took)
+
+
+def _retire_wake_command(
+    transaction: Transaction, member: UnnamedMember, took: bool
+) -> None:
+    """Null the member's old command now that nothing reads it (D2, D4). A command no
+    checkout took is dropped, and the log line keeps it so it can be set again with
+    ``amoeba add --wake-command`` once the member has a checkout."""
+    if member.wake_command is None:
         return
-    machine_id = transaction.acting("checkouts").machine_id
-    if checkout_at(transaction, machine_id, member.project_id) is None:
-        insert_checkout(
-            transaction,
-            member_id=member.project_id,
-            cf_project_id=member.project_id,
-            path=detail.path,
-            wake_command=member.wake_command,
-            now=now,
+    clear_member_wake_command(transaction, member.project_id)
+    if not took:
+        logger.warning(
+            "naming: member %s has no checkout, so its wake command was dropped: %r",
+            member.project_id,
+            member.wake_command,
         )
 
 

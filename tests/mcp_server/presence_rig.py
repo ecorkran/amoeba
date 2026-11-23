@@ -105,7 +105,6 @@ def seed_member(path: Path, member_id: str = MEMBER_ID) -> None:
                 authorize_allow=(),
                 authorize_deny=(),
                 rules_from=RulesFrom.NAMED,
-                wake_command=None,
             ),
             name=member_id,
             now=START,

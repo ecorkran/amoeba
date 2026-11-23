@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from process_containment import contained_popen
 from store.decision_support import CORE, LINT, seed_programs
-from store.wake_support import COMMAND, claim
+from store.wake_support import COMMAND, claim, give_checkout_command
 from store_open import open_local_store
 from user_configs import user_config
 
@@ -58,12 +58,11 @@ def deps(tmp_path: Path, clock: SettableClock) -> Deps:
     return replace(base, clock=clock)
 
 
-def _set_command(store: Store, command: str | None) -> None:
+def _set_command(
+    store: Store, command: str | None, directory: str = "/work/core"
+) -> None:
     with store.write() as transaction:
-        transaction.execute(
-            "UPDATE members SET wake_command = ? WHERE project_id = ?",
-            (command, CORE),
-        )
+        give_checkout_command(transaction, CORE, command, directory)
 
 
 def _status(store: Store, deps: Deps) -> StatusResult:
@@ -246,17 +245,11 @@ def test_no_command_text_reaches_the_document_beyond_the_command_field(
     tmp_path: Path, store: Store, deps: Deps, clock: SettableClock
 ) -> None:
     command = f"/nonexistent/{SECRET_MARKER}-agent --flag"
-    _set_command(store, command)
     checkout = tmp_path / "checkout"
     checkout.mkdir()
+    _set_command(store, command, str(checkout))
     with store.write() as transaction:
-        claimed = claim(
-            transaction,
-            "w1",
-            member_id=CORE,
-            now=clock.now,
-            directory=str(checkout),
-        )
+        claimed = claim(transaction, "w1", member_id=CORE, now=clock.now)
     assert claimed is not None
 
     outcome = run_wake(store, deps, "w1", popen=contained_popen)

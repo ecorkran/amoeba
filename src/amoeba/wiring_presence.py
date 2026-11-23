@@ -12,10 +12,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from amoeba.operations.caller import acting_machine_id, find_caller
+from amoeba.operations.caller import find_caller
 from amoeba.operations.here import gather_caller
 from amoeba.store.deliveries import highest_assigned_seq
 from amoeba.store.errors import StoreBusyError, StoreError
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Member, PushRow, Session
 from amoeba.store.push_reads import member_high_seq, push_rows_after
 from amoeba.store.sessions import delete_session, heartbeat

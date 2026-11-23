@@ -122,8 +122,8 @@ Context Forge project, on the default rules. A repeat changes nothing and is
 | `--deny KEY`, `--no-deny` | `authorize_deny` | The same for the deny list |
 | `--depends-on PROVIDER[:MODE]` (repeatable) | `depends_on: [{provider, consumed}]` | A provider (Context Forge name or id); `MODE` is `from_source` or `from_release`, and without it the config's `default_consumed` |
 | `--concept MEMBER:PATH` | `concept: {member, path}` | The program's concept file, split at the first `:`; an empty side is a usage error |
-| `--wake-command COMMAND` | `wake_command: COMMAND` | The command Amoeba starts, unattended, when a request arrives for this member and no agent is live in it ("The wake command", below). The text must split into words (`shlex` rules) with at least one, and hold no NUL or line break; the executable is not looked up. Omitted leaves the member's command. A CLI-only setting: the MCP `add` tool does not take it |
-| `--no-wake-command` | `wake_command: null` | Clears the member's wake command, so nothing wakes it |
+| `--wake-command COMMAND` | `wake_command: COMMAND` | The command Amoeba starts, unattended, when a request arrives for this member and no agent is live in it ("The wake command", below). It is set on the checkout the command runs in, so it is given from that repo and never with `--project` or for another bulk entry (`malformed`, "a wake command is set from its own checkout"). The text must split into words (`shlex` rules) with at least one, and hold no NUL or line break; the executable is not looked up. Omitted leaves the member's command. A CLI-only setting: the MCP `add` tool does not take it |
+| `--no-wake-command` | `wake_command: null` | Clears this checkout's wake command, so nothing wakes it from here |
 | `--file PATH` (`-` is stdin) | `bulk` | A whole request document (below); it cannot be combined with another flag |
 
 `--rules`, `--default-rules` and `--no-rules` are mutually exclusive, and so are
@@ -304,10 +304,11 @@ stderr.
 
 ## The wake command
 
-A member can carry a **wake command** (slice 244): a command Amoeba starts, unattended,
-when a request is sent to that member and nobody is working in its repo. The PM sets it
-with `amoeba add --wake-command`, from the repo or with `--project`, and clears it with
-`--no-wake-command`; `list members`, `list -j` and `status` show it in plain text, so it
+A checkout can carry a **wake command** (slice 244, moved from the member by slice 261):
+a command Amoeba starts, unattended, when a request is sent to that checkout's member
+and nobody is working in its repo. The PM sets it with `amoeba add --wake-command`, from
+that checkout (never with `--project`: a command belongs to the copy of the repo it runs
+in), and clears it with `--no-wake-command`; `list members`, `list -j` and `status` show it in plain text, so it
 must carry no secret. A pipe, a redirect or an environment assignment needs a script,
 because the command runs without a shell. An example, a script that carries its own cap:
 
@@ -320,8 +321,10 @@ is `open` (outcome `sent`, or `unchanged` with the stored request still `open`) 
 recipient has a wake command, has no push-confirmed live session (`sessions`, above),
 has no wake running, and has fewer than `max_wakes_per_day` wakes started in the last
 24 hours (failed starts count). A note never wakes anyone, nor does a request already
-`accepted`. Amoeba starts `amoeba wake-run` (above) detached in the member's checkout,
-which is Context Forge's `projectPath` for it, and `send` returns without waiting. The
+`accepted`. The wake runs from the member's first-added checkout on this machine that
+has a command (a member with none here is not woken from here). Amoeba starts
+`amoeba wake-run` (above) detached in that checkout's directory, and `send` returns
+without waiting. The
 wake step never changes a request and never makes `send` fail: a store error in it is
 `wake_problem` in the result, and the request stays `open`. If the store also cannot
 record a start failure, the row stays unended: `list` shows it as `running` (with no

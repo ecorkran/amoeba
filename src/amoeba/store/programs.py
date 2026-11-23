@@ -43,12 +43,12 @@ def _program(row: Sequence[object]) -> Program:
 
 def _member_name(row: Sequence[object]) -> str:
     """The member's name; a null one is a member naming has not reached (261 D4)."""
-    if row[10] is None:
+    if row[9] is None:
         raise StoreError(
             f"member {text(row[0], 'members.project_id')!r} has no name; "
             "the naming step has not run on this store"
         )
-    return text(row[10], "members.name")
+    return text(row[9], "members.name")
 
 
 def member_from_row(row: Sequence[object]) -> Member:
@@ -61,13 +61,12 @@ def member_from_row(row: Sequence[object]) -> Member:
             authorize_allow=decode_string_list(row[3], "members.authorize_allow"),
             authorize_deny=decode_string_list(row[4], "members.authorize_deny"),
             rules_from=vocabulary(row[8], RulesFrom, "members.rules_from"),
-            wake_command=optional_text(row[9], "members.wake_command"),
         ),
         registered_at=decode_timestamp(row[5], "members.registered_at"),
         updated_at=decode_timestamp(row[6], "members.updated_at"),
         removed_at=optional_timestamp(row[7], "members.removed_at"),
         name=_member_name(row),
-        origin=optional_text(row[11], "members.origin"),
+        origin=optional_text(row[10], "members.origin"),
     )
 
 
@@ -216,7 +215,6 @@ def upsert_member(
                 stamp,
                 stamp,
                 settings.rules_from,
-                settings.wake_command,
                 name,
                 None,
                 transaction.acting("members").owner_id,
@@ -232,7 +230,6 @@ def upsert_member(
                 settings.rules_from,
                 allow,
                 deny,
-                settings.wake_command,
                 stamp,
                 stamp,
                 settings.project_id,
@@ -253,7 +250,6 @@ def upsert_member(
             settings.rules_from,
             allow,
             deny,
-            settings.wake_command,
             stamp,
             settings.project_id,
         ),

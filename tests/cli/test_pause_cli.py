@@ -122,7 +122,6 @@ def _seed_waiting_question() -> QuestionKey:
                 authorize_allow=(),
                 authorize_deny=(),
                 rules_from=RulesFrom.NAMED,
-                wake_command=None,
             ),
             name=PROJECT_ID,
             now=NOW,

@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from cf_fixtures import DEFAULT_WORKTREE, OUTSIDE_ANY_PROJECT, fixture_document
+from store.wake_support import give_checkout_command
 from user_configs import user_config
 
 from amoeba.config.user_config import UserConfig
@@ -71,10 +72,7 @@ def give_command(
     store: Store, member: str = RECIPIENT, command: str | None = COMMAND
 ) -> None:
     with store.write() as transaction:
-        transaction.execute(
-            "UPDATE members SET wake_command = ? WHERE project_id = ?",
-            (command, member),
-        )
+        give_checkout_command(transaction, member, command, str(CHECKOUT))
 
 
 def send_request(

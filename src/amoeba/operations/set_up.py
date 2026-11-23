@@ -46,6 +46,7 @@ from amoeba.operations.set_up_resolve import (
     ResolvedRequest,
     resolve_request,
 )
+from amoeba.operations.set_up_wake import apply_wake_commands
 from amoeba.store.models import DependencyPair, Member, MemberSettings
 from amoeba.store.programs import (
     get_member,
@@ -184,15 +185,6 @@ def _merged_rules(
     return stored.rules_paths, stored.rules_from
 
 
-def _merged_wake_command(
-    member: ResolvedMember, stored: MemberSettings | None
-) -> str | None:
-    """A given command (null clears) replaces; omitted keeps the stored one."""
-    if member.wake_command_given:
-        return member.wake_command
-    return None if stored is None else stored.wake_command
-
-
 def _merged_settings(
     member: ResolvedMember, stored: MemberSettings | None
 ) -> MemberSettings:
@@ -212,7 +204,6 @@ def _merged_settings(
         authorize_allow=pick(member.authorize_allow, stored and stored.authorize_allow),
         authorize_deny=pick(member.authorize_deny, stored and stored.authorize_deny),
         rules_from=rules_from,
-        wake_command=_merged_wake_command(member, stored),
     )
 
 
@@ -303,6 +294,7 @@ def _apply(
     changes = _write_concept(transaction, request, now)
     for member in request.members:
         changes += _write_member(transaction, request, member, now)
+    changes += apply_wake_commands(transaction, request.members, working, now, changes)
     # Pairs after every member exists: a provider may be added in this request.
     for member in request.members:
         changes += _write_pairs(transaction, request, member, now)

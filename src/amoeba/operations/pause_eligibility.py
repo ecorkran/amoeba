@@ -17,12 +17,7 @@ from pathlib import Path
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.add import add
-from amoeba.operations.caller import (
-    NotAProject,
-    NotInProgram,
-    acting_machine_id,
-    find_caller,
-)
+from amoeba.operations.caller import NotAProject, NotInProgram, find_caller
 from amoeba.operations.deps import Deps
 from amoeba.operations.here import gather_caller, git_root
 from amoeba.operations.here_document import HereCaller, HereNotAProject
@@ -35,6 +30,7 @@ from amoeba.operations.pause_class import (
 )
 from amoeba.operations.pause_models import SkipReason
 from amoeba.operations.set_up_models import SetUpOutcome
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Member, QuestionKey, QuestionRecord
 from amoeba.store.questions import any_answering_run_id, get_question
 from amoeba.store.store import Store

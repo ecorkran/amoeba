@@ -32,11 +32,6 @@ class NotAProject:
     message: str
 
 
-def acting_machine_id(transaction: Transaction) -> int:
-    """The machine this call acts as: the token's on a hub, ``local`` otherwise."""
-    return transaction.acting("checkouts").machine_id
-
-
 def find_caller(
     transaction: Transaction, machine_id: int, here: Here
 ) -> Member | NotInProgram | NotAProject:

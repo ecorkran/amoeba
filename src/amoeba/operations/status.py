@@ -19,12 +19,7 @@ from pydantic import (
 )
 
 from amoeba.config.user_config import NonBlank, UserConfig
-from amoeba.operations.caller import (
-    NotAProject,
-    NotInProgram,
-    acting_machine_id,
-    find_caller,
-)
+from amoeba.operations.caller import NotAProject, NotInProgram, find_caller
 from amoeba.operations.decisions_models import MemberName
 from amoeba.operations.deps import Deps
 from amoeba.operations.here_document import HereCaller, HereNotAProject
@@ -58,6 +53,7 @@ from amoeba.operations.status_sessions import read_member_sessions
 from amoeba.operations.status_waiting import MemberWaiting, waiting_entries
 from amoeba.operations.wake_status import read_member_wakes
 from amoeba.store.errors import StoreRowError
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Member
 from amoeba.store.programs import get_program, list_programs, members_of
 from amoeba.store.questions import (

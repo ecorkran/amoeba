@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from store.message_support import count, delivery_rows
+from store.wake_support import give_checkout_command
 from store_open import open_local_store
 
 from amoeba.operations.message_sweep import sweep_messages
@@ -168,18 +169,14 @@ def test_the_expire_step_never_expires_a_note(
 
 def _claim_wake(store: Store, when: datetime) -> None:
     with store.write() as transaction:
-        transaction.execute(
-            "UPDATE members SET wake_command = 'wake-agent' WHERE project_id = ?",
-            (RECIPIENT,),
-        )
+        give_checkout_command(transaction, RECIPIENT, "wake-agent", "/work/checkout")
         claimed = claim_wake(
             transaction,
             RECIPIENT,
             when,
             WakeLimits(timeout_seconds=600, max_per_day=3, session_stale_seconds=90),
             "a-wake",
-            "/work/checkout",
-            None,
+            "/work/logs/a-wake",
         )
         assert claimed is not None
 

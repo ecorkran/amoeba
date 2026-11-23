@@ -56,7 +56,6 @@ def insert_member(
     registered_at: datetime,
     updated_at: datetime,
     rules_from: RulesFrom = RulesFrom.NAMED,
-    wake_command: str | None = None,
     name: str | None = None,
     origin: str | None = None,
 ) -> None:
@@ -73,7 +72,6 @@ def insert_member(
             encode_timestamp(registered_at),
             encode_timestamp(updated_at),
             rules_from,
-            wake_command,
             project_id if name is None else name,
             origin,
             transaction.acting("members").owner_id,

@@ -20,6 +20,7 @@ from amoeba.store.programs import list_programs, members_of, pairs_of
 from amoeba.store.standing import list_standing
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ConsumedMode, RulesFrom, StandingReach
+from amoeba.store.wakes import wake_command_of
 from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
 from amoeba.upstream.context_forge.projects import ProjectDetails, project_details
 
@@ -168,7 +169,14 @@ def members_view(
         with store.read() as transaction:
             members = members_of(transaction, entry.program_id)
             pairs = pairs_of(transaction, entry.program_id)
-        rows.extend(_member_row(member, pairs, details, config) for member in members)
+            commands = {
+                member.project_id: wake_command_of(transaction, member.project_id)
+                for member in members
+            }
+        rows.extend(
+            _member_row(member, pairs, details, config, commands[member.project_id])
+            for member in members
+        )
     return MembersView(members=tuple(rows))
 
 
@@ -177,6 +185,7 @@ def _member_row(
     pairs: tuple[DependencyPair, ...],
     details: ProjectDetails,
     config: UserConfig,
+    wake_command: str | None,
 ) -> MemberRow:
     settings = member.settings
     known = details.get(settings.project_id)
@@ -191,7 +200,7 @@ def _member_row(
         rules_paths=config.default_rules_paths if default else settings.rules_paths,
         authorize_allow=settings.authorize_allow,
         authorize_deny=settings.authorize_deny,
-        wake_command=settings.wake_command,
+        wake_command=wake_command,
         depends_on=tuple(
             DependencyRef(provider=pair.provider_id, consumed=pair.consumed)
             for pair in pairs

@@ -87,12 +87,12 @@ WHERE program_id = ?
 
 _MEMBER_INSERT_COLUMNS: Final = (
     "project_id, program_id, rules_paths, authorize_allow, authorize_deny, "
-    "registered_at, updated_at, rules_from, wake_command, name, origin"
+    "registered_at, updated_at, rules_from, name, origin"
 )
 #: Select order: ``store.programs.member_from_row`` reads these positionally.
 _MEMBER_COLUMNS: Final = (
     "project_id, program_id, rules_paths, authorize_allow, authorize_deny, "
-    "registered_at, updated_at, removed_at, rules_from, wake_command, name, origin"
+    "registered_at, updated_at, removed_at, rules_from, name, origin"
 )
 #: The active-member predicate (228 D8), the one place "a removed member is not a
 #: member" is written. Every member and pair read below uses it.
@@ -106,20 +106,21 @@ SELECT_MEMBERS_OF: Final = (
     f"SELECT {_MEMBER_COLUMNS} FROM members WHERE program_id = ? "
     f"AND {ACTIVE_MEMBER} ORDER BY project_id"
 )
-# Parameters: the eleven columns, then the acting machine's owner (D12).
+# Parameters: the ten columns, then the acting machine's owner (D12). The retired
+# ``wake_command`` column is not named: nothing writes it (261 D2).
 INSERT_MEMBER: Final = (
     f"INSERT INTO members ({_MEMBER_INSERT_COLUMNS}, owner_id) "
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 UPDATE_MEMBER: Final = """
 UPDATE members SET rules_paths = ?, rules_from = ?, authorize_allow = ?,
-    authorize_deny = ?, wake_command = ?, updated_at = ?
+    authorize_deny = ?, updated_at = ?
 WHERE project_id = ?
 """
 # Re-registering a removed member: a fresh registration, possibly in another program.
 REREGISTER_MEMBER: Final = """
 UPDATE members SET program_id = ?, rules_paths = ?, rules_from = ?,
-    authorize_allow = ?, authorize_deny = ?, wake_command = ?, registered_at = ?,
+    authorize_allow = ?, authorize_deny = ?, registered_at = ?,
     updated_at = ?, removed_at = NULL
 WHERE project_id = ?
 """
@@ -152,6 +153,11 @@ SELECT_NAME_IS_OTHER_MEMBERS_ID: Final = (
 SELECT_UNNAMED_MEMBERS: Final = (
     "SELECT project_id, removed_at IS NOT NULL, wake_command FROM members "
     "WHERE name IS NULL ORDER BY registered_at, project_id"
+)
+# Parameter: member id. Naming moved the command to a checkout (or dropped it, logged),
+# so the retired column is always null afterwards (D4).
+CLEAR_MEMBER_WAKE_COMMAND: Final = (
+    "UPDATE members SET wake_command = NULL WHERE project_id = ?"
 )
 # Parameters: name, time, member id.
 SET_MEMBER_NAME: Final = (

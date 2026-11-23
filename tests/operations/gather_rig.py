@@ -108,7 +108,6 @@ def gather_rig(tmp_path: Path, *, with_concept: bool = True) -> Generator[Gather
                         authorize_allow=(),
                         authorize_deny=(),
                         rules_from=RulesFrom.NAMED,
-                        wake_command=None,
                     ),
                     name=project_id,
                     now=NOW,

@@ -15,7 +15,6 @@ from store.message_support import NOW, seed_members
 from store.seed import insert_checkout
 from store_open import open_local_store
 
-from amoeba.operations.caller import acting_machine_id
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_member import (
     Caller,
@@ -27,7 +26,7 @@ from amoeba.operations.message_member import (
     resolve_recipient,
 )
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.store.machines import invite_machine
+from amoeba.store.machines import acting_machine_id, invite_machine
 from amoeba.store.programs import remove_member
 from amoeba.store.store import Store
 from operations.set_up_support import RECORDED_ID, RECORDED_NAME
@@ -80,7 +79,7 @@ def _actor(
 
 def _recipient(store: Store, reference: str) -> Recipient | Refusal:
     with store.read() as transaction:
-        return resolve_recipient(transaction, acting_machine_id(transaction), reference)
+        return resolve_recipient(transaction, reference)
 
 
 def test_a_checkout_of_a_member_is_the_caller(store: Store) -> None:

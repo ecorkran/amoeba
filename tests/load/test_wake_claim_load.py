@@ -89,7 +89,6 @@ def _seed(path: Path, members: Sequence[tuple[str, str]]) -> None:
                 authorize_deny=(),
                 registered_at=NOW,
                 updated_at=NOW,
-                wake_command=COMMAND,
                 name=name,
             )
             insert_checkout(
@@ -97,6 +96,7 @@ def _seed(path: Path, members: Sequence[tuple[str, str]]) -> None:
                 member_id=project_id,
                 cf_project_id=project_id,
                 path=str(CHECKOUT_PATH),
+                wake_command=COMMAND,
                 now=NOW,
             )
 

@@ -16,7 +16,11 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from amoeba.store.member_names import set_member_name, unnamed_members
+from amoeba.store.member_names import (
+    clear_member_wake_command,
+    set_member_name,
+    unnamed_members,
+)
 from amoeba.store.store import Store
 
 logger = logging.getLogger(__name__)
@@ -36,3 +40,13 @@ def name_by_id(store: Store, *, now: datetime | None = None) -> None:
         for member in unnamed_members(transaction):
             set_member_name(transaction, member.project_id, member.project_id, stamp)
             logger.info("named member %s by its id", member.project_id)
+            if member.wake_command is not None:
+                # No checkout exists on a hub store, so no checkout takes the command:
+                # it is dropped, and the log keeps it (D4).
+                clear_member_wake_command(transaction, member.project_id)
+                logger.warning(
+                    "naming: member %s has no checkout, so its wake command was "
+                    "dropped: %r",
+                    member.project_id,
+                    member.wake_command,
+                )

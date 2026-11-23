@@ -26,7 +26,6 @@ def _member(
         authorize_allow=allow,
         authorize_deny=deny,
         rules_from=rules_from,
-        wake_command=None,
     )
 
 

@@ -185,14 +185,27 @@ def test_each_listed_member_with_a_path_has_a_local_checkout_with_its_wake_comma
     assert checkouts[0].wake_command == "make go"
 
 
-def test_the_old_wake_column_is_unchanged_until_it_is_nulled(world: World) -> None:
+def test_the_old_wake_column_is_null_on_every_row(world: World) -> None:
     with world.store.read() as transaction:
         commands = transaction.execute(
-            "SELECT project_id, wake_command FROM members "
-            "WHERE wake_command IS NOT NULL ORDER BY project_id"
+            "SELECT project_id FROM members WHERE wake_command IS NOT NULL"
         ).fetchall()
 
-    assert [tuple(row) for row in commands] == [("id-a", "make go"), ("id-d", "lost")]
+    assert commands == []
+
+
+def test_a_command_no_checkout_took_is_dropped_and_logged_with_the_member_id(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    opened = _world(tmp_path)
+    with caplog.at_level(logging.WARNING):
+        name_members(opened.store, opened.cf, subprocess.run)
+
+    dropped = [r.getMessage() for r in caplog.records if "dropped" in r.getMessage()]
+    assert len(dropped) == 1
+    assert "id-d" in dropped[0]
+    assert "lost" in dropped[0]
+    opened.store.close()
 
 
 def test_a_member_with_no_path_has_no_checkout(world: World) -> None:
@@ -412,15 +425,18 @@ def test_the_cli_exits_three_when_cf_fails_and_names_the_members_later(
 
 
 def test_a_hub_store_names_each_member_by_its_id_and_makes_no_checkout_or_machine(
-    tmp_path: Path,
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     layout = make_layout(tmp_path)
     build_schema_11_store(
         layout.store_path, [OldMember("id-a", wake_command="x"), OldMember("id-b")]
     )
 
-    with open_hub_store(layout) as store:
+    with caplog.at_level(logging.WARNING), open_hub_store(layout) as store:
         with store.read() as transaction:
+            commands = transaction.execute(
+                "SELECT COUNT(*) FROM members WHERE wake_command IS NOT NULL"
+            ).fetchone()[0]
             rows = transaction.execute(
                 "SELECT project_id, name FROM members ORDER BY project_id"
             ).fetchall()
@@ -430,6 +446,12 @@ def test_a_hub_store_names_each_member_by_its_id_and_makes_no_checkout_or_machin
             ]
     assert [tuple(row) for row in rows] == [("id-a", "id-a"), ("id-b", "id-b")]
     assert counts == [0, 0]
+    # The old command is nulled, and its log line holds the member id and the text.
+    assert commands == 0
+    dropped = [r.getMessage() for r in caplog.records if "dropped" in r.getMessage()]
+    assert len(dropped) == 1
+    assert "id-a" in dropped[0]
+    assert "'x'" in dropped[0]
 
 
 def test_a_named_hub_store_opens_without_taking_the_write_lock(

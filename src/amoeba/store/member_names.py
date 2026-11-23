@@ -82,3 +82,8 @@ def unnamed_members(transaction: Transaction) -> tuple[UnnamedMember, ...]:
         )
         for row in rows
     )
+
+
+def clear_member_wake_command(transaction: Transaction, member_id: str) -> None:
+    """Set the retired ``members.wake_command`` to null (D4)."""
+    transaction.execute(sql.CLEAR_MEMBER_WAKE_COMMAND, (member_id,))

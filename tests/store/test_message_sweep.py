@@ -29,7 +29,7 @@ from store.message_support import (
     seed_members,
     send_request,
 )
-from store.wake_support import claim
+from store.wake_support import claim, give_checkout_command
 
 RETENTION_DAYS = 30
 PAST_TTL = NOW + TTL + timedelta(seconds=1)
@@ -273,10 +273,7 @@ def test_the_due_check_searches_an_index_and_never_scans_messages(
 def _claim_wake_at(store: Store, wake_id: str, when: datetime) -> None:
     """A claimed, unended wake row started at ``when`` for the addressee."""
     with store.write() as transaction:
-        transaction.execute(
-            "UPDATE members SET wake_command = 'wake-agent' WHERE project_id = ?",
-            (ADDRESSEE,),
-        )
+        give_checkout_command(transaction, ADDRESSEE, "wake-agent")
         claimed = claim(transaction, wake_id, now=when, max_wakes=100)
         assert claimed is not None
 

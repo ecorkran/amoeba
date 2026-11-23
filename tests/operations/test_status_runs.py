@@ -38,7 +38,7 @@ from operations.status_support import (
 LIMIT = 600.0
 MEMBER = Member(
     "demo",
-    MemberSettings("member-a", (), (), (), RulesFrom.NAMED, None),
+    MemberSettings("member-a", (), (), (), RulesFrom.NAMED),
     RUN_NOW,
     RUN_NOW,
     None,

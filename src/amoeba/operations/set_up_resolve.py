@@ -157,6 +157,17 @@ def resolve_request(request: SetUpRequest, directory: Path, run: CfRun) -> Resol
                 )
             )
             continue
+        if "wake_command" in entry.model_fields_set and (
+            isinstance(working, CFProjectNotFound) or project.id != working.id
+        ):
+            problems.append(
+                SetUpProblem(
+                    code=SetUpProblemCode.MALFORMED,
+                    detail=f"{own}.wake_command: a wake command is set from its own "
+                    "checkout: run `amoeba add --wake-command` in that repo",
+                )
+            )
+            continue
         first_seen[project.id] = index
         dependencies: list[ResolvedDependency] = []
         for position, dependency in enumerate(entry.depends_on):

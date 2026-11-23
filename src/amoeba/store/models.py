@@ -55,8 +55,6 @@ class MemberSettings:
     authorize_deny: tuple[str, ...]
     #: Whether the rules are ``rules_paths`` or the config's default (229 D7).
     rules_from: RulesFrom
-    #: The command a wake starts for this member (244 D1); ``None`` means no wake.
-    wake_command: str | None
 
 
 @dataclass(frozen=True)

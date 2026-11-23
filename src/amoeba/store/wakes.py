@@ -12,9 +12,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import StrEnum
 from typing import Final
 
 from amoeba.store import sql_wakes
+from amoeba.store.checkouts import Checkout, first_wakeable_checkout
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Wake
 from amoeba.store.programs import get_member
 from amoeba.store.row_values import (
@@ -33,12 +36,6 @@ from amoeba.store.vocabulary import WakeOutcome
 
 #: The rolling window the daily limit counts in (D7).
 WAKE_WINDOW: Final = timedelta(hours=24)
-
-#: ``detail`` of the row a claim inserts already ended when no checkout path is known.
-NO_CHECKOUT_DETAIL: Final = (
-    "Context Forge gave no checkout path for this member; register the project's "
-    "path in Context Forge"
-)
 
 
 @dataclass(frozen=True)
@@ -109,20 +106,36 @@ def _used_in_window(transaction: Transaction, member_id: str, now: datetime) -> 
     return integer(row[0], "wake count")
 
 
-def _wakeable_command(
+class WakeScope(StrEnum):
+    """Whose checkouts a wake check looks at (261 D9)."""
+
+    #: The acting machine's: what a claim starts here.
+    ACTING_MACHINE = "acting_machine"
+    #: Every machine's: what the door asks to refuse a send it cannot wake for.
+    ALL_MACHINES = "all_machines"
+
+
+def _wakeable_checkout(
     transaction: Transaction,
     member_id: str,
     now: datetime,
     limits: WakeLimits,
-) -> str | None:
-    """The member's ``wake_command`` when checks 1 to 4 of D2 all pass, else ``None``.
+    scope: WakeScope,
+) -> Checkout | None:
+    """The checkout whose command a wake would run when checks 1 to 4 of D2 pass.
 
-    In order, stopping at the first that fails: an active member with a command; no
-    push-confirmed live session; no live wake; fewer than ``limits.max_per_day`` rows
-    in ``WAKE_WINDOW``.
+    In order, stopping at the first that fails: an active member with a checkout in
+    ``scope`` that has a wake command (the first added); no push-confirmed live
+    session; no live wake; fewer than ``limits.max_per_day`` rows in ``WAKE_WINDOW``.
+    The three conditions after the first are written once, for both scopes.
     """
-    member = get_member(transaction, member_id)
-    if member is None or member.settings.wake_command is None:
+    if get_member(transaction, member_id) is None:
+        return None
+    machine_id = (
+        acting_machine_id(transaction) if scope is WakeScope.ACTING_MACHINE else None
+    )
+    checkout = first_wakeable_checkout(transaction, member_id, machine_id)
+    if checkout is None:
         return None
     if member_id in live_member_ids(transaction, now, limits.session_stale_seconds):
         return None
@@ -130,7 +143,17 @@ def _wakeable_command(
         return None
     if _used_in_window(transaction, member_id, now) >= limits.max_per_day:
         return None
-    return member.settings.wake_command
+    return checkout
+
+
+def wake_command_of(transaction: Transaction, member_id: str) -> str | None:
+    """The command a wake claimed on the acting machine would run for this member:
+    its first-added checkout's here that has one (261 D9, D13), or ``None``. Only the
+    command is read; the limits are not applied."""
+    checkout = first_wakeable_checkout(
+        transaction, member_id, acting_machine_id(transaction)
+    )
+    return None if checkout is None else checkout.wake_command
 
 
 def can_wake(
@@ -138,53 +161,54 @@ def can_wake(
     member_id: str,
     now: datetime,
     limits: WakeLimits,
+    scope: WakeScope = WakeScope.ACTING_MACHINE,
 ) -> bool:
-    """Whether ``claim_wake`` would pass its checks now; reads only."""
-    return _wakeable_command(transaction, member_id, now, limits) is not None
+    """Whether a claim in ``scope`` would pass its checks now; reads only."""
+    return _wakeable_checkout(transaction, member_id, now, limits, scope) is not None
 
 
-def claim_wake(
+def claim_wake(  # noqa: PLR0913 - the claim's checks and what it writes
     transaction: Transaction,
     member_id: str,
     now: datetime,
     limits: WakeLimits,
     wake_id: str,
-    directory: str | None,
-    log_stem: str | None,
+    log_stem: str,
 ) -> Wake | None:
     """Insert the member's wake row and return it, or return ``None``.
 
-    ``None`` means no wake starts: a check failed, or ``directory`` is null, in which
-    case the row is inserted already ended as ``start_failed`` (D4) and there is
-    nothing to start. The caller makes ``wake_id`` and ``log_stem`` so this reads no
-    layout.
+    The row's directory and command are copied from the member's first-added checkout
+    on the acting machine that has a command (261 D9), so a later edit changes
+    nothing running. ``None`` means no wake starts: a check failed, or the member has
+    no such checkout here. The caller makes ``wake_id`` and ``log_stem`` so this reads
+    no layout.
     """
-    command = _wakeable_command(transaction, member_id, now, limits)
-    if command is None:
+    owner_id = transaction.acting("wakes").owner_id
+    checkout = _wakeable_checkout(
+        transaction, member_id, now, limits, WakeScope.ACTING_MACHINE
+    )
+    if checkout is None or checkout.wake_command is None:
         return None
     stamp = encode_timestamp(now)
     deadline = encode_timestamp(now + timedelta(seconds=limits.timeout_seconds))
-    failed = directory is None
     transaction.execute(
         sql_wakes.INSERT_WAKE,
         (
             wake_id,
             member_id,
-            directory,
-            command,
+            checkout.path,
+            checkout.wake_command,
             stamp,
             deadline,
-            None if failed else log_stem,
+            log_stem,
             None,
-            stamp if failed else None,
-            WakeOutcome.START_FAILED.value if failed else None,
             None,
-            NO_CHECKOUT_DETAIL if failed else None,
-            transaction.acting("wakes").owner_id,
+            None,
+            None,
+            None,
+            owner_id,
         ),
     )
-    if failed:
-        return None
     wake = get_wake(transaction, wake_id)
     if wake is None:
         raise AssertionError("the wake row just inserted is missing")

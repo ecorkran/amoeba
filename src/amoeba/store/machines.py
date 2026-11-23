@@ -37,6 +37,11 @@ class ActingMachine:
     owner_id: int
 
 
+def acting_machine_id(transaction: Transaction) -> int:
+    """The machine this call acts as: the token's on a hub, ``local`` otherwise."""
+    return transaction.acting("checkouts").machine_id
+
+
 def the_owner(transaction: Transaction) -> int:
     """The store's one owner id.
 

@@ -116,6 +116,25 @@ def first_checkout_on(
     return None if row is None else _checkout(row)
 
 
+def first_wakeable_checkout(
+    transaction: Transaction, member_id: str, machine_id: int | None
+) -> Checkout | None:
+    """The member's first-added checkout that has a wake command (261 D9).
+
+    On ``machine_id``, or with ``None`` on any machine (what the door's check asks).
+    """
+    row = (
+        transaction.execute(
+            sql_checkouts.SELECT_WAKEABLE_CHECKOUT_ANYWHERE, (member_id,)
+        ).fetchone()
+        if machine_id is None
+        else transaction.execute(
+            sql_checkouts.SELECT_WAKEABLE_CHECKOUT_ON, (member_id, machine_id)
+        ).fetchone()
+    )
+    return None if row is None else _checkout(row)
+
+
 def delete_checkouts_of_member(transaction: Transaction, member_id: str) -> int:
     return transaction.execute(
         sql_checkouts.DELETE_CHECKOUTS_OF_MEMBER, (member_id,)
