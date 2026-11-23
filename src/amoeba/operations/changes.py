@@ -15,7 +15,6 @@ from amoeba.operations.changes_models import (
     MemberRef,
     ProviderPair,
 )
-from amoeba.operations.deps import Deps
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.release_member import resolve_release_member
 from amoeba.operations.report_release_models import (
@@ -31,7 +30,7 @@ __all__ = ["ChangesResult", "changes"]
 
 
 def changes(
-    store: Store, document: object, *, here: HereCaller | HereNotAProject, deps: Deps
+    store: Store, document: object, *, here: HereCaller | HereNotAProject
 ) -> ChangesResult:
     """The reports of the providers of the member whose checkout is ``here``.
 

@@ -11,7 +11,9 @@ none. The placement, classification and waiting-question steps are in
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from pydantic import (
     BaseModel,
@@ -26,6 +28,8 @@ from amoeba.operations.deps import Deps
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_sweep import sweep_messages
 from amoeba.operations.pause_class import PauseClass
+from amoeba.operations.prune_models import PruneReport
+from amoeba.operations.question_sweep import SweepResult
 from amoeba.operations.question_sweep_scope import sweep_scope
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import (
@@ -33,7 +37,12 @@ from amoeba.operations.reject_codes import (
     unknown_program_problem,
     validation_problems,
 )
-from amoeba.operations.runs_document import RunsDocument, left_out_text, standings
+from amoeba.operations.runs_document import (
+    RunsDocument,
+    RunStanding,
+    left_out_text,
+    standings,
+)
 from amoeba.operations.status_calls import attach_last_calls
 from amoeba.operations.status_closed import closed_now_entries
 from amoeba.operations.status_models import (
@@ -57,7 +66,7 @@ from amoeba.operations.wake_status import read_member_wakes
 from amoeba.store.checkouts import checkouts_on_machine
 from amoeba.store.errors import StoreRowError
 from amoeba.store.machines import acting_machine_id
-from amoeba.store.models import Member
+from amoeba.store.models import Member, QuestionRecord
 from amoeba.store.programs import get_program, list_programs, members_of
 from amoeba.store.questions import (
     latest_rows_by_run,
@@ -140,11 +149,15 @@ def status(
     *,
     here: HereCaller | HereNotAProject,
     runs: RunsDocument,
-    deps: Deps,
+    clock: Callable[[], datetime],
+    local: Deps | None,
 ) -> StatusResult:
     """What is running, paused and waiting on the PM, per program and member.
 
     ``here`` is the caller's gathered project and ``runs`` the machine's gathered runs.
+    ``local`` is this machine's own edges; with it the close sweep and the pruning of
+    local scratch and logs run, and on the hub (``None``) they do not (261 D11): they
+    read the files of the machine that ran ``sq``.
 
     Raises:
         SquadronError: The document says ``sq runs list --json`` gave no usable
@@ -161,11 +174,11 @@ def status(
     members = {m.project_id: m for entry in scope for m in entry.members}
     # Before the reads, so an expired request shows as recorded; a busy store is a
     # problem text, never a failure (the reads apply effective_state).
-    message_problem = sweep_messages(store, config, deps.clock())
+    message_problem = sweep_messages(store, config, clock())
     with store.read() as transaction:
         candidates = sweep_candidates(transaction, list(members))
         rows = latest_rows_by_run(transaction, list(members))
-        requests = held_request_states(transaction, rows, deps.clock())
+        requests = held_request_states(transaction, rows, clock())
     if runs.listing_problem is not None:
         raise SquadronError(
             "status needs `sq runs list --json` (Squadron with #303): "
@@ -181,27 +194,27 @@ def status(
         rows,
         requests,
         config.answering_wait_seconds,
-        deps.clock(),
+        clock(),
     )
     with_calls = attach_last_calls(member_runs, runs)
     member_runs = with_calls.runs
     names = _names(members)
     standing = standings(runs)
-    swept = sweep_scope(store, config, candidates, standing, deps, deps.clock())
+    swept = _sweep(store, config, candidates, standing, local, clock())
     # What is still open after the sweep. After a failed write that is everything,
     # shown as before the sweep.
     with store.read() as transaction:
         open_rows = open_questions(transaction, list(members))
     waiting = waiting_entries(open_rows, standing)
-    messages = read_member_messages(store, members, deps.clock())
+    messages = read_member_messages(store, members, clock())
     sessions = read_member_sessions(
-        store, members, deps.clock(), config.session_stale_seconds
+        store, members, clock(), config.session_stale_seconds
     )
-    wakes = read_member_wakes(store, members, deps.clock(), config.max_wakes_per_day)
+    wakes = read_member_wakes(store, members, clock(), config.max_wakes_per_day)
     program_of = {
         m.project_id: entry.program_id for entry in scope for m in entry.members
     }
-    pruned = deps.prune(store, now=deps.clock(), after_days=config.prune_after_days)
+    pruned = _prune(store, config, local, clock())
     return StatusResult(
         outcome=StatusOutcome.LISTED,
         notice=QUOTED_DATA_NOTICE
@@ -218,6 +231,29 @@ def status(
         sweep_problem=_joined(message_problem, swept.problem),
         file_problems=_file_problems(runs, with_calls.problems, pruned.problems),
     )
+
+
+def _sweep(  # noqa: PLR0913 - the pieces status already has in hand
+    store: Store,
+    config: UserConfig,
+    candidates: Sequence[QuestionRecord],
+    standing: Mapping[str, RunStanding],
+    local: Deps | None,
+    now: datetime,
+) -> SweepResult:
+    if local is None:
+        return SweepResult()
+    return sweep_scope(
+        store, config, candidates, standing, local.squadron_runs_dir, now
+    )
+
+
+def _prune(
+    store: Store, config: UserConfig, local: Deps | None, now: datetime
+) -> PruneReport:
+    if local is None:
+        return PruneReport(removed=0, problems=())
+    return local.prune(store, now=now, after_days=config.prune_after_days)
 
 
 def _file_problems(

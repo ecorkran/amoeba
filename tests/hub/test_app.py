@@ -118,7 +118,7 @@ def test_a_missing_length_is_malformed(hub: InProcessHub) -> None:
         (RefusalCode.BAD_TOKEN, {"headers": {HEADER_AUTHORIZATION: "Bearer nope"}}),
         (RefusalCode.DOOR_VERSION, {"headers": {HEADER_DOOR_VERSION: "99"}}),
         (RefusalCode.MALFORMED_CALL, {"body": b"not json"}),
-        (RefusalCode.NOT_SERVED, {"name": "add"}),
+        (RefusalCode.NOT_SERVED, {"name": "answer"}),
     ],
 )
 def test_each_refusal_travels_with_its_status(
@@ -141,7 +141,7 @@ def test_every_reply_has_the_door_version_header(hub: InProcessHub) -> None:
     replies = [
         _post(hub, "hello", _hello_body()),
         _post(hub, "hello", None, {"Content-Length": str(MAX_CALL_BYTES + 1)}),
-        _post(hub, "add", _hello_body()),
+        _post(hub, "answer", _hello_body()),
     ]
 
     for _status, headers, _body in replies:

@@ -20,11 +20,13 @@ def changes(
     store: Store, document: object, *, directory: Path, deps: Deps
 ) -> ChangesResult:
     here = gather_caller(directory, deps.cf_run)
-    return changes_module.changes(store, document, here=here, deps=deps)
+    return changes_module.changes(store, document, here=here)
 
 
 def report_release(
     store: Store, document: object, *, directory: Path, deps: Deps
 ) -> ReportReleaseResult:
     here = gather_caller(directory, deps.cf_run)
-    return report_release_module.report_release(store, document, here=here, deps=deps)
+    return report_release_module.report_release(
+        store, document, here=here, clock=deps.clock
+    )

@@ -14,7 +14,7 @@ import pytest
 from user_configs import example_config_text
 from wiring_support import TrackedStore, is_closed, record_opened_stores
 
-from amoeba import wiring, wiring_messages, wiring_releases
+from amoeba import wiring, wiring_gather
 from amoeba.cli import commands
 from amoeba.cli import main as cli
 from amoeba.client.errors import (
@@ -241,20 +241,32 @@ def test_invoke_gives_each_release_operation_the_gathered_caller(
     def recording(
         _store: object,
         _document: object,
-        *,
-        here: HereCaller | HereNotAProject,
-        deps: object,
+        _edges: object,
+        values: served.ClientValues,
     ) -> object:
-        seen.append(here)
+        assert isinstance(values.here, HereCaller | HereNotAProject)
+        seen.append(values.here)
         return _changes_result(ChangesOutcome.LISTED)
 
-    monkeypatch.setattr(wiring_releases, "gather_caller", gathering)
-    monkeypatch.setattr(wiring_releases, operation, recording)
+    monkeypatch.setattr(wiring_gather, "gather_caller", gathering)
+    _stub_served(monkeypatch, name, recording)
 
     wiring.invoke(name, {}, tmp_path, Door.CLI)
 
     assert gathered == [tmp_path]
     assert seen == [caller]
+
+
+def _stub_served(
+    monkeypatch: pytest.MonkeyPatch, name: OperationName, run: object
+) -> None:
+    """Replace the hub part ``run_served`` runs for ``name`` with ``run``."""
+    entry = served.SERVED[name.value]
+    monkeypatch.setitem(
+        served.SERVED,
+        name.value,
+        dataclasses.replace(entry, run=run),  # pyright: ignore[reportArgumentType]
+    )
 
 
 def test_invoke_refuses_handle_pause_naming_it(tmp_path: Path) -> None:
@@ -455,12 +467,18 @@ def test_invoke_gives_each_message_operation_the_gathered_caller_and_the_documen
         gathered.append(directory)
         return caller
 
-    def recording(*arguments: object, here: HereCaller, **_keywords: object) -> object:
-        seen.append((arguments[-1], here))
+    def recording(
+        _store: object,
+        document: object,
+        _edges: object,
+        values: served.ClientValues,
+    ) -> object:
+        assert isinstance(values.here, HereCaller)
+        seen.append((document, values.here))
         return _message_result(name)
 
-    monkeypatch.setattr(wiring_messages, "gather_caller", gathering)
-    monkeypatch.setattr(wiring_messages, name.value, recording)
+    monkeypatch.setattr(wiring_gather, "gather_caller", gathering)
+    _stub_served(monkeypatch, name, recording)
 
     wiring.invoke(name, {"marker": 1}, tmp_path, Door.CLI)
 

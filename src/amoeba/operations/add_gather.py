@@ -13,7 +13,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from amoeba.operations.add import AddRequest
+from amoeba.operations.add import AddRequest, names_no_member
 from amoeba.operations.add_door import refuse_door_fields
 from amoeba.operations.here import gather_checkout
 from amoeba.operations.here_document import HereCheckout, HereNotAProject
@@ -22,13 +22,6 @@ from amoeba.store.vocabulary import Door
 from amoeba.upstream.context_forge.cli_call import CfRun
 
 type Gathered = HereCheckout | HereNotAProject | None
-
-
-def names_no_member(request: AddRequest) -> bool:
-    """Whether the request has an entry that names no member, so it needs ``here``."""
-    if request.bulk is not None:
-        return any(entry.project is None for entry in request.bulk.members)
-    return request.project is None
 
 
 def gather_add(

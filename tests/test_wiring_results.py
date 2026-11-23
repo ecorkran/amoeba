@@ -104,8 +104,8 @@ def test_a_decisions_listing_with_records_round_trips(store: Store) -> None:
 
 
 def test_an_unserved_name_cannot_be_rebuilt() -> None:
-    with pytest.raises(ValueError, match="add"):
-        result_from_document("add", {})
+    with pytest.raises(ValueError, match="answer"):
+        result_from_document("answer", {})
 
 
 def test_a_document_that_is_not_that_result_is_a_value_error() -> None:

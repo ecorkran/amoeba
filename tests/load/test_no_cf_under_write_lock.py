@@ -25,7 +25,8 @@ from user_configs import user_config
 
 from amoeba.operations.names import OperationName
 from amoeba.operations.report_release_models import ReportOutcome, ReportReleaseResult
-from amoeba.wiring_releases import place_release
+from amoeba.store.vocabulary import Door
+from amoeba.wiring_gather import place_served
 from load.lock_probe import write_lock_is_held
 
 
@@ -59,13 +60,14 @@ def test_report_release_resolves_the_member_without_holding_the_write_lock(
         cf = LockProbingCf(store.path)
         deps = release_deps(tmp_path, SettableClock(), cf=cf)
 
-        result = place_release(
+        result = place_served(
             OperationName.REPORT_RELEASE,
             store,
             {"commit": FULL_HASH, "changed": "a change", "touched": ["api"]},
             PROVIDER_DIR,
+            Door.CLI,
             deps,
-            user_config,
+            lambda: user_config(),
         )
 
     assert isinstance(result, ReportReleaseResult)

@@ -53,6 +53,7 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
         "amoeba.mcp",
         "amoeba.wiring",
         "amoeba.wiring_door",
+        "amoeba.wiring_gather",
         "amoeba.wiring_messages",
         "amoeba.wiring_presence",
         "amoeba.wiring_registry",
@@ -229,3 +230,77 @@ def test_the_allow_list_rule_catches_a_stray_amoeba_import() -> None:
     assert not disallowed_imports(
         "from amoeba.config.home import x\n", "config", allowed
     )
+
+
+#: The client part (slice 261, D5): the modules that run ``cf``, ``git`` or ``sq``.
+#: The hub never runs those, so it never reaches them through any import.
+CLIENT_PART_MODULES = (
+    "amoeba.operations.here",
+    "amoeba.operations.naming",
+    "amoeba.operations.run_gather",
+    "amoeba.operations.add_gather",
+)
+#: The functions that run ``cf``; only the client part's modules import them.
+CF_CALL_FUNCTIONS = frozenset({"project_of", "project_details", "project_names"})
+CF_CALLERS = frozenset(
+    {"operations/here.py", "operations/naming.py", "operations/run_gather.py"}
+)
+
+
+def _reached_from_module(name: str) -> dict[str, str]:
+    """Every ``amoeba`` module ``name`` reaches by following imports (parents
+    included, as importing a module imports its package), with its first importer."""
+    reached: dict[str, str] = {}
+    pending = [(name, "")]
+    while pending:
+        current, importer = pending.pop()
+        path = _module_file(current)
+        if current in reached or path is None:
+            continue
+        reached[current] = importer
+        parts = current.split(".")
+        pending.extend((".".join(parts[:i]), current) for i in range(2, len(parts)))
+        for imported in _imported_names(path.read_text(encoding="utf-8")):
+            if imported.startswith(ROOT + "."):
+                pending.append((imported, current))
+    return reached
+
+
+def test_only_the_client_part_imports_the_functions_that_run_cf() -> None:
+    """Direct imports of ``project_of``, ``project_details`` and ``project_names``
+    (``operations.add_gather`` reaches them through ``here``). A type-only import
+    (``CFProject``, ``CFProjectNotFound``) is allowed: ``working_directory`` keeps its
+    ``CFProject`` shape."""
+    importers: set[str] = set()
+    for path in sorted(SRC.rglob("*.py")):
+        if "upstream" in path.relative_to(SRC).parts:
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ImportFrom) and any(
+                alias.name in CF_CALL_FUNCTIONS for alias in node.names
+            ):
+                importers.add(str(path.relative_to(SRC)))
+
+    assert importers == CF_CALLERS
+
+
+def test_the_hub_reaches_no_client_part_module_through_any_import() -> None:
+    reached = _reached_from("hub")
+    leaked = sorted(name for name in CLIENT_PART_MODULES if name in reached)
+
+    assert not leaked, {name: reached[name] for name in leaked}
+
+
+def test_served_reaches_no_client_part_module_through_any_import() -> None:
+    reached = _reached_from_module("amoeba.operations.served")
+    leaked = sorted(name for name in CLIENT_PART_MODULES if name in reached)
+
+    assert not leaked, {name: reached[name] for name in leaked}
+
+
+def test_the_walk_finds_an_import_it_should() -> None:
+    """The walk itself: ``wiring_gather`` imports the client part, so it reaches it."""
+    reached = _reached_from_module("amoeba.wiring_gather")
+
+    assert "amoeba.operations.here" in reached
+    assert "amoeba.operations.run_gather" in reached

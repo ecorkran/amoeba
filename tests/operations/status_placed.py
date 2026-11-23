@@ -32,7 +32,7 @@ def status(
     here = gather_caller(directory, deps.cf_run)
     runs = gather_machine_runs(deps)
     return status_module.status(
-        store, config, document, here=here, runs=runs, deps=deps
+        store, config, document, here=here, runs=runs, clock=deps.clock, local=deps
     )
 
 
@@ -48,5 +48,5 @@ def list_view(
     here = gather_caller(directory, deps.cf_run) if gathering else None
     runs = gather_machine_runs(deps) if gathering else None
     return list_view_module.list_view(
-        store, config, document, here=here, runs=runs, deps=deps
+        store, config, document, here=here, runs=runs, clock=deps.clock, local=deps
     )

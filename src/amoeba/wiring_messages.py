@@ -1,22 +1,12 @@
-"""Where ``send``, ``inbox``, ``reply`` and ``cancel`` get their arguments placed
-(slice 240, D3, Timeouts).
-
-``wiring.invoke`` opens the store and builds the dependencies; this only picks the
-operation and hands it the store, the config, the document, the caller's directory
-and the dependencies. It also holds what bounds each call's worst-case time, which
-the tool descriptions state and ``tests/test_message_timing.py`` checks.
-"""
+"""What bounds the worst-case time of ``send``, ``inbox``, ``reply`` and ``cancel``
+(slice 240, Timeouts), which the tool descriptions state and
+``tests/test_message_timing.py`` checks. The placement itself is
+``wiring_gather.place_served``."""
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Final, Literal, assert_never
+from typing import Final, Literal
 
-from amoeba.config.user_config import UserConfig
-from amoeba.operations.cancel import cancel
-from amoeba.operations.deps import Deps
-from amoeba.operations.here import gather_caller
-from amoeba.operations.inbox import inbox
 from amoeba.operations.message_results import (
     CancelResult,
     InboxResult,
@@ -24,9 +14,7 @@ from amoeba.operations.message_results import (
     SendResult,
 )
 from amoeba.operations.names import OperationName
-from amoeba.operations.reply import reply
-from amoeba.operations.send import send
-from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
+from amoeba.store.store import BUSY_TIMEOUT_SECONDS
 from amoeba.upstream.context_forge.project_of import CF_GET_TIMEOUT_SECONDS
 
 type MessageOperation = Literal[
@@ -58,26 +46,3 @@ def worst_case_seconds(name: MessageOperation) -> float:
         MESSAGE_LOOKUPS[name] * CF_GET_TIMEOUT_SECONDS
         + MESSAGE_STORE_WAITS * BUSY_TIMEOUT_SECONDS
     )
-
-
-def place_message(
-    name: MessageOperation,
-    store: Store,
-    config: UserConfig,
-    document: object,
-    directory: Path,
-    deps: Deps,
-) -> MessageResult:
-    # The client part first: a ``cf`` failure raises here, before any store work.
-    here = gather_caller(directory, deps.cf_run)
-    match name:
-        case OperationName.SEND:
-            return send(store, config, document, here=here, deps=deps)
-        case OperationName.INBOX:
-            return inbox(store, document, here=here, deps=deps)
-        case OperationName.REPLY:
-            return reply(store, config, document, here=here, deps=deps)
-        case OperationName.CANCEL:
-            return cancel(store, config, document, here=here, deps=deps)
-        case _:
-            assert_never(name)

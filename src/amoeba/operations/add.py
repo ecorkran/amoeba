@@ -150,6 +150,13 @@ def single_member_request(
     return SetUpRequest.model_validate(document)
 
 
+def names_no_member(request: AddRequest) -> bool:
+    """Whether the request has an entry that names no member, so it needs ``here``."""
+    if request.bulk is not None:
+        return any(entry.project is None for entry in request.bulk.members)
+    return request.project is None
+
+
 def add(
     store: Store, config: UserConfig, document: object, *, here: Gathered
 ) -> SetUpResult:

@@ -9,11 +9,11 @@ member each see every delivery after their own point.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 
 from pydantic import ValidationError
 
-from amoeba.operations.deps import Deps
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_document import declared_text
 from amoeba.operations.message_member import Refusal, caller_of
@@ -37,14 +37,18 @@ __all__ = ["InboxResult", "inbox"]
 
 
 def inbox(
-    store: Store, document: object, *, here: HereCaller | HereNotAProject, deps: Deps
+    store: Store,
+    document: object,
+    *,
+    here: HereCaller | HereNotAProject,
+    clock: Callable[[], datetime],
 ) -> InboxResult:
     """The inbox of the member whose checkout ``here`` is.
 
     Raises:
         StoreError: The store cannot be used.
     """
-    now = deps.clock()
+    now = clock()
     caller = caller_of(store, here, declared_text(document, "member"))
     if isinstance(caller, Refusal):
         return InboxResult.rejected(caller.code, (caller.detail,), since=None)

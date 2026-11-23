@@ -16,7 +16,6 @@ from datetime import datetime
 from pathlib import Path
 
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.deps import Deps
 from amoeba.operations.question_sweep import RunFate, SweepResult, apply_sweep
 from amoeba.operations.runs_document import RunStanding
 from amoeba.store.models import QuestionRecord
@@ -33,7 +32,7 @@ def sweep_scope(  # noqa: PLR0913 - the pieces status already has in hand
     config: UserConfig,
     rows: Sequence[QuestionRecord],
     runs: Mapping[str, RunStanding],
-    deps: Deps,
+    runs_dir: Path,
     now: datetime,
 ) -> SweepResult:
     """Close the open ``rows`` whose run, per ``runs``, is not at their pause.
@@ -43,7 +42,7 @@ def sweep_scope(  # noqa: PLR0913 - the pieces status already has in hand
     """
     judged: list[tuple[QuestionRecord, RunFate]] = []
     for row in rows:
-        fate = _fate(row, runs.get(row.key.run_id), deps.squadron_runs_dir)
+        fate = _fate(row, runs.get(row.key.run_id), runs_dir)
         if fate is not None:
             judged.append((row, fate))
     return apply_sweep(store, config, judged, now)

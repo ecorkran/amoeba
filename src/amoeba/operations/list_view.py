@@ -10,12 +10,12 @@ view also needs are already in the status document. The subjects ``programs``,
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any, Final
 
-from pydantic import ValidationError, field_validator
+from pydantic import TypeAdapter, ValidationError, field_validator
 
 from amoeba.answering.values import AnsweredBy
 from amoeba.config.user_config import NonBlank, UserConfig
@@ -105,6 +105,18 @@ class ListResult(FrozenModel):
     #: ``None`` when ``all`` was not given.
     settled: tuple[SettledEntry, ...] | None = None
 
+    @classmethod
+    def from_document(cls, document: Mapping[str, object]) -> ListResult:
+        """The result a ``document()`` was made from (the door's reply)."""
+        status_part = dict(document)
+        settled = status_part.pop("settled", None)
+        return cls(
+            status=StatusResult.model_validate(status_part),
+            settled=None
+            if settled is None
+            else TypeAdapter(tuple[SettledEntry, ...]).validate_python(settled),
+        )
+
     def document(self) -> dict[str, object]:
         """``status``'s document; with ``all``, plus one top-level ``settled``."""
         document = self.status.model_dump(mode="json")
@@ -133,7 +145,8 @@ def list_view(
     *,
     here: HereCaller | HereNotAProject | None,
     runs: RunsDocument | None,
-    deps: Deps,
+    clock: Callable[[], datetime],
+    local: Deps | None,
 ) -> ListOutcome:
     """Apply the ``list`` request ``document``, which is validated here.
 
@@ -150,7 +163,7 @@ def list_view(
     except ValidationError as error:
         return _rejected(RejectCode.MALFORMED, validation_problems(error))
     if request.subject is None:
-        return _default_view(store, config, request, here, runs, deps)
+        return _default_view(store, config, request, here, runs, clock, local)
     if request.all and request.subject in ALL_NOT_ACCEPTED:
         return _rejected(
             RejectCode.MALFORMED,
@@ -183,7 +196,8 @@ def _default_view(
     request: ListRequest,
     here: HereCaller | HereNotAProject | None,
     runs: RunsDocument | None,
-    deps: Deps,
+    clock: Callable[[], datetime],
+    local: Deps | None,
 ) -> ListResult:
     if here is None or runs is None:
         raise ValueError("the default list view needs the gathered caller and runs")
@@ -193,11 +207,12 @@ def _default_view(
         {} if request.program is None else {"program": request.program},
         here=here,
         runs=runs,
-        deps=deps,
+        clock=clock,
+        local=local,
     )
     if not request.all or result.outcome is StatusOutcome.REJECTED:
         return ListResult(status=result)
-    since = deps.clock() - timedelta(days=config.prune_after_days)
+    since = clock() - timedelta(days=config.prune_after_days)
     with store.read() as transaction:
         settled = settled_since(transaction, since)
         names = {

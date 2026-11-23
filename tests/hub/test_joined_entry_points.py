@@ -69,9 +69,7 @@ def test_every_unserved_operation_raises_not_served_and_writes_nothing(
 @pytest.mark.parametrize(
     "argv",
     [
-        ["list"],
-        ["status"],
-        ["inbox"],
+        ["answer", "run-1", "--text", "yes"],
         ["handle-pause", "run-1"],
         ["wake-run", "wake-1"],
     ],

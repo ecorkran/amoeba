@@ -11,6 +11,9 @@ from ast_strings import string_constants
 
 SOURCE_ROOT: Final = Path(__file__).parents[1] / "src" / "amoeba"
 RUN_LIST_MODULE: Final = SOURCE_ROOT / "upstream" / "squadron" / "run_list.py"
+#: Names the served operation ``list`` and the body key ``runs`` (261 D5, D12): two
+#: unrelated strings that happen to be the command's two words, not the command.
+WIRE_PROTOCOL_MODULE: Final = SOURCE_ROOT / "wire" / "protocol.py"
 
 #: Each vocabulary and the one module that defines it.
 VOCABULARIES: Final = {
@@ -44,6 +47,7 @@ def test_only_run_list_spells_the_runs_list_command() -> None:
         path
         for path in sorted(SOURCE_ROOT.rglob("*.py"))
         if {"runs", "list"} <= set(string_constants(path))
+        and path != WIRE_PROTOCOL_MODULE
     ]
 
     assert spellers == [RUN_LIST_MODULE]

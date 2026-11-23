@@ -8,13 +8,13 @@ and both parties are told. A refusal is recorded only when the caller is known.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from typing import Final
 
 from pydantic import ValidationError
 
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.deps import Deps
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_document import declared_text
 from amoeba.operations.message_member import (
@@ -60,14 +60,14 @@ def cancel(
     document: object,
     *,
     here: HereCaller | HereNotAProject,
-    deps: Deps,
+    clock: Callable[[], datetime],
 ) -> CancelResult:
     """Cancel the request named in ``document``.
 
     Raises:
         StoreError: The store cannot be used.
     """
-    now = deps.clock()
+    now = clock()
     actor = actor_of(store, here, declared_text(document, "member"))
     if isinstance(actor, Refusal):
         record_declared(store, actor, OperationName.CANCEL.value, document, now)

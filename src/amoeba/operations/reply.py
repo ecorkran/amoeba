@@ -9,13 +9,13 @@ the caller, in the transaction that found it.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from typing import Final
 
 from pydantic import ValidationError
 
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.deps import Deps
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_document import declared_text
 from amoeba.operations.message_member import Refusal, caller_of
@@ -71,14 +71,14 @@ def reply(
     document: object,
     *,
     here: HereCaller | HereNotAProject,
-    deps: Deps,
+    clock: Callable[[], datetime],
 ) -> ReplyResult:
     """Apply the reply in ``document`` for the member whose checkout ``here`` is.
 
     Raises:
         StoreError: The store cannot be used.
     """
-    now = deps.clock()
+    now = clock()
     caller = caller_of(store, here, declared_text(document, "member"))
     if isinstance(caller, Refusal):
         record_declared(store, caller, OperationName.REPLY.value, document, now)

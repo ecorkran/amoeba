@@ -171,7 +171,7 @@ def test_a_bad_or_oversized_body_is_malformed(rig: HubRig, body: bytes) -> None:
 
 
 def test_an_unserved_name_is_not_served(rig: HubRig) -> None:
-    reply = rig.call("add", {})
+    reply = rig.call("answer", {})
 
     assert _refused(result_of(reply), RefusalCode.NOT_SERVED)
     assert reply.status == 404
@@ -333,7 +333,7 @@ def test_no_log_line_holds_a_token(
 ) -> None:
     with caplog.at_level(logging.DEBUG):
         rig.call("hello", {}, token="a-bad-token-value")
-        rig.call("add", {})
+        rig.call("answer", {})
         rig.call("hello", {}, headers={HEADER_DOOR_VERSION: "99"})
 
     text = "\n".join(record.getMessage() for record in caplog.records)
@@ -345,7 +345,9 @@ def test_no_log_line_holds_a_token(
 def test_a_seventh_operation_is_served_by_adding_to_the_list_and_the_registry(
     rig: HubRig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def run_stub(store: Store, document: object, edges: object) -> served.ServedResult:
+    def run_stub(
+        store: Store, document: object, edges: object, values: object
+    ) -> served.ServedResult:
         return served.MarkReadResult.model_validate(
             {"outcome": "unchanged", "previous": 1, "current": 1}
         )
@@ -360,11 +362,11 @@ def test_a_seventh_operation_is_served_by_adding_to_the_list_and_the_registry(
     assert _done(result_of(reply)).result["outcome"] == "unchanged"
 
 
-def test_hello_with_an_empty_document_keeps_no_result_and_add_is_not_served(
+def test_hello_with_an_empty_document_keeps_no_result_and_answer_is_not_served(
     rig: HubRig,
 ) -> None:
     hello = rig.call("hello", {})
-    unserved = rig.call("add", {"x": 1})
+    unserved = rig.call("answer", {"x": 1})
 
     assert _done(result_of(hello)).result == {"machine": "alpha"}
     assert _refused(result_of(unserved), RefusalCode.NOT_SERVED)

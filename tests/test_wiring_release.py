@@ -25,7 +25,7 @@ from store.question_support import (
 )
 from user_configs import example_config_text
 
-from amoeba import wiring, wiring_messages
+from amoeba import wiring
 from amoeba.config.home import StateLayout, config_path, state_layout
 from amoeba.config.user_config import ConfigError, UserConfig
 from amoeba.mcp import server
@@ -43,16 +43,20 @@ from amoeba.wiring_release import START_AFTER_OPERATIONS
 SCRIPT = Path("/installed/bin/amoeba")
 HELD = QuestionKey("held-run", "2026-11-10T11:00:00+00:00")
 REQUEST_ID = "ended-request"
-#: Where each operation is looked up when ``invoke`` dispatches it.
+#: Where each operation is looked up when ``invoke`` dispatches it: every served
+#: operation goes through the one placement (261 D5, D12).
 PLACEMENT = {
-    OperationName.ADD: (wiring, "place_add"),
-    OperationName.RM: (wiring, "place_rm"),
-    OperationName.LIST: (wiring, "place_list"),
-    OperationName.STATUS: (wiring, "status"),
-    OperationName.SEND: (wiring_messages, "send"),
-    OperationName.REPLY: (wiring_messages, "reply"),
-    OperationName.CANCEL: (wiring_messages, "cancel"),
-    OperationName.INBOX: (wiring_messages, "inbox"),
+    name: (wiring, "place_served")
+    for name in (
+        OperationName.ADD,
+        OperationName.RM,
+        OperationName.LIST,
+        OperationName.STATUS,
+        OperationName.SEND,
+        OperationName.REPLY,
+        OperationName.CANCEL,
+        OperationName.INBOX,
+    )
 }
 
 
@@ -96,7 +100,12 @@ def _replaced(monkeypatch: pytest.MonkeyPatch, name: OperationName) -> object:
     result = _reply_result()
     module, attribute = PLACEMENT[name]
 
-    def fixed(*_arguments: object, **_keywords: object) -> ReplyResult:
+    def fixed(*arguments: object, **_keywords: object) -> ReplyResult:
+        # The placement's last argument is the config loader; the real operation
+        # loads the config once, and a test of the start's own load counts on that.
+        load = arguments[-1]
+        assert callable(load)
+        load()
         return result
 
     monkeypatch.setattr(module, attribute, fixed)
@@ -175,7 +184,7 @@ def test_an_operation_that_raises_still_starts_the_ended_held_question(
     def fails(*_arguments: object, **_keywords: object) -> ReplyResult:
         raise StoreBusyError("the store stayed busy after the reply committed")
 
-    monkeypatch.setattr(wiring_messages, "reply", fails)
+    monkeypatch.setattr(wiring, "place_served", fails)
 
     with pytest.raises(StoreBusyError, match="after the reply committed"):
         wiring.invoke(OperationName.REPLY, {}, tmp_path, Door.CLI)

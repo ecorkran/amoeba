@@ -50,7 +50,13 @@ def _status(
 ) -> StatusResult:
     deps = status_deps(tmp_path, cf=FakeCf({}), runs=[])
     return status_module.status(
-        store, CONFIG, {}, here=here or NOWHERE, runs=runs, deps=deps
+        store,
+        CONFIG,
+        {},
+        here=here or NOWHERE,
+        runs=runs,
+        clock=deps.clock,
+        local=deps,
     )
 
 
@@ -171,7 +177,8 @@ def test_a_question_whose_run_was_cut_stays_open_while_its_run_file_exists(
         {},
         here=NOWHERE,
         runs=RunsDocument(left_out=LeftOut(completed=1)),
-        deps=deps,
+        clock=deps.clock,
+        local=deps,
     )
 
     assert result.closed_now == ()

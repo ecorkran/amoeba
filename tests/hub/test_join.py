@@ -256,7 +256,7 @@ def test_the_cli_joins_and_leaves(
     assert '"removed"' in capsys.readouterr().out
 
 
-def test_a_joined_machine_serves_six_operations_through_the_hub_and_no_other(
+def test_a_joined_machine_serves_the_served_operations_through_the_hub_and_no_other(
     hub: InProcessHub,
 ) -> None:
     layout = client_layout()
@@ -264,8 +264,8 @@ def test_a_joined_machine_serves_six_operations_through_the_hub_and_no_other(
     before = files_of(layout.state_home)
 
     listed = wiring.invoke(OperationName.DECISIONS, {}, None, Door.CLI)
-    with pytest.raises(NotServedError, match="does not serve list yet") as raised:
-        wiring.invoke(OperationName.LIST, {}, Path("/anywhere"), Door.CLI)
+    with pytest.raises(NotServedError, match="does not serve answer yet") as raised:
+        wiring.invoke(OperationName.ANSWER, {}, Path("/anywhere"), Door.CLI)
 
     assert getattr(listed, "outcome").value == "listed"  # noqa: B009
     assert hub.address in str(raised.value)

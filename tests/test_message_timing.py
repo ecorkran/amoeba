@@ -40,12 +40,13 @@ from amoeba.operations.request_release import MAX_STARTS_PER_CALL, START_BOUND_S
 from amoeba.operations.run_gather import RUNS_GATHER_SECONDS
 from amoeba.operations.wake import WAKE_BOUND_SECONDS
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
+from amoeba.store.vocabulary import Door
 from amoeba.upstream.context_forge.project_of import CF_GET_TIMEOUT_SECONDS
+from amoeba.wiring_gather import place_served
 from amoeba.wiring_messages import (
     MESSAGE_LOOKUPS,
     MESSAGE_STORE_WAITS,
     MessageOperation,
-    place_message,
     worst_case_seconds,
 )
 from amoeba.wiring_release import START_AFTER_OPERATIONS
@@ -73,8 +74,8 @@ type Run = Callable[[Store, Deps], object]
 
 
 def _placed(name: MessageOperation, document: dict[str, object]) -> Run:
-    return lambda store, deps: place_message(
-        name, store, CONFIG, document, DIRECTORY, deps
+    return lambda store, deps: place_served(
+        name, store, document, DIRECTORY, Door.CLI, deps, lambda: CONFIG
     )
 
 

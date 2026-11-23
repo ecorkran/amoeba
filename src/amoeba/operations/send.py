@@ -9,6 +9,7 @@ member to show a row under and writes none.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
 
@@ -32,6 +33,7 @@ from amoeba.operations.reject_codes import RejectCode, validation_problems
 from amoeba.operations.send_note import write_note
 from amoeba.operations.send_write import write_send
 from amoeba.operations.wake import wake_for_sent_request
+from amoeba.operations.wake_door import refuse_a_wake_the_door_cannot_start
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import MessageKind
 
@@ -44,14 +46,20 @@ def send(
     document: object,
     *,
     here: HereCaller | HereNotAProject,
-    deps: Deps,
+    clock: Callable[[], datetime],
+    local: Deps | None,
 ) -> SendResult:
     """Send the request in ``document`` from the member whose checkout ``here`` is.
 
+    ``local`` is this machine's own edges, which start the wake step; ``None`` on the
+    hub, which starts none (261 D9): a send to a member a wake would be due for is
+    refused before anything is written.
+
     Raises:
         StoreError: The store cannot be used.
+        CallRefused: ``local`` is ``None`` and a wake is due (``not_served``).
     """
-    now = deps.clock()
+    now = clock()
     caller = caller_of(store, here, declared_text(document, "member"))
     if isinstance(caller, Refusal):
         return _refuse(store, caller, document, now)
@@ -79,6 +87,8 @@ def send(
         )
     if recipient is None:
         raise AssertionError("a request names its recipient; the model checked")
+    if local is None:
+        refuse_a_wake_the_door_cannot_start(store, config, recipient.member_id, now)
     result = write_send(
         store,
         config,
@@ -87,7 +97,9 @@ def send(
         request=request,
         now=now,
     )
-    return wake_for_sent_request(store, config, deps, recipient, result)
+    if local is None:
+        return result
+    return wake_for_sent_request(store, config, local, recipient, result)
 
 
 def _refuse(

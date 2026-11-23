@@ -30,25 +30,27 @@ def send(
     store: Store, config: UserConfig, document: object, *, directory: Path, deps: Deps
 ) -> SendResult:
     here = gather_caller(directory, deps.cf_run)
-    return send_module.send(store, config, document, here=here, deps=deps)
+    return send_module.send(
+        store, config, document, here=here, clock=deps.clock, local=deps
+    )
 
 
 def inbox(
     store: Store, document: object, *, directory: Path, deps: Deps
 ) -> InboxResult:
     here = gather_caller(directory, deps.cf_run)
-    return inbox_module.inbox(store, document, here=here, deps=deps)
+    return inbox_module.inbox(store, document, here=here, clock=deps.clock)
 
 
 def reply(
     store: Store, config: UserConfig, document: object, *, directory: Path, deps: Deps
 ) -> ReplyResult:
     here = gather_caller(directory, deps.cf_run)
-    return reply_module.reply(store, config, document, here=here, deps=deps)
+    return reply_module.reply(store, config, document, here=here, clock=deps.clock)
 
 
 def cancel(
     store: Store, config: UserConfig, document: object, *, directory: Path, deps: Deps
 ) -> CancelResult:
     here = gather_caller(directory, deps.cf_run)
-    return cancel_module.cancel(store, config, document, here=here, deps=deps)
+    return cancel_module.cancel(store, config, document, here=here, clock=deps.clock)

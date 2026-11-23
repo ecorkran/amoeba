@@ -12,7 +12,7 @@ import shlex
 from collections.abc import Sequence
 from enum import StrEnum
 from functools import partial
-from typing import Annotated, Final, Self
+from typing import Annotated, Final, Self, cast
 
 from pydantic import (
     AfterValidator,
@@ -274,6 +274,10 @@ type WorkingDirectory = (
 )
 
 
+def _without_changes(document: dict[str, object]) -> dict[str, object]:
+    return {key: value for key, value in document.items() if key != "changes"}
+
+
 class SetUpResult(FrozenModel):
     outcome: SetUpOutcome
     #: What was created, changed or removed; empty unless applied.
@@ -284,6 +288,15 @@ class SetUpResult(FrozenModel):
     program: ProgramState | None
     #: Informational. Null when the request was malformed and nothing was looked up.
     working_directory: WorkingDirectory | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_computed_text(cls, data: object) -> object:
+        """The document form carries ``changes``, derived from ``change_records``; a
+        result rebuilt from it (the door's reply) takes the records and drops it."""
+        if not isinstance(data, dict):
+            return data
+        return _without_changes(cast("dict[str, object]", data))
 
     @computed_field
     @property

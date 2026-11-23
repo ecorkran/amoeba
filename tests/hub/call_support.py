@@ -72,9 +72,10 @@ class HubRig:
         body: bytes | None = None,
         headers: dict[str, str] | None = None,
         hooks: DoorHooks = DoorHooks(),  # noqa: B008
+        extra: dict[str, object] | None = None,
     ) -> CallReply:
         return handle_call(
-            make_request(name, document, token, call_id, body, headers),
+            make_request(name, document, token, call_id, body, headers, extra),
             open_store=self.open_store,
             clock=self.clock,
             load_config=self.config,
@@ -97,6 +98,7 @@ def make_request(
     call_id: str,
     body: bytes | None = None,
     headers: dict[str, str] | None = None,
+    extra: dict[str, object] | None = None,
 ) -> CallRequest:
     sent = {
         HEADER_DOOR_VERSION: str(DOOR_VERSION),
@@ -107,7 +109,9 @@ def make_request(
         sent[HEADER_AUTHORIZATION] = f"Bearer {token}"
     sent.update(headers or {})
     payload = (
-        json.dumps({DOCUMENT_KEY: document}).encode("utf-8") if body is None else body
+        json.dumps({DOCUMENT_KEY: document, **(extra or {})}).encode("utf-8")
+        if body is None
+        else body
     )
     return CallRequest(name=name, headers=sent, body=payload, peer="127.0.0.1:50000")
 

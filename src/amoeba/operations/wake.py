@@ -50,6 +50,15 @@ STDERR_LOG_SUFFIX: Final = ".stderr.log"
 WAKE_BOUND_SECONDS: Final = 5 * BUSY_TIMEOUT_SECONDS
 
 
+def wake_limits(config: UserConfig) -> WakeLimits:
+    """The limits a claim and a due-check apply, from the config."""
+    return WakeLimits(
+        timeout_seconds=config.wake_timeout_seconds,
+        max_per_day=config.max_wakes_per_day,
+        session_stale_seconds=config.session_stale_seconds,
+    )
+
+
 def wake_for_sent_request(
     store: Store,
     config: UserConfig,
@@ -97,11 +106,7 @@ def _claim_and_start(
     store: Store, config: UserConfig, deps: Deps, recipient: Recipient
 ) -> str | None:
     now = deps.clock()
-    limits = WakeLimits(
-        timeout_seconds=config.wake_timeout_seconds,
-        max_per_day=config.max_wakes_per_day,
-        session_stale_seconds=config.session_stale_seconds,
-    )
+    limits = wake_limits(config)
     with store.read() as transaction:
         wakeable = can_wake(transaction, recipient.member_id, now, limits)
     if not wakeable:
