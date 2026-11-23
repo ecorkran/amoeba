@@ -1,16 +1,17 @@
 """``status``: what is running, paused and waiting on the PM (slice 224, D2, D4, D8).
 
-The flow: resolve the scope; read the store once; list runs once; place them; classify
-the paused ones; join the waiting questions; ask ``cf`` for names once. The store is
-read first, so no subprocess runs inside a store transaction. The placement,
-classification and waiting-question steps are in ``status_placement``, ``status_runs``
-and ``status_waiting``; the result models are in ``status_models`` and re-exported here.
+The flow: resolve the scope; read the store once; take the runs from the ``runs``
+document (the client part read ``sq``, ``cf``, the run files and the calls log, 261
+D11); place them; classify the paused ones; join the waiting questions. The store is
+read first, so no subprocess runs inside a store transaction, and this module runs
+none. The placement, classification and waiting-question steps are in
+``status_placement``, ``status_runs`` and ``status_waiting``; the result models are in
+``status_models`` and re-exported here.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from pydantic import (
     BaseModel,
@@ -32,6 +33,7 @@ from amoeba.operations.reject_codes import (
     unknown_program_problem,
     validation_problems,
 )
+from amoeba.operations.runs_document import RunsDocument, left_out_text, standings
 from amoeba.operations.status_calls import attach_last_calls
 from amoeba.operations.status_closed import closed_now_entries
 from amoeba.operations.status_models import (
@@ -42,7 +44,7 @@ from amoeba.operations.status_models import (
     StatusResult,
     WakeStatus,
 )
-from amoeba.operations.status_placement import place_runs, scratch_roots
+from amoeba.operations.status_placement import place_runs
 from amoeba.operations.status_requests import MemberMessages, read_member_messages
 from amoeba.operations.status_runs import (
     MemberRun,
@@ -63,9 +65,7 @@ from amoeba.store.questions import (
     sweep_candidates,
 )
 from amoeba.store.store import Store, Transaction
-from amoeba.upstream.context_forge.project_of import project_of
 from amoeba.upstream.squadron.errors import SquadronError
-from amoeba.upstream.squadron.run_list import RunListProblem
 
 __all__ = [
     "ScopeRejected",
@@ -138,18 +138,17 @@ def status(
     config: UserConfig,
     document: object,
     *,
-    directory: Path,
     here: HereCaller | HereNotAProject,
+    runs: RunsDocument,
     deps: Deps,
 ) -> StatusResult:
     """What is running, paused and waiting on the PM, per program and member.
 
-    ``here`` is the caller's gathered project; ``directory`` is still used to place
-    runs (``status_placement`` asks ``cf`` about each run's directory until 12.2).
+    ``here`` is the caller's gathered project and ``runs`` the machine's gathered runs.
 
     Raises:
-        SquadronError: ``sq runs list --json`` gave no usable listing.
-        ContextForgeError: ``cf`` gave no usable answer for a run's directory.
+        SquadronError: The document says ``sq runs list --json`` gave no usable
+            listing.
         StoreError: The store cannot be used.
     """
     try:
@@ -167,38 +166,33 @@ def status(
         candidates = sweep_candidates(transaction, list(members))
         rows = latest_rows_by_run(transaction, list(members))
         requests = held_request_states(transaction, rows, deps.clock())
-    listed = deps.list_runs()
-    if isinstance(listed, RunListProblem):
+    if runs.listing_problem is not None:
         raise SquadronError(
-            f"status needs `sq runs list --json` (Squadron with #303): {listed.reason}"
+            "status needs `sq runs list --json` (Squadron with #303): "
+            f"{runs.listing_problem}"
         )
     # The listing is ``--all`` so the sweep can tell a finished run from an unknown
     # one; completed runs stay out of the per-member run lists, as before.
     with store.read() as transaction:
         by_checkout = _members_by_checkout(transaction, members)
-    placement = place_runs(
-        [run for run in listed if not run.is_completed],
-        by_checkout,
-        scratch_roots(deps.answering_dir, deps.legacy_home),
-        lambda found: project_of(directory=found, run=deps.cf_run),
-    )
-    runs = classify_runs(
+    placement = place_runs(runs.open_runs, by_checkout)
+    member_runs = classify_runs(
         placement.placed,
         rows,
         requests,
-        deps.squadron_runs_dir,
         config.answering_wait_seconds,
         deps.clock(),
     )
-    with_calls = attach_last_calls(runs, deps.calls_log_dir)
-    runs = with_calls.runs
+    with_calls = attach_last_calls(member_runs, runs)
+    member_runs = with_calls.runs
     names = _names(members)
-    swept = sweep_scope(store, config, candidates, listed, deps, deps.clock())
+    standing = standings(runs)
+    swept = sweep_scope(store, config, candidates, standing, deps, deps.clock())
     # What is still open after the sweep. After a failed write that is everything,
     # shown as before the sweep.
     with store.read() as transaction:
         open_rows = open_questions(transaction, list(members))
-    waiting = waiting_entries(open_rows, listed)
+    waiting = waiting_entries(open_rows, standing)
     messages = read_member_messages(store, members, deps.clock())
     sessions = read_member_sessions(
         store, members, deps.clock(), config.session_stale_seconds
@@ -211,17 +205,27 @@ def status(
     return StatusResult(
         outcome=StatusOutcome.LISTED,
         notice=QUOTED_DATA_NOTICE
-        if _shows_others_text(messages, runs, waiting)
+        if _shows_others_text(messages, member_runs, waiting)
         else None,
         programs=tuple(
-            _program_status(entry, names, runs, waiting, messages, sessions, wakes)
+            _program_status(
+                entry, names, member_runs, waiting, messages, sessions, wakes
+            )
             for entry in scope
         ),
         unplaced_runs=placement.unplaced,
         closed_now=closed_now_entries(swept, program_of, names),
         sweep_problem=_joined(message_problem, swept.problem),
-        file_problems=with_calls.problems + pruned.problems,
+        file_problems=_file_problems(runs, with_calls.problems, pruned.problems),
     )
+
+
+def _file_problems(
+    runs: RunsDocument, call_problems: tuple[str, ...], prune_problems: tuple[str, ...]
+) -> tuple[str, ...]:
+    """The call-log and prune problems, and the sentence for a cut document."""
+    cut = left_out_text(runs.left_out)
+    return (*call_problems, *(() if cut is None else (cut,)), *prune_problems)
 
 
 def _joined(*problems: str | None) -> str | None:

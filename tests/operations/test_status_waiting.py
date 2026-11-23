@@ -5,11 +5,13 @@ from __future__ import annotations
 from dataclasses import replace
 
 from amoeba.answering.values import DeclineReason
+from amoeba.operations.runs_document import standings
 from amoeba.operations.status_models import NextOperation, WaitingEntry, WaitingRunState
 from amoeba.operations.status_waiting import waiting_entries
 from amoeba.store.models import QuestionKey, QuestionRecord
 from amoeba.store.vocabulary import QuestionState
 from amoeba.upstream.squadron.run_list import ListedRun
+from operations.runs_doc_support import document_of, project
 from operations.status_support import in_directory, question_row, recorded_run
 
 PAUSED = "demo-pause-1"
@@ -19,7 +21,12 @@ RUNNING = "run-20261111-p6-fe470d63"
 def _entries(
     questions: tuple[QuestionRecord, ...], listed: list[ListedRun]
 ) -> list[WaitingEntry]:
-    return [item.entry for item in waiting_entries(questions, listed)]
+    return [
+        item.entry
+        for item in waiting_entries(
+            questions, standings(document_of(*listed, lookup=project("cf")))
+        )
+    ]
 
 
 def _paused_key(run: ListedRun) -> QuestionKey:

@@ -2,9 +2,10 @@
 
 The class comes from ``classify_pause``, the same function ``handle_pause`` uses, so a
 run ``status`` shows as a missed hook is one ``handle_pause`` picks up. ``status`` does
-not poll: ``handle_pause``'s poll makes the final call. The run file is read only for a
-paused agent question that has no row; a run file that cannot be read is that run's
-``run_file_unreadable``, not a failure of the whole call.
+not poll: ``handle_pause``'s poll makes the final call. The run file's facts come from
+the ``runs`` document, which holds them for every paused run, and are used only for a
+paused agent question that has no row; a run file the document says could not be read
+is that run's ``run_file_unreadable``, not a failure of the whole call.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from amoeba.operations.pause_class import (
     classify_pause,
     run_facts_needed,
 )
+from amoeba.operations.runs_document import OpenRun, RunCheckpoint
 from amoeba.operations.status_models import (
     CheckpointEntry,
     NextAction,
@@ -33,8 +35,7 @@ from amoeba.store.messages import effective_state, get_message
 from amoeba.store.models import AnswerRecord, QuestionRecord
 from amoeba.store.store import Transaction
 from amoeba.store.vocabulary import QuestionState, RequestState
-from amoeba.upstream.squadron.run_file import RunFacts, RunFileProblem, read_run_facts
-from amoeba.upstream.squadron.run_list import ListedCheckpoint, ListedRun
+from amoeba.upstream.squadron.run_file import ExecutionMode, RunFacts
 from amoeba.upstream.squadron.run_outcome import UnknownKind, parse_checkpoint_kind
 
 #: The classes ``handle_pause`` acts on: a missed hook, a dead claim, an answer left
@@ -95,32 +96,30 @@ def classify_runs(
     placed: tuple[PlacedRun, ...],
     rows: LatestRows,
     requests: RequestStates,
-    runs_dir: Path,
     claim_age_limit: float,
     now: datetime,
 ) -> list[MemberRun]:
-    """One entry per placed run, in the listing's order."""
+    """One entry per placed run, in the document's order."""
     return [
         MemberRun(
             item.member.project_id,
-            _entry(item.run, rows, requests, runs_dir, claim_age_limit, now),
+            _entry(item.run, rows, requests, claim_age_limit, now),
         )
         for item in placed
     ]
 
 
 def _entry(
-    run: ListedRun,
+    run: OpenRun,
     rows: LatestRows,
     requests: RequestStates,
-    runs_dir: Path,
     claim_age_limit: float,
     now: datetime,
 ) -> RunEntry:
-    directory = run.working_directory
-    if directory is None:
+    if run.working_directory is None:
         raise ValueError(f"run {run.run_id} was placed without a directory")
-    pause, detail = _pause_of(run, rows, requests, runs_dir, claim_age_limit, now)
+    directory = Path(run.working_directory)
+    pause, detail = _pause_of(run, rows, requests, claim_age_limit, now)
     next_action = None
     if isinstance(pause, PauseClass) and pause in HANDLED_BY_HANDLE_PAUSE:
         checkpoint = run.checkpoint
@@ -142,7 +141,7 @@ def _entry(
     )
 
 
-def _checkpoint_entry(checkpoint: ListedCheckpoint | None) -> CheckpointEntry | None:
+def _checkpoint_entry(checkpoint: RunCheckpoint | None) -> CheckpointEntry | None:
     if checkpoint is None:
         return None
     return CheckpointEntry(
@@ -153,10 +152,9 @@ def _checkpoint_entry(checkpoint: ListedCheckpoint | None) -> CheckpointEntry | 
 
 
 def _pause_of(
-    run: ListedRun,
+    run: OpenRun,
     rows: LatestRows,
     requests: RequestStates,
-    runs_dir: Path,
     claim_age_limit: float,
     now: datetime,
 ) -> tuple[PauseClass | RunFileUnreadable | None, str | None]:
@@ -173,12 +171,34 @@ def _pause_of(
     row, answer = _row_for_pause(rows, run.run_id, observed)
     facts: RunFacts | None = None
     if run_facts_needed(observed, row):
-        read = read_run_facts(runs_dir, run.run_id)
-        if isinstance(read, RunFileProblem):
-            return RunFileUnreadable.RUN_FILE_UNREADABLE, read.reason
+        read = _facts_of(run)
+        if isinstance(read, str):
+            return RunFileUnreadable.RUN_FILE_UNREADABLE, read
         facts = read
     pause_class = classify_pause(observed, row, answer, facts, claim_age_limit, now)
     return pause_class, _detail(pause_class, observed, answer, row, requests)
+
+
+def _facts_of(run: OpenRun) -> RunFacts | str:
+    """The run file's facts from the document, or the text saying why there are none."""
+    if run.run_file_problem is not None:
+        return run.run_file_problem
+    if run.run_file is None:
+        raise ValueError(
+            f"paused run {run.run_id} came with no run file facts or problem"
+        )
+    try:
+        mode = ExecutionMode(run.run_file.execution_mode)
+    except ValueError:
+        # A mode this code has no name for is that run's unreadable run file.
+        shown = run.run_file.execution_mode
+        return f"run file of {run.run_id} has execution mode {shown!r}"
+    directory = run.run_file.working_directory
+    return RunFacts(
+        params=dict(run.run_file.params),
+        execution_mode=mode,
+        working_directory=None if directory is None else Path(directory),
+    )
 
 
 def _row_for_pause(

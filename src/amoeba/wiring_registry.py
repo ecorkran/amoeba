@@ -20,6 +20,7 @@ from amoeba.operations.list_view import ListOutcome, list_view, needs_here
 from amoeba.operations.names import Door
 from amoeba.operations.rm import needs_here as rm_needs_here
 from amoeba.operations.rm import rm
+from amoeba.operations.run_gather import gather_machine_runs
 from amoeba.operations.set_up_models import SetUpResult
 from amoeba.store.store import Store
 
@@ -50,7 +51,9 @@ def place_list(
     directory: Path,
     deps: Deps,
 ) -> ListOutcome:
-    # The client part first, only for the default view (D5): ``list members`` and the
-    # other subjects read the store and need no ``cf`` call.
-    here = gather_caller(directory, deps.cf_run) if needs_here(document) else None
-    return list_view(store, config, document, directory=directory, here=here, deps=deps)
+    # The client part first, only for the default view (D5, D11): ``list members`` and
+    # the other subjects read the store and need no ``cf`` or ``sq`` call.
+    gathering = needs_here(document)
+    here = gather_caller(directory, deps.cf_run) if gathering else None
+    runs = gather_machine_runs(deps) if gathering else None
+    return list_view(store, config, document, here=here, runs=runs, deps=deps)

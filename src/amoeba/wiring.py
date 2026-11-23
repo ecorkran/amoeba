@@ -41,6 +41,7 @@ from amoeba.operations.processes import start_child
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
 from amoeba.operations.resume import LOG_STAMP_FORMAT, resume_bound_seconds
+from amoeba.operations.run_gather import gather_machine_runs
 from amoeba.operations.served import run_served
 from amoeba.operations.state_move import open_state_store, prepare_state_home
 from amoeba.operations.status import status
@@ -233,8 +234,9 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
             deps = default_deps(layout)
             # The client part first: a ``cf`` failure raises before any store work.
             here = gather_caller(where, deps.cf_run)
+            runs = gather_machine_runs(deps)
             return status(
-                store, load_config(), document, directory=where, here=here, deps=deps
+                store, load_config(), document, here=here, runs=runs, deps=deps
             )
         case (
             OperationName.DECISIONS

@@ -13,7 +13,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from enum import StrEnum
-from pathlib import Path
 from typing import Any, Final
 
 from pydantic import ValidationError, field_validator
@@ -37,6 +36,7 @@ from amoeba.operations.reject_codes import (
     unknown_program_problem,
     validation_problems,
 )
+from amoeba.operations.runs_document import RunsDocument
 from amoeba.operations.set_up_models import FrozenModel
 from amoeba.operations.status import status
 from amoeba.operations.status_models import StatusOutcome, StatusResult
@@ -131,18 +131,18 @@ def list_view(
     config: UserConfig,
     document: object,
     *,
-    directory: Path,
     here: HereCaller | HereNotAProject | None,
+    runs: RunsDocument | None,
     deps: Deps,
 ) -> ListOutcome:
     """Apply the ``list`` request ``document``, which is validated here.
 
-    ``here`` is the caller's gathered project, needed by the default view only
-    (``needs_here`` says when); ``directory`` still places runs until 12.2.
+    ``here`` is the caller's gathered project and ``runs`` the machine's gathered runs,
+    both needed by the default view only (``needs_here`` says when).
 
     Raises:
-        SquadronError: ``sq runs list --json`` gave no usable listing (default view).
-        ContextForgeError: ``cf`` gave no usable answer.
+        SquadronError: The runs document says ``sq runs list --json`` gave no usable
+            listing (default view).
         StoreError: The store cannot be used.
     """
     try:
@@ -150,7 +150,7 @@ def list_view(
     except ValidationError as error:
         return _rejected(RejectCode.MALFORMED, validation_problems(error))
     if request.subject is None:
-        return _default_view(store, config, request, directory, here, deps)
+        return _default_view(store, config, request, here, runs, deps)
     if request.all and request.subject in ALL_NOT_ACCEPTED:
         return _rejected(
             RejectCode.MALFORMED,
@@ -181,18 +181,18 @@ def _default_view(
     store: Store,
     config: UserConfig,
     request: ListRequest,
-    directory: Path,
     here: HereCaller | HereNotAProject | None,
+    runs: RunsDocument | None,
     deps: Deps,
 ) -> ListResult:
-    if here is None:
-        raise ValueError("the default list view needs the gathered caller")
+    if here is None or runs is None:
+        raise ValueError("the default list view needs the gathered caller and runs")
     result = status(
         store,
         config,
         {} if request.program is None else {"program": request.program},
-        directory=directory,
         here=here,
+        runs=runs,
         deps=deps,
     )
     if not request.all or result.outcome is StatusOutcome.REJECTED:
@@ -221,7 +221,8 @@ def _stored_name(transaction: Transaction, member_id: str) -> str:
 
 
 def needs_here(document: object) -> bool:
-    """Whether the gathered caller is needed: the default view (no subject) only.
+    """Whether the gathered caller and runs are needed: the default view (no subject)
+    only.
 
     A document that does not parse needs nothing; ``list_view`` rejects it."""
     try:

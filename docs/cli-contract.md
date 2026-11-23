@@ -622,7 +622,7 @@ nothing to show. After the result is built, `status` (and `list`'s default view)
 | `unplaced_runs` | paused runs no member could be found for: `run_id`, `status`, `reason`, `checkpoint_kind`, `detail` |
 | `closed_now` | what this call closed (closures made by `handle-pause` are in that call's calls-log `detail`, not here), so each automatic closure is seen once: `{program, member, run_id, paused_at, question, closed_reason, closed_detail}` for a question, and for an answer marked `not_delivered` the same with `answer_seq` and `resume_outcome` |
 | `sweep_problem` | set when the closing, or the message sweep, could not take the store's lock; nothing was closed and the rows show as before (both texts, joined, when both fail) |
-| `file_problems` | calls-log day files that could not be read, and entries `prune` could not remove |
+| `file_problems` | calls-log day files that could not be read, a sentence naming how many runs of each kind were left out when the machine's runs document passed its size limit (paused runs are kept first, so the runs listed under each member are paused runs first, then the others), and entries `prune` could not remove |
 | `problems` | one line per problem when `rejected` |
 
 `status` closes the open questions of the members in scope whose run is no longer at

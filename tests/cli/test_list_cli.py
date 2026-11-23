@@ -109,7 +109,9 @@ def test_list_all_text_adds_the_other_runs_after_the_sections_of_plain_list(
     assert everything.startswith(plain)
     extra = everything.removeprefix(plain)
     assert extra.lstrip("\n").startswith("Other runs\n")
-    assert f"  {PROJECT_NAME}\n    run-" in extra
+    # Paused runs come first in the runs document (261 D11), then the other runs.
+    assert f"  {PROJECT_NAME}\n    demo-" in extra
+    assert "\n    run-" in extra
     assert "Settled" not in extra  # nothing settled yet
 
 

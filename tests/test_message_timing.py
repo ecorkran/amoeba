@@ -6,10 +6,12 @@ checked against what the stub ``cf`` actually saw, so a lookup added to an opera
 without raising its constant fails here. Slice 242 adds the run-start term: ``send``,
 ``reply`` and ``cancel`` are followed by ``start_ended_held``, whose worst case is
 ``START_BOUND_SECONDS``. ``add``, ``rm``, ``status`` and ``list`` are followed by it
-too, but have no fixed worst case to add it to: they make one ``cf`` lookup per member
-or reference in the request (``add``, ``rm``) or per run directory in the listing
-(``status``, ``list``), a count no constant bounds. ``MCP_CALL_DEADLINE_SECONDS`` is
-their cap (242 D6).
+too. Their worst cases are in ``OTHER_START_WORST_CASE_SECONDS`` (261 D10, D11): ``rm``
+makes at most one gather, ``add`` at most one ``cf`` call and one ``git`` call, and
+``status`` and ``list`` make one ``cf get`` per distinct run directory, bounded by time
+and not by count (the listing, the shared gather time, and one call that starts just
+before it ends). ``MCP_CALL_DEADLINE_SECONDS`` is still their cap (242 D6). The message
+operations in ``RUNS`` and that table's keys together are ``START_AFTER_OPERATIONS``.
 """
 
 from __future__ import annotations
@@ -31,9 +33,11 @@ from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY, FakeCf
 
 from amoeba.mcp.in_process import MCP_CALL_DEADLINE_SECONDS
-from amoeba.operations.deps import Deps
+from amoeba.operations.deps import RUN_POLL_TIMEOUT_SECONDS, Deps
+from amoeba.operations.here import ORIGIN_READ_TIMEOUT_SECONDS
 from amoeba.operations.names import OperationName
 from amoeba.operations.request_release import MAX_STARTS_PER_CALL, START_BOUND_SECONDS
+from amoeba.operations.run_gather import RUNS_GATHER_SECONDS
 from amoeba.operations.wake import WAKE_BOUND_SECONDS
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.context_forge.project_of import CF_GET_TIMEOUT_SECONDS
@@ -46,11 +50,22 @@ from amoeba.wiring_messages import (
 )
 from amoeba.wiring_release import START_AFTER_OPERATIONS
 
-#: The start operations whose worst case scales with their input, so no fixed bound
-#: exists to check against the deadline (see the module docstring).
-UNBOUNDED_START_OPERATIONS = frozenset(
-    {OperationName.ADD, OperationName.RM, OperationName.STATUS, OperationName.LIST}
+#: The worst case of each start operation that is not a message operation, from the
+#: constants that bound its client part, plus the start trigger (see the docstring).
+_RUNS_VIEW_SECONDS = (
+    CF_GET_TIMEOUT_SECONDS  # the caller's directory
+    + RUN_POLL_TIMEOUT_SECONDS  # the sq listing
+    + RUNS_GATHER_SECONDS  # every directory lookup shares this
+    + CF_GET_TIMEOUT_SECONDS  # one lookup that starts just before it ends
 )
+OTHER_START_WORST_CASE_SECONDS: dict[OperationName, float] = {
+    OperationName.RM: CF_GET_TIMEOUT_SECONDS + START_BOUND_SECONDS,
+    OperationName.ADD: (
+        CF_GET_TIMEOUT_SECONDS + ORIGIN_READ_TIMEOUT_SECONDS + START_BOUND_SECONDS
+    ),
+    OperationName.STATUS: _RUNS_VIEW_SECONDS + START_BOUND_SECONDS,
+    OperationName.LIST: _RUNS_VIEW_SECONDS + START_BOUND_SECONDS,
+}
 
 #: Each operation run with an explicit ``member`` through its placement, which runs
 #: the client part (the one ``cf`` lookup) and then the operation.
@@ -189,8 +204,24 @@ def test_each_worst_case_with_the_start_is_below_the_mcp_call_deadline(
     check_below_deadline(_with_start(name), MCP_CALL_DEADLINE_SECONDS)
 
 
-def test_every_start_operation_is_either_bounded_here_or_named_unbounded() -> None:
-    bounded = START_AFTER_OPERATIONS & set(RUNS)
+def test_every_start_operation_has_a_worst_case_here() -> None:
+    message_operations = START_AFTER_OPERATIONS & set(RUNS)
+    tabled = set(OTHER_START_WORST_CASE_SECONDS)
 
-    assert bounded | UNBOUNDED_START_OPERATIONS == START_AFTER_OPERATIONS
-    assert not bounded & UNBOUNDED_START_OPERATIONS
+    assert message_operations | tabled == START_AFTER_OPERATIONS
+    assert not message_operations & tabled
+
+
+def test_the_runs_views_are_bounded_by_time_not_by_directory_count() -> None:
+    """One more run directory adds no time: the gather's own limit is in the figure."""
+    assert OTHER_START_WORST_CASE_SECONDS[OperationName.STATUS] == (
+        CF_GET_TIMEOUT_SECONDS
+        + RUN_POLL_TIMEOUT_SECONDS
+        + RUNS_GATHER_SECONDS
+        + CF_GET_TIMEOUT_SECONDS
+        + START_BOUND_SECONDS
+    )
+    assert (
+        OTHER_START_WORST_CASE_SECONDS[OperationName.LIST]
+        == OTHER_START_WORST_CASE_SECONDS[OperationName.STATUS]
+    )

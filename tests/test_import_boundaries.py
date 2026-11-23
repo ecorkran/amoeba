@@ -179,7 +179,11 @@ def test_the_hub_reaches_no_client_module_through_any_import() -> None:
 #: Modules the hub part uses to look up callers and members (slice 261, D5, D6): they
 #: import nothing from ``upstream``, so they never run ``cf``, ``git`` or ``sq``. A rule
 #: about one module is its own test: the tables above are per package.
-HUB_SIDE_MODULES = ("operations/caller.py", "operations/here_document.py")
+HUB_SIDE_MODULES = (
+    "operations/caller.py",
+    "operations/here_document.py",
+    "operations/runs_document.py",
+)
 
 
 @pytest.mark.parametrize("module", HUB_SIDE_MODULES)
