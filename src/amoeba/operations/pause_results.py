@@ -42,6 +42,8 @@ class PauseTarget:
     #: The checkout the question is claimed in.
     checkout: Path
     member: Member
+    #: The Context Forge id of ``checkout``, the id every ``cf -p`` call takes (261 D6).
+    cf_project_id: str
     run_facts: RunFacts
 
 

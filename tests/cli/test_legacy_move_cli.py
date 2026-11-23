@@ -18,17 +18,17 @@ from amoeba import wiring
 from amoeba.cli import commands
 from amoeba.cli import main as cli
 from amoeba.config.home import HOME_VARIABLE
-from amoeba.operations import served
+from amoeba.operations import served_runners
 from amoeba.upstream.squadron.errors import SquadronError
 
 #: Each command: the function its operation is reached through, and its arguments.
 STUBBED_OPERATIONS = (
-    ("add", "place_add", ["add", "--file"]),
-    ("rm", "place_rm", ["rm", "some-member"]),
-    ("list", "place_list", ["list"]),
+    ("add", "place_served", ["add", "--file"]),
+    ("rm", "place_served", ["rm", "some-member"]),
+    ("list", "place_served", ["list"]),
     ("handle-pause", "handle_pause", ["handle-pause", "run-1"]),
     ("answer", "answer", ["answer", "run-1", "--text", "yes"]),
-    ("status", "status", ["status"]),
+    ("status", "place_served", ["status"]),
     ("decisions", "decisions", ["decisions"]),
     ("mark-read", "mark_read", ["mark-read", "--through", "0"]),
 )
@@ -68,7 +68,7 @@ def test_the_move_happens_before_the_commands_own_work(
     module = (
         commands
         if command == "handle-pause"
-        else served
+        else served_runners
         if command in SERVED_COMMANDS
         else wiring
     )

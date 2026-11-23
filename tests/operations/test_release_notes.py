@@ -28,7 +28,6 @@ from amoeba.operations.release_notes import (
     NOTE_OUTCOMES,
     compose_release_note,
 )
-from amoeba.operations.report_release import report_release
 from amoeba.operations.report_release_models import (
     MAX_CHANGED_LENGTH,
     MAX_TOUCHED_ITEM_LENGTH,
@@ -42,6 +41,7 @@ from amoeba.store.programs import upsert_pair
 from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ConsumedMode
+from operations.release_placed import report_release
 from operations.release_support import (
     PROVIDER_DIR,
     RELEASE_CONSUMER,

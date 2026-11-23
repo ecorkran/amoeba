@@ -8,15 +8,17 @@ lock. The stored-row check, the write and the release notes (slice 243, D5) shar
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from pathlib import Path
 from typing import assert_never
 
 from pydantic import ValidationError
 
-from amoeba.operations.deps import Deps
+from amoeba.config.user_config import UserConfig
+from amoeba.operations.here_document import HereCaller, HereNotAProject
+from amoeba.operations.message_sweep import sweep_messages
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.release_member import resolve_release_member
 from amoeba.operations.release_notes import NOTE_OUTCOMES, write_release_notes
@@ -73,23 +75,43 @@ def _plan(request: ReportReleaseRequest, stored: Release | None) -> _Plan:
             assert_never(request.mode)
 
 
-def report_release(
-    store: Store, document: object, *, directory: Path, deps: Deps
+def report_release_swept(
+    store: Store,
+    config: UserConfig,
+    document: object,
+    *,
+    here: HereCaller | HereNotAProject,
+    clock: Callable[[], datetime],
 ) -> ReportReleaseResult:
-    """Apply ``document`` for the member whose checkout is ``directory``.
+    """``report_release`` after the message sweep: every write that adds a note also
+    sweeps (243 D6), before the report's own transaction and in its own. A held store
+    comes back as the sweep's problem text; the report still runs and its result carries
+    the text. Any other ``StoreError`` propagates."""
+    sweep_problem = sweep_messages(store, config, clock())
+    result = report_release(store, document, here=here, clock=clock)
+    return result.model_copy(update={"sweep_problem": sweep_problem})
+
+
+def report_release(
+    store: Store,
+    document: object,
+    *,
+    here: HereCaller | HereNotAProject,
+    clock: Callable[[], datetime],
+) -> ReportReleaseResult:
+    """Apply ``document`` for the member whose checkout is ``here``.
 
     Raises:
-        ContextForgeError: ``cf`` failed while finding the member.
         StoreError: The store cannot be used.
     """
     try:
         request = ReportReleaseRequest.model_validate(document)
     except ValidationError as error:
         return _rejected(None, malformed_problems(error))
-    member = resolve_release_member(store, directory, deps.cf_run)
+    member = resolve_release_member(store, here)
     if isinstance(member, ReleaseProblem):
         return _rejected(None, (member,))
-    now = deps.clock()
+    now = clock()
     with store.write() as transaction:
         stored = releases.release_for_commit(
             transaction, member.project_id, request.commit

@@ -60,7 +60,7 @@ Slice numbers are execution order. The first slice takes the plan's index (260).
 
 ## Feature Slices (in implementation order)
 
-2. [ ] **(261) Members by Name** — A member is known by a name on every machine.
+2. [x] **(261) Members by Name** — A member is known by a name on every machine.
    - **Schema.** A migration adds the member's name (unique) and its `origin`, and checkouts: a machine, that machine's Context Forge project id, the path, and the wake command, which moves here from the member's settings.
    - **Naming the members that exist.** The first call after the upgrade asks `cf` once for every member and records its name, checkout path and `origin`. A member `cf` no longer knows keeps its id as its name. Of two members with the same Context Forge name, the first registered gets it and the other keeps its id. Every other call runs this first if it has not run. `list` shows a member still named by its id.
    - **`add`.** It sends the checkout's `origin`, reduced to host and path. It looks for the `origin` first, then the name, with the four outcomes in the architecture. `--name` sets or changes the name. A wake command is accepted only for a checkout on the calling machine.

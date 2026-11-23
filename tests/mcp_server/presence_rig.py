@@ -18,6 +18,7 @@ from mcp.server.connection import Connection
 from mcp.shared.dispatcher import CallOptions
 from mcp_types.version import LATEST_HANDSHAKE_VERSION
 from store.message_support import send_request
+from store.seed import insert_checkout
 from store_open import open_local_store
 
 from amoeba.mcp.presence import (
@@ -104,8 +105,16 @@ def seed_member(path: Path, member_id: str = MEMBER_ID) -> None:
                 authorize_allow=(),
                 authorize_deny=(),
                 rules_from=RulesFrom.NAMED,
-                wake_command=None,
             ),
+            name=member_id,
+            now=START,
+        )
+        # The stub ``cf`` answers a directory with the member's own id.
+        insert_checkout(
+            transaction,
+            member_id=member_id,
+            cf_project_id=member_id,
+            path=f"/work/{member_id}",
             now=START,
         )
 

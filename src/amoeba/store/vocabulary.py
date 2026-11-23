@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
+from typing import Final
 
 
 class ConsumedMode(StrEnum):
@@ -128,3 +130,17 @@ class StandingReach(StrEnum):
 #: The reason ``rm`` writes on what a removed member leaves: its cancelled requests
 #: (240 D10) and its withdrawn member-reach standing answers (230 D8).
 MEMBER_REMOVED_REASON = "member_removed"
+
+
+#: A member's name (261 D1): excludes the ``:`` that ``--pair`` and ``--concept`` split
+#: on, and every Context Forge id matches it.
+MEMBER_NAME_PATTERN: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+MEMBER_NAME_MAX_LENGTH: Final = 64
+
+
+def is_member_name(candidate: str) -> bool:
+    """Whether ``candidate`` may be a member's name."""
+    return (
+        len(candidate) <= MEMBER_NAME_MAX_LENGTH
+        and MEMBER_NAME_PATTERN.fullmatch(candidate) is not None
+    )

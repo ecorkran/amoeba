@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from amoeba.store import sql_machines
+from amoeba.store.checkouts import delete_checkouts_on_machine
 from amoeba.store.errors import StoreError
 from amoeba.store.row_values import (
     encode_timestamp,
@@ -34,6 +35,11 @@ class ActingMachine:
 
     machine_id: int
     owner_id: int
+
+
+def acting_machine_id(transaction: Transaction) -> int:
+    """The machine this call acts as: the token's on a hub, ``local`` otherwise."""
+    return transaction.acting("checkouts").machine_id
 
 
 def the_owner(transaction: Transaction) -> int:
@@ -190,17 +196,17 @@ def list_machines(transaction: Transaction) -> list[MachineRow]:
 
 
 def remove_machine(transaction: Transaction, name: str) -> bool:
-    """Delete the machine, its session rows and its kept results, in the caller's one
-    transaction. Returns ``False`` when there is no such machine.
+    """Delete the machine, its session rows, its checkouts and its kept results, in the
+    caller's one transaction. Returns ``False`` when there is no such machine.
 
-    Slices 261 and 262 add what else a machine owns (its checkouts, then its open
-    questions, waiting answers and wakes) to this function (D13).
+    Members stay; one left with no checkout is shown that way (261 D14). Slice 262 adds
+    what else a machine owns (its open questions, waiting answers and wakes) to this
+    function (D13).
     """
-    if (
-        transaction.execute(sql_machines.SELECT_MACHINE_BY_NAME, (name,)).fetchone()
-        is None
-    ):
+    found = transaction.execute(sql_machines.SELECT_MACHINE_BY_NAME, (name,)).fetchone()
+    if found is None:
         return False
+    delete_checkouts_on_machine(transaction, int(found[0]))
     transaction.execute(sql_machines.DELETE_MACHINE_SESSIONS, (name,))
     transaction.execute(sql_machines.DELETE_MACHINE_RESULTS, (name,))
     transaction.execute(sql_machines.DELETE_MACHINE, (name,))

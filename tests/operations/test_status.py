@@ -12,17 +12,16 @@ from store.question_support import NOW, waiting_question
 from store_open import open_local_store
 from user_configs import user_config
 
-from amoeba.operations.members import ContextForgeError
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.operations.status import StatusOutcome, StatusResult, status
+from amoeba.operations.status import StatusOutcome, StatusResult
 from amoeba.operations.status_models import UnplacedReason, WaitingRunState
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.run_list import ListedRun, RunListProblem
+from operations.status_placed import status
 from operations.status_support import (
     CfAnswer,
     FakeCf,
@@ -75,11 +74,8 @@ def _run_status(
     *,
     directory: Path,
     document: object = None,
-    names: dict[str, str] | CfCallFailed | None = None,
 ) -> StatusResult:
-    deps = status_deps(
-        tmp_path, cf=cf, runs=runs, names=NAMES if names is None else names
-    )
+    deps = status_deps(tmp_path, cf=cf, runs=runs)
     return status(
         store,
         user_config(),
@@ -234,39 +230,13 @@ def test_an_sq_failure_raises_naming_the_command_and_status_needs(
         )
 
 
-def test_a_names_failure_raises(store: Store, tmp_path: Path, core_dir: Path) -> None:
-    with pytest.raises(ContextForgeError, match="cf is down"):
-        _run_status(
-            store,
-            tmp_path,
-            FakeCf({core_dir: CORE}),
-            [],
-            directory=core_dir,
-            names=CfCallFailed("cf is down"),
-        )
-
-
-def test_a_member_missing_from_the_names_raises(
-    store: Store, tmp_path: Path, core_dir: Path
-) -> None:
-    with pytest.raises(ContextForgeError, match=CORE):
-        _run_status(
-            store,
-            tmp_path,
-            FakeCf({core_dir: CORE}),
-            [],
-            directory=core_dir,
-            names={LINT: "lint-name"},
-        )
-
-
 def test_an_unknown_program_is_rejected_with_the_known_ids(
     store: Store, tmp_path: Path, elsewhere: Path
 ) -> None:
     result = _run_status(
         store,
         tmp_path,
-        FakeCf({}),
+        FakeCf({elsewhere: CfAnswer.NOT_A_PROJECT}),
         [],
         directory=elsewhere,
         document={"program": "nope"},
@@ -283,7 +253,12 @@ def test_a_malformed_request_is_rejected(
     store: Store, tmp_path: Path, elsewhere: Path, document: object
 ) -> None:
     result = _run_status(
-        store, tmp_path, FakeCf({}), [], directory=elsewhere, document=document
+        store,
+        tmp_path,
+        FakeCf({elsewhere: CfAnswer.NOT_A_PROJECT}),
+        [],
+        directory=elsewhere,
+        document=document,
     )
 
     assert result.outcome is StatusOutcome.REJECTED
@@ -297,7 +272,7 @@ def test_no_store_transaction_is_open_while_sq_is_asked(
         with store.write():  # fails if status still held a transaction open
             return []
 
-    deps = status_deps(tmp_path, cf=FakeCf({core_dir: CORE}), runs=[], names=NAMES)
+    deps = status_deps(tmp_path, cf=FakeCf({core_dir: CORE}), runs=[])
     deps = replace(deps, list_runs=list_runs)
 
     result = status(store, user_config(), {}, directory=core_dir, deps=deps)

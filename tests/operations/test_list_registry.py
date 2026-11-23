@@ -1,4 +1,4 @@
-"""``list``'s registered views against a stub ``cf`` (slice 229, D3, task 7.6)."""
+"""``list``'s registered views, read from the store alone (slice 229, D3; 261 D13)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 from store.question_support import NOW
-from store.seed import insert_member, insert_pair, insert_program
+from store.seed import insert_checkout, insert_member, insert_pair, insert_program
 from store_open import open_local_store
 from user_configs import user_config
 
@@ -20,24 +20,23 @@ from amoeba.operations.list_registry import (
     members_view,
     programs_view,
 )
-from amoeba.operations.members import ContextForgeError
 from amoeba.store.programs import remove_member
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import ConsumedMode, RulesFrom
-from operations.list_support import ListCf, project_entry
 
 CONFIG = user_config()
-PROJECTS = [
-    project_entry("with-path-id", "with-path", "/work/with-path"),
-    project_entry("no-path-id", "no-path"),
-    project_entry("consumer-id", "consumer", "/work/consumer"),
-]
+#: The member ids that have a checkout on the local machine, with its path.
+CHECKOUT_PATHS = {
+    "with-path-id": "/work/with-path",
+    "no-path-id": "/work/no-path",
+    "consumer-id": "/work/consumer",
+}
 
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
     """``demo``: with-path (concept, named rules), no-path (default rules),
-    a member CF forgot, a removed member and a consumer; ``hollow``: nothing."""
+    a member with no checkout, a removed member and a consumer; ``hollow``: nothing."""
     with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as tx:
             _seed(tx)
@@ -96,11 +95,21 @@ def _member(  # noqa: PLR0913 - a test row's named columns
         registered_at=NOW,
         updated_at=NOW,
         rules_from=RulesFrom.CONFIG_DEFAULT if from_default else RulesFrom.NAMED,
+        name=project_id.removesuffix("-id"),
     )
+    path = CHECKOUT_PATHS.get(project_id)
+    if path is not None:
+        insert_checkout(
+            tx,
+            member_id=project_id,
+            cf_project_id=f"cf-{project_id}",
+            path=path,
+            now=NOW,
+        )
 
 
-def _members(store: Store, cf: ListCf) -> MembersView:
-    return members_view(store, CONFIG, cf, program=None)
+def _members(store: Store) -> MembersView:
+    return members_view(store, CONFIG, program=None)
 
 
 def _row(view: MembersView, project_id: str) -> Any:
@@ -108,22 +117,43 @@ def _row(view: MembersView, project_id: str) -> Any:
     return row
 
 
-def test_a_project_with_no_path_has_a_name_and_a_null_path(store: Store) -> None:
-    row = _row(_members(store, ListCf(PROJECTS)), "no-path-id")
+def test_a_member_with_a_checkout_here_has_its_name_and_path(store: Store) -> None:
+    row = _row(_members(store), "no-path-id")
 
-    assert (row.name, row.path, row.in_context_forge) == ("no-path", None, True)
+    assert (row.name, row.path, row.in_context_forge) == (
+        "no-path",
+        "/work/no-path",
+        True,
+    )
+    assert [(c.machine, c.path, c.cf_project_id) for c in row.checkouts] == [
+        ("local", "/work/no-path", "cf-no-path-id")
+    ]
 
 
-def test_a_project_cf_no_longer_lists_is_marked_and_has_no_name_or_path(
+def test_a_member_with_no_checkout_is_marked_and_still_has_its_name(
     store: Store,
 ) -> None:
-    row = _row(_members(store, ListCf(PROJECTS)), "forgotten-id")
+    row = _row(_members(store), "forgotten-id")
 
-    assert (row.name, row.path, row.in_context_forge) == (None, None, False)
+    assert (row.name, row.path, row.in_context_forge) == ("forgotten", None, False)
+    assert row.checkouts == ()
+
+
+def test_the_origin_is_listed(store: Store) -> None:
+    with store.write() as tx:
+        tx.execute(
+            "UPDATE members SET origin = 'github.com/org/repo' "
+            "WHERE project_id = 'with-path-id'"
+        )
+
+    view = _members(store)
+
+    assert _row(view, "with-path-id").origin == "github.com/org/repo"
+    assert _row(view, "no-path-id").origin is None
 
 
 def test_a_removed_member_is_not_listed(store: Store) -> None:
-    view = _members(store, ListCf(PROJECTS))
+    view = _members(store)
 
     assert "removed-id" not in [row.project_id for row in view.members]
     assert [row.project_id for row in view.members] == [
@@ -137,7 +167,7 @@ def test_a_removed_member_is_not_listed(store: Store) -> None:
 def test_a_named_member_shows_its_stored_rules_and_a_default_member_the_configs(
     store: Store,
 ) -> None:
-    view = _members(store, ListCf(PROJECTS))
+    view = _members(store)
 
     named = _row(view, "with-path-id")
     default = _row(view, "no-path-id")
@@ -154,14 +184,14 @@ def test_a_named_member_shows_its_stored_rules_and_a_default_member_the_configs(
 def test_a_default_member_follows_a_config_edit(store: Store) -> None:
     edited = CONFIG.model_copy(update={"default_rules_paths": ("RULES.md",)})
 
-    view = members_view(store, edited, ListCf(PROJECTS), program=None)
+    view = members_view(store, edited, program=None)
 
     assert _row(view, "no-path-id").rules_paths == ("RULES.md",)
     assert _row(view, "with-path-id").rules_paths == ("CLAUDE.md", "docs/*.md")
 
 
 def test_a_member_row_carries_its_lists_and_dependencies(store: Store) -> None:
-    view = _members(store, ListCf(PROJECTS))
+    view = _members(store)
 
     assert _row(view, "with-path-id").authorize_allow == ("push",)
     assert _row(view, "no-path-id").authorize_deny == ("deploy",)
@@ -172,23 +202,15 @@ def test_a_member_row_carries_its_lists_and_dependencies(store: Store) -> None:
     assert _row(view, "with-path-id").depends_on == ()
 
 
-def test_members_cost_one_cf_listing(store: Store) -> None:
-    cf = ListCf(PROJECTS)
-
-    _members(store, cf)
-
-    assert cf.listings == 1
-
-
 def test_the_program_filter_narrows_members(store: Store) -> None:
-    view = members_view(store, CONFIG, ListCf(PROJECTS), program="hollow")
+    view = members_view(store, CONFIG, program="hollow")
 
     assert view.members == ()
 
 
 def test_a_program_with_no_members_is_hidden_then_shown_with_all(store: Store) -> None:
-    hidden = programs_view(store, ListCf(PROJECTS), program=None, show_empty=False)
-    shown = programs_view(store, ListCf(PROJECTS), program=None, show_empty=True)
+    hidden = programs_view(store, program=None, show_empty=False)
+    shown = programs_view(store, program=None, show_empty=True)
 
     assert [row.program for row in hidden.programs] == ["demo"]
     assert [row.program for row in shown.programs] == ["demo", "hollow"]
@@ -207,9 +229,10 @@ def test_a_hidden_program_is_refilled_by_a_member(store: Store) -> None:
             authorize_deny=(),
             registered_at=NOW,
             updated_at=NOW,
+            name="newcomer",
         )
 
-    view = programs_view(store, ListCf(PROJECTS), program=None, show_empty=False)
+    view = programs_view(store, program=None, show_empty=False)
 
     assert [row.program for row in view.programs] == ["demo", "hollow"]
 
@@ -217,9 +240,7 @@ def test_a_hidden_program_is_refilled_by_a_member(store: Store) -> None:
 def test_a_program_lists_its_concept_and_its_active_members_only(
     store: Store,
 ) -> None:
-    (demo,) = programs_view(
-        store, ListCf(PROJECTS), program="demo", show_empty=False
-    ).programs
+    (demo,) = programs_view(store, program="demo", show_empty=False).programs
 
     assert demo.concept is not None
     assert (demo.concept.member, demo.concept.path) == (
@@ -229,14 +250,12 @@ def test_a_program_lists_its_concept_and_its_active_members_only(
     assert demo.members == ("consumer-id", "forgotten-id", "no-path-id", "with-path-id")
 
 
-def test_a_program_names_its_members_and_marks_a_gone_one(store: Store) -> None:
-    (demo,) = programs_view(
-        store, ListCf(PROJECTS), program="demo", show_empty=False
-    ).programs
+def test_a_program_names_its_members(store: Store) -> None:
+    (demo,) = programs_view(store, program="demo", show_empty=False).programs
 
     assert demo.names == {
         "consumer-id": "consumer",
-        "forgotten-id": None,
+        "forgotten-id": "forgotten",
         "no-path-id": "no-path",
         "with-path-id": "with-path",
     }
@@ -244,14 +263,15 @@ def test_a_program_names_its_members_and_marks_a_gone_one(store: Store) -> None:
 
 def test_a_program_with_only_a_concept_is_not_hidden(store: Store) -> None:
     with store.write() as tx:
+        _member(tx, "somebody")
         _program(tx, "conceptual", concept=("somebody", "docs/c.md"))
 
-    view = programs_view(store, ListCf(PROJECTS), program=None, show_empty=False)
+    view = programs_view(store, program=None, show_empty=False)
 
     assert "conceptual" in [row.program for row in view.programs]
 
 
-def test_dependencies_name_both_ends_and_mark_a_gone_one(store: Store) -> None:
+def test_dependencies_name_both_ends(store: Store) -> None:
     with store.write() as tx:
         insert_pair(
             tx,
@@ -263,7 +283,7 @@ def test_dependencies_name_both_ends_and_mark_a_gone_one(store: Store) -> None:
             updated_at=NOW,
         )
 
-    view = dependencies_view(store, ListCf(PROJECTS), program=None)
+    view = dependencies_view(store, program=None)
 
     rows = {(r.provider_id, r.consumer_id): r for r in view.dependencies}
     known = rows[("with-path-id", "consumer-id")]
@@ -273,28 +293,13 @@ def test_dependencies_name_both_ends_and_mark_a_gone_one(store: Store) -> None:
         ConsumedMode.FROM_RELEASE,
     )
     gone = rows[("forgotten-id", "no-path-id")]
-    assert (gone.provider_name, gone.consumer_name) == (None, "no-path")
-
-
-@pytest.mark.parametrize("view", ["programs", "members", "dependencies"])
-def test_cf_failing_raises_with_no_partial_view(store: Store, view: str) -> None:
-    cf = ListCf(None)
-
-    with pytest.raises(ContextForgeError):
-        if view == "programs":
-            programs_view(store, cf, program=None, show_empty=False)
-        elif view == "members":
-            _members(store, cf)
-        else:
-            dependencies_view(store, cf, program=None)
+    assert (gone.provider_name, gone.consumer_name) == ("forgotten", "no-path")
 
 
 def test_each_views_json_has_its_documented_shape(store: Store) -> None:
-    cf = ListCf(PROJECTS)
-
-    programs = programs_view(store, ListCf(PROJECTS), program=None, show_empty=False)
-    members = _members(store, cf)
-    dependencies = dependencies_view(store, cf, program=None)
+    programs = programs_view(store, program=None, show_empty=False)
+    members = _members(store)
+    dependencies = dependencies_view(store, program=None)
 
     assert set(programs.model_dump(mode="json")) == {"programs"}
     assert set(programs.model_dump(mode="json")["programs"][0]) == {
@@ -315,6 +320,8 @@ def test_each_views_json_has_its_documented_shape(store: Store) -> None:
         "authorize_deny",
         "wake_command",
         "depends_on",
+        "origin",
+        "checkouts",
     }
     assert set(dependencies.model_dump(mode="json")["dependencies"][0]) == {
         "provider_id",

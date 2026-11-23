@@ -1,19 +1,18 @@
 """``standing``: record a ruling the PM gave ahead of time (slice 230, D2, D10).
 
 The document is validated here, so the CLI and the MCP layer pass their input through
-unchanged. ``--member`` is resolved by the caller's resolver (``cf`` locally), before
-the write transaction opens, so no subprocess runs while the write lock is held. The
-lookup of the program or member and the give are then one transaction, so a repeat
+unchanged. ``--member`` is a member's name or id, found in the store (261 D6); no ``cf``
+runs. The lookup of the program or member and the give are one transaction, so a repeat
 of the same call finds the row the first one wrote.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import datetime
 
 from pydantic import ValidationError
 
+from amoeba.operations.caller import find_member
 from amoeba.operations.reject_codes import validation_problems
 from amoeba.operations.standing_fit import overflow
 from amoeba.operations.standing_models import (
@@ -22,14 +21,10 @@ from amoeba.operations.standing_models import (
     StandingRequest,
     StandingResult,
 )
-from amoeba.store.programs import get_member, get_program
+from amoeba.store.programs import get_program
 from amoeba.store.standing import give_standing
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import StandingReach
-
-#: Resolves ``--member`` to a member id, or ``None`` when no active member goes by
-#: that reference. The local way asks Context Forge; the hub takes only an id (260 D11).
-type MemberResolver = Callable[[str], str | None]
 
 
 def standing(
@@ -37,7 +32,6 @@ def standing(
     document: object,
     *,
     max_chars: int,
-    resolve_member: MemberResolver,
     now: datetime,
 ) -> StandingResult:
     """Give the standing answer ``document`` describes, or find the same one active.
@@ -47,7 +41,6 @@ def standing(
     ``too_long`` and rolled back, rather than found at the next pause.
 
     Raises:
-        ContextForgeError: The local resolver's ``cf`` failed; nothing was written.
         StoreError: The store cannot be used; nothing was written.
     """
     try:
@@ -56,12 +49,9 @@ def standing(
         return StandingResult.rejected(
             StandingRejection.MALFORMED, validation_problems(error)
         )
-    member_id = None if request.member is None else resolve_member(request.member)
-    if request.member is not None and member_id is None:
-        return _no_such_member(request.member)
     reach = _reach(request)
     try:
-        return _give(store, request, reach, member_id, max_chars, now)
+        return _give(store, request, reach, max_chars, now)
     except _Overflow as refused:
         return StandingResult.rejected(StandingRejection.TOO_LONG, (str(refused),))
 
@@ -74,11 +64,16 @@ def _give(  # noqa: PLR0913 - the request and what standing resolved for it
     store: Store,
     request: StandingRequest,
     reach: StandingReach,
-    member_id: str | None,
     max_chars: int,
     now: datetime,
 ) -> StandingResult:
     with store.write() as transaction:
+        member_id: str | None = None
+        if request.member is not None:
+            member = find_member(transaction, request.member)
+            if member is None:
+                return _no_such_member(request.member)
+            member_id = member.project_id
         if request.program is not None and (
             get_program(transaction, request.program) is None
         ):
@@ -86,8 +81,6 @@ def _give(  # noqa: PLR0913 - the request and what standing resolved for it
                 StandingRejection.NO_SUCH_PROGRAM,
                 (f"no program {request.program}",),
             )
-        if member_id is not None and get_member(transaction, member_id) is None:
-            return _no_such_member(request.member)
         standing_id, created = give_standing(
             transaction, request.text, reach, request.program, member_id, now
         )

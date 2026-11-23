@@ -28,17 +28,21 @@ from fake_sq import (
 from live_environment import process_environment
 from process_containment import contained_popen
 from store.decision_support import at, automatic_answer, seed_programs
+from store.seed import insert_checkout
 from store_open import open_local_store
 from user_configs import example_config_text
 
 from amoeba.cli.main import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE
 from amoeba.config.home import config_path, store_path
+from amoeba.store.member_names import set_member_name
 from amoeba.store.models import QuestionKey
 
 AMOEBA = Path(sys.executable).with_name("amoeba")
 RUN_TIMEOUT_SECONDS = 60
 SYSTEM_PATH = "/usr/bin:/bin"
 PROJECT_ID: str = fixture_document(DEFAULT_WORKTREE)["id"]
+PROJECT_NAME: str = fixture_document(DEFAULT_WORKTREE)["name"]
+DEFAULT_PATH: str = fixture_document(DEFAULT_WORKTREE)["projectPath"]
 ASKED = QuestionKey("run-1", "2026-11-10T09:00:00+00:00")
 
 
@@ -93,9 +97,20 @@ def _seed_one_answer() -> int:
     with open_local_store(store_path()) as store:
         seed_programs(store)
         with store.write() as transaction:
+            # The member is re-keyed to the default worktree's project, so its
+            # checkout is made again under the new key.
+            transaction.execute("DELETE FROM checkouts WHERE member_id = 'member-core'")
             transaction.execute(
                 "UPDATE members SET project_id = ? WHERE project_id = 'member-core'",
                 (PROJECT_ID,),
+            )
+            set_member_name(transaction, PROJECT_ID, PROJECT_NAME, at(0))
+            insert_checkout(
+                transaction,
+                member_id=PROJECT_ID,
+                cf_project_id=PROJECT_ID,
+                path=DEFAULT_PATH,
+                now=at(0),
             )
         return automatic_answer(store, ASKED, PROJECT_ID, 1)
 

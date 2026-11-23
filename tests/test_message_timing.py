@@ -1,14 +1,17 @@
 """The message operations stay inside the MCP call deadline (slice 240, Timeouts).
 
-Each operation's worst case is its ``cf`` lookups at their timeout plus its store waits
-at theirs. The lookup counts are checked against what the stub ``cf`` actually saw, so
-a lookup added to an operation without raising its constant fails here. Slice 242
-adds the run-start term: ``send``, ``reply`` and ``cancel`` are followed by
-``start_ended_held``, whose worst case is ``START_BOUND_SECONDS``. ``add``, ``rm``,
-``status`` and ``list`` are followed by it too, but have no fixed worst case to add it
-to: they make one ``cf`` lookup per member or reference in the request (``add``,
-``rm``) or per run directory in the listing (``status``, ``list``), a count no constant
-bounds. ``MCP_CALL_DEADLINE_SECONDS`` is their cap (242 D6).
+Each operation's worst case is its ``cf`` lookup at its timeout (the one ``cf get`` of
+the caller's directory, 261 D10) plus its store waits at theirs. The lookup counts are
+checked against what the stub ``cf`` actually saw, so a lookup added to an operation
+without raising its constant fails here. Slice 242 adds the run-start term: ``send``,
+``reply`` and ``cancel`` are followed by ``start_ended_held``, whose worst case is
+``START_BOUND_SECONDS``. ``add``, ``rm``, ``status`` and ``list`` are followed by it
+too. Their worst cases are in ``OTHER_START_WORST_CASE_SECONDS`` (261 D10, D11): ``rm``
+makes at most one gather, ``add`` at most one ``cf`` call and one ``git`` call, and
+``status`` and ``list`` make one ``cf get`` per distinct run directory, bounded by time
+and not by count (the listing, the shared gather time, and one call that starts just
+before it ends). ``MCP_CALL_DEADLINE_SECONDS`` is still their cap (242 D6). The message
+operations in ``RUNS`` and that table's keys together are ``START_AFTER_OPERATIONS``.
 """
 
 from __future__ import annotations
@@ -30,16 +33,16 @@ from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY, FakeCf
 
 from amoeba.mcp.in_process import MCP_CALL_DEADLINE_SECONDS
-from amoeba.operations.cancel import cancel
-from amoeba.operations.deps import Deps
-from amoeba.operations.inbox import inbox
+from amoeba.operations.deps import RUN_POLL_TIMEOUT_SECONDS, Deps
+from amoeba.operations.here import ORIGIN_READ_TIMEOUT_SECONDS
 from amoeba.operations.names import OperationName
-from amoeba.operations.reply import reply
 from amoeba.operations.request_release import MAX_STARTS_PER_CALL, START_BOUND_SECONDS
-from amoeba.operations.send import send
+from amoeba.operations.run_gather import RUNS_GATHER_SECONDS
 from amoeba.operations.wake import WAKE_BOUND_SECONDS
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
+from amoeba.store.vocabulary import Door
 from amoeba.upstream.context_forge.project_of import CF_GET_TIMEOUT_SECONDS
+from amoeba.wiring_gather import place_served
 from amoeba.wiring_messages import (
     MESSAGE_LOOKUPS,
     MESSAGE_STORE_WAITS,
@@ -48,18 +51,37 @@ from amoeba.wiring_messages import (
 )
 from amoeba.wiring_release import START_AFTER_OPERATIONS
 
-#: The start operations whose worst case scales with their input, so no fixed bound
-#: exists to check against the deadline (see the module docstring).
-UNBOUNDED_START_OPERATIONS = frozenset(
-    {OperationName.ADD, OperationName.RM, OperationName.STATUS, OperationName.LIST}
+#: The worst case of each start operation that is not a message operation, from the
+#: constants that bound its client part, plus the start trigger (see the docstring).
+_RUNS_VIEW_SECONDS = (
+    CF_GET_TIMEOUT_SECONDS  # the caller's directory
+    + RUN_POLL_TIMEOUT_SECONDS  # the sq listing
+    + RUNS_GATHER_SECONDS  # every directory lookup shares this
+    + CF_GET_TIMEOUT_SECONDS  # one lookup that starts just before it ends
 )
+OTHER_START_WORST_CASE_SECONDS: dict[OperationName, float] = {
+    OperationName.RM: CF_GET_TIMEOUT_SECONDS + START_BOUND_SECONDS,
+    OperationName.ADD: (
+        CF_GET_TIMEOUT_SECONDS + ORIGIN_READ_TIMEOUT_SECONDS + START_BOUND_SECONDS
+    ),
+    OperationName.STATUS: _RUNS_VIEW_SECONDS + START_BOUND_SECONDS,
+    OperationName.LIST: _RUNS_VIEW_SECONDS + START_BOUND_SECONDS,
+}
 
-#: Each operation run with an explicit ``member``, so every lookup it can make happens.
+#: Each operation run with an explicit ``member`` through its placement, which runs
+#: the client part (the one ``cf`` lookup) and then the operation.
 type Run = Callable[[Store, Deps], object]
+
+
+def _placed(name: MessageOperation, document: dict[str, object]) -> Run:
+    return lambda store, deps: place_served(
+        name, store, document, DIRECTORY, Door.CLI, deps, lambda: CONFIG
+    )
+
+
 RUNS: dict[MessageOperation, Run] = {
-    OperationName.SEND: lambda store, deps: send(
-        store,
-        CONFIG,
+    OperationName.SEND: _placed(
+        OperationName.SEND,
         {
             "id": "ask",
             "to": RECIPIENT_NAME,
@@ -67,25 +89,13 @@ RUNS: dict[MessageOperation, Run] = {
             "body": "b",
             "member": SENDER_NAME,
         },
-        directory=DIRECTORY,
-        deps=deps,
     ),
-    OperationName.INBOX: lambda store, deps: inbox(
-        store, {"member": SENDER_NAME}, directory=DIRECTORY, deps=deps
+    OperationName.INBOX: _placed(OperationName.INBOX, {"member": SENDER_NAME}),
+    OperationName.REPLY: _placed(
+        OperationName.REPLY, {"id": "ask", "action": "accept", "member": SENDER_NAME}
     ),
-    OperationName.REPLY: lambda store, deps: reply(
-        store,
-        CONFIG,
-        {"id": "ask", "action": "accept", "member": SENDER_NAME},
-        directory=DIRECTORY,
-        deps=deps,
-    ),
-    OperationName.CANCEL: lambda store, deps: cancel(
-        store,
-        CONFIG,
-        {"id": "ask", "member": SENDER_NAME},
-        directory=DIRECTORY,
-        deps=deps,
+    OperationName.CANCEL: _placed(
+        OperationName.CANCEL, {"id": "ask", "member": SENDER_NAME}
     ),
 }
 
@@ -115,12 +125,12 @@ def test_an_operation_makes_no_more_cf_lookups_than_its_constant(
     assert len(cf.calls) == MESSAGE_LOOKUPS[name]
 
 
-def test_send_makes_three_lookups_and_the_others_two() -> None:
+def test_each_message_operation_makes_one_lookup() -> None:
     assert MESSAGE_LOOKUPS == {
-        OperationName.SEND: 3,
-        OperationName.INBOX: 2,
-        OperationName.REPLY: 2,
-        OperationName.CANCEL: 2,
+        OperationName.SEND: 1,
+        OperationName.INBOX: 1,
+        OperationName.REPLY: 1,
+        OperationName.CANCEL: 1,
     }
     assert MESSAGE_STORE_WAITS == 3
 
@@ -195,8 +205,24 @@ def test_each_worst_case_with_the_start_is_below_the_mcp_call_deadline(
     check_below_deadline(_with_start(name), MCP_CALL_DEADLINE_SECONDS)
 
 
-def test_every_start_operation_is_either_bounded_here_or_named_unbounded() -> None:
-    bounded = START_AFTER_OPERATIONS & set(RUNS)
+def test_every_start_operation_has_a_worst_case_here() -> None:
+    message_operations = START_AFTER_OPERATIONS & set(RUNS)
+    tabled = set(OTHER_START_WORST_CASE_SECONDS)
 
-    assert bounded | UNBOUNDED_START_OPERATIONS == START_AFTER_OPERATIONS
-    assert not bounded & UNBOUNDED_START_OPERATIONS
+    assert message_operations | tabled == START_AFTER_OPERATIONS
+    assert not message_operations & tabled
+
+
+def test_the_runs_views_are_bounded_by_time_not_by_directory_count() -> None:
+    """One more run directory adds no time: the gather's own limit is in the figure."""
+    assert OTHER_START_WORST_CASE_SECONDS[OperationName.STATUS] == (
+        CF_GET_TIMEOUT_SECONDS
+        + RUN_POLL_TIMEOUT_SECONDS
+        + RUNS_GATHER_SECONDS
+        + CF_GET_TIMEOUT_SECONDS
+        + START_BOUND_SECONDS
+    )
+    assert (
+        OTHER_START_WORST_CASE_SECONDS[OperationName.LIST]
+        == OTHER_START_WORST_CASE_SECONDS[OperationName.STATUS]
+    )

@@ -9,9 +9,11 @@ Claimed and answered questions are not here; they appear as their run's ``pause`
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from amoeba.answering.values import REQUEST_DECLINE_REASONS
+from amoeba.operations.runs_document import RunStanding
 from amoeba.operations.status_models import (
     NextAction,
     NextOperation,
@@ -19,7 +21,6 @@ from amoeba.operations.status_models import (
     WaitingRunState,
 )
 from amoeba.store.models import QuestionRecord
-from amoeba.upstream.squadron.run_list import ListedRun
 
 __all__ = ["MemberWaiting", "WaitingRunState", "waiting_entries"]
 
@@ -33,10 +34,9 @@ class MemberWaiting:
 
 
 def waiting_entries(
-    open_questions: tuple[QuestionRecord, ...], listed: list[ListedRun]
+    open_questions: tuple[QuestionRecord, ...], runs: Mapping[str, RunStanding]
 ) -> list[MemberWaiting]:
     """One entry per question, in ``open_questions``'s order (oldest first)."""
-    runs = {run.run_id: run for run in listed}
     return [
         MemberWaiting(
             question.member_id, _entry(question, runs.get(question.key.run_id))
@@ -45,7 +45,7 @@ def waiting_entries(
     ]
 
 
-def _entry(question: QuestionRecord, run: ListedRun | None) -> WaitingEntry:
+def _entry(question: QuestionRecord, run: RunStanding | None) -> WaitingEntry:
     state, detail = _where(question, run)
     next_action = None
     if state is WaitingRunState.AT_PAUSE:
@@ -74,16 +74,15 @@ def _entry(question: QuestionRecord, run: ListedRun | None) -> WaitingEntry:
 
 
 def _where(
-    question: QuestionRecord, run: ListedRun | None
+    question: QuestionRecord, run: RunStanding | None
 ) -> tuple[WaitingRunState, str | None]:
     if run is None:
         return WaitingRunState.NOT_LISTED, None
-    checkpoint = run.checkpoint
-    if run.is_paused and checkpoint is not None:
-        if checkpoint.paused_at == question.key.paused_at:
+    if run.is_paused and run.has_checkpoint:
+        if run.paused_at == question.key.paused_at:
             return WaitingRunState.AT_PAUSE, None
         return (
             WaitingRunState.MOVED_ON,
-            f"the run is paused at a later pause ({checkpoint.paused_at})",
+            f"the run is paused at a later pause ({run.paused_at})",
         )
     return WaitingRunState.MOVED_ON, f"the run is {run.status}"

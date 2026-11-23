@@ -2,9 +2,10 @@
 
 ``git_read`` runs under the call timeout with stdin closed and prompts disabled, and
 refuses any subcommand outside :data:`GIT_SUBCOMMANDS`. Amoeba never merges, commits,
-checks out, resets, stashes, deletes a branch or pushes, so the allowlist is three read
+checks out, resets, stashes, deletes a branch or pushes, so the allowlist is four read
 commands: ``show``, ``log`` and ``ls-tree`` for objects at a pinned commit (never the
-working tree).
+working tree), and ``remote``, accepted only as exactly ``remote get-url origin``, so
+no remote can be added, changed or removed through it (slice 261, D3).
 """
 
 from __future__ import annotations
@@ -27,10 +28,11 @@ GIT_EXECUTABLE: Final = "git"
 SUBCOMMAND_SHOW: Final = "show"
 SUBCOMMAND_LOG: Final = "log"
 SUBCOMMAND_LS_TREE: Final = "ls-tree"
+SUBCOMMAND_REMOTE: Final = "remote"
 
 #: The only subcommands Amoeba may run; anything else is a programming error.
 GIT_SUBCOMMANDS: Final = frozenset(
-    {SUBCOMMAND_SHOW, SUBCOMMAND_LOG, SUBCOMMAND_LS_TREE}
+    {SUBCOMMAND_SHOW, SUBCOMMAND_LOG, SUBCOMMAND_LS_TREE, SUBCOMMAND_REMOTE}
 )
 
 #: Keeps git from waiting on credentials: with stdin closed it fails instead.
@@ -93,6 +95,15 @@ def last_change_args(commit: str, path: str) -> tuple[str, ...]:
     return (SUBCOMMAND_LOG, "-1", "--format=%cI", commit, "--", path)
 
 
+def remote_origin_args() -> tuple[str, ...]:
+    """``remote get-url origin``: the address of the ``origin`` remote.
+
+    The one form of ``remote`` ``git_read`` runs. Git prints the address as stored,
+    which can hold a password, so only ``operations.origin`` should read the output.
+    """
+    return (SUBCOMMAND_REMOTE, "get-url", "origin")
+
+
 def _subcommand(args: tuple[str, ...]) -> str:
     """The first argument that is not an option."""
     for arg in args:
@@ -114,11 +125,14 @@ def git_read(
         completed command.
 
     Raises:
-        ValueError: ``args`` names a subcommand outside :data:`GIT_SUBCOMMANDS`.
+        ValueError: ``args`` names a subcommand outside :data:`GIT_SUBCOMMANDS`, or
+            ``remote`` with anything but :func:`remote_origin_args`.
     """
     subcommand = _subcommand(args)
     if subcommand not in GIT_SUBCOMMANDS:
         raise ValueError(f"git {subcommand} is not an allowed read")
+    if subcommand == SUBCOMMAND_REMOTE and args != remote_origin_args():
+        raise ValueError("git remote is allowed only as `remote get-url origin`")
     env = {**os.environ, **_ENV_NO_PROMPT}
     answer = run_cf(
         (GIT_EXECUTABLE, *args), partial(run, cwd=cwd, env=env), timeout_seconds

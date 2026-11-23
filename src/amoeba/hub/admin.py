@@ -88,7 +88,7 @@ def machines(layout: StateLayout) -> list[MachineRow]:
 
 
 def rm_machine(layout: StateLayout, name: str) -> None:
-    """Delete the machine, its sessions and its kept results in one transaction.
+    """Delete the machine, its sessions, checkouts and kept results in one transaction.
 
     Raises:
         AdminRejection: There is no such machine.

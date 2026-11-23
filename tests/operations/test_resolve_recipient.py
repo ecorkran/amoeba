@@ -1,4 +1,7 @@
-"""`resolve_recipient` returns the checkout path and the wake command (244, D4)."""
+"""`resolve_recipient` finds the active member by name or id (244, D4; 261, D6, D9).
+
+The recipient carries only the member's id: the wake path and command come from a
+checkout inside the claim (``tests/store/test_wake_on_checkout.py``)."""
 
 from __future__ import annotations
 
@@ -7,52 +10,60 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from cf_fixtures import DEFAULT_WORKTREE
-from store.message_support import seed_members
+from store.message_support import NOW, seed_members
+from store.seed import insert_checkout
 from store_open import open_local_store
 
-from amoeba.operations.message_member import Recipient, resolve_recipient
+from amoeba.operations.message_member import (
+    Recipient,
+    Refusal,
+    recipient_of,
+    resolve_recipient,
+)
 from amoeba.store.store import Store
-from operations.set_up_support import FakeCf
-from operations.wake_send_support import CHECKOUT, COMMAND
+from operations.wake_send_support import CHECKOUT
 
 KNOWN_ID = "known-project-id"
 KNOWN_NAME = "known-project-name"
-UNKNOWN_TO_CF = "id-context-forge-does-not-know"
+WITH_NO_CHECKOUT = "id-with-no-checkout"
 
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
     with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
-            seed_members(transaction, KNOWN_ID, UNKNOWN_TO_CF)
-            transaction.execute(
-                "UPDATE members SET wake_command = ? WHERE project_id = ?",
-                (COMMAND, KNOWN_ID),
+            seed_members(
+                transaction,
+                KNOWN_ID,
+                WITH_NO_CHECKOUT,
+                names={KNOWN_ID: KNOWN_NAME},
+            )
+            insert_checkout(
+                transaction,
+                member_id=KNOWN_ID,
+                cf_project_id=KNOWN_ID,
+                path=str(CHECKOUT),
+                now=NOW,
             )
         yield opened
 
 
-def _cf() -> FakeCf:
-    return FakeCf(directory_fixture=DEFAULT_WORKTREE, projects=[(KNOWN_ID, KNOWN_NAME)])
-
-
-@pytest.mark.parametrize("reference", [KNOWN_ID, KNOWN_NAME])
-def test_the_path_is_returned_for_a_reference_context_forge_knows(
+@pytest.mark.parametrize("reference", [KNOWN_ID, KNOWN_NAME, KNOWN_NAME.upper()])
+def test_a_member_is_found_by_name_in_any_case_or_by_id(
     store: Store, reference: str
 ) -> None:
-    recipient = resolve_recipient(store, reference, _cf())
-
-    assert recipient == Recipient(KNOWN_ID, str(CHECKOUT), COMMAND)
+    assert recipient_of(store, reference) == Recipient(KNOWN_ID)
 
 
-def test_the_path_is_null_for_a_reference_read_as_an_id(store: Store) -> None:
-    recipient = resolve_recipient(store, UNKNOWN_TO_CF, _cf())
-
-    assert recipient == Recipient(UNKNOWN_TO_CF, None, None)
+def test_a_member_with_no_checkout_here_is_still_a_recipient(store: Store) -> None:
+    assert recipient_of(store, WITH_NO_CHECKOUT) == Recipient(WITH_NO_CHECKOUT)
 
 
-def test_the_member_is_read_once_for_the_id_the_path_and_the_command(
+def test_an_unknown_reference_is_refused(store: Store) -> None:
+    assert isinstance(recipient_of(store, "nobody"), Refusal)
+
+
+def test_the_member_is_read_in_one_transaction(
     store: Store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     reads = 0
@@ -65,6 +76,11 @@ def test_the_member_is_read_once_for_the_id_the_path_and_the_command(
 
     monkeypatch.setattr(store, "read", counting)
 
-    resolve_recipient(store, KNOWN_NAME, _cf())
+    recipient_of(store, KNOWN_NAME)
 
     assert reads == 1
+
+
+def test_resolve_recipient_runs_in_the_callers_transaction(store: Store) -> None:
+    with store.read() as transaction:
+        assert resolve_recipient(transaction, KNOWN_NAME) == Recipient(KNOWN_ID)

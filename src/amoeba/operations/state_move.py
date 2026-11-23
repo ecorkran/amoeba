@@ -9,6 +9,7 @@ store before the move. ``config.yaml`` is never touched.
 from __future__ import annotations
 
 import fcntl
+import subprocess
 import sys
 import time
 from collections.abc import Generator
@@ -18,6 +19,7 @@ from typing import Final
 
 from amoeba.client.client_file import read_client_address
 from amoeba.config.home import STORE_FILE_NAME, StateLayout
+from amoeba.operations.naming import name_members
 from amoeba.operations.state_move_dirs import has_legacy_state, move_directories
 from amoeba.operations.state_move_store import move_store
 from amoeba.operations.state_move_types import MoveHooks, MoveReport, MoveStep
@@ -184,13 +186,15 @@ def open_state_store(layout: StateLayout) -> Store:
     _refuse_set_aside_without_store(layout)
     prepare_state_home(layout)
     store = Store.open(layout.store_path)
-    acting = False
+    ready = False
     try:
         act_as_local(store)
-        acting = True
+        # Name the members from before migration 012 before anything reads one (261 D4).
+        name_members(store, subprocess.run, subprocess.run)
+        ready = True
     finally:
-        # A store that cannot act as `local` is closed, not handed out; the failure
-        # propagates.
-        if not acting:
+        # A store that cannot act as `local` or be named is closed, not handed out;
+        # the failure propagates.
+        if not ready:
             store.close()
     return store

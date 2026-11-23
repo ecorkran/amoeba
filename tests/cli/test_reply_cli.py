@@ -7,8 +7,8 @@ from pathlib import Path
 
 from amoeba.cli.exit_codes import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE
 from cli.message_cli_support import (
-    PROJECT_ID,
     registered,
+    registered_member_id,
     result_of,
     run_amoeba,
     send_request,
@@ -97,7 +97,11 @@ def test_a_second_accept_exits_one_naming_the_time(tmp_path: Path) -> None:
     assert result["rejection"] == "already_accepted"
     assert "was already accepted at " in result["problems"][0]
     (row,) = stored_rows("message_rejections")
-    assert (row[1], row[4], row[6]) == (PROJECT_ID, "ask-1", "already_accepted")
+    assert (row[1], row[4], row[6]) == (
+        registered_member_id(),
+        "ask-1",
+        "already_accepted",
+    )
 
 
 def test_an_unknown_request_exits_one(tmp_path: Path) -> None:

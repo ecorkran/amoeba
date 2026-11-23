@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import pytest
 
+from amoeba.operations.here_document import HERE_KEY
 from amoeba.operations.names import OperationName
+from amoeba.operations.runs_document import RUNS_KEY
 from amoeba.wire.protocol import (
     HELLO_CALL,
+    HERE_BODY_KEY,
     REFUSAL_STATUS,
+    RUNS_BODY_KEY,
     SERVED_OPERATIONS,
     UNKNOWN_ADVICE,
     WRITING_CALLS,
@@ -35,11 +39,30 @@ def test_hello_is_not_an_operation() -> None:
 def test_writing_calls_are_served_and_decisions_is_not_one() -> None:
     assert WRITING_CALLS <= set(SERVED_OPERATIONS)
     assert "decisions" not in WRITING_CALLS
-    assert len(WRITING_CALLS) == 5
+    assert len(WRITING_CALLS) == 11
 
 
 def test_every_writing_call_has_advice() -> None:
     assert set(UNKNOWN_ADVICE) == WRITING_CALLS
+
+
+def test_the_new_writing_calls_are_the_ones_that_write_and_the_reads_are_not() -> None:
+    """261 D12: ``inbox`` and ``changes`` read; ``list`` and ``status`` write only the
+    message expiry, which is safe to run twice, so they keep no result."""
+    new_writes = {"add", "rm", "send", "reply", "cancel", "report_release"}
+    reads = {"inbox", "changes", "list", "status"}
+
+    assert new_writes <= WRITING_CALLS
+    assert not reads & WRITING_CALLS
+    assert (new_writes | reads) <= set(SERVED_OPERATIONS)
+    for name in new_writes:
+        assert UNKNOWN_ADVICE[name]
+
+
+def test_the_body_keys_are_the_ones_the_hub_part_reads() -> None:
+    """``wire`` imports nothing from ``operations``, so each key is defined twice."""
+    assert HERE_BODY_KEY == HERE_KEY
+    assert RUNS_BODY_KEY == RUNS_KEY
 
 
 def test_every_refusal_code_has_a_status() -> None:

@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from cf_fixtures import OUTSIDE_ANY_PROJECT
+from operations.message_placed import inbox, reply
 from operations.message_support import (
     CONFIG,
     RECIPIENT_NAME,
@@ -38,8 +39,6 @@ from store.message_support import PROGRAM
 from store_open import open_local_store
 
 from amoeba.operations.deps import Deps
-from amoeba.operations.inbox import inbox
-from amoeba.operations.reply import reply
 from amoeba.store.errors import StoreBusyError
 from amoeba.store.store import Store
 

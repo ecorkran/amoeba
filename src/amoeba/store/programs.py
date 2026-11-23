@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from amoeba.store import sql
-from amoeba.store.errors import StoreIntegrityError
+from amoeba.store.errors import StoreError, StoreIntegrityError
 from amoeba.store.models import DependencyPair, Member, MemberSettings, Program
 from amoeba.store.row_values import (
     decode_string_list,
@@ -41,7 +41,18 @@ def _program(row: Sequence[object]) -> Program:
     )
 
 
-def _member(row: Sequence[object]) -> Member:
+def _member_name(row: Sequence[object]) -> str:
+    """The member's name; a null one is a member naming has not reached (261 D4)."""
+    if row[9] is None:
+        raise StoreError(
+            f"member {text(row[0], 'members.project_id')!r} has no name; "
+            "the naming step has not run on this store"
+        )
+    return text(row[9], "members.name")
+
+
+def member_from_row(row: Sequence[object]) -> Member:
+    """A ``Member`` from a row selected with ``sql``'s member columns."""
     return Member(
         program_id=text(row[1], "members.program_id"),
         settings=MemberSettings(
@@ -50,11 +61,12 @@ def _member(row: Sequence[object]) -> Member:
             authorize_allow=decode_string_list(row[3], "members.authorize_allow"),
             authorize_deny=decode_string_list(row[4], "members.authorize_deny"),
             rules_from=vocabulary(row[8], RulesFrom, "members.rules_from"),
-            wake_command=optional_text(row[9], "members.wake_command"),
         ),
         registered_at=decode_timestamp(row[5], "members.registered_at"),
         updated_at=decode_timestamp(row[6], "members.updated_at"),
         removed_at=optional_timestamp(row[7], "members.removed_at"),
+        name=_member_name(row),
+        origin=optional_text(row[10], "members.origin"),
     )
 
 
@@ -85,18 +97,18 @@ def get_program(transaction: Transaction, program_id: str) -> Program | None:
 
 def get_member(transaction: Transaction, project_id: str) -> Member | None:
     row = transaction.execute(sql.SELECT_MEMBER, (project_id,)).fetchone()
-    return None if row is None else _member(row)
+    return None if row is None else member_from_row(row)
 
 
 def get_member_any(transaction: Transaction, project_id: str) -> Member | None:
     """The member row whether or not it was removed (``removed_at`` says which)."""
     row = transaction.execute(sql.SELECT_MEMBER_ANY, (project_id,)).fetchone()
-    return None if row is None else _member(row)
+    return None if row is None else member_from_row(row)
 
 
 def members_of(transaction: Transaction, program_id: str) -> tuple[Member, ...]:
     rows = transaction.execute(sql.SELECT_MEMBERS_OF, (program_id,)).fetchall()
-    return tuple(_member(row) for row in rows)
+    return tuple(member_from_row(row) for row in rows)
 
 
 def member_settings(transaction: Transaction, project_id: str) -> MemberSettings | None:
@@ -175,11 +187,13 @@ def upsert_member(
     *,
     program_id: str,
     settings: MemberSettings,
+    name: str,
     now: datetime,
 ) -> bool:
-    """Create the member or replace its lists.
+    """Create the member, named ``name``, or replace its lists.
 
-    A removed member is registered afresh, in this program, whichever it was in.
+    A removed member is registered afresh, in this program, whichever it was in; a
+    stored name is never changed here (261 D1), so ``name`` is bound only on create.
 
     Raises:
         StoreIntegrityError: The active member already belongs to another program.
@@ -201,7 +215,8 @@ def upsert_member(
                 stamp,
                 stamp,
                 settings.rules_from,
-                settings.wake_command,
+                name,
+                None,
                 transaction.acting("members").owner_id,
             ),
         )
@@ -215,7 +230,6 @@ def upsert_member(
                 settings.rules_from,
                 allow,
                 deny,
-                settings.wake_command,
                 stamp,
                 stamp,
                 settings.project_id,
@@ -236,7 +250,6 @@ def upsert_member(
             settings.rules_from,
             allow,
             deny,
-            settings.wake_command,
             stamp,
             settings.project_id,
         ),

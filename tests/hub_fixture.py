@@ -27,6 +27,14 @@ from typing import IO, Final
 
 import yaml
 from hub.start_support import free_port
+from hub_clients import (
+    BIN_DIRECTORY,
+    add_worktree,
+    cf_calls,
+    clone_repo,
+    install_client_tools,
+    set_runs,
+)
 from process_containment import contained_popen
 from user_configs import example_config_text
 
@@ -43,8 +51,11 @@ COMMAND_TIMEOUT_SECONDS: Final = 120.0
 #: The names of the two machines and the home each is joined from.
 FIRST: Final = "alpha"
 SECOND: Final = "beta"
-#: Programs that are not on the fixture hub's ``PATH``.
+#: Programs that are not on a client's ``PATH`` but its own stubs (``cf``, ``sq``).
 FORBIDDEN_PROGRAMS: Final = ("cf", "sq")
+#: Programs that are not on the fixture hub's ``PATH`` at all: the hub never runs any
+#: of them (slice 261, D5).
+HUB_FORBIDDEN_PROGRAMS: Final = ("cf", "sq", "git")
 
 
 def amoeba_script() -> str:
@@ -62,6 +73,15 @@ def safe_path() -> str:
     path = os.pathsep.join([str(Path(sys.executable).parent), *keep])
     for program in FORBIDDEN_PROGRAMS:
         assert shutil.which(program, path=path) is None, f"{program} is on the PATH"
+    return path
+
+
+def hub_path() -> str:
+    """The hub's ``PATH``: the venv's ``bin`` only, so ``cf``, ``sq`` and ``git`` are
+    all missing there."""
+    path = str(Path(sys.executable).parent)
+    for program in HUB_FORBIDDEN_PROGRAMS:
+        assert shutil.which(program, path=path) is None, f"{program} is on the hub PATH"
     return path
 
 
@@ -85,7 +105,7 @@ class Completed:
 
 @dataclass
 class ClientHome:
-    """A client machine's ``AMOEBA_HOME``."""
+    """A client machine's ``AMOEBA_HOME``, with its own stub ``cf`` and ``sq``."""
 
     name: str
     home: Path
@@ -93,6 +113,32 @@ class ClientHome:
 
     def run(self, *args: str, timeout: float = COMMAND_TIMEOUT_SECONDS) -> Completed:
         return self.hub.run_in(self.home, *args, timeout=timeout)
+
+    def run_in(
+        self, directory: Path, *args: str, timeout: float = COMMAND_TIMEOUT_SECONDS
+    ) -> Completed:
+        """``amoeba <args>`` with ``directory`` as the working directory."""
+        return self.hub.run_in(self.home, *args, timeout=timeout, cwd=directory)
+
+    def clone(
+        self,
+        name: str,
+        origin: str | None,
+        project_id: str,
+        project_name: str | None = None,
+    ) -> Path:
+        """A repo of this machine with ``origin`` and its Context Forge project id."""
+        return clone_repo(self.home, name, origin, project_id, project_name)
+
+    def worktree(self, repo: Path, name: str) -> Path:
+        return add_worktree(self.home, repo, name)
+
+    def set_runs(self, runs: list[dict[str, object]]) -> None:
+        set_runs(self.home, runs)
+
+    def cf_calls(self) -> list[str]:
+        """What the stub ``cf`` of this machine has been asked so far."""
+        return cf_calls(self.home)
 
 
 class FixtureHub:
@@ -131,6 +177,9 @@ class FixtureHub:
         self.stdout_lines: list[str] = []
         self.tokens: dict[str, str] = {}
         self.clients: dict[str, ClientHome] = {}
+        #: Variables set last in a home's environment, replacing its stubs (the live
+        #: tier gives a client the real ``cf`` and its own data directory).
+        self.home_environment: dict[Path, dict[str, str]] = {}
 
     def write_hub_yaml(self) -> None:
         self.layout.hub_file.write_text(yaml.safe_dump(self.settings), encoding="utf-8")
@@ -139,15 +188,27 @@ class FixtureHub:
     def address(self) -> str:
         return str(self.settings["address"])
 
-    def _env(self, home: Path) -> dict[str, str]:
-        return {"AMOEBA_HOME": str(home), "PATH": safe_path(), "HOME": str(self.root)}
+    def env_for(self, home: Path) -> dict[str, str]:
+        """The hub's environment for the hub home; a client's, with its own stub
+        ``cf`` and ``sq`` first on the ``PATH``, for any other."""
+        if home == self.home:
+            path = hub_path()
+        else:
+            path = os.pathsep.join([str(home / BIN_DIRECTORY), safe_path()])
+        base = {"AMOEBA_HOME": str(home), "PATH": path, "HOME": str(self.root)}
+        return {**base, **self.home_environment.get(home, {})}
 
     def run_in(
-        self, home: Path, *args: str, timeout: float = COMMAND_TIMEOUT_SECONDS
+        self,
+        home: Path,
+        *args: str,
+        timeout: float = COMMAND_TIMEOUT_SECONDS,
+        cwd: Path | None = None,
     ) -> Completed:
         child = contained_popen(
             [amoeba_script(), *args],
-            env=self._env(home),
+            cwd=cwd,
+            env=self.env_for(home),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -164,7 +225,7 @@ class FixtureHub:
         self.stderr_lines, self.stdout_lines = [], []
         child = contained_popen(
             [amoeba_script(), "hub", "serve", *extra],
-            env=self._env(self.home),
+            env=self.env_for(self.home),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -246,6 +307,7 @@ class FixtureHub:
         line = self.invite(machine)
         home = self.root / f"client-{home_name or machine}"
         home.mkdir()
+        install_client_tools(home)
         client = ClientHome(home_name or machine, home, self)
         done = client.run("join", line, "-j")
         assert done.code == 0, done.err

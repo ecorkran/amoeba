@@ -7,9 +7,9 @@ from pathlib import Path
 from amoeba.cli.exit_codes import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from cli.message_cli_support import (
-    PROJECT_ID,
     PROJECT_NAME,
     registered,
+    registered_member_id,
     result_of,
     run_amoeba,
     send_request,
@@ -28,7 +28,7 @@ def test_send_prints_the_result_document(tmp_path: Path) -> None:
     assert result["rejection"] is None
     assert result["notice"] == QUOTED_DATA_NOTICE
     assert result["request"]["id"] == "ask-1"
-    assert result["request"]["from_member"] == PROJECT_ID
+    assert result["request"]["from_member"] == registered_member_id()
     assert result["request"]["state"] == "open"
     assert result["request"]["direction"] == "sent"
     assert len(stored_rows("messages")) == 1
@@ -72,7 +72,7 @@ def test_a_rejected_send_exits_one_and_is_recorded(tmp_path: Path) -> None:
     assert result["request"] is None
     assert stored_rows("messages") == []
     (row,) = stored_rows("message_rejections")
-    assert row[1] == PROJECT_ID
+    assert row[1] == registered_member_id()
     assert "parent_unknown" in row
 
 

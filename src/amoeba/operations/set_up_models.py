@@ -12,7 +12,7 @@ import shlex
 from collections.abc import Sequence
 from enum import StrEnum
 from functools import partial
-from typing import Annotated, Final, Self
+from typing import Annotated, Final, Self, cast
 
 from pydantic import (
     AfterValidator,
@@ -71,20 +71,22 @@ class FrozenModel(BaseModel):
 
 
 class ConceptRequest(FrozenModel):
-    #: A Context Forge project name or id.
+    #: A member's name or id.
     member: NonBlankText
     path: ConceptPath
 
 
 class DependsOnRequest(FrozenModel):
-    #: A Context Forge project name or id.
+    #: A member's name or id.
     provider: NonBlankText
     consumed: ConsumedMode
 
 
 class MemberRequest(FrozenModel):
-    #: A Context Forge project name or id; omitted means the working directory's.
+    #: A member's name or id; omitted means the working directory's checkout.
     project: NonBlankText | None = None
+    #: Sets or changes the member's name (261 D7).
+    name: NonBlankText | None = None
     #: Omitted leaves the member's rules (a new member gets the config default);
     #: given, including ``[]`` (no rules), replaces them and makes them named.
     rules_paths: tuple[RulesPath, ...] | None = None
@@ -114,7 +116,7 @@ class MemberRequest(FrozenModel):
 
 
 class RemovePairRequest(FrozenModel):
-    #: Context Forge project names or ids.
+    #: Members' names or ids.
     provider: NonBlankText
     consumer: NonBlankText
 
@@ -122,7 +124,7 @@ class RemovePairRequest(FrozenModel):
 class RemoveRequest(FrozenModel):
     """What ``set_up`` takes out (228 D8). Members are removed softly, pairs deleted."""
 
-    #: Context Forge project names or ids.
+    #: Members' names or ids.
     members: tuple[NonBlankText, ...] = ()
     pairs: tuple[RemovePairRequest, ...] = ()
 
@@ -154,6 +156,8 @@ class ChangeSubject(StrEnum):
     MEMBER = "member"
     DEPENDENCY = "dependency"
     PAIR = "pair"
+    #: A checkout added or removed (261 D7, D8).
+    CHECKOUT = "checkout"
 
 
 class Change(FrozenModel):
@@ -190,6 +194,17 @@ class SetUpProblemCode(StrEnum):
     CONCEPT_MEMBER_NOT_MEMBER = "concept_member_not_member"
     MEMBER_HAS_OPEN_QUESTIONS = "member_has_open_questions"
     NOT_A_MEMBER = "not_a_member"
+    #: ``add`` (261 D7): the name is another member's, or another member's id.
+    NAME_TAKEN = "name_taken"
+    #: ``add`` replaced a member's ``origin`` with one another active member has.
+    ORIGIN_TAKEN = "origin_taken"
+    #: ``add`` found the name taken and this checkout has no ``origin`` to say it is
+    #: the same repo.
+    NO_ORIGIN = "no_origin"
+    #: ``add --attach-to`` named a member that already has a checkout.
+    MEMBER_HAS_CHECKOUTS = "member_has_checkouts"
+    #: ``rm --checkout`` named a path with no checkout on this machine (D8).
+    NOT_A_CHECKOUT = "not_a_checkout"
 
 
 class OpenQuestion(FrozenModel):
@@ -219,9 +234,10 @@ class DependencyState(FrozenModel):
 
 
 class MemberState(FrozenModel):
-    """A member as stored; ids are Context Forge project ids."""
+    """A member as stored: its own id and its name (261 D13)."""
 
     project_id: str
+    name: str
     rules_paths: tuple[str, ...]
     #: ``config_default``: the config's ``default_rules_paths`` apply and
     #: ``rules_paths`` is unused (empty).
@@ -258,6 +274,10 @@ type WorkingDirectory = (
 )
 
 
+def _without_changes(document: dict[str, object]) -> dict[str, object]:
+    return {key: value for key, value in document.items() if key != "changes"}
+
+
 class SetUpResult(FrozenModel):
     outcome: SetUpOutcome
     #: What was created, changed or removed; empty unless applied.
@@ -268,6 +288,15 @@ class SetUpResult(FrozenModel):
     program: ProgramState | None
     #: Informational. Null when the request was malformed and nothing was looked up.
     working_directory: WorkingDirectory | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_computed_text(cls, data: object) -> object:
+        """The document form carries ``changes``, derived from ``change_records``; a
+        result rebuilt from it (the door's reply) takes the records and drops it."""
+        if not isinstance(data, dict):
+            return data
+        return _without_changes(cast("dict[str, object]", data))
 
     @computed_field
     @property

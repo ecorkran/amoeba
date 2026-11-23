@@ -23,8 +23,9 @@ from operations.release_support import (
 from store.release_support import FULL_HASH, PROVIDER, START, seed_members
 from user_configs import example_config_text
 
-from amoeba import wiring, wiring_releases
+from amoeba import wiring
 from amoeba.config.home import StateLayout, config_path, state_layout
+from amoeba.operations import report_release as report_release_module
 from amoeba.operations.deps import Deps
 from amoeba.operations.names import Door, OperationName
 from amoeba.operations.report_release_models import ReportOutcome, ReportReleaseResult
@@ -111,7 +112,7 @@ def test_a_held_store_problem_text_still_lets_the_report_record(
     def held(*_args: object) -> str | None:
         return "message sweep did not run: busy"
 
-    monkeypatch.setattr(wiring_releases, "sweep_messages", held)
+    monkeypatch.setattr(report_release_module, "sweep_messages", held)
 
     result = _report()
 
@@ -126,7 +127,7 @@ def test_a_store_error_from_the_sweep_leaves_no_report(
     def broken(*_args: object) -> str | None:
         raise StoreIntegrityError("the sweep failed")
 
-    monkeypatch.setattr(wiring_releases, "sweep_messages", broken)
+    monkeypatch.setattr(report_release_module, "sweep_messages", broken)
 
     with pytest.raises(StoreIntegrityError, match="sweep failed"):
         _report()
@@ -142,7 +143,7 @@ def test_the_sweep_gets_the_deps_clock(
     def recording(_store: Store, _config: object, now: object) -> None:
         seen.append(now)
 
-    monkeypatch.setattr(wiring_releases, "sweep_messages", recording)
+    monkeypatch.setattr(report_release_module, "sweep_messages", recording)
 
     _report()
 

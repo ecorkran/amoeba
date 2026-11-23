@@ -18,12 +18,11 @@ from typing import Final, cast
 
 from amoeba.config.user_config import UserConfig
 from amoeba.hub.call_refusals import CallReply, Refuser
-from amoeba.operations.errors import OPERATION_ERRORS
+from amoeba.operations.errors import OPERATION_ERRORS, CallRefused
 from amoeba.operations.served import (
     SERVED,
     ServedEdges,
-    id_names,
-    id_resolver,
+    client_values_from_body,
     result_document,
     run_served,
 )
@@ -90,6 +89,8 @@ class _Checked:
     client_version: str | None
     call_id: str = ""
     document: object = None
+    #: The whole body object: ``here`` and ``runs`` ride beside ``document`` (261 D5).
+    body: Mapping[str, object] | None = None
     config: UserConfig | None = None
 
 
@@ -159,7 +160,8 @@ def _check_without_store(
         return _malformed(client_version, "the body is not JSON")
     if not isinstance(body, dict) or DOCUMENT_KEY not in body:
         return _malformed(client_version, f"the body needs a {DOCUMENT_KEY!r} key")
-    document: object = cast("dict[str, object]", body)[DOCUMENT_KEY]
+    fields = cast("dict[str, object]", body)
+    document: object = fields[DOCUMENT_KEY]
     if request.name != HELLO_CALL and request.name not in SERVED_OPERATIONS:
         message = f"the door does not serve {request.name!r}"
         return _Checked((RefusalCode.NOT_SERVED, message), client_version)
@@ -168,7 +170,7 @@ def _check_without_store(
     except OPERATION_ERRORS as error:
         message = f"{type(error).__name__}: {error}"
         return _Checked((RefusalCode.HUB_ERROR, message), client_version)
-    return _Checked(None, client_version, call_id, document, config)
+    return _Checked(None, client_version, call_id, document, fields, config)
 
 
 def _kept_reply(
@@ -213,11 +215,15 @@ def _operation_reply(  # noqa: PLR0913 - one call's parts
         edges = ServedEdges(
             clock=clock,
             load_config=lambda: _loaded(config),
-            names=id_names,
-            resolve_member=id_resolver(store),
+            local=None,
+        )
+        values = client_values_from_body(
+            request.name, checked.document, checked.body or {}
         )
         reply = done_reply(
-            result_document(run_served(request.name, store, checked.document, edges))
+            result_document(
+                run_served(request.name, store, checked.document, edges, values)
+            )
         )
         if request.name in WRITING_CALLS:
             keep(
@@ -274,6 +280,13 @@ def _serve(
         try:
             body = _operation_reply(
                 store, request, checked, machine, label, request_hash, clock
+            )
+        except CallRefused as refusal:
+            # The hub part's own refusal (261 D12): the savepoint is already rolled
+            # back, the touch commits with the scope, nothing is kept.
+            return (
+                refuser.refuse(RefusalCode(refusal.code), refusal.message, label),
+                True,
             )
         except Exception as error:  # noqa: BLE001 - the hub's boundary for a call
             return refuser.for_exception(error, label), True

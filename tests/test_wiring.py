@@ -14,7 +14,7 @@ import pytest
 from user_configs import example_config_text
 from wiring_support import TrackedStore, is_closed, record_opened_stores
 
-from amoeba import wiring, wiring_messages, wiring_releases
+from amoeba import wiring, wiring_gather
 from amoeba.cli import commands
 from amoeba.cli import main as cli
 from amoeba.client.errors import (
@@ -25,7 +25,7 @@ from amoeba.client.errors import (
 )
 from amoeba.config.home import AmoebaHomeError, config_path, state_layout
 from amoeba.config.user_config import ConfigError
-from amoeba.operations import served
+from amoeba.operations import served, served_runners
 from amoeba.operations.answer import AnswerOutcome, AnswerResult
 from amoeba.operations.changes_models import (
     ChangesOutcome,
@@ -35,9 +35,10 @@ from amoeba.operations.changes_models import (
 )
 from amoeba.operations.decisions import DecisionsResult
 from amoeba.operations.dismiss import DismissResult
+from amoeba.operations.errors import ContextForgeError
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
-from amoeba.operations.members import ContextForgeError
 from amoeba.operations.message_models import (
     CancelOutcome,
     InboxOutcome,
@@ -171,7 +172,7 @@ def test_invoke_closes_the_store_when_the_operation_raises(
     def raising(*_arguments: object, **_keywords: object) -> object:
         raise SquadronError("sq down")
 
-    monkeypatch.setattr(served, "mark_read", raising)
+    monkeypatch.setattr(served_runners, "mark_read", raising)
 
     with pytest.raises(SquadronError):
         wiring.invoke(OperationName.MARK_READ, {"through": 0}, None, Door.MCP)
@@ -223,25 +224,49 @@ def test_the_cli_calls_invoke_as_the_cli_door(
         (OperationName.CHANGES, "changes"),
     ],
 )
-def test_invoke_gives_each_release_operation_the_directory(
+def test_invoke_gives_each_release_operation_the_gathered_caller(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     name: OperationName,
     operation: str,
 ) -> None:
-    seen: list[Path] = []
+    seen: list[HereCaller | HereNotAProject] = []
+    gathered: list[Path] = []
+    caller = HereCaller(project_id="gathered-project")
+
+    def gathering(directory: Path, _run: object) -> HereCaller:
+        gathered.append(directory)
+        return caller
 
     def recording(
-        _store: object, _document: object, *, directory: Path, deps: object
+        _store: object,
+        _document: object,
+        _edges: object,
+        values: served.ClientValues,
     ) -> object:
-        seen.append(directory)
+        assert isinstance(values.here, HereCaller | HereNotAProject)
+        seen.append(values.here)
         return _changes_result(ChangesOutcome.LISTED)
 
-    monkeypatch.setattr(wiring_releases, operation, recording)
+    monkeypatch.setattr(wiring_gather, "gather_caller", gathering)
+    _stub_served(monkeypatch, name, recording)
 
     wiring.invoke(name, {}, tmp_path, Door.CLI)
 
-    assert seen == [tmp_path]
+    assert gathered == [tmp_path]
+    assert seen == [caller]
+
+
+def _stub_served(
+    monkeypatch: pytest.MonkeyPatch, name: OperationName, run: object
+) -> None:
+    """Replace the hub part ``run_served`` runs for ``name`` with ``run``."""
+    entry = served.SERVED[name.value]
+    monkeypatch.setitem(
+        served.SERVED,
+        name.value,
+        dataclasses.replace(entry, run=run),  # pyright: ignore[reportArgumentType]
+    )
 
 
 def test_invoke_refuses_handle_pause_naming_it(tmp_path: Path) -> None:
@@ -292,7 +317,7 @@ def _report_release_result(outcome: ReportOutcome) -> ReportReleaseResult:
 def _changes_result(outcome: ChangesOutcome) -> ChangesResult:
     return ChangesResult(
         outcome=outcome,
-        member=MemberRef(id="member", name=None),
+        member=MemberRef(id="member", name="me"),
         since="2026-11-09T12:00:00+00:00",
         pairs=(),
         problems=(),
@@ -431,20 +456,34 @@ MESSAGE_OPERATIONS = (
 
 
 @pytest.mark.parametrize("name", MESSAGE_OPERATIONS, ids=lambda name: name.value)
-def test_invoke_gives_each_message_operation_the_directory_and_the_document(
+def test_invoke_gives_each_message_operation_the_gathered_caller_and_the_document(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, name: OperationName
 ) -> None:
-    seen: list[tuple[object, Path]] = []
+    seen: list[tuple[object, HereCaller]] = []
+    gathered: list[Path] = []
+    caller = HereCaller(project_id="gathered-project")
 
-    def recording(*arguments: object, directory: Path, **_keywords: object) -> object:
-        seen.append((arguments[-1], directory))
+    def gathering(directory: Path, _run: object) -> HereCaller:
+        gathered.append(directory)
+        return caller
+
+    def recording(
+        _store: object,
+        document: object,
+        _edges: object,
+        values: served.ClientValues,
+    ) -> object:
+        assert isinstance(values.here, HereCaller)
+        seen.append((document, values.here))
         return _message_result(name)
 
-    monkeypatch.setattr(wiring_messages, name.value, recording)
+    monkeypatch.setattr(wiring_gather, "gather_caller", gathering)
+    _stub_served(monkeypatch, name, recording)
 
     wiring.invoke(name, {"marker": 1}, tmp_path, Door.CLI)
 
-    assert seen == [({"marker": 1}, tmp_path)]
+    assert gathered == [tmp_path]
+    assert seen == [({"marker": 1}, caller)]
 
 
 @pytest.mark.parametrize("name", MESSAGE_OPERATIONS, ids=lambda name: name.value)

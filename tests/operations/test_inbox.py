@@ -15,15 +15,14 @@ from cf_fixtures import OUTSIDE_ANY_PROJECT
 from store.message_support import count
 
 from amoeba.operations.deps import Deps
-from amoeba.operations.inbox import inbox
 from amoeba.operations.message_models import InboxOutcome
 from amoeba.operations.message_results import InboxResult, RequestDirection
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.operations.reply import reply
 from amoeba.store.deliveries import highest_assigned_seq
 from amoeba.store.message_sweep import sweep
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, RequestState
+from operations.message_placed import inbox, reply
 from operations.message_support import (
     CONFIG,
     RECIPIENT,

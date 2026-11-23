@@ -24,8 +24,6 @@ from user_configs import user_config
 from amoeba.operations.served import (
     ServedEdges,
     ServedResult,
-    id_names,
-    id_resolver,
     result_document,
     run_served,
 )
@@ -46,8 +44,6 @@ def _run(store: Store, name: str, document: object) -> ServedResult:
     edges = ServedEdges(
         clock=lambda: NOW,
         load_config=user_config,
-        names=id_names,
-        resolve_member=id_resolver(store),
     )
     return run_served(name, store, document, edges)
 
@@ -108,8 +104,8 @@ def test_a_decisions_listing_with_records_round_trips(store: Store) -> None:
 
 
 def test_an_unserved_name_cannot_be_rebuilt() -> None:
-    with pytest.raises(ValueError, match="add"):
-        result_from_document("add", {})
+    with pytest.raises(ValueError, match="answer"):
+        result_from_document("answer", {})
 
 
 def test_a_document_that_is_not_that_result_is_a_value_error() -> None:

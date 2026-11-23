@@ -53,8 +53,6 @@ def build_consumer(parent: Path, provider: PauseWorld) -> PauseWorld:
         "add",
         "--program",
         PROGRAM_ID,
-        "--project",
-        CONSUMER_PROJECT_NAME,
         "--depends-on",
         CF_PROJECT_NAME,
     )

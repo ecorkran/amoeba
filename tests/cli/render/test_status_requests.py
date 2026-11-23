@@ -113,12 +113,6 @@ def test_a_received_request_says_from_and_an_expired_one_says_expired() -> None:
     assert "ask · from lint · expired · 3h 5m" in text
 
 
-def test_a_member_cf_no_longer_lists_is_named_by_its_id() -> None:
-    text = _text(requests=(_request(other_name=None),))
-
-    assert "to id-lint (not in Context Forge)" in text
-
-
 def test_a_request_with_live_children_says_what_it_is_waiting_on() -> None:
     text = _text(requests=(_request(child_ids=("child-1", "child-2")),))
 

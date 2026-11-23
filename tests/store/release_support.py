@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from amoeba.store.store import Store
-from store.seed import insert_member, insert_program
+from amoeba.store.store import Store, Transaction
+from store.seed import insert_checkout, insert_member, insert_program
 
 PROGRAM = "demo"
 PROVIDER = "provider-id"
@@ -43,3 +43,16 @@ def seed_members(store: Store) -> None:
                 registered_at=START,
                 updated_at=START,
             )
+            seed_checkout(transaction, member)
+
+
+def seed_checkout(transaction: Transaction, member: str) -> None:
+    """A checkout of ``member`` on the acting machine; the Context Forge id the
+    release tests' stub ``cf`` gives its directory is the member's own id."""
+    insert_checkout(
+        transaction,
+        member_id=member,
+        cf_project_id=member,
+        path=f"/work/{member}",
+        now=START,
+    )

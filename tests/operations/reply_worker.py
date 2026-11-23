@@ -17,8 +17,8 @@ from pathlib import Path
 from cf_fixtures import OUTSIDE_ANY_PROJECT
 from store_open import open_local_store
 
-from amoeba.operations.reply import reply
 from amoeba.store.errors import StoreBusyError
+from operations.message_placed import reply
 from operations.message_support import (
     CONFIG,
     RECIPIENT_NAME,

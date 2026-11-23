@@ -18,7 +18,7 @@ from user_configs import user_config
 from amoeba.cli.render.waiting import NOTHING_NEEDS_YOU, render_waiting
 from amoeba.operations.deps import Deps
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
-from amoeba.operations.status import StatusResult, status
+from amoeba.operations.status import StatusResult
 from amoeba.operations.status_models import MemberStatus, StatusOutcome
 from amoeba.store.message_rejections import record_rejection
 from amoeba.store.message_transitions import StateFields, change_state
@@ -26,8 +26,9 @@ from amoeba.store.messages import get_message
 from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, RequestState
-from operations.list_support import ListCf, names_of, project_entry
+from operations.list_support import ListCf, project_entry
 from operations.release_support import SettableClock
+from operations.status_placed import status
 from operations.status_support import CfAnswer, status_deps
 
 ELSEWHERE = Path("/work/elsewhere")
@@ -53,7 +54,7 @@ def clock() -> SettableClock:
 @pytest.fixture
 def deps(tmp_path: Path, clock: SettableClock) -> Deps:
     cf = ListCf(PROJECTS, {ELSEWHERE: CfAnswer.NOT_A_PROJECT})
-    base = status_deps(tmp_path, cf=cf, runs=[], names=names_of(PROJECTS))
+    base = status_deps(tmp_path, cf=cf, runs=[])
     return replace(base, clock=clock)
 
 

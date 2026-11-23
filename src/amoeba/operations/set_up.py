@@ -1,8 +1,8 @@
 """``set_up``: register or update a program, its members and dependency pairs (D7).
 
-The flow: validate the document, resolve every reference through Context Forge (all
-``cf`` calls, before the store is written), then in one write transaction read the
-stored state, run the checks, and either write or return the problems. What the
+The flow: validate the document, then in one write transaction find every reference
+in the store (no ``cf`` runs: the client part gathered what it needed, 261 D5), read
+the stored state, run the checks, and either write or return the problems. What the
 request names under ``members`` is created or set, and a given list replaces the
 stored value whole; only what it names under ``remove`` is removed (228 D8). A repeat
 writes nothing and returns ``unchanged``.
@@ -14,155 +14,57 @@ here too.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from pathlib import Path
 
 from pydantic import ValidationError
 
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.add_member import MemberPlan
+from amoeba.operations.here_document import HereCaller, HereCheckout
 from amoeba.operations.set_up_checks import check_request
 from amoeba.operations.set_up_models import (
     Change,
     ChangeSubject,
     ChangeVerb,
-    ConceptState,
-    DependencyState,
-    MemberState,
-    ProgramState,
     SetUpOutcome,
     SetUpProblem,
     SetUpProblemCode,
     SetUpRequest,
     SetUpResult,
-    WorkingDirectory,
-    WorkingDirectoryMember,
-    WorkingDirectoryNotAProject,
-    WorkingDirectoryNotInProgram,
 )
+from amoeba.operations.set_up_plan import apply_plan, name_before_write
 from amoeba.operations.set_up_remove import apply_removal
 from amoeba.operations.set_up_resolve import (
+    Gathered,
     ResolvedMember,
     ResolvedRequest,
     resolve_request,
 )
-from amoeba.store.models import DependencyPair, Member, MemberSettings
+from amoeba.operations.set_up_state import (
+    malformed_result,
+    program_state,
+    rejected,
+    working_directory_of,
+)
+from amoeba.operations.set_up_wake import apply_wake_commands
+from amoeba.store.member_names import set_member_name
+from amoeba.store.models import MemberSettings
 from amoeba.store.programs import (
     get_member,
     get_pair,
     get_program,
-    members_of,
-    pairs_of,
     upsert_member,
     upsert_pair,
     upsert_program,
 )
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import RulesFrom
-from amoeba.upstream.context_forge.cli_call import CfRun
-from amoeba.upstream.context_forge.project_of import CFProject, CFProjectNotFound
 
 __all__ = [
-    "ContextForgeError",
     "SetUpProblemCode",
     "SetUpRequest",
     "SetUpResult",
     "set_up",
 ]
-
-#: What a validation problem names when pydantic has no field to point at.
-DOCUMENT_LOCATION = "document"
-
-
-# --- reading state -----------------------------------------------------------
-
-
-def _member_state(member: Member, pairs: tuple[DependencyPair, ...]) -> MemberState:
-    return MemberState(
-        project_id=member.project_id,
-        rules_paths=member.settings.rules_paths,
-        rules_from=member.settings.rules_from,
-        authorize_allow=member.settings.authorize_allow,
-        authorize_deny=member.settings.authorize_deny,
-        depends_on=tuple(
-            DependencyState(provider=pair.provider_id, consumed=pair.consumed)
-            for pair in pairs
-            if pair.consumer_id == member.project_id
-        ),
-    )
-
-
-def _program_state(transaction: Transaction, program_id: str) -> ProgramState | None:
-    program = get_program(transaction, program_id)
-    if program is None:
-        return None
-    pairs = pairs_of(transaction, program_id)
-    concept = (
-        None
-        if program.concept_member is None or program.concept_path is None
-        else ConceptState(member=program.concept_member, path=program.concept_path)
-    )
-    return ProgramState(
-        program_id=program_id,
-        concept=concept,
-        members=tuple(
-            _member_state(member, pairs)
-            for member in members_of(transaction, program_id)
-        ),
-    )
-
-
-def _working_directory(
-    transaction: Transaction, working: CFProject | CFProjectNotFound
-) -> WorkingDirectory:
-    """Built from the lookup already made; no new ``cf`` call."""
-    if isinstance(working, CFProjectNotFound):
-        return WorkingDirectoryNotAProject(not_a_project=working.message)
-    member = get_member(transaction, working.id)
-    if member is None:
-        return WorkingDirectoryNotInProgram(not_in_program=working.id)
-    state = _member_state(member, pairs_of(transaction, member.program_id))
-    return WorkingDirectoryMember(member=state, program=member.program_id)
-
-
-# --- results -----------------------------------------------------------------
-
-
-def _rejected(
-    transaction: Transaction,
-    program_id: str,
-    working: CFProject | CFProjectNotFound,
-    problems: list[SetUpProblem],
-) -> SetUpResult:
-    return SetUpResult(
-        outcome=SetUpOutcome.REJECTED,
-        change_records=(),
-        problems=tuple(problems),
-        program=_program_state(transaction, program_id),
-        working_directory=_working_directory(transaction, working),
-    )
-
-
-def _location(loc: tuple[int | str, ...]) -> str:
-    return ".".join(str(part) for part in loc) or DOCUMENT_LOCATION
-
-
-def malformed_result(error: ValidationError) -> SetUpResult:
-    """One ``malformed`` problem per pydantic error; nothing was looked up."""
-    problems = tuple(
-        SetUpProblem(
-            code=SetUpProblemCode.MALFORMED,
-            detail=f"{_location(problem['loc'])}: {problem['msg']}",
-        )
-        for problem in error.errors()
-    )
-    return SetUpResult(
-        outcome=SetUpOutcome.REJECTED,
-        change_records=(),
-        problems=problems,
-        program=None,
-        working_directory=None,
-    )
-
 
 # --- writes ------------------------------------------------------------------
 
@@ -181,15 +83,6 @@ def _merged_rules(
     if member.rules_default or stored is None:
         return (), RulesFrom.CONFIG_DEFAULT
     return stored.rules_paths, stored.rules_from
-
-
-def _merged_wake_command(
-    member: ResolvedMember, stored: MemberSettings | None
-) -> str | None:
-    """A given command (null clears) replaces; omitted keeps the stored one."""
-    if member.wake_command_given:
-        return member.wake_command
-    return None if stored is None else stored.wake_command
 
 
 def _merged_settings(
@@ -211,7 +104,6 @@ def _merged_settings(
         authorize_allow=pick(member.authorize_allow, stored and stored.authorize_allow),
         authorize_deny=pick(member.authorize_deny, stored and stored.authorize_deny),
         rules_from=rules_from,
-        wake_command=_merged_wake_command(member, stored),
     )
 
 
@@ -242,20 +134,37 @@ def _write_member(
     transaction: Transaction,
     request: ResolvedRequest,
     member: ResolvedMember,
+    here: Gathered | HereCaller,
     now: datetime,
 ) -> list[Change]:
     stored = get_member(transaction, member.project_id)
-    changes: list[Change] = []
+    plan = member.plan
+    if plan is not None:
+        name_before_write(transaction, plan, now)
+    program_id = request.program_id
     changed = upsert_member(
         transaction,
-        program_id=request.program_id,
+        program_id=program_id,
         settings=_merged_settings(member, None if stored is None else stored.settings),
+        name=member.name,
         now=now,
     )
+    changes: list[Change] = []
     if changed:
         verb = ChangeVerb.ADDED if stored is None else ChangeVerb.UPDATED
         changes.append(
-            Change(verb=verb, subject=ChangeSubject.MEMBER, detail=member.project_id)
+            Change(verb=verb, subject=ChangeSubject.MEMBER, detail=member.name)
+        )
+    if plan is not None and isinstance(here, HereCheckout):
+        changes += apply_plan(transaction, plan, here, now)
+    if member.rename_to is not None and member.rename_to != member.name:
+        set_member_name(transaction, member.project_id, member.rename_to, now)
+        changes.append(
+            Change(
+                verb=ChangeVerb.UPDATED,
+                subject=ChangeSubject.MEMBER,
+                detail=f"{member.name} is now named {member.rename_to}",
+            )
         )
     return changes
 
@@ -283,7 +192,7 @@ def _write_pairs(
                 Change(
                     verb=verb,
                     subject=ChangeSubject.DEPENDENCY,
-                    detail=f"{member.project_id} on {dependency.provider_id} "
+                    detail=f"{member.name} on {dependency.provider_name} "
                     f"({dependency.consumed.value})",
                 )
             )
@@ -293,12 +202,13 @@ def _write_pairs(
 def _apply(
     transaction: Transaction,
     request: ResolvedRequest,
-    working: CFProject | CFProjectNotFound,
+    here: Gathered | HereCaller,
 ) -> SetUpResult:
     now = datetime.now(UTC)
     changes = _write_concept(transaction, request, now)
     for member in request.members:
-        changes += _write_member(transaction, request, member, now)
+        changes += _write_member(transaction, request, member, here, now)
+    changes += apply_wake_commands(transaction, request.members, here, now, changes)
     # Pairs after every member exists: a provider may be added in this request.
     for member in request.members:
         changes += _write_pairs(transaction, request, member, now)
@@ -307,9 +217,33 @@ def _apply(
         outcome=SetUpOutcome.APPLIED if changes else SetUpOutcome.UNCHANGED,
         change_records=tuple(changes),
         problems=(),
-        program=_program_state(transaction, request.program_id),
-        working_directory=_working_directory(transaction, working),
+        program=program_state(transaction, request.program_id),
+        working_directory=working_directory_of(transaction, here),
     )
+
+
+def apply_set_up(  # noqa: PLR0913 - the transaction, the request and what was gathered
+    transaction: Transaction,
+    config: UserConfig,
+    request: SetUpRequest,
+    here: Gathered | HereCaller,
+    working_plan: MemberPlan | SetUpProblem | None = None,
+) -> SetUpResult:
+    """The engine inside the caller's write transaction: find the references, run the
+    checks, and either write or return the problems. Nothing is written when a
+    problem is found, so the transaction may commit as it is."""
+    resolution = resolve_request(
+        transaction,
+        request,
+        here if not isinstance(here, HereCaller) else None,
+        working_plan,
+    )
+    problems = list(resolution.problems)
+    if resolution.request is not None:
+        problems += check_request(transaction, config, resolution.request)
+    if problems or resolution.request is None:
+        return rejected(transaction, request.program, here, problems)
+    return _apply(transaction, resolution.request, here)
 
 
 def set_up(
@@ -317,28 +251,19 @@ def set_up(
     config: UserConfig,
     document: object,
     *,
-    directory: Path,
-    run: CfRun,
+    here: Gathered | HereCaller,
 ) -> SetUpResult:
     """Apply the ``set_up`` request ``document``, which is validated here.
 
+    ``here`` is what the client part gathered from the caller's directory, or
+    ``None`` when the request names every member.
+
     Raises:
-        ContextForgeError: ``cf`` failed to give a usable answer; nothing is written.
         StoreError: The store failed.
     """
     try:
         request = SetUpRequest.model_validate(document)
     except ValidationError as error:
         return malformed_result(error)
-    resolution = resolve_request(request, directory, run)
     with store.write() as transaction:
-        problems = list(resolution.problems)
-        if resolution.request is not None:
-            problems += check_request(transaction, config, resolution.request)
-        # Nothing has been written when a problem is found, so returning here
-        # leaves the store as it was.
-        if problems or resolution.request is None:
-            return _rejected(
-                transaction, request.program, resolution.working_directory, problems
-            )
-        return _apply(transaction, resolution.request, resolution.working_directory)
+        return apply_set_up(transaction, config, request, here)

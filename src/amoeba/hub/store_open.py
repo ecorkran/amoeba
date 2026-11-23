@@ -11,6 +11,7 @@ import sqlite3
 from contextlib import closing
 
 from amoeba.config.home import StateLayout
+from amoeba.operations.name_by_id import name_by_id
 from amoeba.store.errors import (
     HubStoreBehindError,
     HubStoreMissingError,
@@ -84,4 +85,13 @@ def open_hub_store(layout: StateLayout, *, create: bool = False) -> Store:
             f"the hub has no store at {layout.store_path}; `amoeba hub serve` makes "
             "one on a first start"
         )
-    return Store.open(layout.store_path)
+    store = Store.open(layout.store_path)
+    named = False
+    try:
+        # A hub has no `cf`: a member left unnamed by schema 11 is named by its id.
+        name_by_id(store)
+        named = True
+    finally:
+        if not named:
+            store.close()
+    return store

@@ -15,14 +15,12 @@ from amoeba.store.sessions import upsert_session
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import WakeOutcome
 from amoeba.store.wakes import (
-    NO_CHECKOUT_DETAIL,
     WAKE_WINDOW,
     can_wake,
     finish_wake,
     get_wake,
 )
 from store.message_support import ADDRESSEE, NOW, SENDER, seed_members
-from store.seed import insert_member
 from store.wake_support import (
     COMMAND,
     DIRECTORY,
@@ -33,6 +31,7 @@ from store.wake_support import (
     TIMEOUT_SECONDS,
     claim,
     confirmed_session,
+    seed_waking_member,
 )
 
 TICK = timedelta(microseconds=1)
@@ -44,17 +43,7 @@ def store(tmp_path: Path) -> Iterator[Store]:
     with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
             seed_members(transaction, SENDER)
-            insert_member(
-                transaction,
-                project_id=ADDRESSEE,
-                program_id="demo",
-                rules_paths=(),
-                authorize_allow=(),
-                authorize_deny=(),
-                registered_at=NOW,
-                updated_at=NOW,
-                wake_command=COMMAND,
-            )
+            seed_waking_member(transaction)
         yield opened
 
 
@@ -72,7 +61,7 @@ def test_an_unknown_member_is_not_claimed(store: Store) -> None:
 
 def test_a_member_with_no_command_is_not_claimed(store: Store) -> None:
     with store.write() as transaction:
-        transaction.execute("UPDATE members SET wake_command = NULL")
+        transaction.execute("UPDATE checkouts SET wake_command = NULL")
         assert claim(transaction, "w1") is None
         assert not can_wake(transaction, ADDRESSEE, NOW, LIMITS)
 
@@ -174,7 +163,12 @@ def test_the_limit_counts_start_failed_rows(store: Store) -> None:
     with store.write() as transaction:
         for index in range(MAX_WAKES):
             at = NOW + index * HOUR
-            assert claim(transaction, f"w{index}", now=at, directory=None) is None
+            # A start that fails ends its row as ``start_failed`` (wake.py), and the
+            # row still counts toward the day's limit.
+            assert claim(transaction, f"w{index}", now=at) is not None
+            finish_wake(
+                transaction, f"w{index}", WakeOutcome.START_FAILED, None, "x", at
+            )
         assert claim(transaction, "over", now=NOW + MAX_WAKES * HOUR) is None
         assert get_wake(transaction, "over") is None
 
@@ -188,17 +182,16 @@ def test_a_row_exactly_a_day_old_no_longer_counts(store: Store) -> None:
         assert claim(transaction, "w", now=NOW + WAKE_WINDOW, max_wakes=1) is not None
 
 
-def test_a_null_directory_inserts_an_ended_start_failed_row(store: Store) -> None:
+def test_a_member_with_no_checkout_here_gets_no_claim_and_no_wake_row(
+    store: Store,
+) -> None:
     with store.write() as transaction:
-        result = claim(transaction, "w1", directory=None)
+        transaction.execute("DELETE FROM checkouts")
+        result = claim(transaction, "w1")
         row = get_wake(transaction, "w1")
 
     assert result is None
-    assert row is not None
-    assert row.outcome is WakeOutcome.START_FAILED
-    assert row.ended_at == NOW
-    assert row.detail == NO_CHECKOUT_DETAIL
-    assert (row.directory, row.log_stem, row.command) == (None, None, COMMAND)
+    assert row is None
 
 
 def test_can_wake_agrees_with_claim_wake_over_the_same_fixtures(store: Store) -> None:
@@ -220,7 +213,7 @@ def test_a_later_edit_of_the_command_leaves_the_stored_row_unchanged(
 ) -> None:
     with store.write() as transaction:
         claim(transaction, "w1")
-        transaction.execute("UPDATE members SET wake_command = 'other'")
+        transaction.execute("UPDATE checkouts SET wake_command = 'other'")
         row = get_wake(transaction, "w1")
 
     assert row is not None

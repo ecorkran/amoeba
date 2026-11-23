@@ -87,12 +87,12 @@ WHERE program_id = ?
 
 _MEMBER_INSERT_COLUMNS: Final = (
     "project_id, program_id, rules_paths, authorize_allow, authorize_deny, "
-    "registered_at, updated_at, rules_from, wake_command"
+    "registered_at, updated_at, rules_from, name, origin"
 )
-#: Select order: ``store.programs._member`` reads these positionally.
+#: Select order: ``store.programs.member_from_row`` reads these positionally.
 _MEMBER_COLUMNS: Final = (
     "project_id, program_id, rules_paths, authorize_allow, authorize_deny, "
-    "registered_at, updated_at, removed_at, rules_from, wake_command"
+    "registered_at, updated_at, removed_at, rules_from, name, origin"
 )
 #: The active-member predicate (228 D8), the one place "a removed member is not a
 #: member" is written. Every member and pair read below uses it.
@@ -106,26 +106,74 @@ SELECT_MEMBERS_OF: Final = (
     f"SELECT {_MEMBER_COLUMNS} FROM members WHERE program_id = ? "
     f"AND {ACTIVE_MEMBER} ORDER BY project_id"
 )
-# Parameters: the nine columns, then the acting machine's owner (D12).
+# Parameters: the ten columns, then the acting machine's owner (D12). The retired
+# ``wake_command`` column is not named: nothing writes it (261 D2).
 INSERT_MEMBER: Final = (
     f"INSERT INTO members ({_MEMBER_INSERT_COLUMNS}, owner_id) "
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 UPDATE_MEMBER: Final = """
 UPDATE members SET rules_paths = ?, rules_from = ?, authorize_allow = ?,
-    authorize_deny = ?, wake_command = ?, updated_at = ?
+    authorize_deny = ?, updated_at = ?
 WHERE project_id = ?
 """
 # Re-registering a removed member: a fresh registration, possibly in another program.
 REREGISTER_MEMBER: Final = """
 UPDATE members SET program_id = ?, rules_paths = ?, rules_from = ?,
-    authorize_allow = ?, authorize_deny = ?, wake_command = ?, registered_at = ?,
+    authorize_allow = ?, authorize_deny = ?, registered_at = ?,
     updated_at = ?, removed_at = NULL
 WHERE project_id = ?
 """
 REMOVE_MEMBER: Final = (
     "UPDATE members SET removed_at = ?, updated_at = ? "
     f"WHERE project_id = ? AND {ACTIVE_MEMBER}"
+)
+
+# --- member names and origin (slice 261, D1 to D4) ---------------------------------
+# ``name`` is compared without case by its column collation; ``project_id`` is not.
+
+SELECT_MEMBER_BY_NAME: Final = (
+    f"SELECT {_MEMBER_COLUMNS} FROM members WHERE name = ? AND {ACTIVE_MEMBER}"
+)
+SELECT_MEMBER_BY_ORIGIN: Final = (
+    f"SELECT {_MEMBER_COLUMNS} FROM members WHERE origin = ? AND {ACTIVE_MEMBER}"
+)
+#: The most recently removed member with this origin (D7 step 3).
+SELECT_REMOVED_MEMBER_BY_ORIGIN: Final = (
+    f"SELECT {_MEMBER_COLUMNS} FROM members WHERE origin = ? "
+    "AND removed_at IS NOT NULL ORDER BY removed_at DESC, registered_at DESC LIMIT 1"
+)
+# Parameters: the name, then the member's own id. Any member, active or removed (D1).
+SELECT_NAME_IS_OTHER_MEMBERS_ID: Final = (
+    "SELECT 1 FROM members WHERE project_id = ? COLLATE NOCASE AND project_id <> ? "
+    "LIMIT 1"
+)
+#: The members from before migration 012 that naming has not reached, in
+#: registration order (D4): id, whether removed, and the old wake command.
+SELECT_UNNAMED_MEMBERS: Final = (
+    "SELECT project_id, removed_at IS NOT NULL, wake_command FROM members "
+    "WHERE name IS NULL ORDER BY registered_at, project_id"
+)
+# Parameter: the machine's name. The active members with no checkout on it: what the
+# live update's read-back compares with the projects `cf` lists (261 D16).
+SELECT_ACTIVE_MEMBERS_WITHOUT_CHECKOUT_ON: Final = (
+    f"SELECT project_id FROM members WHERE {ACTIVE_MEMBER} AND NOT EXISTS ("
+    "SELECT 1 FROM checkouts JOIN machines ON machines.machine_id = "
+    "checkouts.machine_id WHERE checkouts.member_id = members.project_id "
+    "AND machines.name = ?) ORDER BY project_id"
+)
+# Parameter: member id. Naming moved the command to a checkout (or dropped it, logged),
+# so the retired column is always null afterwards (D4).
+CLEAR_MEMBER_WAKE_COMMAND: Final = (
+    "UPDATE members SET wake_command = NULL WHERE project_id = ?"
+)
+# Parameters: name, time, member id.
+SET_MEMBER_NAME: Final = (
+    "UPDATE members SET name = ?, updated_at = ? WHERE project_id = ?"
+)
+# Parameters: origin (or null), time, member id.
+SET_MEMBER_ORIGIN: Final = (
+    "UPDATE members SET origin = ?, updated_at = ? WHERE project_id = ?"
 )
 
 # --- dependency_pairs -------------------------------------------------------

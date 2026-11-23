@@ -10,8 +10,8 @@ interfaces:
 - 263
 - 264
 dateCreated: 20261120
-dateUpdated: 20261121
-status: not_started
+dateUpdated: 20261123
+status: complete
 turns: 32
 promptTokens: 3292508
 cachedTokens: 3062008
@@ -600,35 +600,75 @@ From 260: the door, the call scope, kept results, machines and the acting machin
 
 ### Verification Walkthrough
 
-Draft; refined after implementation. `--name` and `rm --checkout` do not exist yet.
-
-The criteria above are tests on the two-machine fixture and the local store:
+Run on 20261123 against the built slice. The criteria above are tests on the two-machine fixture and the local store:
 
 ```bash
-uv run pytest tests/hub tests/operations tests/store/test_migration_012.py
+uv run pytest tests/hub tests/operations tests/store/test_migration_012.py tests/scripts
+uv run pytest tests/load                     # the door load bounds (15.4)
+uv run pytest tests/live/messaging           # real cf and git on two machines; needs the AMOEBA_LIVE_* variables
 ```
 
-By hand, with the fixture's hub and two client homes `alpha` and `beta` (from `tests/hub_fixture.py`), and a repo cloned in each:
+By hand, with a hub and two joined client homes `alpha` and `beta` (`tests/hub_fixture.py` builds both: `two_machine_hub(root)`, then `hub.clients["alpha"]` and `hub.clients["beta"]` run the real CLI; each client has its own `cf`, so one repo has a different Context Forge project id on each), a clone of `widget` in each (`git@github.com:org/shared-repo.git` on `alpha`, `https://github.com/org/shared-repo` on `beta`), a repo `tool` on `alpha`, and a different repo `other-widget` on `beta` that is also a Context Forge project named `widget`. Each command below is run in the directory named, as that machine. The output is what the fixture printed; ids and paths are abbreviated.
 
 ```bash
-# alpha: clone with the SSH origin
-cd ~/alpha/widget && amoeba add -j          # outcome applied; member "widget"; checkout on alpha
-# beta: clone with the HTTPS origin
-cd ~/beta/widget && amoeba add -j           # outcome applied; attached to "widget"
-amoeba list members                         # one member, two checkouts, each with its machine
+# alpha: the clone with the SSH origin
+cd ~/alpha/widget && amoeba add
+#   added
+#     created program widget
+#     added member widget
+#       rules: default
+#     added checkout ~/alpha/widget of widget
+#     changed member widget origin github.com/org/shared-repo      (exit 0)
 
-# a second repo on alpha sends to it
-cd ~/alpha/tool && amoeba add && amoeba send --to widget --subject "..." --body "..."
-# beta reads it
-cd ~/beta/widget && amoeba inbox -j         # the request is listed
+# beta: the clone with the HTTPS origin attaches to the same member
+cd ~/beta/widget && amoeba add
+#   added
+#     added checkout ~/beta/widget of widget                       (exit 0)
+
+amoeba list members                          # from either machine
+#   widget · program widget
+#     id: <32 hex>
+#     origin: github.com/org/shared-repo
+#     rules: default (CLAUDE.md, AGENTS.md)
+#     checkouts:
+#       alpha, Context Forge id cf-widget-alpha
+#         ~/alpha/widget
+#       beta, Context Forge id cf-widget-beta
+#         ~/beta/widget
+
+# a second repo on alpha sends to it, and beta reads it
+cd ~/alpha/tool && amoeba add && amoeba send --id ask-1 --to widget --subject "add a flag" --body "please"
+#   sent: ask-1                                                    (exit 0)
+cd ~/beta/widget && amoeba inbox
+#   Requests
+#       ask-1 · from <id> · open · <1m
+#         subject: add a flag
+#         body: please
+#   as_of_seq: 1 (pass it as --since next time)
 
 # a different repo that is also called "widget"
-cd ~/beta/other-widget && amoeba add        # rejected: name_taken, both remotes shown
-amoeba add --name widget-fork               # applied
+cd ~/beta/other-widget && amoeba add
+#   rejected: name_taken:                                          (exit 1)
+#     member 'widget' has this name; its origin is github.com/org/shared-repo and this
+#     checkout's is github.com/org/other-widget ... (the whole detail, with the ways on)
+amoeba add --name widget-fork
+#   added
+#     created program widget-fork
+#     added member widget-fork
+#       rules: default
+#     added checkout ~/beta/other-widget of widget-fork
+#     changed member widget-fork origin github.com/org/other-widget (exit 0)
 
-# remove from anywhere
-cd /tmp && amoeba rm widget-fork            # applied
+# remove from anywhere: no cf call, no working directory
+cd /tmp && amoeba rm widget-fork
+#   removed
+#     removed member widget-fork                                   (exit 0)
+amoeba rm --checkout ~/beta/widget           # on beta: the member stays, one checkout fewer
+#   removed
+#     removed checkout ~/beta/widget                               (exit 0)
 ```
+
+Corrections the run found, fixed in this slice: a joined machine's `add` and `rm` text read the local `config.yaml` for the default rules, which is not the config that applies (the hub's is) and may not exist, so the command exited 3 after the hub had applied the change; the text now says `rules: default` alone there. And the text of `name_taken` and its kin cut the detail at the terminal width, losing the way on; those five refusals now wrap their whole detail. Both have tests (`test_add_and_rm_text_needs_no_config_on_a_joined_machine`, `test_a_refusal_that_holds_the_way_on_is_wrapped_in_full_never_cut`). `-j` was never affected.
 
 On the local store, after upgrading: `amoeba list members` shows every member with a name, its checkout on `local`, and any member still named by its id.
 
@@ -661,6 +701,18 @@ Suggested order. Each step leaves the suite passing on the local store.
 7. `gather_runs` and the `runs` document.
 8. The ten hub parts in `run_served`, `CallRefused` and its branch in `handle_call`, the fixture changes, and the chain test.
 9. `rm-machine`, the documents, and `update_live.py`.
+
+### Implementation Notes as built (20261123)
+
+- **Load figures (15.4).** `tests/load/test_door_load.py` runs 16 threads (5 `decisions` readers, 5 writers, 3 `send` callers, 3 `inbox` callers): 260 calls in 8.1 s, slowest 0.158 s against the 2 s bound, median 7 ms. Idle, 100 calls each: `decisions` median 2.5 ms, `inbox` 2.5 ms, `send` 4.3 ms, against the 200 ms bound. `tests/test_ci_gates_load.py` pins that CI's `Tests` step runs the load tier.
+- **Restore command and the rerun rule (16.1, closes #45).** `uv run python scripts/update_live.py restore` puts the newest backup (`<state home>/backups/<stamp>/`) back and reinstalls the version recorded with it. The script's older commit record does not exist in this tree (it installs a PyPI version since ce248104), so the design's `backups/installed-commit` became `backups/installed-version`, written last by a successful `update` or `restore`. `update` takes its `previous` from `--previous`, else that record, else `amoeba --version`. If the newest backup records `previous` and its store holds an older schema than the live one, an earlier `update` migrated and never finished: `update` keeps that backup as the restore point, takes none, and prints that it did. A kill before the migration leaves the store at the old schema, so a new backup is taken as before. Anything that fails after the install, a failed `amoeba list` included, restores and exits 1 naming the failure and the restored version. The null-name check reuses `sql.SELECT_UNNAMED_MEMBERS`; the other new statement is `SELECT_ACTIVE_MEMBERS_WITHOUT_CHECKOUT_ON`.
+- **Modules beyond Component Structure.** Client-part split so the hub never imports it: `operations/here_document.py`, `operations/add_gather.py`, `operations/name_by_id.py` (5.2: D2's text puts `name_by_id` in `operations.naming`, which imports the client part, so it is its own module), `store/member_names.py`. Splits by concern to stay near 300 lines: `operations/add_member.py` with `add_names.py` and `add_origin.py`; `operations/set_up_plan.py`, `set_up_wake.py` and `set_up_state.py` out of `set_up.py` (269 lines, under its 344); `operations/served_types.py` and `served_runners.py` out of `served.py`; `operations/status_local.py` out of `status.py`; `operations/wake_door.py` (the hub's `send` refusal); `wiring_gather.py` (the client part's placement, replacing `wiring_registry.py` and `wiring_releases.py`, and `place_message`). Test infrastructure: `tests/hub_clients.py`, `tests/store/schema_11.py`.
+- **The import rule is narrowed (13.7).** Only `here`, `naming` and `run_gather` import `project_of` or `project_details`; type-only imports (`CFProject`, `CFProjectNotFound`) are allowed because `working_directory` keeps its `CFProject` shape. The hub and `operations.served` reach none of the four client-part modules through any import (walked in `tests/test_import_boundaries.py`).
+- **`handle_pause` (7.7).** `PauseTarget.cf_project_id` and the pause path's `cf -p` calls are changed here although the Excluded list leaves `handle_pause` to 262: the member id is no longer a Context Forge id, so the pause path needed the checkout's.
+- **Unknown references are `not_a_member` (9.8)**, where today they are `not_a_project`: the engine finds references in the store, not in Context Forge.
+- **Existing `tests/load` files (7.1, 7.3, 8.1).** `test_messages_load`, `test_wake_claim_load` and `test_report_release_load` follow the new signatures with bounds and assertions unchanged, apart from `test_wake_claim_load`'s send bound, which is computed from `worst_case_seconds` and fell from 105 s to 45 s with one `cf` lookup per operation; `test_no_cf_under_write_lock` drives the placement.
+- **Test edits.** The tests changed under the "Behavior kept" rule are listed under their tasks (7.1 to 11.2) in `user/tasks/261-tasks.members-by-name.md`.
+- **Design text changed under the small-conflict rule.** `operations` take a `clock` and `ServedEdges` gained `local` (the machine's own edges; `None` on the hub, which starts no wake and runs no sweep, prune or run start); `ListResult.from_document` and `result_from_document(name, document, request)` (a `list` result's type follows its subject); `SetUpResult` drops its computed `changes` when rebuilt from a document; `gather_values` uses `deps.cf_run` and `deps.git_run`; `UNKNOWN_ADVICE` words `reply`, `cancel` and `send` for each; the runs document keeps a lower kind out once a higher one is cut; paused runs come first in `status` and `list` text; `tests/test_read_side_defined_once.py` allows `wire/protocol.py` to hold the served name `list` and the body key `runs`.
 
 ### Special Considerations
 
@@ -696,7 +748,7 @@ Done as the person running it.
 - **A call's outcome is unknown.** The error says to run `inbox` or `list` (or `list members`) before sending again.
 - **Undo.** `amoeba rm <name>` removes a member. `add` in its repo registers it again with its history when the repo has an `origin`. With none, nothing ties the checkout to the removed member, so `add` creates a new member and the old records stay with the removed row. For the upgrade itself, `uv run python scripts/update_live.py restore` puts the store back as it was before the migration.
 
-Dead ends found: none. One limit, stated above: a repo with no `origin` that is removed and added again is a new member.
+Dead ends found: two, running the walkthrough on the built slice (a joined machine's `add` text needing a local config, and `name_taken`'s way on cut in text); both fixed, see the Verification Walkthrough. One limit, stated above: a repo with no `origin` that is removed and added again is a new member.
 
 Dead ends found by the full-text design review of 20261121, and how each is resolved:
 

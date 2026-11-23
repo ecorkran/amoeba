@@ -17,12 +17,11 @@ from pathlib import Path
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.add import add
+from amoeba.operations.add_gather import gather_add
+from amoeba.operations.caller import NotAProject, NotInProgram, find_caller
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import (
-    NotAProject,
-    NotInProgram,
-    resolve_member,
-)
+from amoeba.operations.here import gather_caller, git_root
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.pause_class import (
     ObservedPause,
     PauseClass,
@@ -31,7 +30,8 @@ from amoeba.operations.pause_class import (
     observed_from_document,
 )
 from amoeba.operations.pause_models import SkipReason
-from amoeba.operations.set_up_models import SetUpOutcome
+from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Member, QuestionKey, QuestionRecord
 from amoeba.store.questions import any_answering_run_id, get_question
 from amoeba.store.store import Store
@@ -68,6 +68,9 @@ class Eligible:
     #: The question text exactly as ``sq runs wait --json`` printed it.
     question: str
     member: Member
+    #: The Context Forge project id of the checkout the call came from: what ``cf -p``
+    #: takes. The member's id is never given to ``cf`` (261 D6).
+    cf_project_id: str
     #: What the poll said about the pause, for ``classify_pause``.
     observed: ObservedPause
     run_facts: RunFacts
@@ -125,11 +128,7 @@ def _run_only_skip(pause_class: PauseClass, polled: RunOutcomeDocument) -> Skip:
 def _checkout_of(directory: Path) -> Path:
     """The checkout holding ``directory``: its nearest ancestor with a ``.git`` entry
     (a directory, or the file a linked worktree has), else ``directory`` itself."""
-    resolved = directory.resolve()
-    for candidate in (resolved, *resolved.parents):
-        if (candidate / ".git").exists():
-            return candidate
-    return resolved
+    return git_root(directory) or directory.resolve()
 
 
 def _wrong_checkout(directory: Path, started_in: Path | None) -> Skip | None:
@@ -156,19 +155,36 @@ def _raw(kind: CheckpointKind | UnknownKind | None) -> str:
     return kind.raw if isinstance(kind, UnknownKind) else kind.value
 
 
+def _caller_at(
+    store: Store, directory: Path, deps: Deps
+) -> tuple[Member | NotInProgram | NotAProject, HereCaller | HereNotAProject]:
+    """The member whose checkout holds ``directory``, and what the client gathered.
+
+    Raises:
+        ContextForgeError: ``cf`` failed to give a usable answer.
+    """
+    here = gather_caller(directory, deps.cf_run)
+    with store.read() as transaction:
+        found = find_caller(transaction, acting_machine_id(transaction), here)
+    return found, here
+
+
 def _registered(
     store: Store, config: UserConfig, directory: Path, deps: Deps, cf_id: str
 ) -> Member | Skip:
     """Register the project in no program with ``add``'s defaults and resolve it again.
     A registration that does not take is a skip that says why, never a member."""
-    result = add(store, config, {}, directory=directory, run=deps.cf_run, door=Door.CLI)
+    gathered = gather_add({}, directory, deps.cf_run, deps.git_run, Door.CLI)
+    if isinstance(gathered, SetUpResult):
+        raise ValueError("an empty add document is never refused by the CLI door")
+    result = add(store, config, {}, here=gathered)
     if result.outcome is SetUpOutcome.REJECTED:
         problems = "; ".join(problem.detail for problem in result.problems)
         return Skip(
             SkipReason.NOT_IN_PROGRAM,
             f"project {cf_id}; registering it was rejected: {problems}",
         )
-    resolved = resolve_member(store, directory, deps.cf_run)
+    resolved, _here = _caller_at(store, directory, deps)
     if not isinstance(resolved, Member):
         return Skip(
             SkipReason.NOT_IN_PROGRAM, f"project {cf_id}; still no member after add"
@@ -186,7 +202,7 @@ def _member_checks(  # noqa: PLR0913 - the pieces of one call
     directory: Path,
     deps: Deps,
 ) -> Eligible | Skip:
-    resolved = resolve_member(store, directory, deps.cf_run)
+    resolved, here = _caller_at(store, directory, deps)
     if isinstance(resolved, NotAProject):
         return Skip(SkipReason.NOT_A_PROJECT, resolved.message or None)
     if isinstance(resolved, NotInProgram):
@@ -208,4 +224,6 @@ def _member_checks(  # noqa: PLR0913 - the pieces of one call
         return wrong
     if existing is not None and existing.member_id != resolved.project_id:
         return Skip(SkipReason.OTHER_MEMBER, f"member {existing.member_id}")
-    return Eligible(key, question, resolved, observed, facts, existing)
+    if not isinstance(here, HereCaller):
+        raise ValueError("a member's checkout has a gathered project id")
+    return Eligible(key, question, resolved, here.project_id, observed, facts, existing)

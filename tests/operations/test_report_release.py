@@ -19,9 +19,8 @@ from store.release_support import (
 from store_open import open_local_store
 
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.operations.report_release import report_release
 from amoeba.operations.report_release_models import (
     ReportOutcome,
     ReportReleaseResult,
@@ -30,6 +29,7 @@ from amoeba.store import releases
 from amoeba.store.models import Release
 from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Store
+from operations.release_placed import report_release
 from operations.release_support import (
     CF_DOWN_DIR,
     NOT_A_PROJECT_DIR,

@@ -46,7 +46,7 @@ class Program:
 class MemberSettings:
     """What a member's answering depends on; the member's own part of the row."""
 
-    #: Context Forge project id, the member's key.
+    #: The member's id: an opaque key, never parsed (261 D1).
     project_id: str
     rules_paths: tuple[str, ...]
     #: Config item keys taken off this member's not-authorized list.
@@ -55,8 +55,6 @@ class MemberSettings:
     authorize_deny: tuple[str, ...]
     #: Whether the rules are ``rules_paths`` or the config's default (229 D7).
     rules_from: RulesFrom
-    #: The command a wake starts for this member (244 D1); ``None`` means no wake.
-    wake_command: str | None
 
 
 @dataclass(frozen=True)
@@ -69,6 +67,10 @@ class Member:
     updated_at: datetime
     #: When ``set_up`` removed the member; ``None`` for an active one.
     removed_at: datetime | None
+    #: The member's name (261 D1), never null on a row the store hands out.
+    name: str
+    #: The reduced remote (261 D3) that says which repo this is; ``None`` for none.
+    origin: str | None
 
     @property
     def project_id(self) -> str:

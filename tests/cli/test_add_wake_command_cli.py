@@ -92,17 +92,28 @@ def test_a_member_without_a_command_has_no_line_and_a_null_in_json(
     assert _members(tmp_path)["members"][0][FIELD] is None
 
 
-def test_project_sets_it_from_another_directory(tmp_path: Path) -> None:
+def test_project_with_a_wake_command_is_malformed(tmp_path: Path) -> None:
+    """A command is set from its own checkout (261 D7): ``--project`` names a member,
+    not a checkout, so it cannot carry one."""
     write_config()
     repos = Repos(tmp_path)
     repos.run(repos.forge, "add", "--program", "demo")
 
-    repos.run(
-        repos.squadron, "add", "--project", repos.forge.name, "--wake-command", COMMAND
+    refused = repos.run(
+        repos.squadron,
+        "add",
+        "--project",
+        repos.forge.name,
+        "--wake-command",
+        COMMAND,
+        expect=EXIT_REJECTED,
     )
 
+    assert refused["outcome"] == "rejected"
+    assert [problem["code"] for problem in refused["problems"]] == ["malformed"]
+    assert "its own checkout" in refused["problems"][0]["detail"]
     members = repos.run(repos.guide, "list", "members")["members"]
-    assert {row["name"]: row[FIELD] for row in members} == {repos.forge.name: COMMAND}
+    assert {row["name"]: row[FIELD] for row in members} == {repos.forge.name: None}
 
 
 def test_file_sets_leaves_and_clears_through_the_bulk_key(tmp_path: Path) -> None:

@@ -16,11 +16,11 @@ from user_configs import user_config
 
 from amoeba.answering.values import DeclineReason
 from amoeba.operations.calls_log import append_call, day_file, result_entry
-from amoeba.operations.list_view import ListResult, list_view
+from amoeba.operations.list_view import ListResult
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.request_release import START_FAILED_OUTCOME
-from amoeba.operations.status import StatusResult, status
+from amoeba.operations.status import StatusResult
 from amoeba.operations.status_models import MemberStatus, RunEntry
 from amoeba.store.held_questions import mark_start_attempted, settle_held_waiting
 from amoeba.store.models import QuestionKey
@@ -29,6 +29,7 @@ from amoeba.store.store import Store
 from amoeba.store.vocabulary import RequestState
 from operations.held_support import seed_request
 from operations.pause_support import START
+from operations.status_placed import list_view, status
 from operations.status_support import (
     FakeCf,
     in_directory,
@@ -73,7 +74,7 @@ def _status(store: Store, tmp_path: Path, core_dir: Path) -> StatusResult:
         in_directory(recorded_run(PAUSED), core_dir),
         in_directory(recorded_run(RUNNING), core_dir),
     ]
-    deps = status_deps(tmp_path, cf=FakeCf({core_dir: CORE}), runs=runs, names=NAMES)
+    deps = status_deps(tmp_path, cf=FakeCf({core_dir: CORE}), runs=runs)
     return status(store, user_config(), {}, directory=core_dir, deps=deps)
 
 
@@ -255,7 +256,7 @@ def test_list_gives_the_status_result_unchanged_with_a_held_run(
 ) -> None:
     _hold(store, core_dir, RequestState.ACCEPTED)
     runs = [in_directory(recorded_run(PAUSED), core_dir)]
-    deps = status_deps(tmp_path, cf=FakeCf({core_dir: CORE}), runs=runs, names=NAMES)
+    deps = status_deps(tmp_path, cf=FakeCf({core_dir: CORE}), runs=runs)
 
     listed = list_view(store, user_config(), {}, directory=core_dir, deps=deps)
     expected = status(store, user_config(), {}, directory=core_dir, deps=deps)

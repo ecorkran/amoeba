@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -35,7 +36,7 @@ from live_environment import process_environment
 from process_containment import contained_popen
 from user_configs import example_config_text
 
-from amoeba.config.home import config_path
+from amoeba.config.home import config_path, store_path
 
 AMOEBA = Path(sys.executable).with_name("amoeba")
 RUN_TIMEOUT_SECONDS = 60
@@ -43,6 +44,7 @@ SYSTEM_PATH = "/usr/bin:/bin"
 #: The id and name of the project the default recording is in.
 PROJECT_ID: str = fixture_document(DEFAULT_WORKTREE)["id"]
 PROJECT_NAME: str = fixture_document(DEFAULT_WORKTREE)["name"]
+PROJECT_PATH: str = fixture_document(DEFAULT_WORKTREE)["projectPath"]
 
 
 def write_config(text: str | None = None) -> None:
@@ -58,6 +60,34 @@ def request_file(tmp_path: Path, document: object) -> Path:
     return path
 
 
+def registered_member_id() -> str:
+    """The id of the one member the CLI registered: its own, not Context Forge's
+    (261 D1)."""
+    with sqlite3.connect(store_path()) as connection:
+        row = connection.execute("SELECT project_id FROM members").fetchone()
+    return str(row[0])
+
+
+def write_origin_free_git(bin_dir: Path) -> None:
+    """A ``git`` on ``PATH`` that says every repo has no ``origin`` remote and runs the
+    real ``git`` for anything else.
+
+    The recorded Context Forge project path is a real directory on a developer's
+    machine, so ``add`` would otherwise record that checkout's real remote (261 D3).
+    """
+    real = shutil.which("git")
+    if real is None:
+        raise AssertionError("git is not installed")
+    script = bin_dir / "git"
+    script.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "remote" ]; then echo "error: No such remote" >&2; exit 2; fi\n'
+        f'exec "{real}" "$@"\n',
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+
+
 def run_amoeba(  # noqa: PLR0913 - the fakes a subprocess run can be given
     tmp_path: Path,
     *arguments: str,
@@ -68,12 +98,14 @@ def run_amoeba(  # noqa: PLR0913 - the fakes a subprocess run can be given
     as_json: bool = False,
     cwd: Path | None = None,
     routing: Sequence[RoutedProject] | None = None,
+    real_git: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """Run ``amoeba``; ``as_json`` adds ``-j`` after the command name.
 
-    ``cwd`` is the working directory (default ``tmp_path``). ``routing`` replaces the
-    recorded ``cf`` with one that knows those projects, for a test that needs several
-    members.
+    ``cwd`` is the working directory (default ``tmp_path``). ``real_git`` runs the
+    real ``git`` for ``origin`` too (the default says no repo has one). ``routing``
+    replaces the recorded ``cf`` with one that knows those projects, for a test that
+    needs several members.
     """
     if as_json and arguments and not arguments[0].startswith("-"):
         arguments = (arguments[0], "-j", *arguments[1:])
@@ -84,6 +116,8 @@ def run_amoeba(  # noqa: PLR0913 - the fakes a subprocess run can be given
         write_fake_cf_with_projects(bin_dir, cf_fixture)
     else:
         write_fake_cf(bin_dir, cf_fixture)
+    if not real_git:
+        write_origin_free_git(bin_dir)
     write_fake_sq(
         bin_dir,
         waits={},

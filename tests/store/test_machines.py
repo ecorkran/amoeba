@@ -127,8 +127,9 @@ def _seed_member(store: Store) -> None:
         )
         tx.execute(
             "INSERT INTO members (project_id, program_id, rules_paths, "
-            "authorize_allow, authorize_deny, registered_at, updated_at, owner_id) "
-            "VALUES ('m1', 'demo', '[]', '[]', '[]', 't', 't', ?)",
+            "authorize_allow, authorize_deny, registered_at, updated_at, name, "
+            "owner_id) "
+            "VALUES ('m1', 'demo', '[]', '[]', '[]', 't', 't', 'm1', ?)",
             (owner,),
         )
 

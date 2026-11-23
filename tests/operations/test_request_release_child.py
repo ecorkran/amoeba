@@ -22,6 +22,7 @@ from user_configs import example_config_text
 
 from amoeba import wiring
 from amoeba.config.home import config_path, logs_dir, state_layout
+from amoeba.operations.caller import find_member
 from amoeba.operations.names import Door, OperationName
 from amoeba.operations.request_release import REQUEST_RELEASE_LOG_DIRECTORY
 from amoeba.store.held_questions import HeldQuestion, insert_held
@@ -66,7 +67,9 @@ def test_reply_done_starts_a_real_child_that_moves_the_held_question(
         Door.CLI,
     )
     with wiring.open_store(state_layout()) as store, store.write() as transaction:
-        held = HeldQuestion(HELD, sender.id, "q", str(sender.path))
+        asker = find_member(transaction, sender.name)
+        assert asker is not None
+        held = HeldQuestion(HELD, asker.project_id, "q", str(sender.path))
         assert insert_held(transaction, held, REQUEST_ID, datetime.now(UTC))
     wiring.invoke(
         OperationName.REPLY,

@@ -2,23 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
 import pytest
 from cf_fixtures import OUTSIDE_ANY_PROJECT, fake_cf_run
 from store_open import open_local_store
-from user_configs import user_config
 
-from amoeba.operations.members import ContextForgeError
-from amoeba.operations.set_up import SetUpProblemCode, SetUpResult, set_up
+from amoeba.operations.errors import ContextForgeError
+from amoeba.operations.here import gather_checkout
+from amoeba.operations.set_up import SetUpProblemCode, SetUpResult
 from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.store import Store
 from operations.set_up_support import (
     DIRECTORY,
-    RECORDED_ID,
     RECORDED_NAME,
+    no_origin_git,
+    register_projects,
     row_counts,
     run_set_up,
 )
@@ -37,11 +38,18 @@ def _member(**fields: Any) -> dict[str, Any]:
     return {"rules_paths": ["CLAUDE.md"], **fields}
 
 
-def _rejected(store: Store, document: object, **options: Any) -> SetUpResult:
+def _rejected(
+    store: Store,
+    document: object,
+    projects: Sequence[tuple[str, str]] = (),
+    **options: Any,
+) -> SetUpResult:
+    register_projects(store, document, projects)
+    before = row_counts(store)
     result = run_set_up(store, document, **options)
     assert result.outcome is SetUpOutcome.REJECTED
     assert result.changes == ()
-    assert row_counts(store) == EMPTY
+    assert row_counts(store) == before
     return result
 
 
@@ -120,9 +128,34 @@ def test_a_member_listed_twice_by_name_and_id_is_malformed(store: Store) -> None
     assert "members.0" in result.problems[0].detail
 
 
+def test_two_entries_renaming_to_one_name_are_name_taken_not_a_store_error(
+    store: Store,
+) -> None:
+    """The store's unique index would refuse the second write; the engine says so
+    first, naming both entries, and writes nothing (261 review)."""
+    document = {
+        "program": "demo",
+        "members": [
+            _member(project="provider", name="shared"),
+            _member(project="consumer", name="Shared"),
+        ],
+    }
+
+    result = _rejected(
+        store, document, projects=[("provider-id", "provider"), ("c-id", "consumer")]
+    )
+
+    assert [problem.code for problem in result.problems] == [
+        SetUpProblemCode.NAME_TAKEN
+    ]
+    assert "members.1.name" in result.problems[0].detail
+    assert "members.0" in result.problems[0].detail
+
+
 def test_a_member_named_by_the_working_directory_and_by_name_is_malformed(
     store: Store,
 ) -> None:
+    run_set_up(store, {"program": "demo", "members": [_member()]})
     document = {
         "program": "demo",
         "members": [_member(), _member(project=RECORDED_NAME)],
@@ -133,18 +166,18 @@ def test_a_member_named_by_the_working_directory_and_by_name_is_malformed(
     assert result.problems[0].code is SetUpProblemCode.MALFORMED
 
 
-def test_a_bad_reference_is_not_a_project(store: Store) -> None:
+def test_a_bad_reference_is_not_a_member(store: Store) -> None:
     document = {"program": "demo", "members": [_member(project="no-such-project")]}
 
     result = _rejected(store, document)
 
     assert [problem.code for problem in result.problems] == [
-        SetUpProblemCode.NOT_A_PROJECT
+        SetUpProblemCode.NOT_A_MEMBER
     ]
     assert "members.0.project" in result.problems[0].detail
 
 
-def test_a_bad_provider_and_concept_member_are_not_a_project(store: Store) -> None:
+def test_a_bad_provider_and_concept_member_are_not_a_member(store: Store) -> None:
     document = {
         "program": "demo",
         "concept": {"member": "ghost", "path": "docs/concept.md"},
@@ -159,7 +192,7 @@ def test_a_bad_provider_and_concept_member_are_not_a_project(store: Store) -> No
     assert "concept.member" in details
     assert "members.0.depends_on.0.provider" in details
     assert {problem.code for problem in result.problems} == {
-        SetUpProblemCode.NOT_A_PROJECT
+        SetUpProblemCode.NOT_A_MEMBER
     }
 
 
@@ -180,13 +213,7 @@ def test_an_omitted_project_with_a_non_project_directory_is_not_a_project(
 
 def test_a_cf_failure_raises_before_anything_is_written(store: Store) -> None:
     with pytest.raises(ContextForgeError):
-        set_up(
-            store,
-            user_config(),
-            {"program": "demo", "members": [_member()]},
-            directory=DIRECTORY,
-            run=fake_cf_run(None),
-        )
+        gather_checkout(DIRECTORY, fake_cf_run(None), no_origin_git)
 
     assert row_counts(store) == EMPTY
 
@@ -196,4 +223,4 @@ def test_an_omitted_project_uses_the_working_directorys_project(store: Store) ->
 
     assert result.outcome is SetUpOutcome.APPLIED
     assert result.program is not None
-    assert [member.project_id for member in result.program.members] == [RECORDED_ID]
+    assert [member.name for member in result.program.members] == [RECORDED_NAME]

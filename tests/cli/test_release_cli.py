@@ -16,7 +16,7 @@ from amoeba.cli.main import main
 from amoeba.config.home import store_path
 from amoeba.operations.changes_models import ChangesOutcome, ChangesResult, MemberRef
 from amoeba.operations.names import Door, OperationName
-from cli.cli_support import PROJECT_ID, result_of, run_amoeba, write_config
+from cli.cli_support import registered_member_id, result_of, run_amoeba, write_config
 from cli.requests_support import HASH, Repos
 
 FULL_HASH = "ab12" * 10
@@ -50,7 +50,7 @@ def test_report_release_prints_the_result_document_with_touched_in_order(
     assert completed.returncode == EXIT_OK, completed.stderr
     result = result_of(completed)
     assert result["outcome"] == "recorded"
-    assert result["member"] == PROJECT_ID
+    assert result["member"] == registered_member_id()
     assert result["report"]["touched"] == ["second", "first"]
     assert result["report"]["commit"] == FULL_HASH
 
@@ -84,7 +84,7 @@ def test_changes_lists_with_no_providers(tmp_path: Path) -> None:
     result = result_of(completed)
     assert result["outcome"] == "listed"
     assert result["pairs"] == []
-    assert result["member"]["id"] == PROJECT_ID
+    assert result["member"]["id"] == registered_member_id()
 
 
 def test_an_abbreviated_hash_is_rejected_as_malformed_with_exit_one(
@@ -159,7 +159,7 @@ def documents(monkeypatch: pytest.MonkeyPatch) -> list[tuple[OperationName, obje
         seen.append((name, document))
         return ChangesResult(
             outcome=ChangesOutcome.LISTED,
-            member=MemberRef(id="member", name=None),
+            member=MemberRef(id="member", name="me"),
             since=SINCE,
             pairs=(),
             problems=(),

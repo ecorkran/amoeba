@@ -23,10 +23,10 @@ from amoeba.config.home import (
     state_layout,
 )
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.cf_readers import cf_member_resolver, cf_names
 from amoeba.operations.deps import Deps
 from amoeba.operations.names import OperationName
 from amoeba.operations.served import ServedEdges, ServedResult
+from amoeba.operations.set_up_models import SetUpResult
 from amoeba.operations.state_move import open_state_store, prepare_state_home
 from amoeba.store.set_aside import (
     PutBack,
@@ -37,8 +37,10 @@ from amoeba.store.set_aside import (
     set_aside,
     set_aside_stores,
 )
+from amoeba.store.vocabulary import Door
 from amoeba.wire.join_line import JoinError, parse_join_line
 from amoeba.wire.protocol import SERVED_OPERATIONS
+from amoeba.wiring_gather import body_keys, gather_values
 from amoeba.wiring_results import result_from_document
 
 #: How the two commands are named in a message.
@@ -53,14 +55,9 @@ class NotServedError(Exception):
 def local_served_edges(
     deps: Deps, load_config: Callable[[], UserConfig]
 ) -> ServedEdges:
-    """The edges the six served operations get on the local way: today's
-    ``cf``-backed readers, the config loader and the clock."""
-    return ServedEdges(
-        clock=deps.clock,
-        load_config=load_config,
-        names=cf_names(deps),
-        resolve_member=cf_member_resolver(deps.cf_run),
-    )
+    """The edges the served operations get on the local way: the clock, the config
+    loader and this machine's own edges (the hub gets none, 261 D9, D11)."""
+    return ServedEdges(clock=deps.clock, load_config=load_config, local=deps)
 
 
 def joined() -> ClientFile | None:
@@ -93,20 +90,38 @@ def _not_served(client_file: ClientFile, operation: str) -> str:
     )
 
 
-def route(name: OperationName, document: object) -> ServedResult | None:
+def route(  # noqa: PLR0913 - invoke's arguments and the deps the gather needs
+    name: OperationName,
+    document: object,
+    directory: Path | None,
+    door: Door,
+    make_deps: Callable[[], Deps],
+) -> ServedResult | SetUpResult | None:
     """The hub's result when this machine is joined, ``None`` when it is not.
 
-    A served operation goes through ``client.call`` and comes back as the typed
-    result the local way returns; any other raises ``NotServedError``. With a client
-    file nothing local is read or written first.
+    A served operation gathers what it needs here (the client part, so a
+    ``ContextForgeError`` is raised before any hub call), goes through
+    ``client.call`` with the gathered values beside the document, and comes back as
+    the typed result the local way returns; any other raises ``NotServedError``.
+    ``add``'s door refusal is returned as the result it is, with no call. With a
+    client file nothing local is read or written first.
     """
     client_file = joined()
     if client_file is None:
         return None
     if name.value not in SERVED_OPERATIONS:
         raise NotServedError(_not_served(client_file, name.value))
-    result = call(client_file, pinned_cert_path(), name.value, document)
-    return result_from_document(name.value, result)
+    values = gather_values(name, document, directory, door, make_deps())
+    if isinstance(values, SetUpResult):
+        return values
+    result = call(
+        client_file,
+        pinned_cert_path(),
+        name.value,
+        document,
+        extra=body_keys(values),
+    )
+    return result_from_document(name.value, result, document)
 
 
 # --- join and leave ----------------------------------------------------------

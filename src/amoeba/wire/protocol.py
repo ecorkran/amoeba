@@ -23,10 +23,34 @@ SERVED_OPERATIONS: Final[tuple[str, ...]] = (
     "retract",
     "standing",
     "withdraw",
+    "add",
+    "rm",
+    "list",
+    "status",
+    "inbox",
+    "reply",
+    "cancel",
+    "changes",
+    "report_release",
+    "send",
 )
 #: Served operations that write, so their results are kept for a repeated call (D9).
+#: ``inbox`` and ``changes`` read. ``list`` and ``status`` write only the message
+#: expiry, which is safe to run twice, so they keep no result (261 D12).
 WRITING_CALLS: Final[frozenset[str]] = frozenset(
-    {"mark_read", "dismiss", "retract", "standing", "withdraw"}
+    {
+        "mark_read",
+        "dismiss",
+        "retract",
+        "standing",
+        "withdraw",
+        "add",
+        "rm",
+        "reply",
+        "cancel",
+        "report_release",
+        "send",
+    }
 )
 #: The door's own call: a token check that returns the machine's name. Not an operation.
 HELLO_CALL: Final = "hello"
@@ -35,6 +59,11 @@ HELLO_MACHINE_KEY: Final = "machine"
 
 #: The request body key holding the operation's document.
 DOCUMENT_KEY: Final = "document"
+#: The body keys beside it for values only the client can read (261 D5): the caller's
+#: project (or, for ``add``, its checkout) and the machine's runs. A call that does not
+#: need one sends none and the hub ignores one it is sent.
+HERE_BODY_KEY: Final = "here"
+RUNS_BODY_KEY: Final = "runs"
 #: A body over this, or with no valid length, is refused before it is read.
 MAX_CALL_BYTES: Final = 1024 * 1024
 
@@ -144,6 +173,26 @@ UNKNOWN_ADVICE: Final[dict[str, str]] = {
         "standing answer exists."
     ),
     "withdraw": "Run it again; `unchanged` means it is already withdrawn.",
+    "send": (
+        "Run `amoeba inbox` or `amoeba list` and look for the request before "
+        "sending again."
+    ),
+    "reply": (
+        "Run `amoeba inbox` or `amoeba list` and look for the request before "
+        "replying again."
+    ),
+    "cancel": (
+        "Run `amoeba inbox` or `amoeba list` and look for the request before "
+        "cancelling again."
+    ),
+    "add": "Run `amoeba list members` and look for the member and its checkout.",
+    "rm": "Run `amoeba list members` and look for the member and its checkout.",
+    "report_release": (
+        "Run it again. A report that was applied answers `unchanged` and a "
+        "withdrawal that was applied is rejected because nothing is stored; "
+        "neither writes. A correction that was applied is applied again with the "
+        "same text."
+    ),
 }
 
 #: A machine's name (D3): lower-case letters and digits, with ``.``, ``_`` and ``-``.

@@ -16,7 +16,7 @@ from user_configs import user_config
 from amoeba.config.user_config import UserConfig
 from amoeba.operations import send_write
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.message_models import (
     MAX_BODY_LENGTH,
     MAX_ID_LENGTH,
@@ -27,12 +27,12 @@ from amoeba.operations.message_models import (
 )
 from amoeba.operations.message_results import SendResult
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.operations.send import send
 from amoeba.store.message_transitions import StateFields, change_state
 from amoeba.store.messages import get_message
 from amoeba.store.programs import remove_member
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, RequestState
+from operations.message_placed import send
 from operations.message_support import (
     RECIPIENT,
     RECIPIENT_NAME,
@@ -410,7 +410,7 @@ def test_the_sweep_runs_first_so_an_expired_request_is_recorded(
     assert old is not None and old.state is RequestState.EXPIRED
 
 
-def test_a_send_makes_at_most_three_cf_lookups(
+def test_a_send_makes_one_cf_lookup(
     store: Store, tmp_path: Path, clock: SettableClock
 ) -> None:
     cf = message_cf()
@@ -418,7 +418,7 @@ def test_a_send_makes_at_most_three_cf_lookups(
 
     _send(store, counted, _document(member=SENDER_NAME))
 
-    assert len(cf.calls) == 3
+    assert len(cf.calls) == 1
 
 
 def test_a_cf_failure_raises_and_writes_nothing(

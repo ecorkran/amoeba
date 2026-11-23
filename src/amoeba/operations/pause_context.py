@@ -38,6 +38,8 @@ from amoeba.operations.program_sources import (
 )
 from amoeba.operations.standing_sources import standing_answers_of
 from amoeba.store.answers import pm_precedent
+from amoeba.store.checkouts import Checkout, first_checkout_on
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Member, PmPrecedent, Program, StandingAnswerRow
 from amoeba.store.programs import get_program, members_of
 from amoeba.store.standing import standing_reaching
@@ -167,6 +169,10 @@ class _StoredFacts:
     precedent: tuple[PmPrecedent, ...]
     #: The active standing answers reaching the member (230 D5).
     standing: tuple[StandingAnswerRow, ...]
+    #: The concept member's first-added checkout on the acting machine, whose path and
+    #: Context Forge id the concept read uses (261 D6); ``None`` when there is none or
+    #: the program has no concept.
+    concept_checkout: Checkout | None
 
 
 def gather(
@@ -177,9 +183,13 @@ def gather(
     settings: AnswererSettings,
     run: CfRun,
     *,
+    cf_project_id: str,
     request: Passage | None = None,
 ) -> PauseContext | SourcesProblem:
     """The context for a question asked by ``member`` in ``checkout``.
+
+    ``cf_project_id`` is the Context Forge id of that checkout: every ``cf -p`` call
+    takes it, never ``member.project_id``, which Context Forge may not know (261 D6).
 
     ``request`` is a held question's ``request_result`` passage (242 D5), handed to
     ``assemble`` as it is.
@@ -190,10 +200,10 @@ def gather(
     a problem to its decline reason with ``sources_reason``.
     """
     stored = _read_store(store, member)
-    slice_context = resolve_slice(checkout, member.project_id, run_facts.params, run)
+    slice_context = resolve_slice(checkout, cf_project_id, run_facts.params, run)
     if isinstance(slice_context, SourcesProblem):
         return slice_context
-    committed = _read_committed(checkout, member, slice_context, settings, run)
+    committed = _read_committed(checkout, cf_project_id, slice_context, settings, run)
     if not isinstance(committed, CommittedSources):
         return committed
     return _assemble(
@@ -206,6 +216,13 @@ def _read_store(store: Store, member: Member) -> _StoredFacts:
         program = get_program(transaction, member.program_id)
         if program is None:
             raise ValueError(f"member {member.project_id} has no program record")
+        concept_checkout = (
+            None
+            if program.concept_member is None
+            else first_checkout_on(
+                transaction, program.concept_member, acting_machine_id(transaction)
+            )
+        )
         return _StoredFacts(
             program=program,
             members=members_of(transaction, member.program_id),
@@ -213,17 +230,18 @@ def _read_store(store: Store, member: Member) -> _StoredFacts:
             standing=standing_reaching(
                 transaction, member.project_id, member.program_id
             ),
+            concept_checkout=concept_checkout,
         )
 
 
 def _read_committed(
     checkout: Path,
-    member: Member,
+    cf_project_id: str,
     slice_context: SliceContext,
     settings: AnswererSettings,
     run: CfRun,
 ) -> CommittedSources | SourcesProblem:
-    target = read_target(checkout, member.project_id, run, READ_TIMEOUT_SECONDS)
+    target = read_target(checkout, cf_project_id, run, READ_TIMEOUT_SECONDS)
     if isinstance(target, ReadFailure):
         return unreadable(target.detail)
     return read_committed_sources(
@@ -253,6 +271,7 @@ def _assemble(  # noqa: PLR0913 - the pieces gather has already read
         ProgramRead(
             asker=member,
             asker_reads=AskerReads(checkout, committed.commit, committed.files),
+            concept_checkout=stored.concept_checkout,
             max_chars=settings.passages_max_chars - committed.chars,
             run=run,
             timeout_seconds=READ_TIMEOUT_SECONDS,

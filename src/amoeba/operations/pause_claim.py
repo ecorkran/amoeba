@@ -266,6 +266,7 @@ def _prepare(
         target.run_facts,
         settings,
         deps.cf_run,
+        cf_project_id=target.cf_project_id,
         request=passage,
     )
     if isinstance(context, SourcesProblem):

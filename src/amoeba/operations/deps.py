@@ -21,8 +21,7 @@ from typing import Final
 from amoeba.amoeba_script import resolve_amoeba_script
 from amoeba.operations.processes import Spawner, start_child
 from amoeba.operations.prune_models import Prune
-from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
-from amoeba.upstream.context_forge.projects import ProjectNames, project_names
+from amoeba.upstream.context_forge.cli_call import CfRun
 from amoeba.upstream.squadron.run_list import ListedRun, RunListProblem, list_runs
 from amoeba.upstream.squadron.run_outcome import RunPoll, poll_run
 
@@ -31,10 +30,6 @@ RUN_POLL_TIMEOUT_SECONDS: Final = 30.0
 
 #: Reads one run's outcome without waiting: ``poll_run`` with its timeout bound.
 type PollRun = Callable[[str], RunPoll]
-
-
-#: Reads every Context Forge project's name by id (slice 224, D6).
-type ReadProjectNames = Callable[[], ProjectNames | CfCallFailed]
 
 
 #: Reads the whole ``sq runs list --json`` listing with the poll's timeout bound.
@@ -47,6 +42,8 @@ class Deps:
     ``decisions``."""
 
     cf_run: CfRun
+    #: Runs ``git`` for the reads of ``operations.here`` (slice 261, D5).
+    git_run: CfRun
     poll_run: PollRun
     spawn: Spawner
     clock: Callable[[], datetime]
@@ -62,7 +59,6 @@ class Deps:
     #: The pre-228 home, whose ``answering/`` placement also skips; ``None`` when
     #: there is no legacy home (``StateLayout.legacy_home``).
     legacy_home: Path | None
-    project_names: ReadProjectNames
     list_runs: ListRuns
     #: Removes settled scratch and logs past ``prune_after_days`` (228 D9).
     prune: Prune
@@ -87,6 +83,7 @@ def production_deps(
     """The real edges: ``subprocess.run``, ``poll_run``, ``start_child``, the clock."""
     return Deps(
         cf_run=subprocess.run,
+        git_run=subprocess.run,
         poll_run=partial(poll_run, timeout_seconds=RUN_POLL_TIMEOUT_SECONDS),
         spawn=start_child,
         clock=_utc_now,
@@ -96,7 +93,6 @@ def production_deps(
         calls_log_dir=calls_log_dir,
         squadron_runs_dir=squadron_runs_dir,
         legacy_home=legacy_home,
-        project_names=partial(project_names, subprocess.run),
         list_runs=partial(list_runs, timeout_seconds=RUN_POLL_TIMEOUT_SECONDS),
         prune=prune,
         amoeba_script=resolve_amoeba_script,

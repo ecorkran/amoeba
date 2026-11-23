@@ -100,9 +100,7 @@ def build_world(
     _write_config(world, passages_max_chars)
     # No rules flag: the member reads the config's default rules (229 D7), which for
     # this repo is its CLAUDE.md (an absent AGENTS.md is skipped).
-    registered = run_amoeba(
-        world, "add", "--program", PROGRAM_ID, "--project", CF_PROJECT_NAME
-    )
+    registered = run_amoeba(world, "add", "--program", PROGRAM_ID)
     assert registered.returncode == 0, registered.stderr + registered.stdout
     return world
 

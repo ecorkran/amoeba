@@ -17,7 +17,6 @@ from user_configs import user_config
 from amoeba.answering.values import AnsweringEvidence, DeclineReason
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
-from amoeba.operations.status import status
 from amoeba.operations.status_runs import HANDLED_BY_HANDLE_PAUSE
 from amoeba.store.answers import Settled, answers_of, record_resume, settle_answered
 from amoeba.store.questions import (
@@ -40,6 +39,7 @@ from operations.handle_rig import (
     world,
 )
 from operations.pause_support import START
+from operations.status_placed import status
 
 OLD_RUN = "amoeba-20261110T110000Z-oldoldoldold"
 WAIT = 600.0
@@ -196,7 +196,6 @@ def test_status_and_handle_pause_agree_on_every_class(
         deps = replace(
             w.deps,
             list_runs=lambda: [_listed(w)],
-            project_names=lambda: {PROJECT_ID: "the-member"},
         )
 
         shown = status(w.store, user_config(), {}, directory=w.directory, deps=deps)
@@ -222,7 +221,6 @@ def test_a_closed_pause_shows_why_and_has_no_next_and_writes_nothing(
         deps = replace(
             w.deps,
             list_runs=lambda: [_listed(w)],
-            project_names=lambda: {PROJECT_ID: "the-member"},
         )
 
         shown = status(w.store, user_config(), {}, directory=w.directory, deps=deps)

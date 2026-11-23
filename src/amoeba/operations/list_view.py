@@ -10,17 +10,17 @@ view also needs are already in the status document. The subjects ``programs``,
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
 from enum import StrEnum
-from pathlib import Path
 from typing import Any, Final
 
-from pydantic import ValidationError, field_validator
+from pydantic import TypeAdapter, ValidationError, field_validator
 
 from amoeba.answering.values import AnsweredBy
 from amoeba.config.user_config import NonBlank, UserConfig
 from amoeba.operations.deps import Deps
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.list_registry import (
     DependenciesView,
     MembersView,
@@ -31,19 +31,20 @@ from amoeba.operations.list_registry import (
     programs_view,
     standing_view,
 )
-from amoeba.operations.members import ContextForgeError
 from amoeba.operations.reject_codes import (
     RejectCode,
     unknown_program_problem,
     validation_problems,
 )
+from amoeba.operations.runs_document import RunsDocument
 from amoeba.operations.set_up_models import FrozenModel
 from amoeba.operations.status import status
 from amoeba.operations.status_models import StatusOutcome, StatusResult
+from amoeba.store.errors import StoreRowError
+from amoeba.store.programs import get_member_any
 from amoeba.store.settled import SettledQuestion, settled_since
-from amoeba.store.store import Store
+from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import ClosedReason
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
 
 
 class ListSubject(StrEnum):
@@ -104,6 +105,18 @@ class ListResult(FrozenModel):
     #: ``None`` when ``all`` was not given.
     settled: tuple[SettledEntry, ...] | None = None
 
+    @classmethod
+    def from_document(cls, document: Mapping[str, object]) -> ListResult:
+        """The result a ``document()`` was made from (the door's reply)."""
+        status_part = dict(document)
+        settled = status_part.pop("settled", None)
+        return cls(
+            status=StatusResult.model_validate(status_part),
+            settled=None
+            if settled is None
+            else TypeAdapter(tuple[SettledEntry, ...]).validate_python(settled),
+        )
+
     def document(self) -> dict[str, object]:
         """``status``'s document; with ``all``, plus one top-level ``settled``."""
         document = self.status.model_dump(mode="json")
@@ -130,14 +143,19 @@ def list_view(
     config: UserConfig,
     document: object,
     *,
-    directory: Path,
-    deps: Deps,
+    here: HereCaller | HereNotAProject | None,
+    runs: RunsDocument | None,
+    clock: Callable[[], datetime],
+    local: Deps | None,
 ) -> ListOutcome:
     """Apply the ``list`` request ``document``, which is validated here.
 
+    ``here`` is the caller's gathered project and ``runs`` the machine's gathered runs,
+    both needed by the default view only (``needs_here`` says when).
+
     Raises:
-        SquadronError: ``sq runs list --json`` gave no usable listing (default view).
-        ContextForgeError: ``cf`` gave no usable answer.
+        SquadronError: The runs document says ``sq runs list --json`` gave no usable
+            listing (default view).
         StoreError: The store cannot be used.
     """
     try:
@@ -145,7 +163,7 @@ def list_view(
     except ValidationError as error:
         return _rejected(RejectCode.MALFORMED, validation_problems(error))
     if request.subject is None:
-        return _default_view(store, config, request, directory, deps)
+        return _default_view(store, config, request, here, runs, clock, local)
     if request.all and request.subject in ALL_NOT_ACCEPTED:
         return _rejected(
             RejectCode.MALFORMED,
@@ -163,45 +181,71 @@ def list_view(
             return _rejected(RejectCode.UNKNOWN_PROGRAM, (unknown,))
     match request.subject:
         case ListSubject.PROGRAMS:
-            return programs_view(
-                store, deps.cf_run, program=request.program, show_empty=request.all
-            )
+            return programs_view(store, program=request.program, show_empty=request.all)
         case ListSubject.MEMBERS:
-            return members_view(store, config, deps.cf_run, program=request.program)
+            return members_view(store, config, program=request.program)
         case ListSubject.DEPENDENCIES:
-            return dependencies_view(store, deps.cf_run, program=request.program)
+            return dependencies_view(store, program=request.program)
         case ListSubject.STANDING:
-            return standing_view(store, deps.cf_run, include_withdrawn=request.all)
+            return standing_view(store, include_withdrawn=request.all)
 
 
 def _default_view(
     store: Store,
     config: UserConfig,
     request: ListRequest,
-    directory: Path,
-    deps: Deps,
+    here: HereCaller | HereNotAProject | None,
+    runs: RunsDocument | None,
+    clock: Callable[[], datetime],
+    local: Deps | None,
 ) -> ListResult:
+    if here is None or runs is None:
+        raise ValueError("the default list view needs the gathered caller and runs")
     result = status(
         store,
         config,
         {} if request.program is None else {"program": request.program},
-        directory=directory,
-        deps=deps,
+        here=here,
+        runs=runs,
+        clock=clock,
+        local=local,
     )
     if not request.all or result.outcome is StatusOutcome.REJECTED:
         return ListResult(status=result)
-    since = deps.clock() - timedelta(days=config.prune_after_days)
+    since = clock() - timedelta(days=config.prune_after_days)
     with store.read() as transaction:
         settled = settled_since(transaction, since)
-    names = deps.project_names()
-    if isinstance(names, CfCallFailed):
-        raise ContextForgeError(names.detail)
+        names = {
+            item.member_id: _stored_name(transaction, item.member_id)
+            for item in settled
+        }
     return ListResult(
         status=result,
         settled=tuple(
             _entry(item, names) for item in settled if _in_scope(item, request.program)
         ),
     )
+
+
+def _stored_name(transaction: Transaction, member_id: str) -> str:
+    """The name the store holds for a member, removed members included."""
+    member = get_member_any(transaction, member_id)
+    if member is None:
+        raise StoreRowError(f"settled question of {member_id!r}, a member not in store")
+    return member.name
+
+
+def needs_here(document: object) -> bool:
+    """Whether the gathered caller and runs are needed: the default view (no subject)
+    only.
+
+    A document that does not parse needs nothing; ``list_view`` rejects it."""
+    try:
+        request = ListRequest.model_validate(document)
+    except ValidationError:
+        # Not a valid request: list_view returns the malformed rejection, no caller.
+        return False
+    return request.subject is None
 
 
 def _in_scope(item: SettledQuestion, program: str | None) -> bool:
@@ -212,7 +256,7 @@ def _entry(item: SettledQuestion, names: Mapping[str, str]) -> SettledEntry:
     return SettledEntry(
         program=item.program_id,
         member_id=item.member_id,
-        member_name=names.get(item.member_id),
+        member_name=names[item.member_id],
         run_id=item.key.run_id,
         paused_at=item.key.paused_at,
         question=item.question,

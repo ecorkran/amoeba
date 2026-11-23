@@ -113,7 +113,10 @@ Context Forge project, on the default rules. A repeat changes nothing and is
 | Flag | Request field | Meaning |
 |---|---|---|
 | `--program ID` | `program` | The program (created when new). Without it: the member's own program when it is registered (a removed member's too), else a new program named for its Context Forge project. A program that already exists by that name is joined, and the text says `added member Y to existing program X` instead of `created program X` |
-| `--project NAME` | `project` | A Context Forge project name or id; default the working directory's. A directory with no project and no `--project` is `not_a_project` and nothing is written |
+| `--project NAME` | `project` | An existing member's name or id (slice 261); default this directory's checkout, which `add` finds or creates the member for ("Which member", below). It never creates a member and runs no `cf`, so it works from any directory. A directory with no project and no `--project` is `not_a_project` and nothing is written |
+| `--name NAME` | `name` | Sets or changes the member's name (default: the Context Forge name). A name is `[A-Za-z0-9][A-Za-z0-9._-]*`, at most 64 characters, compared without case; one that another active member has, or that is another member's id, is `name_taken` |
+| `--attach-to NAME` | `attach_to` | Attach this checkout to that member when it has no checkout on any machine (`member_has_checkouts` otherwise): the way to give a checkout back to a member with no `origin` to match on. `malformed` when this checkout is already on record (`amoeba rm --checkout` first) |
+| `--new-member` | `new_member` | Make a new member of this checkout and skip the `origin` steps; the name must be free. The undo for a checkout that attached to the wrong member |
 | `--rules PATH` (repeatable) | `rules_paths: [PATH...]` | Replaces the member's rules with these entries (`rules.md`) |
 | `--default-rules` | `rules_default: true` | Returns the member to the config's `default_rules_paths` |
 | `--no-rules` | `rules_paths: []` | Stores no rules at all |
@@ -122,8 +125,8 @@ Context Forge project, on the default rules. A repeat changes nothing and is
 | `--deny KEY`, `--no-deny` | `authorize_deny` | The same for the deny list |
 | `--depends-on PROVIDER[:MODE]` (repeatable) | `depends_on: [{provider, consumed}]` | A provider (Context Forge name or id); `MODE` is `from_source` or `from_release`, and without it the config's `default_consumed` |
 | `--concept MEMBER:PATH` | `concept: {member, path}` | The program's concept file, split at the first `:`; an empty side is a usage error |
-| `--wake-command COMMAND` | `wake_command: COMMAND` | The command Amoeba starts, unattended, when a request arrives for this member and no agent is live in it ("The wake command", below). The text must split into words (`shlex` rules) with at least one, and hold no NUL or line break; the executable is not looked up. Omitted leaves the member's command. A CLI-only setting: the MCP `add` tool does not take it |
-| `--no-wake-command` | `wake_command: null` | Clears the member's wake command, so nothing wakes it |
+| `--wake-command COMMAND` | `wake_command: COMMAND` | The command Amoeba starts, unattended, when a request arrives for this member and no agent is live in it ("The wake command", below). It is set on the checkout the command runs in, so it is given from that repo and never with `--project` or for another bulk entry (`malformed`, "a wake command is set from its own checkout"). The text must split into words (`shlex` rules) with at least one, and hold no NUL or line break; the executable is not looked up. Omitted leaves the member's command. A CLI-only setting: the MCP `add` tool does not take it |
+| `--no-wake-command` | `wake_command: null` | Clears this checkout's wake command, so nothing wakes it from here |
 | `--file PATH` (`-` is stdin) | `bulk` | A whole request document (below); it cannot be combined with another flag |
 
 `--rules`, `--default-rules` and `--no-rules` are mutually exclusive, and so are
@@ -139,7 +142,7 @@ The MCP `add` tool takes the same fields (`program`, `project`, `rules_paths`,
 never both, plus `directory`; it does not take `wake_command`, in the single fields or
 in a bulk member, and a call that passes it is `rejected` as an unknown field. `add` builds a request for the `set_up` engine and returns
 its result (`SetUpResult`): `outcome` (`applied`, `unchanged` or `rejected`), `changes`
-(one line per changed row, `<added|updated|removed> <program|member|dependency|pair>
+(one line per changed row, `<added|updated|removed> <program|member|dependency|pair|checkout>
 ...`), `change_records` (the same changes as `{verb, subject, detail}`), `problems` (empty unless rejected), `program` (the program as stored, or null)
 and `working_directory` (informational, or null for a malformed request). Exit 1 when
 `rejected`.
@@ -147,31 +150,68 @@ and `working_directory` (informational, or null for a malformed request). Exit 1
 Each problem has a `code`, a `detail` naming the field at fault, and `open_questions` (empty except for `member_has_open_questions`, where it lists each blocking question as `{run_id, paused_at}`). Codes: `malformed`,
 `not_a_project`, `empty_program`, `member_of_other_program`,
 `unknown_provider`, `self_dependency`, `unknown_authorize_item`,
-`concept_member_not_member`, `member_has_open_questions` and `not_a_member`. Any problem
-rejects the whole request and writes nothing. A new member needs no rules: it gets the
+`concept_member_not_member`, `member_has_open_questions`, `not_a_member`, and from slice
+261 `name_taken`, `origin_taken`, `no_origin`, `member_has_checkouts` and `not_a_checkout`.
+Those five carry the way on in their `detail` (the remotes, the flags to give), and the text
+prints the whole detail, wrapped, never cut; on a joined machine the text of `add` and `rm`
+says `rules: default` alone, since the config that applies is the hub's.
+Any problem rejects the whole request and writes nothing. A new member needs no rules: it gets the
 default.
+
+**Which member (slice 261).** With no `--project`, `add` reads this directory's
+checkout (the Context Forge project id and path, and the repo's `origin` remote reduced
+to `host[:port]/path`, with no scheme, user or password) and chooses the member in this
+order: (1) this checkout is on record on this machine: its member, whatever path
+arrived; the member's `origin` is recorded when it has none, kept when the checkout has
+none, and replaced (both values in the change record) when they differ, `origin_taken`
+when another active member has the new one; (2) an active member has this `origin`: the
+checkout is added to it; (3) a removed member has this `origin`: the most recent one is
+registered again, `name_taken` if its name is taken now and no `--name` is given; (4) a
+free name (`--name`, else the Context Forge name) makes a new member with id
+`uuid4().hex`; (5) a name an active member has is `name_taken` when this checkout has an
+`origin` (naming both remotes and the way on) and `no_origin` when it has none (a repo
+with no `origin` remote can have one checkout, because nothing shows a second is the
+same repo). `change_records` gain the subject `checkout` (`added checkout PATH of
+NAME`) and `updated member` lines for a rename or an `origin` change.
 
 ## `amoeba rm`
 
 ```
 amoeba rm [MEMBER]... [--pair PROVIDER:CONSUMER]... [--concept] [--program ID] [-j]
+amoeba rm --checkout PATH [-j]
 ```
 
 Also `amoeba remove`. With no `MEMBER`, no pair and no `--concept`, it removes the
-working directory's project. `MEMBER` is a Context Forge name or id (an id works after
-the Context Forge project is deleted). Every named member and pair end must belong to
-one program, found from the store, or `--program` names it: members of different
-programs are `member_of_other_program`, a member that was never in a program is
-`not_a_member`. `--concept` clears the program's concept, the only way to remove the
-concept's member (without it that member is `concept_member_not_member`). `rm` builds
-the `remove` section of a request (below), so soft removal and its refusals are the
-engine's. The MCP `rm` tool takes `members`, `pairs` (each `PROVIDER:CONSUMER`),
-`concept` (true) and `program`, plus `directory`.
+caller's member: the one whose checkout is the working directory's Context Forge
+project on this machine (the only case that reads the working directory; `rm <name>`
+runs no `cf` and works from any directory and machine, and `working_directory` is null
+in its result). `MEMBER` is a member's name (any case) or id. Every named member and
+pair end must belong to one program, found from the store, or `--program` names it:
+members of different programs are `member_of_other_program`, a member that was never in
+a program is `not_a_member`. A removed member is found by its id only, so `rm <id>`
+twice is `unchanged` and `rm <name>` twice is `not_a_member` (a removed member's name is
+free for another member). `--concept` clears the program's concept, the only way to
+remove the concept's member (without it that member is `concept_member_not_member`).
+`rm` builds the `remove` section of a request (below), so soft removal and its refusals
+are the engine's. Removing a member also deletes its checkouts on every machine, and
+their wake commands with them. The MCP `rm` tool takes `members`, `pairs` (each
+`PROVIDER:CONSUMER`), `concept` (true), `program` and `checkout`, plus `directory`.
+
+`--checkout PATH` removes one checkout of this machine and leaves the member, the way to
+clear a deleted clone (slice 261). It is found by its stored path as `list members`
+shows it, compared as text with trailing slashes dropped from both sides and not
+resolved against the disk, because the directory may be gone; a path that is not
+absolute is `malformed`. If two checkouts here hold that path, both go. A path with no
+checkout on this machine is `not_a_checkout`, and the detail lists this machine's stored
+paths. It cannot be combined with members, `--pair`, `--concept` or `--program` (`malformed`). The
+result's change record is `removed checkout PATH`. Removing the last checkout leaves a
+member with none, which `list members` marks.
 
 A member with open questions is refused (`member_has_open_questions`); the text prints
 each question's key and the `amoeba answer` and `amoeba dismiss` command that clears it.
-Removing an already removed member is `unchanged`. A removed member comes back with
-`amoeba add` (in its old program unless `--program` names another).
+Removing an already removed member by id is `unchanged`. A removed member comes back
+with `amoeba add` in a checkout of its repo that has the same `origin` remote (step 3
+of "Which member"), in its old program unless `--program` names another.
 
 ## `amoeba list`
 
@@ -198,21 +238,29 @@ gains one top-level `settled` (the questions answered or closed within
 and **Settled**. `--program ID` narrows the view.
 
 **`programs`**: `{programs: [{program, concept: {member, path} | null, members:
-[project_id], names: {project_id: name | null}}]}`; `names` covers the members and the
-concept's member, null for a project Context Forge no longer lists (the text shows the
-id and `(not in Context Forge)`). A program with no active members and no concept is
+[project_id], names: {project_id: name}}]}`; `names` covers the members and the
+concept's member, from the store. A program with no active members and no concept is
 left out unless `--all` is given; the row cannot be deleted (it is the target of its removed members'
 records), and `add --program` refills it.
 
 **`members`**: `{members: [{project_id, name, path, in_context_forge, program,
 rules_from, rules_paths, authorize_allow, authorize_deny, wake_command, depends_on:
-[{provider, consumed}]}]}`. `path` is Context Forge's `projectPath`; the text says `(no path in
-Context Forge)` when it has none, and a member whose project is gone shows its id and
-`(not in Context Forge)`. `rules_paths` is the stored entries for `named` rules and the
-config's current `default_rules_paths` for `config_default`. `wake_command` is the
-stored command in plain text, or null; the text shows it on a `wake command:` line, with
-the command on the next line, for a member that has one and no such line for one that
-does not. A removed member is not listed.
+[{provider, consumed}], origin, checkouts: [{machine, path, cf_project_id,
+wake_command}]}]}` (slice 261). `project_id` is the member's own id (opaque) and `name`
+its name. `path` is the path of the member's first-added checkout on the calling
+machine, null when it has none there, and `in_context_forge` says whether it has one;
+`checkouts` lists every checkout on every machine, the one added first first, with the
+machine's name and the Context Forge project id that machine knows it by. `origin` is
+the reduced remote (`host[:port]/path`) or null. `rules_paths` is the stored entries
+for `named` rules and the config's current `default_rules_paths` for `config_default`.
+`wake_command` is the command a wake claimed on the calling machine would run, in plain
+text, or null; the text shows it on a `wake command:` line, with the command on the next
+line, for a member that has one. The text shows, per member: the name, then `id:`,
+`origin:`, `rules:`, any `allow:` and `deny:`, `depends on:` and `checkouts:` (each with
+its machine, Context Forge id, path and wake command), and marks a member with no
+checkout `(no checkout)` and one named by its id `(named by its id)` with the
+`amoeba add --project ID --name NAME` command that renames it. A removed member is not
+listed.
 
 **`dependencies`**: `{dependencies: [{provider_id, provider_name, consumer_id,
 consumer_name, consumed}]}`.
@@ -221,17 +269,14 @@ consumer_name, consumed}]}`.
 given_at, text, withdrawn_at, withdraw_reason}]}`, newest first (slice 230). Active
 standing answers only; `--all` adds withdrawn ones, whose `withdrawn_at` and
 `withdraw_reason` are set (null on an active one). `program` is set for reach
-`program`; `member` (the project id) and `member_name` (Context Forge's name, null for
-a project it no longer lists) for reach `member`. The text shows one block per entry:
+`program`; `member` (the member's id) and `member_name` (its name) for reach `member`. The text shows one block per entry:
 the id, the reach (`everything`, `program <id>` or `member <name>`) and the date, then
 the text, wrapped to 100 columns and never cut, and for a withdrawn one its date and reason; `No standing
-answers.` when there are none. Context Forge is read only when a member-reach entry
-needs its name. `--program` does not apply (a reach `all` entry reaches every program)
+answers.` when there are none. `--program` does not apply (a reach `all` entry reaches every program)
 and is `rejected`, `malformed`. It is not part of the default view.
 
 `--all` with `members` or `dependencies` is a usage error, exit 2 (as an operation it
-is `rejected`, `malformed`). The registered views read Context Forge once; `cf` failing
-is exit 3 with no partial view. An unknown `--program` is `rejected` with
+is `rejected`, `malformed`). The registered views read the store and run no `cf`. An unknown `--program` is `rejected` with
 `unknown_program`.
 
 ## The request document
@@ -242,7 +287,8 @@ is exit 3 with no partial view. An unknown `--program` is `rejected` with
 program: demo
 concept: {member: some-member, path: docs/concept.md}   # omitted leaves it
 members:
-  - project: some-member          # Context Forge name or id; omitted: the working directory's
+  - project: some-member          # an existing member's name or id; omitted: the working directory's checkout (at most one entry)
+    name: some-name               # sets or changes the member's name
     rules_paths: [CLAUDE.md]      # omitted: keep (a new member gets the default); [] is no rules
     rules_default: false          # true returns the member to the default rules
     authorize_allow: []
@@ -251,7 +297,7 @@ members:
     depends_on:
       - {provider: some-provider, consumed: from_source}
 remove:
-  members: [other-member]         # Context Forge names or ids
+  members: [other-member]         # members' names or ids
   pairs:
     - {provider: some-provider, consumer: some-consumer}
 ```
@@ -260,13 +306,14 @@ remove:
 
 - A removed member is **soft-removed**: its row stays (its questions and answers are
   the record), its pairs are deleted, and everywhere else it is treated as not a
-  member (`NotInProgram`, absent from `status` and the program's members). Naming it
-  again under `members` re-registers it as a new member (the config's default rules
-  unless `rules_paths` is given), in this or another program. A pair is deleted.
-- A reference Context Forge does not know is read as a stored member id, so a member
-  whose Context Forge project was deleted can still be removed by its id.
+  member (`NotInProgram`, absent from `status` and the program's members). It comes
+  back through `add` in a checkout of its repo with the same `origin` (slice 261), not
+  by naming it in a request: a reference to a removed member is `not_a_member`. A pair
+  is deleted.
+- A reference nobody matches is `not_a_member`; a removed member can still be removed
+  again by its id (`unchanged`).
 - Removing an already removed member or an absent pair is no change, so a repeat is
-  `unchanged`. `changes` gains `removed member <id>` and `removed pair <provider> ->
+  `unchanged`. `changes` gains `removed member <name>` and `removed pair <provider> ->
   <consumer>`.
 - Removing the program's concept member while the concept stays is rejected
   (`concept_member_not_member`). Clear the concept in the same request with
@@ -304,10 +351,11 @@ stderr.
 
 ## The wake command
 
-A member can carry a **wake command** (slice 244): a command Amoeba starts, unattended,
-when a request is sent to that member and nobody is working in its repo. The PM sets it
-with `amoeba add --wake-command`, from the repo or with `--project`, and clears it with
-`--no-wake-command`; `list members`, `list -j` and `status` show it in plain text, so it
+A checkout can carry a **wake command** (slice 244, moved from the member by slice 261):
+a command Amoeba starts, unattended, when a request is sent to that checkout's member
+and nobody is working in its repo. The PM sets it with `amoeba add --wake-command`, from
+that checkout (never with `--project`: a command belongs to the copy of the repo it runs
+in), and clears it with `--no-wake-command`; `list members`, `list -j` and `status` show it in plain text, so it
 must carry no secret. A pipe, a redirect or an environment assignment needs a script,
 because the command runs without a shell. An example, a script that carries its own cap:
 
@@ -320,8 +368,10 @@ is `open` (outcome `sent`, or `unchanged` with the stored request still `open`) 
 recipient has a wake command, has no push-confirmed live session (`sessions`, above),
 has no wake running, and has fewer than `max_wakes_per_day` wakes started in the last
 24 hours (failed starts count). A note never wakes anyone, nor does a request already
-`accepted`. Amoeba starts `amoeba wake-run` (above) detached in the member's checkout,
-which is Context Forge's `projectPath` for it, and `send` returns without waiting. The
+`accepted`. The wake runs from the member's first-added checkout on this machine that
+has a command (a member with none here is not woken from here). Amoeba starts
+`amoeba wake-run` (above) detached in that checkout's directory, and `send` returns
+without waiting. The
 wake step never changes a request and never makes `send` fail: a store error in it is
 `wake_problem` in the result, and the request stays `open`. If the store also cannot
 record a start failure, the row stays unended: `list` shows it as `running` (with no
@@ -575,7 +625,7 @@ nothing to show. After the result is built, `status` (and `list`'s default view)
 | `unplaced_runs` | paused runs no member could be found for: `run_id`, `status`, `reason`, `checkpoint_kind`, `detail` |
 | `closed_now` | what this call closed (closures made by `handle-pause` are in that call's calls-log `detail`, not here), so each automatic closure is seen once: `{program, member, run_id, paused_at, question, closed_reason, closed_detail}` for a question, and for an answer marked `not_delivered` the same with `answer_seq` and `resume_outcome` |
 | `sweep_problem` | set when the closing, or the message sweep, could not take the store's lock; nothing was closed and the rows show as before (both texts, joined, when both fail) |
-| `file_problems` | calls-log day files that could not be read, and entries `prune` could not remove |
+| `file_problems` | calls-log day files that could not be read, a sentence naming how many runs of each kind were left out when the machine's runs document passed its size limit (paused runs are kept first, so the runs listed under each member are paused runs first, then the others), and entries `prune` could not remove |
 | `problems` | one line per problem when `rejected` |
 
 `status` closes the open questions of the members in scope whose run is no longer at
@@ -588,8 +638,8 @@ longer knows the run).
 
 A member's `requests` are its open and accepted requests, sent and received, each
 `{id, direction, other_member, other_name, subject, state, created_at, state_changed_at,
-parent_id, child_ids}`. `state` is the effective state, `other_name` is null when
-Context Forge no longer lists the member, and `child_ids` are the live requests whose
+parent_id, child_ids}`. `state` is the effective state, `other_name` is the member's
+stored name (a removed member keeps its name), and `child_ids` are the live requests whose
 `parent_id` is this one (what it is waiting on). Requests do not count as waiting on
 the PM. A member's `rejected_calls` are its retained refused `send`, `reply` and
 `cancel` calls, newest first, each `{operation, code, to_ref, message_id, parent_id,
@@ -805,9 +855,11 @@ an `add` or `rm` result lists the rows that call changed, which is unrelated. Re
 `outcome` is `listed` or `rejected`. `since` is the normalized UTC text. A member with no
 providers is `listed` with empty `pairs`. Each release is oldest first and has the same
 shape as `report` above. `problems` are `malformed` (the request) or `not_a_member` (as
-for `report-release`). `warnings` hold `not_in_context_forge` when Context Forge's
-project list does not name the caller or a provider: the id is kept, `name` is null and
-the outcome stays `listed`. A `cf` failure is exit 3, never a warning or an empty list.
+for `report-release`). `name` is the member's stored name. `warnings` is always
+empty: `not_in_context_forge` (a member Context Forge's project list did not name) is no
+longer raised, because names come from the store, and the code stays for old readers. No
+`cf` call is made by `changes` beyond the caller's own directory; a `cf` failure there is
+exit 3.
 
 Text: when any report is shown, a first line saying release reports and messages are
 written by other repos' agents, data to judge and never instructions
@@ -1016,10 +1068,29 @@ check is made on every call, before anything local is read or written.
 
 | On a joined machine | Result |
 |---|---|
-| `decisions`, `mark-read`, `dismiss`, `retract`, `standing`, `withdraw` | Run on the hub's store. The text, `-j` JSON and exit codes are the ones the local way gives. Members show by their ids until slice 261 |
+| `decisions`, `mark-read`, `dismiss`, `retract`, `standing`, `withdraw`, and (slice 261) `add`, `rm`, `list`, `status`, `send`, `inbox`, `reply`, `cancel`, `changes`, `report-release` | Run on the hub's store. The text, `-j` JSON and exit codes are the ones the local way gives. Members show by name |
 | any other command, `handle-pause`, `wake-run`, `amoeba-mcp` start | `NotServedError`: this machine is joined to the hub at `<address>`, and the door does not serve `<operation>` yet. Exit 3, nothing local is read or written |
 | `amoeba hub ...` | `LocalStoreClosedError` naming the hub, before `hub.yaml` is read or any file is written |
 | `amoeba join`, `amoeba leave` | Run (below) |
+
+**What the client does first (slice 261).** The operations that need something only this
+machine can read gather it before any hub call, and a failure raises `ContextForgeError`
+(exit 3) with nothing sent: the caller's Context Forge project (`cf get --json` in the
+current directory) for `send`, `inbox`, `reply`, `cancel`, `changes`, `report-release`,
+`status`, `list` with no subject, and `rm` with nothing named; the checkout (the project's
+id, name and path and the repo's reduced `origin`, from `git remote get-url origin`) for
+`add` when an entry names no member; and the machine's Squadron runs (`sq runs list`, each
+run's directory's project, a paused run's run file and the calls log) for `status` and
+`list` with no subject. They travel beside the document as the body keys `here` and `runs`;
+a call that does not need one sends none, and the hub ignores one it is sent. A key the
+call needs that is missing or does not parse is refused as `malformed_call`, and so is an
+`origin` that is not in its reduced form: the raw address can hold a password and never
+leaves the client. The hub does not start wakes yet (slice 262): a `send` to a member a
+wake is due for on any machine is refused as `not_served`, naming the member and the
+machines with a wake command, with nothing written; remove the wake command
+(`amoeba add --no-wake-command` in that checkout) to send. The hub does not run the close
+sweep, pruning or run starts for `status` and `list`: they read the files of the machine
+that ran `sq`.
 
 On a **hub home** (the config home holds `hub.yaml`) every command that opens the
 local store, and `amoeba join`, refuse with `HubHomeError` / `JoinError`: the hub's

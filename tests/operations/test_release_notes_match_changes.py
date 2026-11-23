@@ -18,12 +18,11 @@ import pytest
 from store.release_support import FULL_HASH, OTHER_PROVIDER, PROVIDER, seed_members
 from store_open import open_local_store
 
-from amoeba.operations.changes import changes
 from amoeba.operations.deps import Deps
-from amoeba.operations.report_release import report_release
 from amoeba.operations.report_release_models import ReportOutcome
 from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Store
+from operations.release_placed import changes, report_release
 from operations.release_support import (
     GONE_PROVIDER,
     PROVIDER_DIR,
@@ -99,7 +98,7 @@ def clock() -> SettableClock:
 
 @pytest.fixture
 def deps(tmp_path: Path, clock: SettableClock) -> Deps:
-    return release_deps(tmp_path, clock, names=dict(NAMES))
+    return release_deps(tmp_path, clock)
 
 
 def _document(event: Event) -> dict[str, object]:

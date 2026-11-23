@@ -22,7 +22,7 @@ from amoeba.mcp.detached import (
 )
 from amoeba.mcp.in_process import CallTimedOut
 from amoeba.mcp.tools import ToolSpec
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.names import OperationName
 from amoeba.store.errors import StoreBusyError
 from amoeba.upstream.squadron.errors import SquadronError

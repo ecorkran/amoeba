@@ -134,6 +134,7 @@ def _handle_polled(  # noqa: PLR0913 - the pieces of one call
         question=checked.question,
         checkout=directory,
         member=checked.member,
+        cf_project_id=checked.cf_project_id,
         run_facts=checked.run_facts,
     )
     existing = checked.existing

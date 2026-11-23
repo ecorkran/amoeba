@@ -40,23 +40,18 @@ from amoeba.operations.processes import start_child
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
 from amoeba.operations.resume import LOG_STAMP_FORMAT, resume_bound_seconds
-from amoeba.operations.served import run_served
 from amoeba.operations.state_move import open_state_store, prepare_state_home
-from amoeba.operations.status import status
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.wire.join_line import JoinError
 from amoeba.wiring_door import (
     NotServedError,
     joined,
-    local_served_edges,
     refuse_if_joined,
     route,
 )
-from amoeba.wiring_messages import place_message
-from amoeba.wiring_registry import place_add, place_list, place_rm
+from amoeba.wiring_gather import place_served
 from amoeba.wiring_release import start_after
-from amoeba.wiring_releases import place_release
 from amoeba.wiring_results import OperationResult, is_rejected, result_document
 
 __all__ = [
@@ -153,12 +148,6 @@ def default_deps(layout: StateLayout) -> Deps:
     )
 
 
-def _required_directory(name: OperationName, directory: Path | None) -> Path:
-    if directory is None:
-        raise ValueError(f"{name.value} needs the caller's directory")
-    return directory
-
-
 def invoke(
     name: OperationName, document: object, directory: Path | None, door: Door
 ) -> OperationResult:
@@ -176,7 +165,9 @@ def invoke(
             directory-taking operation got none.
         OPERATIONAL_ERRORS: As the operation raises them.
     """
-    served = route(name, document)
+    served = route(
+        name, document, directory, door, lambda: default_deps(state_layout())
+    )
     if served is not None:
         return served
     layout = state_layout()
@@ -199,26 +190,6 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
 ) -> OperationResult:
     """``invoke``'s body: the operation ``name`` on ``document``."""
     match name:
-        case OperationName.ADD:
-            return place_add(
-                store,
-                load_config(),
-                document,
-                _required_directory(name, directory),
-                door,
-            )
-        case OperationName.RM:
-            return place_rm(
-                store, load_config(), document, _required_directory(name, directory)
-            )
-        case OperationName.LIST:
-            return place_list(
-                store,
-                load_config(),
-                document,
-                _required_directory(name, directory),
-                default_deps(layout),
-            )
         case OperationName.ANSWER:
             return answer(
                 store,
@@ -227,50 +198,34 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
                 deps=default_deps(layout),
                 via=door,
             )
-        case OperationName.STATUS:
-            return status(
-                store,
-                load_config(),
-                document,
-                directory=_required_directory(name, directory),
-                deps=default_deps(layout),
-            )
         case (
-            OperationName.DECISIONS
+            OperationName.ADD
+            | OperationName.RM
+            | OperationName.LIST
+            | OperationName.STATUS
+            | OperationName.DECISIONS
             | OperationName.MARK_READ
             | OperationName.DISMISS
             | OperationName.RETRACT
             | OperationName.STANDING
             | OperationName.WITHDRAW
-        ):
-            return run_served(
-                name,
-                store,
-                document,
-                local_served_edges(default_deps(layout), load_config),
-            )
-        case OperationName.REPORT_RELEASE | OperationName.CHANGES:
-            return place_release(
-                name,
-                store,
-                document,
-                _required_directory(name, directory),
-                default_deps(layout),
-                load_config,
-            )
-        case (
-            OperationName.SEND
+            | OperationName.REPORT_RELEASE
+            | OperationName.CHANGES
+            | OperationName.SEND
             | OperationName.INBOX
             | OperationName.REPLY
             | OperationName.CANCEL
         ):
-            return place_message(
+            # The client part (a ``cf`` failure raises before any store work), then
+            # the hub part in process, as ``run_served`` runs it on the hub too.
+            return place_served(
                 name,
                 store,
-                load_config(),
                 document,
-                _required_directory(name, directory),
+                directory,
+                door,
                 default_deps(layout),
+                load_config,
             )
         case OperationName.HANDLE_PAUSE:
             raise ValueError(

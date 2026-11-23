@@ -9,20 +9,21 @@ member to show a row under and writes none.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
-from pathlib import Path
 
 from pydantic import ValidationError
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.deps import Deps
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_document import declared_text
 from amoeba.operations.message_member import (
     Recipient,
     Refusal,
-    resolve_caller,
-    resolve_recipient,
+    caller_of,
+    recipient_of,
 )
 from amoeba.operations.message_models import SendRequest
 from amoeba.operations.message_rejection import record_declared
@@ -32,6 +33,7 @@ from amoeba.operations.reject_codes import RejectCode, validation_problems
 from amoeba.operations.send_note import write_note
 from amoeba.operations.send_write import write_send
 from amoeba.operations.wake import wake_for_sent_request
+from amoeba.operations.wake_door import refuse_a_wake_the_door_cannot_start
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import MessageKind
 
@@ -43,19 +45,22 @@ def send(
     config: UserConfig,
     document: object,
     *,
-    directory: Path,
-    deps: Deps,
+    here: HereCaller | HereNotAProject,
+    clock: Callable[[], datetime],
+    local: Deps | None,
 ) -> SendResult:
-    """Send the request in ``document`` from the member ``directory`` belongs to.
+    """Send the request in ``document`` from the member whose checkout ``here`` is.
+
+    ``local`` is this machine's own edges, which start the wake step; ``None`` on the
+    hub, which starts none (261 D9): a send to a member a wake would be due for is
+    refused before anything is written.
 
     Raises:
-        ContextForgeError: ``cf`` failed or timed out; nothing was written.
         StoreError: The store cannot be used.
+        CallRefused: ``local`` is ``None`` and a wake is due (``not_served``).
     """
-    now = deps.clock()
-    caller = resolve_caller(
-        store, directory, declared_text(document, "member"), deps.cf_run
-    )
+    now = clock()
+    caller = caller_of(store, here, declared_text(document, "member"))
     if isinstance(caller, Refusal):
         return _refuse(store, caller, document, now)
     try:
@@ -65,9 +70,7 @@ def send(
         malformed = Refusal(RejectCode.MALFORMED, "; ".join(problems), caller.member_id)
         return _refuse(store, malformed, document, now, problems)
     recipient: Recipient | Refusal | None = (
-        None
-        if request.to is None
-        else resolve_recipient(store, request.to, deps.cf_run)
+        None if request.to is None else recipient_of(store, request.to)
     )
     if isinstance(recipient, Refusal):
         return _refuse(
@@ -84,6 +87,8 @@ def send(
         )
     if recipient is None:
         raise AssertionError("a request names its recipient; the model checked")
+    if local is None:
+        refuse_a_wake_the_door_cannot_start(store, config, recipient.member_id, now)
     result = write_send(
         store,
         config,
@@ -92,7 +97,9 @@ def send(
         request=request,
         now=now,
     )
-    return wake_for_sent_request(store, config, deps, recipient, result)
+    if local is None:
+        return result
+    return wake_for_sent_request(store, config, local, recipient, result)
 
 
 def _refuse(

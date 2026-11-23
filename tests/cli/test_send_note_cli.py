@@ -9,8 +9,8 @@ from amoeba.cli.exit_codes import EXIT_OK, EXIT_REJECTED
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from cli.cli_support import write_config
 from cli.message_cli_support import (
-    PROJECT_ID,
     registered,
+    registered_member_id,
     result_of,
     run_amoeba,
     send_note,
@@ -34,7 +34,7 @@ def test_note_to_a_member_prints_the_note_and_leaves_no_request(
     assert result["outcome"] == "sent"
     assert result["request"] is None
     assert result["note"]["id"] == "news-1"
-    assert result["note"]["from_member"] == PROJECT_ID
+    assert result["note"]["from_member"] == registered_member_id()
     assert result["note"]["to_program"] is None
     assert result["notice"] == QUOTED_DATA_NOTICE
     ((message_id, kind, *_rest),) = stored_rows("messages")

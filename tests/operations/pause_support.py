@@ -11,6 +11,7 @@ from pathlib import Path
 
 from cf_plan_run import plan_cf_run
 from fake_sq import FakePoller, fake_poller
+from store.seed import insert_checkout
 
 from amoeba.operations.deps import Deps
 from amoeba.operations.processes import Spawner, WaitableChild
@@ -19,8 +20,6 @@ from amoeba.store.models import Member, MemberSettings
 from amoeba.store.programs import get_member, upsert_member, upsert_program
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import RulesFrom
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
-from amoeba.upstream.context_forge.projects import ProjectNames
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.upstream.squadron.run_list import ListedRun, RunListProblem
 from amoeba.upstream.squadron.run_outcome import RunPoll
@@ -117,12 +116,17 @@ class DepsRig:
     poller: FakePoller
 
 
-def _unused_project_names() -> ProjectNames | CfCallFailed:
-    raise AssertionError("this test gave no project_names reader")
-
-
 def _unused_list_runs() -> list[ListedRun] | RunListProblem:
     raise AssertionError("this test gave no list_runs reader")
+
+
+def _no_origin_git(
+    argv: Sequence[str], **_kwargs: object
+) -> subprocess.CompletedProcess[str]:
+    """A ``git`` for a repo with no ``origin`` remote: only a pause in a project in no
+    program registers one (``add``'s client part), and the tests' paths are not repos
+    the real ``git`` should be asked about."""
+    return subprocess.CompletedProcess(list(argv), 2, "", "error: No such remote")
 
 
 def unused_amoeba_script() -> Path:
@@ -156,6 +160,7 @@ def build_deps(
 
     deps = Deps(
         cf_run=plan_cf_run(integration_branch="", broken=False),
+        git_run=_no_origin_git,
         poll_run=poll,
         spawn=spawner or recorder,
         clock=clock,
@@ -165,7 +170,6 @@ def build_deps(
         calls_log_dir=tmp_path / "logs" / "calls",
         squadron_runs_dir=tmp_path / "runs",
         legacy_home=None,
-        project_names=_unused_project_names,
         list_runs=_unused_list_runs,
         prune=no_prune,
         amoeba_script=unused_amoeba_script,
@@ -199,8 +203,17 @@ def register_member(
                 authorize_allow=(),
                 authorize_deny=(),
                 rules_from=RulesFrom.NAMED,
-                wake_command=None,
             ),
+            name=project_id,
+            now=START,
+        )
+        # The stub ``cf`` answers a directory with this project id, which a pause
+        # looks up as the checkout (261 D6).
+        insert_checkout(
+            transaction,
+            member_id=project_id,
+            cf_project_id=project_id,
+            path=f"/work/{project_id}",
             now=START,
         )
     with store.read() as transaction:

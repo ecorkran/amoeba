@@ -146,7 +146,7 @@ def test_decisions_are_identical_from_both_and_mark_read_moves_the_shared_marker
         assert from_first == from_second
         records: list[dict[str, dict[str, str]]] = from_first["records"]  # type: ignore[assignment]
         assert [r["member"]["id"] for r in records] == [CORE, LINT]
-        assert [r["member"]["name"] for r in records] == [CORE, LINT]
+        assert [r["member"]["name"] for r in records] == ["core-name", "lint-name"]
 
         moved = hub.clients[FIRST].run("mark-read", "--through", str(seqs[0]), "-j")
         assert moved.code == 0, moved.err

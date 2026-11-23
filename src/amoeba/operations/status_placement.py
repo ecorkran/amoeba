@@ -1,93 +1,75 @@
-"""Placing the runs of ``sq runs list`` under members (slice 224, D4).
+"""Placing the runs of the ``runs`` document under members (slice 224, D4; 261, D11).
 
-Rules, in order, by a run's ``working_directory``: ``None`` and a missing directory are
-unplaced; a scratch directory of an answering run is dropped (no ``cf`` call); then the
-directory's Context Forge project decides: not a project or not in scope is dropped, a
-failed lookup is unplaced, a member in scope is placed. Only a ``paused`` run is ever
-listed as unplaced: another status with nowhere to go cannot be a missed hook and would
-bury what the PM has to act on. ``project_of`` is called once per directory.
+Rules, in order, by a run's directory lookup in the document: no directory and a missing
+directory are unplaced; a failed lookup is unplaced; then the directory's Context Forge
+project decides: not a project, or one that is no checkout of a member in scope, is
+dropped, and the member whose checkout has that project id on the calling machine is
+placed. Only a ``paused`` run is ever listed as unplaced: another status with nowhere to
+go cannot be a missed hook and would bury what the PM has to act on. The document's
+runs are already without answering scratch runs, and this module reads no disk and runs
+no ``cf``.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 
-from amoeba.config.home import ANSWERING_DIR_NAME
+from amoeba.operations.runs_document import LookupKind, OpenRun
 from amoeba.operations.status_models import UnplacedReason, UnplacedRunEntry
 from amoeba.store.models import Member
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
-from amoeba.upstream.context_forge.project_of import CFProject, CFProjectNotFound
-from amoeba.upstream.squadron.run_list import ListedRun
 
-__all__ = ["PlacedRun", "Placement", "UnplacedReason", "place_runs", "scratch_roots"]
-
-#: Looks up a directory's Context Forge project (one ``cf`` call).
-type ProjectOf = Callable[[Path], CFProject | CFProjectNotFound | CfCallFailed]
+__all__ = ["PlacedRun", "Placement", "UnplacedReason", "place_runs"]
 
 
 @dataclass(frozen=True)
 class PlacedRun:
     """A listed run and the member whose repo it runs in."""
 
-    run: ListedRun
+    run: OpenRun
     member: Member
 
 
 @dataclass(frozen=True)
 class Placement:
-    """Where the listing's runs went. Dropped runs are in neither list."""
+    """Where the document's runs went. Dropped runs are in neither list."""
 
     placed: tuple[PlacedRun, ...]
     unplaced: tuple[UnplacedRunEntry, ...]
 
 
-def scratch_roots(answering_dir: Path, legacy_home: Path | None) -> tuple[Path, ...]:
-    """The directories whose runs are answering scratch: the answering directory and,
-    for a paused answering run started before the state move, the legacy one (D12)."""
-    if legacy_home is None:
-        return (answering_dir,)
-    return (answering_dir, legacy_home / ANSWERING_DIR_NAME)
+#: The lookups that leave a run with no member, and why.
+_UNPLACED_REASONS = {
+    LookupKind.NO_DIRECTORY: UnplacedReason.NO_DIRECTORY,
+    LookupKind.DIRECTORY_MISSING: UnplacedReason.DIRECTORY_MISSING,
+    LookupKind.FAILED: UnplacedReason.LOOKUP_FAILED,
+}
 
 
 def place_runs(
-    listed: list[ListedRun],
-    members_in_scope: Mapping[str, Member],
-    scratch_dirs: Sequence[Path],
-    project_of: ProjectOf,
+    runs: Sequence[OpenRun], members_by_checkout: Mapping[str, Member]
 ) -> Placement:
-    """Place ``listed`` under ``members_in_scope`` (by project id); see the module
-    docstring for the rules."""
+    """Place ``runs`` under the members in ``members_by_checkout`` (by the Context Forge
+    project id of a checkout on the calling machine); see the module docstring."""
     placed: list[PlacedRun] = []
     unplaced: list[UnplacedRunEntry] = []
-    lookups: dict[Path, CFProject | CFProjectNotFound | CfCallFailed] = {}
-
-    def refuse(run: ListedRun, reason: UnplacedReason, detail: str | None) -> None:
-        if run.is_paused:
-            unplaced.append(_unplaced(run, reason, detail))
-
-    for run in listed:
-        directory = run.working_directory
-        if directory is None:
-            refuse(run, UnplacedReason.NO_DIRECTORY, None)
-        elif not directory.exists():
-            refuse(run, UnplacedReason.DIRECTORY_MISSING, None)
-        elif any(directory.resolve().is_relative_to(d.resolve()) for d in scratch_dirs):
-            continue  # an answering run's scratch: never listed, no cf call
-        else:
-            if directory not in lookups:
-                lookups[directory] = project_of(directory)
-            outcome = lookups[directory]
-            if isinstance(outcome, CfCallFailed):
-                refuse(run, UnplacedReason.LOOKUP_FAILED, outcome.detail)
-            elif isinstance(outcome, CFProject) and outcome.id in members_in_scope:
-                placed.append(PlacedRun(run, members_in_scope[outcome.id]))
+    for run in runs:
+        lookup = run.lookup
+        reason = _UNPLACED_REASONS.get(lookup.kind)
+        if reason is not None:
+            if run.is_paused:
+                unplaced.append(_unplaced(run, reason, lookup.detail))
+        elif lookup.kind is LookupKind.PROJECT:
+            if lookup.project_id is None:
+                raise ValueError(f"run {run.run_id} has a project lookup with no id")
+            member = members_by_checkout.get(lookup.project_id)
+            if member is not None:
+                placed.append(PlacedRun(run, member))
     return Placement(tuple(placed), tuple(unplaced))
 
 
 def _unplaced(
-    run: ListedRun, reason: UnplacedReason, detail: str | None
+    run: OpenRun, reason: UnplacedReason, detail: str | None
 ) -> UnplacedRunEntry:
     checkpoint = run.checkpoint
     return UnplacedRunEntry(

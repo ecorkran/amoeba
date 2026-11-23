@@ -11,21 +11,22 @@ from pathlib import Path
 import pytest
 from process_containment import contained_popen
 from store.decision_support import CORE, LINT, seed_programs
-from store.wake_support import COMMAND, claim
+from store.wake_support import COMMAND, claim, give_checkout_command
 from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.cli.render.waiting import NOTHING_NEEDS_YOU, render_waiting
 from amoeba.operations.deps import Deps
-from amoeba.operations.list_view import ListResult, list_view
-from amoeba.operations.status import StatusResult, status
+from amoeba.operations.list_view import ListResult
+from amoeba.operations.status import StatusResult
 from amoeba.operations.status_models import MemberStatus, WakeStatus
 from amoeba.operations.wake_run import run_wake
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import WakeOutcome
 from amoeba.store.wakes import finish_wake
-from operations.list_support import ListCf, names_of, project_entry
+from operations.list_support import ListCf, project_entry
 from operations.release_support import SettableClock
+from operations.status_placed import list_view, status
 from operations.status_support import CfAnswer, status_deps
 
 ELSEWHERE = Path("/work/elsewhere")
@@ -53,16 +54,15 @@ def clock() -> SettableClock:
 @pytest.fixture
 def deps(tmp_path: Path, clock: SettableClock) -> Deps:
     cf = ListCf(PROJECTS, {ELSEWHERE: CfAnswer.NOT_A_PROJECT})
-    base = status_deps(tmp_path, cf=cf, runs=[], names=names_of(PROJECTS))
+    base = status_deps(tmp_path, cf=cf, runs=[])
     return replace(base, clock=clock)
 
 
-def _set_command(store: Store, command: str | None) -> None:
+def _set_command(
+    store: Store, command: str | None, directory: str = "/work/core"
+) -> None:
     with store.write() as transaction:
-        transaction.execute(
-            "UPDATE members SET wake_command = ? WHERE project_id = ?",
-            (command, CORE),
-        )
+        give_checkout_command(transaction, CORE, command, directory)
 
 
 def _status(store: Store, deps: Deps) -> StatusResult:
@@ -245,17 +245,11 @@ def test_no_command_text_reaches_the_document_beyond_the_command_field(
     tmp_path: Path, store: Store, deps: Deps, clock: SettableClock
 ) -> None:
     command = f"/nonexistent/{SECRET_MARKER}-agent --flag"
-    _set_command(store, command)
     checkout = tmp_path / "checkout"
     checkout.mkdir()
+    _set_command(store, command, str(checkout))
     with store.write() as transaction:
-        claimed = claim(
-            transaction,
-            "w1",
-            member_id=CORE,
-            now=clock.now,
-            directory=str(checkout),
-        )
+        claimed = claim(transaction, "w1", member_id=CORE, now=clock.now)
     assert claimed is not None
 
     outcome = run_wake(store, deps, "w1", popen=contained_popen)

@@ -13,6 +13,7 @@ import json
 import ssl
 import time
 import uuid
+from collections.abc import Mapping
 from functools import cache
 from importlib import metadata
 from pathlib import Path
@@ -154,11 +155,14 @@ def call(  # noqa: PLR0913 - the file, the certificate, the call and how long to
     document: object,
     times: DoorTimes = DoorTimes(),  # noqa: B008  frozen, no state to share
     call_id: str | None = None,
+    extra: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Make the call and return its result document.
 
     One call id, made here when none is given, is used by every repeat, so the hub
-    applies a repeated writing call once.
+    applies a repeated writing call once. ``extra`` holds the body keys beside
+    ``document`` for values only this machine can read (the caller's project, the
+    runs; 261 D5).
 
     Raises:
         HubCertificateError: The hub did not present the saved certificate; never
@@ -168,7 +172,7 @@ def call(  # noqa: PLR0913 - the file, the certificate, the call and how long to
     """
     context = pinned_context(cert_path)
     path = f"{CALL_PATH_PREFIX}{name}"
-    body = json.dumps({DOCUMENT_KEY: document}).encode("utf-8")
+    body = json.dumps({DOCUMENT_KEY: document, **(extra or {})}).encode("utf-8")
     sent_id = call_id if call_id is not None else uuid.uuid4().hex
     started = time.monotonic()
     while True:

@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Slice 260: the hub and the door. `amoeba hub serve` holds the store and serves six operations (`decisions`, `mark_read`, `dismiss`, `retract`, `standing`, `withdraw`) over TLS pinned to the hub's own certificate, with a token per machine (`amoeba hub invite`, `machines`, `rm-machine`), kept results so a repeated call applies once, timed and pre-migration backups, `--from-backup`, and a rotating hub log. `amoeba join <line>` points a machine at a hub (`--set-aside-local` sets a local store aside, `--address` changes the address) and `amoeba leave` undoes it; a joined machine says the door does not serve any other command yet. A container image and compose example are in `docker/`. Store migration 011 (version 11) adds owners, machines, kept results and the closed mark. `cryptography`, `starlette` and `uvicorn` are now declared dependencies. See `docs/cli-contract.md`, `docs/config-contract.md` and `docs/store-contract.md`.
 
+- Slice 261: members by name. A member has its own id and a name, and a Context Forge id belongs to a checkout (one copy of a repo on one machine), so one member can have checkouts on several machines and agents in all of them read one inbox. `amoeba add` finds the member by the repo's `origin` (reduced to host and path, never the raw address) and attaches the checkout; `--name` sets the name, `--attach-to` and `--new-member` choose the member, and `add` is refused as `name_taken`, `origin_taken`, `no_origin` or `member_has_checkouts` with the way on. `amoeba rm <name>` works from any directory and `rm --checkout PATH` removes one checkout; `list members` shows each member's name, `origin` and checkouts. Members are found by name in the store and `cf` is asked only about the caller's own directory. The first call after the upgrade names every member once (migration 012, version 12); the wake command moves from the member to its checkout. The hub now serves ten more operations (`add`, `rm`, `list`, `status`, `send`, `inbox`, `reply`, `cancel`, `changes`, `report_release`), the client reading the caller's project, the checkout and the machine's runs itself and sending them beside the call; a `send` a wake is due for is refused as `not_served` until slice 262. `hub rm-machine` deletes the machine's checkouts. See `docs/cli-contract.md`, `docs/store-contract.md` and `docs/mcp-server.md`.
+
+### Changed
+
+- `--project` (and a bulk entry's `project`) names an existing member by name or id, so it can no longer register another repo's Context Forge project; run `amoeba add` in that repo. An unknown reference is `not_a_member` where it was `not_a_project`. `status` and `list` show paused runs before the others.
+
+### Fixed
+
+- `scripts/update_live.py`: an update killed after the migration no longer loses its restore point on the rerun, and a failed `amoeba list` (a `cf` failure during naming) restores the store, config and previous version by itself. The read-back also checks that every member has a name and every listed member a checkout (#45).
+- On a joined machine `amoeba add` and `rm` no longer read the local `config.yaml` for their text (they exited 3 after the hub had applied the change), and the way on in `name_taken` and its kin is no longer cut in the text.
+
 ## [0.2.7] - 2026-11-22
 
 Released in place of 0.2.6, which was tagged but never published: its tag failed CI on a test that needed Context Forge installed.

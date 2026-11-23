@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 
@@ -21,7 +20,6 @@ from store.decision_support import (
 from store.question_support import NOW, waiting_question
 from store_open import open_local_store
 
-from amoeba.operations.cf_readers import cf_names
 from amoeba.operations.decisions import DecisionsOutcome, DecisionsResult, decisions
 from amoeba.operations.dismiss import DismissOutcome, dismiss
 from amoeba.operations.retract import (
@@ -35,10 +33,7 @@ from amoeba.store.decisions import advance_marker, read_marker
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
-from amoeba.upstream.context_forge.projects import ProjectNames
-from operations.pause_support import build_deps
 
-NAMES: ProjectNames = {CORE: "core-name", LINT: "lint-name"}
 LATER = NOW + timedelta(hours=1)
 REASON = "wrong number"
 
@@ -55,9 +50,7 @@ def _retract(store: Store, seq: object, reason: object = REASON) -> RetractResul
 
 
 def _decisions(store: Store, tmp_path: Path) -> DecisionsResult:
-    rig = build_deps(tmp_path, polls={}, spawns=[])
-    deps = replace(rig.deps, project_names=lambda: NAMES)
-    return decisions(store, {}, names=cf_names(deps))
+    return decisions(store, {})
 
 
 def _precedent(store: Store, member: str = LINT) -> list[str]:

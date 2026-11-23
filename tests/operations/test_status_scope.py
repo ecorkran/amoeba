@@ -11,11 +11,12 @@ from store.question_support import NOW
 from store.seed import insert_program
 from store_open import open_local_store
 
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
+from amoeba.operations.here import gather_caller
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.status import ScopedProgram, ScopeRejected, resolve_scope
 from amoeba.store.store import Store
-from operations.status_support import CfAnswer, FakeCf, status_deps
+from operations.status_support import CfAnswer, FakeCf
 
 INSIDE_CORE = Path("/work/core")
 INSIDE_LINT = Path("/work/lint")
@@ -53,8 +54,8 @@ def _cf() -> FakeCf:
 def _scope(
     store: Store, tmp_path: Path, directory: Path, program: str | None
 ) -> tuple[ScopedProgram, ...] | ScopeRejected:
-    deps = status_deps(tmp_path, cf=_cf(), runs=[], names={})
-    return resolve_scope(store, directory, program, deps)
+    here = gather_caller(directory, _cf())
+    return resolve_scope(store, here, program)
 
 
 def _ids(scope: tuple[ScopedProgram, ...] | ScopeRejected) -> list[str]:
@@ -99,12 +100,8 @@ def test_an_unknown_program_is_rejected_listing_the_known_ids(
 def test_a_failing_cf_while_resolving_the_directory_raises_and_never_widens(
     store: Store, tmp_path: Path
 ) -> None:
-    deps = status_deps(
-        tmp_path, cf=FakeCf({INSIDE_CORE: CfAnswer.FAILS}), runs=[], names={}
-    )
-
     with pytest.raises(ContextForgeError):
-        resolve_scope(store, INSIDE_CORE, None, deps)
+        gather_caller(INSIDE_CORE, FakeCf({INSIDE_CORE: CfAnswer.FAILS}))
 
 
 def test_a_program_with_no_members_is_listed_with_no_members(

@@ -12,9 +12,8 @@ import pytest
 from cf_fixtures import OUTSIDE_ANY_PROJECT, fake_cf_run
 from store.message_support import count, delivery_rows
 
-from amoeba.operations.cancel import cancel
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.message_models import MAX_REASON_LENGTH, CancelOutcome
 from amoeba.operations.message_results import CancelResult, RequestDirection
 from amoeba.operations.reject_codes import RejectCode
@@ -22,6 +21,7 @@ from amoeba.store.message_transitions import StateFields, change_state
 from amoeba.store.messages import get_message
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, RequestState
+from operations.message_placed import cancel
 from operations.message_support import (
     CONFIG,
     RECIPIENT,

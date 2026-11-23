@@ -7,8 +7,8 @@ from pathlib import Path
 from amoeba.cli.exit_codes import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from cli.message_cli_support import (
-    PROJECT_ID,
     registered,
+    registered_member_id,
     result_of,
     run_amoeba,
     send_note,
@@ -40,7 +40,7 @@ def test_the_document_has_the_requests_and_the_number_to_pass_back(
     assert completed.returncode == EXIT_OK, completed.stderr
     result = result_of(completed)
     assert result["outcome"] == "listed"
-    assert result["member"] == PROJECT_ID
+    assert result["member"] == registered_member_id()
     assert result["since"] is None
     assert result["as_of_seq"] == 1
     assert [request["id"] for request in result["requests"]] == ["ask-1"]
@@ -156,7 +156,7 @@ def test_the_text_has_a_notes_section_below_the_notice(tmp_path: Path) -> None:
     lines = completed.stdout.splitlines()
     assert lines[0] == QUOTED_DATA_NOTICE
     assert lines[1] == "Notes"
-    assert "news-1" in lines[2] and f"from {PROJECT_ID}" in lines[2]
+    assert "news-1" in lines[2] and f"from {registered_member_id()}" in lines[2]
     assert "subject: subject of news-1" in completed.stdout
     assert "body: body of news-1" in completed.stdout
     assert "No requests." not in completed.stdout

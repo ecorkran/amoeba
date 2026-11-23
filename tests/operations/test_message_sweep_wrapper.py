@@ -11,7 +11,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from store.message_support import count, delivery_rows, seed_members
+from store.message_support import count, delivery_rows
+from store.wake_support import give_checkout_command
 from store_open import open_local_store
 
 from amoeba.operations.message_sweep import sweep_messages
@@ -24,8 +25,8 @@ from operations.message_support import (
     CONFIG,
     RECIPIENT,
     SENDER,
-    THIRD,
     message_deps,
+    seed_message_members,
     send_request_as_sender,
 )
 from operations.release_support import SettableClock
@@ -40,7 +41,7 @@ def store(tmp_path: Path) -> Iterator[Store]:
         tmp_path / "amoeba.sqlite3", busy_timeout_seconds=SHORT_BUSY_TIMEOUT_SECONDS
     ) as opened:
         with opened.write() as transaction:
-            seed_members(transaction, SENDER, RECIPIENT, THIRD)
+            seed_message_members(transaction)
         yield opened
 
 
@@ -168,18 +169,14 @@ def test_the_expire_step_never_expires_a_note(
 
 def _claim_wake(store: Store, when: datetime) -> None:
     with store.write() as transaction:
-        transaction.execute(
-            "UPDATE members SET wake_command = 'wake-agent' WHERE project_id = ?",
-            (RECIPIENT,),
-        )
+        give_checkout_command(transaction, RECIPIENT, "wake-agent", "/work/checkout")
         claimed = claim_wake(
             transaction,
             RECIPIENT,
             when,
             WakeLimits(timeout_seconds=600, max_per_day=3, session_stale_seconds=90),
             "a-wake",
-            "/work/checkout",
-            None,
+            "/work/logs/a-wake",
         )
         assert claimed is not None
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -14,8 +15,8 @@ from amoeba.config.home import store_path
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from cli.cli_support import (
-    PROJECT_ID,
     PROJECT_NAME,
+    PROJECT_PATH,
     result_of,
     run_amoeba,
     write_config,
@@ -27,6 +28,13 @@ KEY = QuestionKey("run-open", "2026-11-14T06:48:00+00:00")
 def _registered(tmp_path: Path) -> None:
     write_config()
     assert run_amoeba(tmp_path, "add").returncode == EXIT_OK
+
+
+def _member_id() -> str:
+    """The registered member's own id (not Context Forge's)."""
+    with sqlite3.connect(store_path()) as connection:
+        row = connection.execute("SELECT project_id FROM members").fetchone()
+    return str(row[0])
 
 
 def test_rm_with_no_argument_removes_this_repo_and_says_so(tmp_path: Path) -> None:
@@ -45,7 +53,7 @@ def test_rm_json_prints_the_result_document(tmp_path: Path) -> None:
 
     result = result_of(completed)
     assert result["outcome"] == "applied"
-    assert result["changes"] == [f"removed member {PROJECT_ID}"]
+    assert result["changes"] == [f"removed member {PROJECT_NAME}"]
 
 
 @pytest.mark.parametrize("command", ["rm", "remove"])
@@ -62,20 +70,26 @@ def test_a_member_is_removed_by_name_and_remove_is_the_same_command(
 def test_a_member_is_removed_by_id(tmp_path: Path) -> None:
     _registered(tmp_path)
 
-    completed = run_amoeba(tmp_path, "rm", PROJECT_ID)
+    completed = run_amoeba(tmp_path, "rm", _member_id())
 
     assert completed.returncode == EXIT_OK
     assert completed.stdout.startswith("removed\n")
 
 
-def test_a_repeat_is_unchanged(tmp_path: Path) -> None:
+def test_a_repeat_by_id_is_unchanged_and_by_name_is_not_a_member(
+    tmp_path: Path,
+) -> None:
     _registered(tmp_path)
-    run_amoeba(tmp_path, "rm")
+    member_id = _member_id()
+    run_amoeba(tmp_path, "rm", member_id)
 
-    completed = run_amoeba(tmp_path, "rm")
+    by_id = run_amoeba(tmp_path, "rm", member_id)
+    by_name = run_amoeba(tmp_path, "rm", PROJECT_NAME)
 
-    assert completed.returncode == EXIT_OK
-    assert completed.stdout == "unchanged\n"
+    assert by_id.returncode == EXIT_OK
+    assert by_id.stdout == "unchanged\n"
+    assert by_name.returncode == EXIT_REJECTED
+    assert by_name.stdout.startswith("rejected: not_a_member: ")
 
 
 def test_a_repo_that_was_never_registered_is_not_a_member(tmp_path: Path) -> None:
@@ -91,9 +105,10 @@ def test_open_questions_refuse_and_print_the_commands_that_clear_them(
     tmp_path: Path,
 ) -> None:
     _registered(tmp_path)
+    member_id = _member_id()
     with open_local_store(store_path()) as store, store.write() as transaction:
         insert_question(
-            transaction, claimed_question(KEY, member_id=PROJECT_ID), now=NOW
+            transaction, claimed_question(KEY, member_id=member_id), now=NOW
         )
 
     completed = run_amoeba(tmp_path, "rm")
@@ -132,3 +147,35 @@ def test_a_malformed_pair_exits_two(pair: str) -> None:
         main(["rm", "--pair", pair])
 
     assert raised.value.code == EXIT_USAGE
+
+
+def test_checkout_reaches_the_request_and_removes_it_leaving_the_member(
+    tmp_path: Path,
+) -> None:
+    _registered(tmp_path)
+
+    completed = run_amoeba(tmp_path, "rm", "--checkout", PROJECT_PATH, as_json=True)
+
+    assert completed.returncode == EXIT_OK, completed.stderr
+    assert result_of(completed)["changes"] == [f"removed checkout {PROJECT_PATH}"]
+    listed = result_of(run_amoeba(tmp_path, "list", "members", as_json=True))
+    (member,) = listed["members"]
+    assert (member["name"], member["checkouts"]) == (PROJECT_NAME, [])
+
+
+def test_checkout_with_no_such_path_is_rejected_and_lists_the_paths(
+    tmp_path: Path,
+) -> None:
+    _registered(tmp_path)
+
+    text = run_amoeba(tmp_path, "rm", "--checkout", "/nowhere")
+    document = result_of(
+        run_amoeba(tmp_path, "rm", "--checkout", "/nowhere", as_json=True)
+    )
+
+    assert text.returncode == EXIT_REJECTED
+    assert text.stdout.startswith("rejected: not_a_checkout:\n")
+    assert PROJECT_PATH in text.stdout, "the text lists the stored paths, uncut"
+    (problem,) = document["problems"]
+    assert problem["code"] == "not_a_checkout"
+    assert PROJECT_PATH in problem["detail"]

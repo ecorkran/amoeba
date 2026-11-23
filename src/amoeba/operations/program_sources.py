@@ -31,9 +31,9 @@ from amoeba.answering.source_reads import (
     in_context,
     read_file,
 )
+from amoeba.store.checkouts import Checkout
 from amoeba.store.models import Member, Program
-from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
-from amoeba.upstream.context_forge.project_of import CFProjectNotFound, project_of
+from amoeba.upstream.context_forge.cli_call import CfRun
 from amoeba.upstream.context_forge.target_read import ReadFailure, read_target
 from amoeba.upstream.git_read import GitReadResult, resolve_commit_args
 
@@ -101,6 +101,9 @@ class ProgramRead:
 
     asker: Member
     asker_reads: AskerReads
+    #: The concept member's first-added checkout on this machine (261 D6); ``None``
+    #: when it has none, which is a ``missing`` problem when the concept is read.
+    concept_checkout: Checkout | None
     #: Characters still allowed for the concept text after the project's own text.
     #: An early stop on raw text (182, D5); assembly decides on rendered size.
     max_chars: int
@@ -167,18 +170,18 @@ def _read_from_asker(
 def _read_from_other_member(
     program: Program, holder: str, read: ProgramRead
 ) -> SourceFile | SourcesProblem:
-    """The concept member's checkout, its target and pinned commit, then the file."""
+    """The concept member's checkout on this machine, its target and pinned commit,
+    then the file."""
     prefix = f"concept member {holder}"
-    project = project_of(reference=holder, run=read.run)
-    if isinstance(project, CFProjectNotFound):
+    row = read.concept_checkout
+    if row is None:
         return SourcesProblem(
             SourcesProblemKind.MISSING,
-            f"{prefix} is not a Context Forge project: {project.message}",
+            f"{prefix} has no checkout on this machine",
         )
-    if isinstance(project, CfCallFailed):
-        return unreadable(f"{prefix}: {project.detail}")
-    checkout = Path(project.project_path)
-    target = read_target(checkout, holder, read.run, read.timeout_seconds)
+    checkout = Path(row.path)
+    # The checkout's own Context Forge id, never the member's id (261 D6).
+    target = read_target(checkout, row.cf_project_id, read.run, read.timeout_seconds)
     if isinstance(target, ReadFailure):
         return unreadable(f"{prefix}: {target.detail}")
     git = GitReads(checkout, read.run, read.timeout_seconds)

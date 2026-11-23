@@ -70,7 +70,7 @@ file, pid file or read-only mode, and a missing store is created.
 ## Migrations
 
 - Numbered files in `src/amoeba/store/schema/` (`001_baseline.sql`, `002_pause_handling.sql`,
-  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`, `009_wakes.sql`, `010_standing_answers.sql`, `011_hub_and_door.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (11).
+  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`, `009_wakes.sql`, `010_standing_answers.sql`, `011_hub_and_door.sql`, `012_members_by_name.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (12).
 - Opening applies the missing files in order inside one write transaction and stamps
   `schema_meta.version`. A store stamped higher than the code expects is refused
   (`StoreSchemaError`) and left untouched.
@@ -90,7 +90,7 @@ file, pid file or read-only mode, and a missing store is created.
   unchanged `state` would split one state across two columns. `008` rebuilds
   `questions` by the same procedure, copying every row and key, so `answers` keeps its
   references; no index exists on `questions`, so none is recreated.
-- Times are UTC ISO-8601 text. Member ids are Context Forge project ids. Every closed
+- Times are UTC ISO-8601 text. A member's id is an opaque key, never parsed (a member made before slice 261 keeps the Context Forge project id it was registered under; a later one gets `uuid4().hex`). Every closed
   vocabulary is a `StrEnum` (`store/vocabulary.py`, `answering/values.py`), and a test
   pins each `CHECK` list to its enum.
 
@@ -120,7 +120,7 @@ a foreign key would be circular.
 
 | Column | Meaning |
 |---|---|
-| `project_id` | Key; the Context Forge project id. A member belongs to one program. |
+| `project_id` | Key; the member's id, an opaque text key that is never parsed (slice 261, D1). A member that existed before migration `012` keeps the Context Forge project id it was registered under; a later one gets `uuid4().hex`. A member belongs to one program. |
 | `program_id` | The program. `UNIQUE (program_id, project_id)` backs the pair foreign keys. |
 | `rules_paths` | JSON array of repo-relative rules paths (a `*` allowed in the last segment). |
 | `authorize_allow` | JSON array of config item keys taken off this member's not-authorized list. |
@@ -128,7 +128,9 @@ a foreign key would be circular.
 | `registered_at`, `updated_at` | As above. |
 | `removed_at` | Migration `003`. UTC time `set_up` removed the member; null for an active one. The row stays, because the member's questions and answers reference it and are the record. |
 | `rules_from` | Migration `005`. `named` or `config_default` (`RulesFrom`, a `CHECK`), `NOT NULL`, default `named`. `named` means the member's own `rules_paths` entries (an empty list is a valid named choice: no rules); `config_default` means the config's `default_rules_paths`, read at answering time, and the stored `rules_paths` is unused (written as `[]`). Existing members stay `named`. |
-| `wake_command` | Migration `009`, slice 244. Text, nullable: the command Amoeba starts, unattended, when a request is sent to this member and it has no live session. Null means no wake, and is what every existing member holds. Set by the CLI's `add --wake-command` and cleared by `--no-wake-command`; `list members` shows it in plain text, so it holds no secret. |
+| `wake_command` | Migration `009`, slice 244. Retired by slice 261: the command lives on the member's checkouts (`checkouts.wake_command`). The naming step copies a command to the member's checkout and sets this column to null, and nothing writes it afterwards. Kept as a column because the migration cannot move it (a checkout needs a machine, and the local opener makes that). |
+| `name` | Migration `012`, slice 261. Text with `COLLATE NOCASE`, matching `[A-Za-z0-9][A-Za-z0-9._-]*`, at most 64 characters. Null only on a row from before the migration, until the naming step runs (`operations.naming`, or `name_by_id` on a hub store); a `BEFORE INSERT` trigger refuses a new member with no name, so only old rows can be unnamed. A partial unique index over active members (`removed_at IS NULL`) makes a name unique among them, in any case; a removed member keeps its name for display and does not hold it against anyone. |
+| `origin` | Migration `012`. Text, nullable: the reduced remote (`host[:port]/path`, lower case, no scheme, user or password, no trailing slash or `.git`) that says which repo this is, so checkouts on other machines attach to one member. Null when the repo has none. A partial unique index over active members keeps two from sharing one; any number may have none. |
 
 ### `dependency_pairs` (`set_up`; read by slice 227)
 
@@ -403,6 +405,23 @@ hub. Written by `join --set-aside-local`, cleared by `leave`.
 | `hub_address` | The hub's `host:port` the store went to. |
 | `closed_at` | UTC time the mark was written. |
 
+### `checkouts` (migration `012`, slice 261)
+
+One copy of a repo on one machine. A member has one per machine and clone, and all of
+them share the member's inbox. Written by `add`, deleted by `rm`, `rm --checkout` and
+`amoeba hub rm-machine`.
+
+| Column | Meaning |
+|---|---|
+| `checkout_id` | Key; `AUTOINCREMENT`. Order by `added_at`, then this, gives "the one added first". |
+| `member_id` | The member; not null; references `members.project_id`. Indexed. |
+| `machine_id` | The machine the copy is on; not null; references `machines`. |
+| `cf_project_id` | The Context Forge project id that machine knows the repo by; not null. `UNIQUE (machine_id, cf_project_id)`: one project on one machine is one checkout of one member. |
+| `path` | The directory the checkout was registered at; not null; set when the row is made and never changed by `add` (a registered worktree has the same project id and its own directory, so updating it would move the checkout between worktrees). A moved repo is `rm --checkout <old path>`, then `add` in the new place. |
+| `wake_command` | Text, nullable: the command a wake starts here (slice 244, moved from `members.wake_command`). Null means no wake. Set by `add --wake-command` in this checkout and cleared by `--no-wake-command`; `list members` shows it in plain text, so it holds no secret. |
+| `owner_id` | The owner; references `owners`; a `BEFORE INSERT` trigger (`checkouts_owner_required`) aborts when it is null, as on the other record tables. |
+| `added_at`, `updated_at` | UTC times. |
+
 ### `owner_id` and `sessions.machine_id` (migration `011`)
 
 `owner_id` is on the twelve tables that hold records: `programs`, `members`,
@@ -413,6 +432,9 @@ without a default, and a default owner would be a silent fallback, so each table
 `BEFORE INSERT` trigger (`<table>_owner_required`) that aborts when `owner_id` is null.
 Every insert binds it from the store's acting machine. A store with no acting machine
 fails its first insert with `NoActingMachineError`.
+
+Migration `012` adds `checkouts` with the same trigger (`checkouts_owner_required`), so
+the owner is on thirteen tables.
 
 `sessions.machine_id` references `machines`, with the same kind of trigger
 (`sessions_machine_required`). Rows written before the migration keep a null machine;
@@ -432,11 +454,15 @@ one of eight things. `tests/store/test_schema_holds_no_mirrored_state.py` pins t
 columns under the same reasons, so a new column fails it until it is listed in both
 places and its reason is stated.
 
+A checkout's Context Forge id and path, and a member's `origin`, are the keys Amoeba
+recognises a caller and a repo by. They are taken when `add` runs in that checkout and
+are never read as Context Forge's or git's current state.
+
 - **record**: what happened, written once when it did and never updated to follow anything else. A column here is never read as current state: `questions.checkout` is where a pause ran and `questions.slice_label` the slice its passages were gathered for, not where the member is or what slice it is on. Columns: `answers.answer`, `answers.answered_by`, `answers.cited`, `answers.paused_at`, `answers.recorded_at`, `answers.resume_at`, `answers.resume_detail`, `answers.resume_log`, `answers.resume_outcome`, `answers.resume_started_at`, `answers.retract_reason`, `answers.retracted_at`, `answers.run_id`, `answers.seq`, `answers.via`, `questions.answering_run_id`, `questions.checkout`, `questions.claimed_at`, `questions.closed_at`, `questions.closed_detail`, `questions.closed_reason`, `questions.evidence`, `questions.member_id`, `questions.passages`, `questions.paused_at`, `questions.question`, `questions.request_id`, `questions.run_id`, `questions.slice_label`, `questions.source_commit`, `questions.start_attempted_at`, `questions.state`, `questions.updated_at`, `questions.waiting_detail`, `questions.waiting_reason`, `releases.changed`, `releases.commit_sha`, `releases.member_id`, `releases.reported_at`, `releases.seq`, `releases.touched`, `releases.version`, `releases.versioned_at`.
 
-- **membership**: who is in a program, the PM's registration and the one thing only Amoeba knows. Columns: `dependency_pairs.consumer_id`, `dependency_pairs.program_id`, `dependency_pairs.provider_id`, `dependency_pairs.registered_at`, `dependency_pairs.updated_at`, `members.program_id`, `members.project_id`, `members.registered_at`, `members.removed_at`, `members.updated_at`, `programs.program_id`, `programs.registered_at`, `programs.updated_at`.
+- **membership**: who is in a program, the PM's registration and the one thing only Amoeba knows; a checkout is the registration of one copy of a repo on one machine. Columns: `checkouts.added_at`, `checkouts.cf_project_id`, `checkouts.checkout_id`, `checkouts.machine_id`, `checkouts.member_id`, `checkouts.path`, `checkouts.updated_at`, `dependency_pairs.consumer_id`, `dependency_pairs.program_id`, `dependency_pairs.provider_id`, `dependency_pairs.registered_at`, `dependency_pairs.updated_at`, `members.name`, `members.origin`, `members.program_id`, `members.project_id`, `members.registered_at`, `members.removed_at`, `members.updated_at`, `programs.program_id`, `programs.registered_at`, `programs.updated_at`.
 
-- **settings**: what the PM chose for a program or member, and the store's own schema version. Columns: `dependency_pairs.consumed`, `members.authorize_allow`, `members.authorize_deny`, `members.rules_from`, `members.rules_paths`, `members.wake_command`, `programs.concept_member`, `programs.concept_path`, `schema_meta.id`, `schema_meta.version`.
+- **settings**: what the PM chose for a program or member, and the store's own schema version. Columns: `checkouts.wake_command`, `dependency_pairs.consumed`, `members.authorize_allow`, `members.authorize_deny`, `members.rules_from`, `members.rules_paths`, `members.wake_command`, `programs.concept_member`, `programs.concept_path`, `schema_meta.id`, `schema_meta.version`.
 
 - **messages**: what agents said to each other and where each request stands. Amoeba is the only place this exists, and a request's state is Amoeba's own, never read from Context Forge or Squadron. Columns: `deliveries.created_at`, `deliveries.event`, `deliveries.member_id`, `deliveries.message_id`, `deliveries.seq`, `message_rejections.code`, `message_rejections.created_at`, `message_rejections.detail`, `message_rejections.id`, `message_rejections.member_id`, `message_rejections.message_id`, `message_rejections.operation`, `message_rejections.parent_id`, `message_rejections.to_ref`, `messages.accepted_at`, `messages.body`, `messages.created_at`, `messages.depth`, `messages.expires_at`, `messages.from_member`, `messages.kind`, `messages.message_id`, `messages.parent_id`, `messages.reason`, `messages.result`, `messages.result_commit`, `messages.result_version`, `messages.state`, `messages.state_changed_at`, `messages.subject`, `messages.to_member`, `messages.to_program`.
 
@@ -446,7 +472,7 @@ places and its reason is stated.
 
 - **marker**: how far the PM has read the decisions. Columns: `pm_marker.id`, `pm_marker.last_seen_seq`.
 
-- **ownership**: who owns each record and which machine wrote it, the machines that may call the hub, and the kept results and closed mark of the door (slice 260). Amoeba is the only place this exists. Columns: `answers.owner_id`, `call_results.call_id`, `call_results.machine_id`, `call_results.operation`, `call_results.recorded_at`, `call_results.reply`, `call_results.request_hash`, `closed_mark.closed_at`, `closed_mark.hub_address`, `closed_mark.mark_key`, `deliveries.owner_id`, `dependency_pairs.owner_id`, `machines.client_version`, `machines.created_at`, `machines.last_called_at`, `machines.machine_id`, `machines.name`, `machines.owner_id`, `machines.token_hash`, `members.owner_id`, `message_rejections.owner_id`, `messages.owner_id`, `owners.created_at`, `owners.name`, `owners.owner_id`, `programs.owner_id`, `questions.owner_id`, `releases.owner_id`, `sessions.machine_id`, `sessions.owner_id`, `standing_answers.owner_id`, `wakes.owner_id`.
+- **ownership**: who owns each record and which machine wrote it, the machines that may call the hub, and the kept results and closed mark of the door (slice 260). Amoeba is the only place this exists. Columns: `answers.owner_id`, `call_results.call_id`, `call_results.machine_id`, `call_results.operation`, `call_results.recorded_at`, `call_results.reply`, `call_results.request_hash`, `checkouts.owner_id`, `closed_mark.closed_at`, `closed_mark.hub_address`, `closed_mark.mark_key`, `deliveries.owner_id`, `dependency_pairs.owner_id`, `machines.client_version`, `machines.created_at`, `machines.last_called_at`, `machines.machine_id`, `machines.name`, `machines.owner_id`, `machines.token_hash`, `members.owner_id`, `message_rejections.owner_id`, `messages.owner_id`, `owners.created_at`, `owners.name`, `owners.owner_id`, `programs.owner_id`, `questions.owner_id`, `releases.owner_id`, `sessions.machine_id`, `sessions.owner_id`, `standing_answers.owner_id`, `wakes.owner_id`.
 
 - **presence**: which `amoeba-mcp` processes are serving now, as their own heartbeats say. Nothing else knows this, and a row that stops beating stops counting. Columns: `sessions.client`, `sessions.directory`, `sessions.heartbeat_at`, `sessions.member_id`, `sessions.push_confirmed_at`, `sessions.session_id`, `sessions.started_at`.
 

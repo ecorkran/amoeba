@@ -25,16 +25,32 @@ from store.question_support import NOW, claimed_question
 from store_open import open_local_store
 from user_configs import user_config
 
+from amoeba.operations.changes_models import ChangesResult
 from amoeba.operations.decisions import DecisionsOutcome, DecisionsResult
 from amoeba.operations.dismiss import DismissOutcome, DismissResult
+from amoeba.operations.errors import MALFORMED_CALL, CallRefused
+from amoeba.operations.here_document import (
+    HereCaller,
+    HereCheckout,
+    HereNotAProject,
+)
+from amoeba.operations.list_registry import MembersView
+from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
+from amoeba.operations.message_results import InboxResult
 from amoeba.operations.retract import RetractOutcome, RetractResult
+from amoeba.operations.runs_document import RunsDocument, runs_to_document
 from amoeba.operations.served import (
     SERVED,
+    ClientValues,
+    Gather,
+    HereKind,
     ServedEdges,
     ServedResult,
-    id_names,
-    id_resolver,
+    client_values_from_body,
+    gather_needed,
+    result_document,
+    result_from_document,
     run_served,
 )
 from amoeba.operations.standing_models import (
@@ -44,6 +60,7 @@ from amoeba.operations.standing_models import (
     WithdrawOutcome,
     WithdrawResult,
 )
+from amoeba.operations.status import StatusOutcome, StatusResult
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store, Transaction
 from amoeba.wire.protocol import SERVED_OPERATIONS
@@ -63,8 +80,6 @@ def _edges(store: Store, *, max_chars: int | None = None) -> ServedEdges:
     return ServedEdges(
         clock=lambda: NOW,
         load_config=lambda: config,
-        names=id_names,
-        resolve_member=id_resolver(store),
     )
 
 
@@ -83,15 +98,25 @@ def test_the_registry_is_exactly_the_served_operations() -> None:
     )
 
 
-def test_only_standing_reads_the_config() -> None:
+def test_the_operations_that_read_the_config_are_these() -> None:
+    """``inbox`` and ``changes`` read none; the rest of the nine and ``standing`` do,
+    so a hub without ``config.yaml`` refuses them as ``hub_error`` (260 D6)."""
     assert {name for name, entry in SERVED.items() if entry.needs_config} == {
-        "standing"
+        "standing",
+        "add",
+        "rm",
+        "list",
+        "status",
+        "send",
+        "reply",
+        "cancel",
+        "report_release",
     }
 
 
 def test_an_unserved_name_raises_value_error(store: Store) -> None:
-    with pytest.raises(ValueError, match="add"):
-        run_served("add", store, {}, _edges(store))
+    with pytest.raises(ValueError, match="answer"):
+        run_served("answer", store, {}, _edges(store))
 
 
 def test_each_of_the_six_runs_on_a_seeded_store(store: Store) -> None:
@@ -141,7 +166,7 @@ def test_each_of_the_six_runs_on_a_seeded_store(store: Store) -> None:
     assert retracted.outcome is RetractOutcome.RETRACTED
 
 
-def test_the_hub_readers_name_a_member_by_its_id_and_resolve_only_ids(
+def test_names_and_references_are_store_reads_and_start_no_process(
     store: Store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def no_subprocess(*_args: object, **_kwargs: object) -> None:
@@ -158,14 +183,22 @@ def test_the_hub_readers_name_a_member_by_its_id_and_resolve_only_ids(
         StandingResult,
     )
     by_name = _is(
-        run_served("standing", store, {"text": "r2", "member": "core"}, edges),
+        run_served("standing", store, {"text": "r2", "member": "core-name"}, edges),
+        StandingResult,
+    )
+    unknown = _is(
+        run_served("standing", store, {"text": "r3", "member": "nobody"}, edges),
         StandingResult,
     )
 
-    assert [(r.member.id, r.member.name) for r in listed.records] == [(CORE, CORE)]
+    assert [(r.member.id, r.member.name) for r in listed.records] == [
+        (CORE, "core-name")
+    ]
     assert by_id.outcome is StandingOutcome.GIVEN
     assert by_id.member == CORE
-    assert by_name.rejection is StandingRejection.NO_SUCH_MEMBER
+    assert by_name.outcome is StandingOutcome.GIVEN
+    assert by_name.member == CORE
+    assert unknown.rejection is StandingRejection.NO_SUCH_MEMBER
 
 
 def test_a_standing_answer_for_a_program_reaches_it(store: Store) -> None:
@@ -313,3 +346,154 @@ def test_standings_overflow_path_stores_nothing_and_keeps_the_outer_write(
             ).fetchone()[0]
             == 1
         )
+
+
+# --- the gathered values (slice 261, D5) -------------------------------------------
+
+CALLER_DOCUMENT = {"project_id": "cf-caller"}
+CHECKOUT_DOCUMENT = {
+    "project_id": "cf-new",
+    "name": "new-repo",
+    "path": "/work/new",
+    "origin": "github.com/org/new-repo",
+}
+
+
+@pytest.mark.parametrize(
+    ("name", "document", "here", "runs"),
+    [
+        ("status", {}, HereKind.CALLER, True),
+        ("list", {}, HereKind.CALLER, True),
+        ("list", {"subject": "members"}, None, False),
+        ("list", {"subject": "programs"}, None, False),
+        ("list", {"subject": "dependencies"}, None, False),
+        ("list", {"subject": "standing"}, None, False),
+        ("inbox", {}, HereKind.CALLER, False),
+        ("changes", {}, HereKind.CALLER, False),
+        ("send", {}, HereKind.CALLER, False),
+        ("reply", {}, HereKind.CALLER, False),
+        ("cancel", {}, HereKind.CALLER, False),
+        ("report_release", {}, HereKind.CALLER, False),
+        ("add", {}, HereKind.CHECKOUT, False),
+        ("add", {"project": "forge"}, None, False),
+        ("add", {"name": "forge"}, HereKind.CHECKOUT, False),
+        ("rm", {}, HereKind.CALLER, False),
+        ("rm", {"members": ["forge"]}, None, False),
+        ("rm", {"checkout": "/work/forge"}, None, False),
+        ("decisions", {}, None, False),
+        ("standing", {}, None, False),
+    ],
+)
+def test_what_each_call_needs_gathered(
+    name: str, document: object, here: HereKind | None, runs: bool
+) -> None:
+    assert gather_needed(name, document) == Gather(here=here, runs=runs)
+
+
+def test_a_document_that_does_not_parse_needs_nothing_gathered() -> None:
+    """The operation rejects it as malformed; no ``cf`` call is made for it."""
+    for name in ("add", "rm", "list"):
+        assert gather_needed(name, {"unknown_field": 1}) == Gather()
+
+
+def test_values_are_parsed_from_the_body_for_what_the_call_needs() -> None:
+    body: dict[str, object] = {
+        "here": CALLER_DOCUMENT,
+        "runs": runs_to_document(RunsDocument()),
+    }
+
+    values = client_values_from_body("status", {}, body)
+
+    assert values.here == HereCaller(project_id="cf-caller")
+    assert values.runs == RunsDocument()
+
+
+def test_add_parses_the_checkout_shape_and_the_not_a_project_shape() -> None:
+    checkout = client_values_from_body("add", {}, {"here": CHECKOUT_DOCUMENT})
+    nowhere = client_values_from_body("add", {}, {"here": {"not_a_project": "no"}})
+
+    assert isinstance(checkout.here, HereCheckout)
+    assert checkout.here.origin == "github.com/org/new-repo"
+    assert isinstance(nowhere.here, HereNotAProject)
+
+
+def test_a_key_the_call_does_not_need_is_ignored_even_when_it_is_garbage() -> None:
+    values = client_values_from_body(
+        "list", {"subject": "members"}, {"here": 5, "runs": "junk"}
+    )
+
+    assert values == ClientValues()
+
+
+@pytest.mark.parametrize(
+    ("name", "body", "field"),
+    [
+        ("status", {"runs": {}}, "here"),
+        ("status", {"here": CALLER_DOCUMENT}, "runs"),
+        ("status", {"here": CALLER_DOCUMENT, "runs": []}, "runs"),
+        ("status", {"here": [], "runs": {}}, "here"),
+        ("inbox", {"here": {"wrong": 1}}, "here"),
+        ("add", {"here": CALLER_DOCUMENT}, "here"),
+        (
+            "add",
+            {"here": {**CHECKOUT_DOCUMENT, "origin": "git@host:org/x.git"}},
+            "here",
+        ),
+    ],
+)
+def test_a_missing_or_bad_value_is_a_malformed_call_naming_the_key(
+    name: str, body: dict[str, object], field: str
+) -> None:
+    with pytest.raises(CallRefused) as raised:
+        client_values_from_body(name, {}, body)
+
+    assert raised.value.code == MALFORMED_CALL
+    assert field in raised.value.message
+    assert "git@host" not in raised.value.message
+
+
+def test_status_and_list_run_on_a_seeded_store_with_hand_built_values(
+    store: Store,
+) -> None:
+    edges = _edges(store)
+    values = ClientValues(here=HereNotAProject(not_a_project="x"), runs=RunsDocument())
+
+    status = run_served("status", store, {}, edges, values)
+    listed = run_served("list", store, {}, edges, values)
+    members = run_served("list", store, {"subject": "members"}, edges, ClientValues())
+
+    assert _is(status, StatusResult).outcome is StatusOutcome.LISTED
+    assert _is(listed, ListResult).status.outcome is StatusOutcome.LISTED
+    assert len(_is(members, MembersView).members) == 2
+
+
+def test_inbox_and_changes_run_with_the_caller(store: Store) -> None:
+    edges = _edges(store)
+    values = ClientValues(here=HereCaller(project_id=CORE))
+
+    inbox = run_served("inbox", store, {}, edges, values)
+    changes = run_served(
+        "changes", store, {"since": "2026-01-01T00:00:00+00:00"}, edges, values
+    )
+
+    assert _is(inbox, InboxResult).outcome.value == "listed"
+    assert _is(changes, ChangesResult).outcome.value == "listed"
+
+
+def test_a_list_result_is_rebuilt_from_its_document_by_the_request_subject(
+    store: Store,
+) -> None:
+    edges = _edges(store)
+    values = ClientValues(here=HereNotAProject(not_a_project="x"), runs=RunsDocument())
+    for request in ({}, {"all": True}, {"subject": "members"}, {"subject": "programs"}):
+        shown = run_served(
+            "list",
+            store,
+            request,
+            edges,
+            values if not request.get("subject") else ClientValues(),
+        )
+
+        rebuilt = result_from_document("list", result_document(shown), request)
+
+        assert rebuilt == shown

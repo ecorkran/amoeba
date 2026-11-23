@@ -2,7 +2,7 @@
 
 ``FakeCf`` answers ``cf get --json`` per working directory from the real recordings
 (the project id is the one substitution), counting the calls per directory.
-``status_deps`` builds ``Deps`` with a scripted ``list_runs`` and ``project_names``.
+``status_deps`` builds ``Deps`` with a scripted ``list_runs``.
 """
 
 from __future__ import annotations
@@ -28,8 +28,6 @@ from amoeba.answering.values import AnsweredBy
 from amoeba.operations.deps import Deps
 from amoeba.store.models import AnswerRecord, QuestionKey, QuestionRecord
 from amoeba.store.vocabulary import QuestionState, ResumeOutcome
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
-from amoeba.upstream.context_forge.projects import ProjectNames
 from amoeba.upstream.squadron.run_list import ListedRun, RunListProblem, parse_listing
 from operations.pause_support import build_deps
 
@@ -153,15 +151,13 @@ def status_deps(
     *,
     cf: Callable[..., subprocess.CompletedProcess[str]],
     runs: list[ListedRun] | RunListProblem,
-    names: ProjectNames | CfCallFailed,
     answering_dir: Path | None = None,
 ) -> Deps:
-    """``Deps`` for ``status``: the given ``cf``, listing and names, and fakes else."""
+    """``Deps`` for ``status``: the given ``cf`` and listing, and fakes else."""
     base = build_deps(tmp_path, polls={}, spawns=[]).deps
     return replace(
         base,
         cf_run=cf,
         list_runs=lambda: runs,
-        project_names=lambda: names,
         answering_dir=answering_dir or base.answering_dir,
     )

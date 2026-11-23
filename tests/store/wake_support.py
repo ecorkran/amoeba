@@ -10,7 +10,7 @@ from amoeba.store.sessions import upsert_session
 from amoeba.store.store import Transaction
 from amoeba.store.wakes import WakeLimits, claim_wake
 from store.message_support import ADDRESSEE, NOW, PROGRAM
-from store.seed import insert_member
+from store.seed import insert_checkout, insert_member
 
 COMMAND = "wake-agent --max-seconds 60"
 TIMEOUT_SECONDS = 600
@@ -26,9 +26,11 @@ def seed_waking_member(
     transaction: Transaction,
     project_id: str = ADDRESSEE,
     command: str | None = COMMAND,
+    directory: str | None = DIRECTORY,
 ) -> None:
-    """The member ``project_id`` in the seeded program, with ``command`` as its wake
-    command. The caller seeded the program."""
+    """The member ``project_id`` in the seeded program, with one checkout on the acting
+    machine at ``directory`` whose wake command is ``command``; a ``directory`` of
+    ``None`` seeds no checkout. The caller seeded the program."""
     insert_member(
         transaction,
         project_id=project_id,
@@ -38,7 +40,41 @@ def seed_waking_member(
         authorize_deny=(),
         registered_at=NOW,
         updated_at=NOW,
+    )
+    if directory is not None:
+        insert_checkout(
+            transaction,
+            member_id=project_id,
+            cf_project_id=project_id,
+            path=directory,
+            wake_command=command,
+            now=NOW,
+        )
+
+
+def give_checkout_command(
+    transaction: Transaction,
+    member_id: str,
+    command: str | None,
+    directory: str = DIRECTORY,
+) -> None:
+    """Set ``command`` on the member's first checkout on the acting machine, making
+    one at ``directory`` when it has none."""
+    if transaction.execute(
+        "SELECT 1 FROM checkouts WHERE member_id = ?", (member_id,)
+    ).fetchone():
+        transaction.execute(
+            "UPDATE checkouts SET wake_command = ? WHERE member_id = ?",
+            (command, member_id),
+        )
+        return
+    insert_checkout(
+        transaction,
+        member_id=member_id,
+        cf_project_id=member_id,
+        path=directory,
         wake_command=command,
+        now=NOW,
     )
 
 
@@ -48,7 +84,6 @@ def claim(
     *,
     member_id: str = ADDRESSEE,
     now: datetime = NOW,
-    directory: str | None = DIRECTORY,
     max_wakes: int = MAX_WAKES,
 ) -> Wake | None:
     return claim_wake(
@@ -57,8 +92,7 @@ def claim(
         now,
         replace(LIMITS, max_per_day=max_wakes),
         wake_id,
-        directory,
-        None if directory is None else f"{LOG_DIRECTORY}/{wake_id}",
+        f"{LOG_DIRECTORY}/{wake_id}",
     )
 
 

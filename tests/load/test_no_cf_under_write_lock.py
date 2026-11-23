@@ -21,9 +21,12 @@ from operations.release_support import (
 )
 from store.release_support import FULL_HASH, seed_members
 from store_open import open_local_store
+from user_configs import user_config
 
-from amoeba.operations.report_release import report_release
-from amoeba.operations.report_release_models import ReportOutcome
+from amoeba.operations.names import OperationName
+from amoeba.operations.report_release_models import ReportOutcome, ReportReleaseResult
+from amoeba.store.vocabulary import Door
+from amoeba.wiring_gather import place_served
 from load.lock_probe import write_lock_is_held
 
 
@@ -57,13 +60,17 @@ def test_report_release_resolves_the_member_without_holding_the_write_lock(
         cf = LockProbingCf(store.path)
         deps = release_deps(tmp_path, SettableClock(), cf=cf)
 
-        result = report_release(
+        result = place_served(
+            OperationName.REPORT_RELEASE,
             store,
             {"commit": FULL_HASH, "changed": "a change", "touched": ["api"]},
-            directory=PROVIDER_DIR,
-            deps=deps,
+            PROVIDER_DIR,
+            Door.CLI,
+            deps,
+            lambda: user_config(),
         )
 
+    assert isinstance(result, ReportReleaseResult)
     assert result.outcome == ReportOutcome.RECORDED
-    assert cf.lock_held_at_call, "the member is resolved through cf"
+    assert cf.lock_held_at_call, "the placement's gather asks cf for the directory"
     assert not any(cf.lock_held_at_call)

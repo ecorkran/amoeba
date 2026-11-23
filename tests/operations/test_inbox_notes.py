@@ -13,10 +13,10 @@ from cf_fixtures import OUTSIDE_ANY_PROJECT
 from store.message_support import PROGRAM, count
 
 from amoeba.operations.deps import Deps
-from amoeba.operations.inbox import inbox
 from amoeba.operations.message_results import InboxResult
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.store.store import Store
+from operations.message_placed import inbox
 from operations.message_support import (
     RECIPIENT_NAME,
     SENDER,

@@ -1,16 +1,19 @@
 """``status``: what is running, paused and waiting on the PM (slice 224, D2, D4, D8).
 
-The flow: resolve the scope; read the store once; list runs once; place them; classify
-the paused ones; join the waiting questions; ask ``cf`` for names once. The store is
-read first, so no subprocess runs inside a store transaction. The placement,
-classification and waiting-question steps are in ``status_placement``, ``status_runs``
-and ``status_waiting``; the result models are in ``status_models`` and re-exported here.
+The flow: resolve the scope; read the store once; take the runs from the ``runs``
+document (the client part read ``sq``, ``cf``, the run files and the calls log, 261
+D11); place them; classify the paused ones; join the waiting questions. The store is
+read first, so no subprocess runs inside a store transaction, and this module runs
+none. The placement, classification and waiting-question steps are in
+``status_placement``, ``status_runs`` and ``status_waiting``; the result models are in
+``status_models`` and re-exported here.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
+from datetime import datetime
 
 from pydantic import (
     BaseModel,
@@ -19,25 +22,30 @@ from pydantic import (
 )
 
 from amoeba.config.user_config import NonBlank, UserConfig
+from amoeba.operations.caller import NotAProject, NotInProgram, find_caller
 from amoeba.operations.decisions_models import MemberName
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import (
-    ContextForgeError,
-    NotAProject,
-    NotInProgram,
-    resolve_member,
-)
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_sweep import sweep_messages
 from amoeba.operations.pause_class import PauseClass
-from amoeba.operations.question_sweep_scope import sweep_scope
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import (
     RejectCode,
     unknown_program_problem,
     validation_problems,
 )
+from amoeba.operations.runs_document import (
+    RunsDocument,
+    standings,
+)
 from amoeba.operations.status_calls import attach_last_calls
 from amoeba.operations.status_closed import closed_now_entries
+from amoeba.operations.status_local import (
+    file_problems,
+    joined,
+    prune_if_local,
+    sweep_if_local,
+)
 from amoeba.operations.status_models import (
     MemberStatus,
     ProgramStatus,
@@ -46,7 +54,7 @@ from amoeba.operations.status_models import (
     StatusResult,
     WakeStatus,
 )
-from amoeba.operations.status_placement import place_runs, scratch_roots
+from amoeba.operations.status_placement import place_runs
 from amoeba.operations.status_requests import MemberMessages, read_member_messages
 from amoeba.operations.status_runs import (
     MemberRun,
@@ -56,7 +64,9 @@ from amoeba.operations.status_runs import (
 from amoeba.operations.status_sessions import read_member_sessions
 from amoeba.operations.status_waiting import MemberWaiting, waiting_entries
 from amoeba.operations.wake_status import read_member_wakes
+from amoeba.store.checkouts import checkouts_on_machine
 from amoeba.store.errors import StoreRowError
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Member
 from amoeba.store.programs import get_program, list_programs, members_of
 from amoeba.store.questions import (
@@ -65,10 +75,7 @@ from amoeba.store.questions import (
     sweep_candidates,
 )
 from amoeba.store.store import Store, Transaction
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
-from amoeba.upstream.context_forge.project_of import project_of
 from amoeba.upstream.squadron.errors import SquadronError
-from amoeba.upstream.squadron.run_list import RunListProblem
 
 __all__ = [
     "ScopeRejected",
@@ -106,17 +113,13 @@ class ScopeRejected:
 
 
 def resolve_scope(
-    store: Store, directory: Path, program: str | None, deps: Deps
+    store: Store, here: HereCaller | HereNotAProject, program: str | None
 ) -> tuple[ScopedProgram, ...] | ScopeRejected:
     """The programs ``status`` covers (D2).
 
     ``program`` given: that program, or ``unknown_program`` listing the known ids.
-    Otherwise the program of the member ``directory`` is in, or every program when it
-    is in none.
-
-    Raises:
-        ContextForgeError: ``cf`` failed while resolving ``directory``. This is an
-            operational error and never widens the scope.
+    Otherwise the program of the member whose checkout is ``here``, or every program
+    when it is in none.
     """
     if program is not None:
         with store.read() as transaction:
@@ -124,8 +127,8 @@ def resolve_scope(
             if unknown is not None:
                 return ScopeRejected(RejectCode.UNKNOWN_PROGRAM, (unknown,))
             return (_scoped(transaction, program),)
-    resolved = resolve_member(store, directory, deps.cf_run)
     with store.read() as transaction:
+        resolved = find_caller(transaction, acting_machine_id(transaction), here)
         if isinstance(resolved, NotAProject | NotInProgram):
             return tuple(
                 _scoped(transaction, entry.program_id)
@@ -145,92 +148,90 @@ def status(
     config: UserConfig,
     document: object,
     *,
-    directory: Path,
-    deps: Deps,
+    here: HereCaller | HereNotAProject,
+    runs: RunsDocument,
+    clock: Callable[[], datetime],
+    local: Deps | None,
 ) -> StatusResult:
     """What is running, paused and waiting on the PM, per program and member.
 
+    ``here`` is the caller's gathered project and ``runs`` the machine's gathered runs.
+    ``local`` is this machine's own edges; with it the close sweep and the pruning of
+    local scratch and logs run, and on the hub (``None``) they do not (261 D11): they
+    read the files of the machine that ran ``sq``.
+
     Raises:
-        SquadronError: ``sq runs list --json`` gave no usable listing.
-        ContextForgeError: ``cf`` gave no usable answer, or no name for a member.
+        SquadronError: The document says ``sq runs list --json`` gave no usable
+            listing.
         StoreError: The store cannot be used.
     """
     try:
         request = StatusRequest.model_validate(document)
     except ValidationError as error:
         return _rejected(RejectCode.MALFORMED, validation_problems(error))
-    scope = resolve_scope(store, directory, request.program, deps)
+    scope = resolve_scope(store, here, request.program)
     if isinstance(scope, ScopeRejected):
         return _rejected(scope.code, scope.problems)
     members = {m.project_id: m for entry in scope for m in entry.members}
     # Before the reads, so an expired request shows as recorded; a busy store is a
     # problem text, never a failure (the reads apply effective_state).
-    message_problem = sweep_messages(store, config, deps.clock())
+    message_problem = sweep_messages(store, config, clock())
     with store.read() as transaction:
         candidates = sweep_candidates(transaction, list(members))
         rows = latest_rows_by_run(transaction, list(members))
-        requests = held_request_states(transaction, rows, deps.clock())
-    listed = deps.list_runs()
-    if isinstance(listed, RunListProblem):
+        requests = held_request_states(transaction, rows, clock())
+    if runs.listing_problem is not None:
         raise SquadronError(
-            f"status needs `sq runs list --json` (Squadron with #303): {listed.reason}"
+            "status needs `sq runs list --json` (Squadron with #303): "
+            f"{runs.listing_problem}"
         )
     # The listing is ``--all`` so the sweep can tell a finished run from an unknown
     # one; completed runs stay out of the per-member run lists, as before.
-    placement = place_runs(
-        [run for run in listed if not run.is_completed],
-        members,
-        scratch_roots(deps.answering_dir, deps.legacy_home),
-        lambda found: project_of(directory=found, run=deps.cf_run),
-    )
-    runs = classify_runs(
+    with store.read() as transaction:
+        by_checkout = _members_by_checkout(transaction, members)
+    placement = place_runs(runs.open_runs, by_checkout)
+    member_runs = classify_runs(
         placement.placed,
         rows,
         requests,
-        deps.squadron_runs_dir,
         config.answering_wait_seconds,
-        deps.clock(),
+        clock(),
     )
-    with_calls = attach_last_calls(runs, deps.calls_log_dir)
-    runs = with_calls.runs
-    # Names come before the sweep: the external ``cf`` call can fail, and a failure
-    # after the sweep's write would lose the report of what it closed.
-    names = _names(members, deps)
-    swept = sweep_scope(store, config, candidates, listed, deps, deps.clock())
+    with_calls = attach_last_calls(member_runs, runs)
+    member_runs = with_calls.runs
+    names = _names(members)
+    standing = standings(runs)
+    swept = sweep_if_local(store, config, candidates, standing, local, clock())
     # What is still open after the sweep. After a failed write that is everything,
     # shown as before the sweep.
     with store.read() as transaction:
         open_rows = open_questions(transaction, list(members))
-    waiting = waiting_entries(open_rows, listed)
-    messages = read_member_messages(store, members, names, deps.clock())
+    waiting = waiting_entries(open_rows, standing)
+    messages = read_member_messages(store, members, clock())
     sessions = read_member_sessions(
-        store, members, deps.clock(), config.session_stale_seconds
+        store, members, clock(), config.session_stale_seconds
     )
-    wakes = read_member_wakes(store, members, deps.clock(), config.max_wakes_per_day)
+    wakes = read_member_wakes(store, members, clock(), config.max_wakes_per_day)
     program_of = {
         m.project_id: entry.program_id for entry in scope for m in entry.members
     }
-    pruned = deps.prune(store, now=deps.clock(), after_days=config.prune_after_days)
+    pruned = prune_if_local(store, config, local, clock())
     return StatusResult(
         outcome=StatusOutcome.LISTED,
         notice=QUOTED_DATA_NOTICE
-        if _shows_others_text(messages, runs, waiting)
+        if _shows_others_text(messages, member_runs, waiting)
         else None,
         programs=tuple(
-            _program_status(entry, names, runs, waiting, messages, sessions, wakes)
+            _program_status(
+                entry, names, member_runs, waiting, messages, sessions, wakes
+            )
             for entry in scope
         ),
         unplaced_runs=placement.unplaced,
         closed_now=closed_now_entries(swept, program_of, names),
-        sweep_problem=_joined(message_problem, swept.problem),
-        file_problems=with_calls.problems + pruned.problems,
+        sweep_problem=joined(message_problem, swept.problem),
+        file_problems=file_problems(runs, with_calls.problems, pruned.problems),
     )
-
-
-def _joined(*problems: str | None) -> str | None:
-    """The sweep problems that happened, one text, or ``None`` when none did."""
-    found = [problem for problem in problems if problem is not None]
-    return "; ".join(found) if found else None
 
 
 def _shows_others_text(
@@ -253,17 +254,23 @@ def _rejected(code: RejectCode, problems: tuple[str, ...]) -> StatusResult:
     )
 
 
-def _names(members: dict[str, Member], deps: Deps) -> dict[str, str]:
-    """Names of the members in scope, from one ``cf`` call (none if there are none)."""
-    if not members:
-        return {}
-    names = deps.project_names()
-    if isinstance(names, CfCallFailed):
-        raise ContextForgeError(names.detail)
-    missing = sorted(set(members) - set(names))
-    if missing:
-        raise ContextForgeError(f"Context Forge lists no project named for {missing}")
-    return names
+def _members_by_checkout(
+    transaction: Transaction, members: dict[str, Member]
+) -> dict[str, Member]:
+    """The members in scope by the Context Forge project id of each of their checkouts
+    on this machine: a run is placed by its directory's project (261 D11)."""
+    return {
+        checkout.cf_project_id: members[checkout.member_id]
+        for checkout in checkouts_on_machine(
+            transaction, acting_machine_id(transaction)
+        )
+        if checkout.member_id in members
+    }
+
+
+def _names(members: dict[str, Member]) -> dict[str, str]:
+    """The stored name of each member in scope (261 D13)."""
+    return {project_id: member.name for project_id, member in members.items()}
 
 
 def _program_status(

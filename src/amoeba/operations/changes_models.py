@@ -47,10 +47,10 @@ class ChangesRequest(BaseModel):
 
 
 class MemberRef(FrozenModel):
-    """A member as shown; ``name`` is null when Context Forge does not list it."""
+    """A member as shown: its id and its stored name (261 D13)."""
 
     id: str
-    name: str | None
+    name: str
 
 
 class ProviderPair(FrozenModel):

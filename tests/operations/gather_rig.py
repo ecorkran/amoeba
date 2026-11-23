@@ -11,6 +11,7 @@ from pathlib import Path
 from answering.sources_repo import build_sources_repo
 from cf_plan_run import plan_cf_run
 from git_repo import head_of
+from store.seed import insert_checkout
 from store_open import open_local_store
 
 from amoeba.answering.passages import SourcesProblem
@@ -22,7 +23,9 @@ from amoeba.store.store import Store
 from amoeba.store.vocabulary import RulesFrom
 from amoeba.upstream.squadron.run_file import ExecutionMode, RunFacts
 from operations.program_rig import (
+    ASKER_CF_ID,
     ASKING_MEMBER,
+    CONCEPT_CF_ID,
     CONCEPT_MEMBER,
     CONCEPT_PATH,
     PROGRAM_ID,
@@ -76,6 +79,7 @@ class GatherRig:
             facts(params),
             settings(max_chars=max_chars),
             self.run,
+            cf_project_id=ASKER_CF_ID,
         )
 
 
@@ -104,8 +108,19 @@ def gather_rig(tmp_path: Path, *, with_concept: bool = True) -> Generator[Gather
                         authorize_allow=(),
                         authorize_deny=(),
                         rules_from=RulesFrom.NAMED,
-                        wake_command=None,
                     ),
+                    name=project_id,
+                    now=NOW,
+                )
+            for project_id, cf_id, path in (
+                (CONCEPT_MEMBER, CONCEPT_CF_ID, concept_repo),
+                (ASKING_MEMBER, ASKER_CF_ID, asker),
+            ):
+                insert_checkout(
+                    transaction,
+                    member_id=project_id,
+                    cf_project_id=cf_id,
+                    path=str(path),
                     now=NOW,
                 )
         with store.read() as transaction:
@@ -114,7 +129,6 @@ def gather_rig(tmp_path: Path, *, with_concept: bool = True) -> Generator[Gather
         run = RoutedRun(
             concept_repo=concept_repo,
             target="main",
-            project_known=True,
             fault=None,
             plan=plan_cf_run(integration_branch="", broken=False),
         )
