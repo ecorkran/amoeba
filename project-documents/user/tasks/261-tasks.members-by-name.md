@@ -309,66 +309,76 @@ Before `add`'s rewrite, so a command is never written to a checkout while the cl
 
 **Commit**: `feat: choose or create the member for a checkout`
 
-- [ ] **9.8 The engine's references and the removal resolver**
-  - [ ] `set_up_resolve.py`: the `cf` lookups and `_Lookups` go; each reference (`depends_on`, pair ends, concept member, `--project`) is one `find_member` read in the engine's transaction. The request's `remove.members` and `remove.pairs` go through `resolve_removal`, whose `lookup` is the `cf` lookup being deleted, so `set_up_remove_resolve.py` is converted here too: its references come from `find_member_for_removal` (a removed member is found by id only), and `Reference.known_to_cf` and `set_up_remove`'s sentence built from it go. A test: an `add` document with `remove` naming a member by name, a removed member by id, and an unknown name, with a `cf` stub that fails if called.
-  - [ ] An unknown reference (`members.N.project`, a `depends_on` provider, a pair end, the concept member) is `not_a_member` with its field path in the detail, where today it is `not_a_project`. Named assertion changes in `tests/operations/test_set_up_validation.py`: `test_a_bad_reference_is_not_a_project` and `test_a_bad_provider_and_concept_member_are_not_a_project` assert `NOT_A_MEMBER` with the same field paths and are renamed to say so (record in 17.3: the design's allowed edit does not cover a changed code)
-  - [ ] The design's allowed edit, done here because this task is what breaks them: every test that passed `--project`, a bulk entry, `--depends-on`, `--pair` or `--concept` for a Context Forge project that is not a member, most through the `projects=` stub of `tests/operations/set_up_support.py`, seeds or registers that member first. The note lists the modules
-  - [ ] Success: checks pass
-- [ ] **9.9 `add()` takes the gathered checkout: request fields, placement, bulk document and wake command**
-  - [ ] The `add` request gains `name`, `attach_to`, `new_member` (`project`, `attach_to`, `new_member` mutually exclusive, else `malformed`); each bulk entry gains `name`. `add()` runs `add_member` for `project` or for the entry that names no member, passing these fields
-  - [ ] `add()` takes the value `gather_add` returned (a `HereCheckout`, a `HereNotAProject`, or none) in place of `directory`, `run` and `door`, and no longer calls `project_of`. `place_add` in `wiring_registry.py` calls `gather_add` with `subprocess.run`, `deps.git_run` and its `door`, then `add()`; the MCP path goes through the same placement. `SetUpResult.working_directory` is null when the call gathered nothing
-  - [ ] The engine: `set_up()` and `resolve_request` take that gathered value in place of `directory` and `run`, and the `project_of(directory=...)` call in `set_up_resolve.py` goes. The gathered value gives `working_directory` and the default project for an entry that names none; with none gathered, `working_directory` is null and an entry naming no member is `malformed`. `rm.py` still has its directory until 10.1, so here it calls `gather_caller` and passes the result. `run_set_up` in `tests/operations/set_up_support.py` builds the gathered value from its stub, so the modules using it change nothing else
-  - [ ] `--file`: at most one entry names no member and follows `add_member` (more is `malformed`); an entry naming a non-member is `not_a_member`, saying to run `amoeba add` in that repo
-  - [ ] The wake command goes to the checkout `add_member` chose or made; with `project` it is `malformed`
-  - [ ] Remove the interim code of 1.1 and 2.3 (`ResolvedMember.name` and `path`, the name rule and the checkout insert in `_write_member`). This is the last interim code in the slice (7.1's `Recipient` fields went in 8.1)
-  - [ ] Success: pyright clean
-- [ ] **9.10 Tests**
-  - [ ] `add --project <name>` and an all-named bulk file work from a directory that is not a project, with `working_directory` null; `add --project <name> --wake-command x` is `malformed`; `--wake-command` with no member named sets only the caller's checkout; `--no-wake-command` clears it; two unnamed bulk entries are `malformed`; a non-member entry is `not_a_member` with the detail
-  - [ ] Success: checks pass
-- [ ] **9.11 `pause_eligibility`, the CLI and MCP**
-  - [ ] `pause_eligibility`: a project in no program is registered by `gather_add` then `add` with the empty document; a refusal is the existing skip carrying its text (D6)
-  - [ ] `cli/registration_arguments.py`: `--name`, `--attach-to`, `--new-member` (exclusive with `--project`, which takes a name or id), each with its entry in `docs/cli-contract.md`; `cli/render/registration.py` renders the new codes. `mcp/tools.py`: the `add` tool gains `name`, `attach_to`, `new_member`
-  - [ ] Success: checks pass
-- [ ] **9.12 Tests**
-  - [ ] A pause in a project in no program registers it; the member's id is not its Context Forge id; with a `cf` stub failing any `-p` but the checkout ids, its plan, target branch and another member's concept file are read; a `name_taken` refusal is the skip with its text
-  - [ ] CLI: the three flags reach the request; `--project` with `--attach-to` is a usage error
-  - [ ] Secrets: a repo whose `origin` holds `user:secret@`, and one with a malformed address holding a password: after `add` through the CLI the secret is in no stdout, stderr, log file or store byte
-  - [ ] Success: checks pass
+- [x] **9.8 The engine's references and the removal resolver**
+  - [x] `set_up_resolve.py`: the `cf` lookups and `_Lookups` go; each reference (`depends_on`, pair ends, concept member, `--project`) is one `find_member` read in the engine's transaction. The request's `remove.members` and `remove.pairs` go through `resolve_removal`, whose `lookup` is the `cf` lookup being deleted, so `set_up_remove_resolve.py` is converted here too: its references come from `find_member_for_removal` (a removed member is found by id only), and `Reference.known_to_cf` and `set_up_remove`'s sentence built from it go. A test: an `add` document with `remove` naming a member by name, a removed member by id, and an unknown name, with a `cf` stub that fails if called.
+  - [x] An unknown reference (`members.N.project`, a `depends_on` provider, a pair end, the concept member) is `not_a_member` with its field path in the detail, where today it is `not_a_project`. Named assertion changes in `tests/operations/test_set_up_validation.py`: `test_a_bad_reference_is_not_a_project` and `test_a_bad_provider_and_concept_member_are_not_a_project` assert `NOT_A_MEMBER` with the same field paths and are renamed to say so (record in 17.3: the design's allowed edit does not cover a changed code)
+  - [x] The design's allowed edit, done here because this task is what breaks them: every test that passed `--project`, a bulk entry, `--depends-on`, `--pair` or `--concept` for a Context Forge project that is not a member, most through the `projects=` stub of `tests/operations/set_up_support.py`, seeds or registers that member first. The note lists the modules
+  - [x] Success: checks pass
+  - Note: `set_up_resolve.py` and `set_up_remove_resolve.py` have no `cf` lookups (references are `find_member` / `find_member_for_removal`); `Reference.known_to_cf` is gone. `test_set_up_validation`'s two tests are renamed to `*_are_not_a_member` and assert `NOT_A_MEMBER`; tests with non-member projects now seed members first.
+- [x] **9.9 `add()` takes the gathered checkout: request fields, placement, bulk document and wake command**
+  - [x] The `add` request gains `name`, `attach_to`, `new_member` (`project`, `attach_to`, `new_member` mutually exclusive, else `malformed`); each bulk entry gains `name`. `add()` runs `add_member` for `project` or for the entry that names no member, passing these fields
+  - [x] `add()` takes the value `gather_add` returned (a `HereCheckout`, a `HereNotAProject`, or none) in place of `directory`, `run` and `door`, and no longer calls `project_of`. `place_add` in `wiring_registry.py` calls `gather_add` with `subprocess.run`, `deps.git_run` and its `door`, then `add()`; the MCP path goes through the same placement. `SetUpResult.working_directory` is null when the call gathered nothing
+  - [x] The engine: `set_up()` and `resolve_request` take that gathered value in place of `directory` and `run`, and the `project_of(directory=...)` call in `set_up_resolve.py` goes. The gathered value gives `working_directory` and the default project for an entry that names none; with none gathered, `working_directory` is null and an entry naming no member is `malformed`. `rm.py` still has its directory until 10.1, so here it calls `gather_caller` and passes the result. `run_set_up` in `tests/operations/set_up_support.py` builds the gathered value from its stub, so the modules using it change nothing else
+  - [x] `--file`: at most one entry names no member and follows `add_member` (more is `malformed`); an entry naming a non-member is `not_a_member`, saying to run `amoeba add` in that repo
+  - [x] The wake command goes to the checkout `add_member` chose or made; with `project` it is `malformed`
+  - [x] Remove the interim code of 1.1 and 2.3 (`ResolvedMember.name` and `path`, the name rule and the checkout insert in `_write_member`). This is the last interim code in the slice (7.1's `Recipient` fields went in 8.1)
+  - [x] Success: pyright clean
+  - Note: `AddRequest` gains `name`, `attach_to`, `new_member` (mutually exclusive with `project`, else `malformed`); `add()` takes the gathered `here`; `place_add` in `wiring_registry.py` calls `gather_add` then `add`. The plan-building part is in new `operations/set_up_plan.py` to keep `set_up.py` near 300 lines; `set_up_interim.py` is deleted; `rm.py` gathers the caller until 10.1.
+- [x] **9.10 Tests**
+  - [x] `add --project <name>` and an all-named bulk file work from a directory that is not a project, with `working_directory` null; `add --project <name> --wake-command x` is `malformed`; `--wake-command` with no member named sets only the caller's checkout; `--no-wake-command` clears it; two unnamed bulk entries are `malformed`; a non-member entry is `not_a_member` with the detail
+  - [x] Success: checks pass
+  - Note: tests are in `tests/operations/test_add_by_checkout.py`.
+- [x] **9.11 `pause_eligibility`, the CLI and MCP**
+  - [x] `pause_eligibility`: a project in no program is registered by `gather_add` then `add` with the empty document; a refusal is the existing skip carrying its text (D6)
+  - [x] `cli/registration_arguments.py`: `--name`, `--attach-to`, `--new-member` (exclusive with `--project`, which takes a name or id), each with its entry in `docs/cli-contract.md`; `cli/render/registration.py` renders the new codes. `mcp/tools.py`: the `add` tool gains `name`, `attach_to`, `new_member`
+  - [x] Success: checks pass
+  - Note: `pause_eligibility` registers via `gather_add` then `add({})`; CLI flags `--name`, `--attach-to`, `--new-member` with exclusivity; the MCP `add` tool has the fields; contract entries added.
+- [x] **9.12 Tests**
+  - [x] A pause in a project in no program registers it; the member's id is not its Context Forge id; with a `cf` stub failing any `-p` but the checkout ids, its plan, target branch and another member's concept file are read; a `name_taken` refusal is the skip with its text
+  - [x] CLI: the three flags reach the request; `--project` with `--attach-to` is a usage error
+  - [x] Secrets: a repo whose `origin` holds `user:secret@`, and one with a malformed address holding a password: after `add` through the CLI the secret is in no stdout, stderr, log file or store byte
+  - [x] Success: checks pass
+  - Note: new `tests/operations/test_handle_pause_registers.py` (a project removed then paused registers anew with an id that is not its Context Forge id; every `cf -p` carries the checkout's Context Forge id); `test_pause_eligibility` cases; CLI flag tests in `tests/cli/test_add_cli.py`; secrets test in `tests/cli/test_add_secrets_cli.py`.
 
 **Commit**: `feat: rewrite add around checkouts with --name, --attach-to and --new-member`
 
 ## 10. `rm` (D8, D10; effort 3)
 
-- [ ] **10.1 Removal by name, by caller and by checkout**
-  - [ ] `rm.py`: named members by `find_member_for_removal`, through `set_up_remove_resolve.py` as 9.8 left it (a removed one by id is `unchanged`); nothing named reads the caller; `here` is gathered only in D5's case. `rm`'s anchors and its `cf` call per member go. `rm()` takes the gathered caller or none in place of `directory` and `run`; `place_rm` in `wiring_registry.py` runs `gather_caller` only in D5's case and passes it. The result's `working_directory` is null when nothing was gathered
-  - [ ] The `rm` request gains `checkout`. `--checkout <path>`: relative, or combined with members, `--pair` or `--concept`, is `malformed`; `delete_checkouts_at_path` on the acting machine; none deleted is `not_a_checkout` listing this machine's stored paths; the member stays
-  - [ ] Removing a member also runs `delete_checkouts_of_member` in the same transaction, after today's steps, in `set_up_remove.py` where the removal runs
-  - [ ] Success: pyright clean
-- [ ] **10.2 Tests**
-  - [ ] `tests/operations/test_rm_by_name.py`: `rm <name>` from a non-project directory, with no `cf` call and `working_directory` null in the result, removes a member with no checkout and cancels its open requests as `member_removed`; its checkouts on every machine go; `rm <id>` twice is `unchanged`; `rm <name>` twice is `not_a_member`; bare `rm` removes the caller
-  - [ ] `--checkout`: removes it and leaves the member, with or without a trailing slash and with the directory deleted; two rows at one path both go; unknown is `not_a_checkout` listing paths; relative and combined are `malformed`; the last one leaves a member with none. A moved repo: after `rm --checkout <old path>`, `add` in the new directory (same `origin`, new Context Forge id) attaches with the new path
-  - [ ] Success: checks pass
-- [ ] **10.3 Delete the old lookups**
-  - [ ] Delete `operations/members.py`, `operations/member_reference.py`, `operations/project_lookup.py` and `tests/operations/test_members.py` (add to `test_caller.py` any case it pins that 6.2 lacks); afterwards `grep -rn "operations.members\b\|member_reference\|project_lookup" src tests` finds nothing
-  - [ ] `project_of.py`: the `reference` parameter goes, with the tests in `tests/upstream/context_forge/test_project_of.py` that pass it. `projects.py`: `project_names` goes with its tests (unused after this task)
-  - [ ] `cli/commands.py`: `_project_names` and its import go; change records print the names they carry. `rm --checkout PATH` in `cli/registration_arguments.py` with its `docs/cli-contract.md` entry; the MCP `rm` tool gains `checkout`
-  - [ ] Tests: `amoeba rm --checkout <path>` reaches the request; `amoeba add` and `amoeba rm` print change records with a `cf` stub that fails `list projects`
-  - [ ] Success: checks pass
+- [x] **10.1 Removal by name, by caller and by checkout**
+  - [x] `rm.py`: named members by `find_member_for_removal`, through `set_up_remove_resolve.py` as 9.8 left it (a removed one by id is `unchanged`); nothing named reads the caller; `here` is gathered only in D5's case. `rm`'s anchors and its `cf` call per member go. `rm()` takes the gathered caller or none in place of `directory` and `run`; `place_rm` in `wiring_registry.py` runs `gather_caller` only in D5's case and passes it. The result's `working_directory` is null when nothing was gathered
+  - [x] The `rm` request gains `checkout`. `--checkout <path>`: relative, or combined with members, `--pair` or `--concept`, is `malformed`; `delete_checkouts_at_path` on the acting machine; none deleted is `not_a_checkout` listing this machine's stored paths; the member stays
+  - [x] Removing a member also runs `delete_checkouts_of_member` in the same transaction, after today's steps, in `set_up_remove.py` where the removal runs
+  - [x] Success: pyright clean
+  - Note: `rm()` takes the gathered caller or none; the `rm` request gained `checkout`; removing a member deletes its checkouts.
+- [x] **10.2 Tests**
+  - [x] `tests/operations/test_rm_by_name.py`: `rm <name>` from a non-project directory, with no `cf` call and `working_directory` null in the result, removes a member with no checkout and cancels its open requests as `member_removed`; its checkouts on every machine go; `rm <id>` twice is `unchanged`; `rm <name>` twice is `not_a_member`; bare `rm` removes the caller
+  - [x] `--checkout`: removes it and leaves the member, with or without a trailing slash and with the directory deleted; two rows at one path both go; unknown is `not_a_checkout` listing paths; relative and combined are `malformed`; the last one leaves a member with none. A moved repo: after `rm --checkout <old path>`, `add` in the new directory (same `origin`, new Context Forge id) attaches with the new path
+  - [x] Success: checks pass
+  - Note: tests are in `tests/operations/test_rm_by_name.py` and `tests/cli/test_rm_cli.py`.
+- [x] **10.3 Delete the old lookups**
+  - [x] Delete `operations/members.py`, `operations/member_reference.py`, `operations/project_lookup.py` and `tests/operations/test_members.py` (add to `test_caller.py` any case it pins that 6.2 lacks); afterwards `grep -rn "operations.members\b\|member_reference\|project_lookup" src tests` finds nothing
+  - [x] `project_of.py`: the `reference` parameter goes, with the tests in `tests/upstream/context_forge/test_project_of.py` that pass it. `projects.py`: `project_names` goes with its tests (unused after this task)
+  - [x] `cli/commands.py`: `_project_names` and its import go; change records print the names they carry. `rm --checkout PATH` in `cli/registration_arguments.py` with its `docs/cli-contract.md` entry; the MCP `rm` tool gains `checkout`
+  - [x] Tests: `amoeba rm --checkout <path>` reaches the request; `amoeba add` and `amoeba rm` print change records with a `cf` stub that fails `list projects`
+  - [x] Success: checks pass
+  - Note: deleted `operations/members.py`, `operations/member_reference.py`, `operations/project_lookup.py` and `tests/operations/test_members.py`; `project_of`'s `reference` parameter and `projects.project_names` removed; `commands._project_names` removed.
 
 **Commit**: `feat: remove members by name from anywhere and add rm --checkout`
 
 ## 11. Results and `list members` (D11, D13; effort 3)
 
-- [ ] **11.1 Result fields**
-  - [ ] `MemberState` gains `name` (direct constructions in tests pass it). `SetUpResult` change records name members by name (`working_directory` is already null when nothing was gathered, from 9.9 and 10.1)
-  - [ ] `MemberRef.name` (`changes_models.py`) and any other `id`/`name` pair whose `name` is `str | None` because `cf` might not list the member become `str`, from the store (D13). Named: `tests/test_wiring.py` and `tests/cli/test_release_cli.py` build `MemberRef(..., name=None)`; each passes the member's name and asserts that name where it asserted none
-  - [ ] `list_registry.py`: `MemberRow` gains `origin` and `checkouts` (machine name, path, Context Forge id, wake command); `path` is the first-added checkout on the calling machine or null; `in_context_forge` says whether it has one there; `project_details` and its import go. `list programs`, `list dependencies` and `list standing` read names from the store
-  - [ ] `cli/render/registry.py`: `list members` shows name, id, program, `origin`, settings and checkouts; marks a member with no checkout, and one named by its id with `amoeba add --project <id> --name <name>`. Contract entries for the added fields
-  - [ ] Success: pyright clean
-- [ ] **11.2 Tests**
-  - [ ] Named assertion changes: the exact key set of a members row in `tests/operations/test_list_registry.py` gains `origin` and `checkouts`; `tests/cli/test_list_cli.py` lists the same keys and gains them too, and its `test_a_failing_cf_exits_three` is deleted, replaced by the no-`cf` test below; `tests/cli/render/test_registry.py`'s `_member` builds rows with `origin` and `checkouts`, and its exact `list members` texts change to the new layout (name, id, program, `origin`, settings, checkouts, and the no-checkout and named-by-id marks); `test_the_cli_contract_gives_each_registered_view_its_fields_in_order` checks field order against the `members` paragraph of `docs/cli-contract.md`, so 11.1's contract entry lists `origin` and `checkouts` in the model's order
-  - [ ] `tests/operations/test_list_members.py`: checkouts on two machines both listed, `path` and `wake_command` from the calling machine's first-added checkout; no-checkout and named-by-id members marked; the four `list` subjects work with a `cf` stub that fails if called
-  - [ ] Success: checks pass
+- [x] **11.1 Result fields**
+  - [x] `MemberState` gains `name` (direct constructions in tests pass it). `SetUpResult` change records name members by name (`working_directory` is already null when nothing was gathered, from 9.9 and 10.1)
+  - [x] `MemberRef.name` (`changes_models.py`) and any other `id`/`name` pair whose `name` is `str | None` because `cf` might not list the member become `str`, from the store (D13). Named: `tests/test_wiring.py` and `tests/cli/test_release_cli.py` build `MemberRef(..., name=None)`; each passes the member's name and asserts that name where it asserted none
+  - [x] `list_registry.py`: `MemberRow` gains `origin` and `checkouts` (machine name, path, Context Forge id, wake command); `path` is the first-added checkout on the calling machine or null; `in_context_forge` says whether it has one there; `project_details` and its import go. `list programs`, `list dependencies` and `list standing` read names from the store
+  - [x] `cli/render/registry.py`: `list members` shows name, id, program, `origin`, settings and checkouts; marks a member with no checkout, and one named by its id with `amoeba add --project <id> --name <name>`. Contract entries for the added fields
+  - [x] Success: pyright clean
+  - Note: `MemberState.name` added. `MemberRow` gained `origin` and `checkouts` (`CheckoutRow`); `project_details` dropped from `list_registry`. `MemberRef.name` and `RequestEntry.other_name` are now `str`, read from the store (`status_requests` reads the other end with `get_member_any`, raising `StoreError` for an unknown id). The `not_in_context_forge` warning is no longer raised (code kept in the contract). The `NOT_IN_CONTEXT_FORGE` render constant and two tests were deleted as unreachable: an unnamed provider (`tests/cli/render/test_releases.py`) and a member `cf` no longer lists (`tests/cli/render/test_status_requests.py`). `test_wiring` and `test_release_cli` pass `name="me"`.
+- [x] **11.2 Tests**
+  - [x] Named assertion changes: the exact key set of a members row in `tests/operations/test_list_registry.py` gains `origin` and `checkouts`; `tests/cli/test_list_cli.py` lists the same keys and gains them too, and its `test_a_failing_cf_exits_three` is deleted, replaced by the no-`cf` test below; `tests/cli/render/test_registry.py`'s `_member` builds rows with `origin` and `checkouts`, and its exact `list members` texts change to the new layout (name, id, program, `origin`, settings, checkouts, and the no-checkout and named-by-id marks); `test_the_cli_contract_gives_each_registered_view_its_fields_in_order` checks field order against the `members` paragraph of `docs/cli-contract.md`, so 11.1's contract entry lists `origin` and `checkouts` in the model's order
+  - [x] `tests/operations/test_list_members.py`: checkouts on two machines both listed, `path` and `wake_command` from the calling machine's first-added checkout; no-checkout and named-by-id members marked; the four `list` subjects work with a `cf` stub that fails if called
+  - [x] Success: checks pass
+  - Note: `tests/operations/test_list_members.py`; key-set changes in `test_list_registry` and `test_list_cli`; render tests updated; `tests/cli/test_list_cli.py::test_the_registered_views_make_no_cf_call` covers the four subjects.
 
 **Commit**: `feat: show names, origins and checkouts in results and list members`
 

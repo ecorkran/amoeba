@@ -17,13 +17,13 @@ from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations import set_up_remove
-from amoeba.operations.rm import rm
 from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.messages import get_message
 from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.programs import get_member_any
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import MEMBER_REMOVED_REASON, RequestState
+from operations.rm_placed import rm
 from operations.set_up_support import DIRECTORY, FakeCf, run_set_up
 
 PROVIDER = "provider-id"

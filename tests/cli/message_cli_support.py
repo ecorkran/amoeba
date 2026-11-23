@@ -18,6 +18,7 @@ from amoeba.config.home import store_path
 from cli.cli_support import (
     PROJECT_ID,
     PROJECT_NAME,
+    registered_member_id,
     result_of,
     run_amoeba,
     write_config,
@@ -27,6 +28,7 @@ __all__ = [
     "PROJECT_ID",
     "PROJECT_NAME",
     "registered",
+    "registered_member_id",
     "result_of",
     "run_amoeba",
     "send_note",

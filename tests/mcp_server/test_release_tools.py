@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,15 +19,16 @@ import anyio
 import mcp_types as types
 import pytest
 from cf_fixtures import DEFAULT_WORKTREE, write_fake_cf_with_projects
-from cli.cli_support import PROJECT_ID, result_of, run_amoeba, write_config
+from cli.cli_support import PROJECT_NAME, result_of, run_amoeba, write_config
 from store.seed import insert_member, insert_pair
 from store_open import open_local_store
 
 from amoeba.cli.exit_codes import EXIT_OK, EXIT_REJECTED
 from amoeba.config.home import store_path
 from amoeba.mcp import server
+from amoeba.operations.caller import find_member
 from amoeba.store import releases
-from amoeba.store.programs import get_member
+from amoeba.store.models import Member
 from amoeba.store.store import Transaction
 from amoeba.store.vocabulary import ConsumedMode
 from mcp_server.presence_rig import idle_presence
@@ -84,7 +86,8 @@ def _seed_provider(tmp_path: Path) -> None:
     """A provider this repo consumes, with one report; the names ``cf`` gives do not
     include it, so the result also carries the warning."""
     with open_local_store(store_path()) as store, store.write() as transaction:
-        program = _program_of(transaction)
+        consumer = _registered(transaction)
+        program = consumer.program_id
         insert_member(
             transaction,
             project_id=PROVIDER_ID,
@@ -94,12 +97,13 @@ def _seed_provider(tmp_path: Path) -> None:
             authorize_deny=(),
             registered_at=SEEDED_AT,
             updated_at=SEEDED_AT,
+            name=PROVIDER_ID,
         )
         insert_pair(
             transaction,
             program_id=program,
             provider_id=PROVIDER_ID,
-            consumer_id=PROJECT_ID,
+            consumer_id=consumer.project_id,
             consumed=ConsumedMode.FROM_SOURCE,
             registered_at=SEEDED_AT,
             updated_at=SEEDED_AT,
@@ -109,10 +113,19 @@ def _seed_provider(tmp_path: Path) -> None:
         )
 
 
-def _program_of(transaction: Transaction) -> str:
-    member = get_member(transaction, PROJECT_ID)
+def _registered(transaction: Transaction) -> Member:
+    member = find_member(transaction, PROJECT_NAME)
     assert member is not None
-    return member.program_id
+    return member
+
+
+def _without_ids(document: dict[str, Any]) -> dict[str, Any]:
+    """``document`` with every 32-hex member id replaced by a marker: each home makes
+    its own member, so the two doors' ids differ (261 D1)."""
+    stripped: dict[str, Any] = json.loads(
+        re.sub(r"\b[0-9a-f]{32}\b", "<id>", json.dumps(document))
+    )
+    return stripped
 
 
 def test_report_release_gives_equal_results_through_both_doors(
@@ -150,7 +163,9 @@ def test_report_release_gives_equal_results_through_both_doors(
 
     assert not is_error
     assert document["outcome"] == "recorded"
-    assert _without_clock(document) == _without_clock(result_of(completed))
+    assert _without_ids(_without_clock(document)) == _without_ids(
+        _without_clock(result_of(completed))
+    )
 
 
 def test_changes_gives_equal_results_through_both_doors(

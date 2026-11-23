@@ -305,7 +305,7 @@ def _report_release_result(outcome: ReportOutcome) -> ReportReleaseResult:
 def _changes_result(outcome: ChangesOutcome) -> ChangesResult:
     return ChangesResult(
         outcome=outcome,
-        member=MemberRef(id="member", name=None),
+        member=MemberRef(id="member", name="me"),
         since="2026-11-09T12:00:00+00:00",
         pairs=(),
         problems=(),

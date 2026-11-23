@@ -21,10 +21,9 @@ from cf_fixtures import (
     fake_cf_run,
     write_fake_cf_with_projects,
 )
-from cli.cli_support import run_amoeba, write_config
+from cli.cli_support import write_config
 from mcp import ClientSession
 
-from amoeba.cli.exit_codes import EXIT_OK
 from amoeba.mcp.channel_event import CHANNEL_CAPABILITY
 from amoeba.mcp.presence import PresenceDeps, PresenceState, ToolPresence
 from amoeba.mcp.server import build_server
@@ -55,8 +54,8 @@ def store_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     write_fake_cf_with_projects(bin_dir, DEFAULT_WORKTREE)
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
     write_config()
-    assert run_amoeba(tmp_path, "add").returncode == EXIT_OK
     path = Path(os.environ["AMOEBA_HOME"]) / "amoeba.sqlite3"
+    seed_member(path, MEMBER_ID)
     seed_member(path, PEER)
     return path
 

@@ -40,28 +40,15 @@ class ProjectDetail:
     path: str | None
 
 
-#: Project id to project name.
-type ProjectNames = dict[str, str]
 #: Project id to its details.
 type ProjectDetails = dict[str, ProjectDetail]
-
-
-def project_names(run: CfRun) -> ProjectNames | CfCallFailed:
-    """Every registered project's name by id, from one ``cf`` call.
-
-    Anything but a JSON array of objects with a string ``id`` and ``name`` is a
-    ``CfCallFailed`` quoting the output head.
-    """
-    details = project_details(run)
-    if isinstance(details, CfCallFailed):
-        return details
-    return {project_id: detail.name for project_id, detail in details.items()}
 
 
 def project_details(run: CfRun) -> ProjectDetails | CfCallFailed:
     """Every registered project's id, name and path (or ``None``), one ``cf`` call.
 
-    The same call and the same failures as :func:`project_names`.
+    Anything but a JSON array of objects with a string ``id`` and ``name`` is a
+    ``CfCallFailed`` quoting the output head.
     """
     argv = [CF_EXECUTABLE, *list_projects_command()]
     shown = " ".join(argv)

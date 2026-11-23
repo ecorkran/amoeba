@@ -26,6 +26,9 @@ SEPARATOR: Final = ":"
 _ADD_DEFAULTS: Final = {
     "program": None,
     "project": None,
+    "name": None,
+    "attach_to": None,
+    "new_member": False,
     "rules": None,
     "default_rules": False,
     "no_rules": False,
@@ -96,10 +99,26 @@ def register_add(
         help="the program (default: the "
         "member's own, else one named for its Context Forge project)",
     )
-    parser.add_argument(
+    choose = parser.add_mutually_exclusive_group()
+    choose.add_argument(
         "--project",
         metavar="NAME",
-        help="a Context Forge project name or id (default: the working directory's)",
+        help="an existing member's name or id (default: this directory's checkout)",
+    )
+    choose.add_argument(
+        "--attach-to",
+        metavar="NAME",
+        help="attach this checkout to that member, which has no checkout yet",
+    )
+    choose.add_argument(
+        "--new-member",
+        action="store_true",
+        help="make a new member of this checkout, whatever its origin remote says",
+    )
+    parser.add_argument(
+        "--name",
+        metavar="NAME",
+        help="set or change the member's name (default: the Context Forge name)",
     )
     rules = parser.add_mutually_exclusive_group()
     rules.add_argument(
@@ -168,7 +187,7 @@ def register_rm(
         "members",
         nargs="*",
         metavar="MEMBER",
-        help="Context Forge project names or ids",
+        help="members' names or ids",
     )
     parser.add_argument(
         "--pair",
@@ -181,6 +200,12 @@ def register_rm(
         "--concept", action="store_true", help="clear the program's concept"
     )
     parser.add_argument("--program", metavar="ID", help="the program")
+    parser.add_argument(
+        "--checkout",
+        metavar="PATH",
+        help="remove this machine's checkout stored at PATH (absolute, as list "
+        "members shows it) and leave the member",
+    )
     return parser
 
 
@@ -240,9 +265,11 @@ def add_document(
     if arguments.file is not None:
         return {"bulk": read_file(arguments.file)}
     document: dict[str, Any] = {}
-    for name in ("program", "project"):
+    for name in ("program", "project", "name", "attach_to"):
         if getattr(arguments, name) is not None:
             document[name] = getattr(arguments, name)
+    if arguments.new_member:
+        document["new_member"] = True
     if arguments.rules is not None:
         document["rules_paths"] = list(arguments.rules)
     if arguments.default_rules:
@@ -280,6 +307,8 @@ def rm_document(arguments: argparse.Namespace) -> dict[str, Any]:
         document["concept"] = True
     if arguments.program is not None:
         document["program"] = arguments.program
+    if arguments.checkout is not None:
+        document["checkout"] = arguments.checkout
     return document
 
 

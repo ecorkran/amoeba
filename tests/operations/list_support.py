@@ -11,7 +11,6 @@ from typing import Any
 
 from cf_fixtures import failure
 
-from amoeba.upstream.context_forge.projects import ProjectNames
 from operations.status_support import CfAnswer, FakeCf
 
 LIST_ARGUMENT = "list"
@@ -51,7 +50,3 @@ class ListCf:
                 list(argv), 0, json.dumps(list(self.projects)), ""
             )
         return FakeCf(self.by_directory)(argv, **kwargs)
-
-
-def names_of(projects: Sequence[dict[str, Any]]) -> ProjectNames:
-    return {entry["id"]: entry["name"] for entry in projects}

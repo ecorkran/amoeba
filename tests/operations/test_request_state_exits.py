@@ -24,7 +24,6 @@ from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.deps import Deps
-from amoeba.operations.rm import rm
 from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.message_sweep import sweep
 from amoeba.store.messages import get_message
@@ -41,6 +40,7 @@ from operations.message_support import (
     send_request_as_sender,
 )
 from operations.release_support import SettableClock
+from operations.rm_placed import rm
 from operations.set_up_support import DIRECTORY, FakeCf, run_set_up
 from operations.status_placed import list_view
 from operations.status_support import CfAnswer, status_deps

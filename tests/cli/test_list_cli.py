@@ -9,13 +9,14 @@ from pathlib import Path
 import pytest
 from fake_sq import recorded_listing, recorded_warning
 
-from amoeba.cli.exit_codes import EXIT_ERROR, EXIT_OK, EXIT_USAGE
+from amoeba.cli.exit_codes import EXIT_OK, EXIT_USAGE
 from amoeba.cli.main import main
 from amoeba.cli.render.registry import NO_PROGRAMS
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from cli.cli_support import (
     PROJECT_ID,
     PROJECT_NAME,
+    registered_member_id,
     result_of,
     run_amoeba,
     write_config,
@@ -124,8 +125,8 @@ def test_list_programs_text_and_json(tmp_path: Path) -> None:
             {
                 "program": PROJECT_NAME,
                 "concept": None,
-                "members": [PROJECT_ID],
-                "names": {PROJECT_ID: PROJECT_NAME},
+                "members": [registered_member_id()],
+                "names": {registered_member_id(): PROJECT_NAME},
             }
         ]
     }
@@ -147,6 +148,8 @@ def test_list_members_text_and_json(tmp_path: Path) -> None:
     document = result_of(run_amoeba(tmp_path, "list", "members", as_json=True))
 
     assert text.splitlines()[0] == f"{PROJECT_NAME} · program {PROJECT_NAME}"
+    assert "  origin: none\n" in text
+    assert f"  checkouts:\n    local, Context Forge id {PROJECT_ID}\n" in text
     assert "  rules: default (CLAUDE.md, AGENTS.md)\n" in text
     (member,) = document["members"]
     assert set(member) == {
@@ -161,6 +164,8 @@ def test_list_members_text_and_json(tmp_path: Path) -> None:
         "authorize_deny",
         "wake_command",
         "depends_on",
+        "origin",
+        "checkouts",
     }
     assert member["rules_from"] == "config_default"
     assert member["rules_paths"] == ["CLAUDE.md", "AGENTS.md"]
@@ -198,15 +203,14 @@ def test_an_unknown_subject_is_a_usage_error() -> None:
     assert raised.value.code == EXIT_USAGE
 
 
-@pytest.mark.parametrize("subject", ["members", "dependencies"])
-def test_a_failing_cf_exits_three(tmp_path: Path, subject: str) -> None:
+@pytest.mark.parametrize("subject", ["programs", "members", "dependencies", "standing"])
+def test_the_registered_views_make_no_cf_call(tmp_path: Path, subject: str) -> None:
     _registered(tmp_path)
 
     completed = run_amoeba(tmp_path, "list", subject, cf_fixture=None)
 
-    assert completed.returncode == EXIT_ERROR
-    assert "error: ContextForgeError" in completed.stderr
-    assert completed.stdout == ""
+    assert completed.returncode == EXIT_OK, completed.stderr
+    assert completed.stderr == ""
 
 
 def test_an_unknown_program_is_rejected_with_exit_one_and_the_known_ones_listed(

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
@@ -100,6 +101,12 @@ def _without_clock(document: dict[str, Any]) -> dict[str, Any]:
     return stripped
 
 
+def _without_ids(document: Any) -> Any:
+    """``document`` with every 32-hex member id replaced by a marker: each home makes
+    its own member, so the two doors' ids differ (261 D1)."""
+    return json.loads(re.sub(r"\b[0-9a-f]{32}\b", "<id>", json.dumps(document)))
+
+
 def _compare(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -121,7 +128,9 @@ def _compare(
     document, is_error = _through_mcp(tool, {"directory": str(tmp_path), **arguments})
 
     assert not is_error
-    assert _without_clock(document) == _without_clock(result_of(completed))
+    assert _without_ids(_without_clock(document)) == _without_ids(
+        _without_clock(result_of(completed))
+    )
     assert document["notice"] == QUOTED_DATA_NOTICE
     return document
 

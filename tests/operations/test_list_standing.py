@@ -119,15 +119,16 @@ def test_cf_is_read_only_when_a_member_row_needs_a_name(
     assert cf.listings == 0
 
 
-def test_a_project_cf_no_longer_lists_has_no_name(store: Store, tmp_path: Path) -> None:
+def test_a_member_reach_row_carries_the_members_name_from_the_store(
+    store: Store, tmp_path: Path
+) -> None:
     _give(store, {"text": "alpha", "member": "alpha"}, 0)
-    without_alpha = [entry for entry in CF_PROJECTS if entry["id"] != "alpha-id"]
 
-    view = _view(_list(store, tmp_path, {"subject": "standing"}, ListCf(without_alpha)))
+    view = _view(_list(store, tmp_path, {"subject": "standing"}))
 
     assert (view.standing[0].member, view.standing[0].member_name) == (
         "alpha-id",
-        None,
+        "alpha",
     )
 
 

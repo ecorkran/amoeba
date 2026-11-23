@@ -3,12 +3,14 @@ scenario D tests (slice 240)."""
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 from cf_routing import RoutedProject
 
 from amoeba.cli.exit_codes import EXIT_OK
+from amoeba.config.home import store_path
 from cli.cli_support import result_of, run_amoeba
 
 HASH = "cd34" * 10
@@ -28,6 +30,15 @@ class Repos:
         for project in self.projects:
             project.path.mkdir(parents=True)
         self.squadron, self.forge, self.guide = self.projects
+
+    def member_id(self, repo: RoutedProject) -> str:
+        """The id of the member registered for ``repo``: its own, not Context Forge's
+        (261 D1)."""
+        with sqlite3.connect(store_path()) as connection:
+            row = connection.execute(
+                "SELECT project_id FROM members WHERE name = ?", (repo.name,)
+            ).fetchone()
+        return str(row[0])
 
     def run(
         self, repo: RoutedProject, *arguments: str, expect: int = EXIT_OK

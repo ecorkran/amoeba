@@ -7,11 +7,11 @@ from datetime import UTC, datetime
 import pytest
 
 from amoeba.cli.render.registry import (
+    NAMED_BY_ID,
+    NO_CHECKOUT,
     NO_DEPENDENCIES,
     NO_MEMBERS,
-    NO_PATH,
     NO_PROGRAMS,
-    NOT_IN_CF,
     render_dependencies,
     render_members,
     render_programs,
@@ -19,6 +19,7 @@ from amoeba.cli.render.registry import (
 )
 from amoeba.cli.render.text import COLUMNS, ELLIPSIS
 from amoeba.operations.list_registry import (
+    CheckoutRow,
     ConceptRow,
     DependenciesView,
     DependencyRef,
@@ -41,6 +42,15 @@ def _member(project_id: str, **fields: object) -> MemberRow:
         "name": project_id.removeprefix("id-"),
         "path": f"/work/{project_id.removeprefix('id-')}",
         "in_context_forge": True,
+        "origin": None,
+        "checkouts": (
+            CheckoutRow(
+                machine="local",
+                path=f"/work/{project_id.removeprefix('id-')}",
+                cf_project_id=f"cf-{project_id}",
+                wake_command=None,
+            ),
+        ),
         "program": "trading",
         "rules_from": RulesFrom.CONFIG_DEFAULT,
         "rules_paths": ("CLAUDE.md", "AGENTS.md"),
@@ -59,7 +69,7 @@ def test_programs_with_a_concept_and_without_members() -> None:
                 program="trading",
                 concept=ConceptRow(member="id-core", path="docs/concept.md"),
                 members=("id-core", "id-lint", "id-gone"),
-                names={"id-core": "core", "id-lint": "lint", "id-gone": None},
+                names={"id-core": "core", "id-lint": "lint", "id-gone": "gone"},
             ),
             ProgramRow(program="hollow", concept=None, members=(), names={}),
         )
@@ -71,7 +81,7 @@ def test_programs_with_a_concept_and_without_members() -> None:
         "  members:\n"
         "    core\n"
         "    lint\n"
-        f"    id-gone {NOT_IN_CF}\n"
+        "    gone\n"
         "hollow\n"
         "  members: none\n"
     )
@@ -102,17 +112,23 @@ def test_a_default_member_and_a_named_member() -> None:
 
     assert render_members(view) == (
         "core · program trading\n"
-        "  path:\n"
-        "    /work/core\n"
+        "  id: id-core\n"
+        "  origin: none\n"
         "  rules: default (CLAUDE.md, AGENTS.md)\n"
+        "  checkouts:\n"
+        "    local, Context Forge id cf-id-core\n"
+        "      /work/core\n"
         "\n"
         "lint · program trading\n"
-        "  path:\n"
-        "    /work/lint\n"
+        "  id: id-lint\n"
+        "  origin: none\n"
         "  rules: CLAUDE.md, docs/*.md\n"
         "  allow: push\n"
         "  deny: deploy, release\n"
         "  depends on: core (from_release)\n"
+        "  checkouts:\n"
+        "    local, Context Forge id cf-id-lint\n"
+        "      /work/lint\n"
     )
 
 
@@ -124,35 +140,74 @@ def test_named_empty_rules_say_none() -> None:
     assert "  rules: none\n" in render_members(view)
 
 
-def test_a_project_with_no_path_says_so() -> None:
-    view = MembersView(members=(_member("id-core", path=None),))
+def test_an_origin_and_a_checkout_on_each_machine_are_listed() -> None:
+    row = _member(
+        "id-core",
+        origin="github.com/org/core",
+        checkouts=(
+            CheckoutRow(
+                machine="alpha",
+                path="/a/core",
+                cf_project_id="cf-a",
+                wake_command="wake-it",
+            ),
+            CheckoutRow(
+                machine="beta", path="/b/core", cf_project_id="cf-b", wake_command=None
+            ),
+        ),
+    )
 
-    assert f"  path: {NO_PATH}\n" in render_members(view)
-    assert "  path:\n" not in render_members(view)
+    text = render_members(MembersView(members=(row,)))
+
+    assert "  origin: github.com/org/core\n" in text
+    assert (
+        "  checkouts:\n"
+        "    alpha, Context Forge id cf-a\n"
+        "      /a/core\n"
+        "      wake command:\n"
+        "        wake-it\n"
+        "    beta, Context Forge id cf-b\n"
+        "      /b/core\n"
+    ) in text
 
 
-def test_a_project_cf_no_longer_lists_shows_its_id_and_the_marker() -> None:
-    gone = _member("id-gone", name=None, path=None, in_context_forge=False)
+def test_a_member_with_no_checkout_is_marked() -> None:
+    bare = _member("id-core", path=None, in_context_forge=False, checkouts=())
 
-    text = render_members(MembersView(members=(gone,)))
+    text = render_members(MembersView(members=(bare,)))
 
-    assert text.splitlines()[0] == f"id-gone {NOT_IN_CF} · program trading"
-    assert "path" not in text
+    assert text.splitlines()[0] == f"core {NO_CHECKOUT} · program trading"
+    assert "  checkouts: none\n" in text
+
+
+def test_a_member_named_by_its_id_says_how_to_rename_it() -> None:
+    by_id = _member("5f0c1e", name="5f0c1e")
+
+    text = render_members(MembersView(members=(by_id,)))
+
+    assert text.splitlines()[0] == f"5f0c1e {NAMED_BY_ID} · program trading"
+    assert "  to give it a name:\n    amoeba add --project 5f0c1e --name NAME\n" in text
 
 
 def test_a_long_path_is_whole_on_its_own_line() -> None:
-    text = render_members(MembersView(members=(_member("id-core", path=LONG_PATH),)))
+    long = CheckoutRow(
+        machine="local", path=LONG_PATH, cf_project_id="cf", wake_command=None
+    )
+    text = render_members(MembersView(members=(_member("id-core", checkouts=(long,)),)))
 
-    assert f"    {LONG_PATH}\n" in text
+    assert f"      {LONG_PATH}\n" in text
     assert len(LONG_PATH) > COLUMNS
 
 
 def test_no_member_line_but_the_path_is_wider_than_the_limit() -> None:
+    long = CheckoutRow(
+        machine="local", path=LONG_PATH, cf_project_id="cf", wake_command=None
+    )
     view = MembersView(
         members=(
             _member(
                 "id-core",
-                path=LONG_PATH,
+                checkouts=(long,),
                 authorize_allow=tuple(f"key-{n}" for n in range(60)),
             ),
         )
@@ -160,14 +215,14 @@ def test_no_member_line_but_the_path_is_wider_than_the_limit() -> None:
 
     lines = render_members(view).splitlines()
 
-    assert [line for line in lines if len(line) > COLUMNS] == [f"    {LONG_PATH}"]
+    assert [line for line in lines if len(line) > COLUMNS] == [f"      {LONG_PATH}"]
 
 
 def test_no_members() -> None:
     assert render_members(MembersView(members=())) == NO_MEMBERS + "\n"
 
 
-def test_dependencies_use_names_and_mark_a_gone_end() -> None:
+def test_dependencies_use_names() -> None:
     view = DependenciesView(
         dependencies=(
             DependencyRow(
@@ -179,7 +234,7 @@ def test_dependencies_use_names_and_mark_a_gone_end() -> None:
             ),
             DependencyRow(
                 provider_id="id-gone",
-                provider_name=None,
+                provider_name="gone",
                 consumer_id="id-lint",
                 consumer_name="lint",
                 consumed=ConsumedMode.FROM_RELEASE,
@@ -188,7 +243,7 @@ def test_dependencies_use_names_and_mark_a_gone_end() -> None:
     )
 
     assert render_dependencies(view) == (
-        f"core -> lint (from_source)\nid-gone {NOT_IN_CF} -> lint (from_release)\n"
+        "core -> lint (from_source)\ngone -> lint (from_release)\n"
     )
 
 
@@ -196,23 +251,6 @@ def test_no_dependencies() -> None:
     assert render_dependencies(DependenciesView(dependencies=())) == (
         NO_DEPENDENCIES + "\n"
     )
-
-
-def test_a_provider_cf_does_not_name_is_marked_in_a_members_dependencies() -> None:
-    view = MembersView(
-        members=(
-            _member(
-                "id-lint",
-                depends_on=(
-                    DependencyRef(
-                        provider="id-gone", consumed=ConsumedMode.FROM_SOURCE
-                    ),
-                ),
-            ),
-        )
-    )
-
-    assert f"  depends on: id-gone {NOT_IN_CF} (from_source)\n" in render_members(view)
 
 
 def test_a_wake_command_is_on_its_own_line_and_a_member_without_one_has_none() -> None:

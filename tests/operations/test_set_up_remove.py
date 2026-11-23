@@ -22,7 +22,6 @@ from amoeba.store.models import QuestionKey
 from amoeba.store.programs import get_member_any, get_pair, get_program
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import RulesFrom
 from operations.set_up_support import run_set_up
 
 PROJECTS = [
@@ -35,7 +34,7 @@ CLAIMED = QuestionKey("run-claimed", "2026-11-10T11:00:00+00:00")
 WAITING = QuestionKey("run-waiting", "2026-11-10T11:05:00+00:00")
 ANSWERED = QuestionKey("run-answered", "2026-11-10T11:10:00+00:00")
 CONCEPT = {"member": "consumer", "path": "docs/concept.md"}
-REMOVE_CONSUMER = {"program": "demo", "remove": {"members": ["consumer"]}}
+REMOVE_CONSUMER = {"program": "demo", "remove": {"members": ["consumer-id"]}}
 
 
 @pytest.fixture
@@ -105,7 +104,7 @@ def test_removes_a_pair_then_a_member_and_a_repeat_is_unchanged(store: Store) ->
 
     assert pair_result.outcome is SetUpOutcome.APPLIED
     assert pair_result.changes == ("removed pair provider-id -> consumer-id",)
-    assert member_result.changes == ("removed member consumer-id",)
+    assert member_result.changes == ("removed member consumer",)
     assert member_result.program is not None
     assert [m.project_id for m in member_result.program.members] == ["provider-id"]
     assert repeat.outcome is SetUpOutcome.UNCHANGED
@@ -118,7 +117,7 @@ def test_removes_a_pair_then_a_member_and_a_repeat_is_unchanged(store: Store) ->
 def test_removing_a_member_takes_its_pairs_with_it(store: Store) -> None:
     result = _set_up(store, {"program": "demo", "remove": {"members": ["provider"]}})
 
-    assert result.changes == ("removed member provider-id",)
+    assert result.changes == ("removed member provider",)
     with store.read() as transaction:
         assert get_pair(transaction, "provider-id", "consumer-id") is None
 
@@ -135,38 +134,17 @@ def test_removing_an_absent_pair_between_members_changes_nothing(store: Store) -
     assert result.outcome is SetUpOutcome.UNCHANGED
 
 
-def test_naming_a_removed_member_re_adds_it_on_the_default_rules(
-    store: Store,
-) -> None:
+def test_a_removed_member_named_in_a_request_is_not_a_member(store: Store) -> None:
+    """A removed member comes back through ``add`` in a checkout of its repo (261 D7
+    step 3), not through a reference in a request."""
     _set_up(store, REMOVE_CONSUMER)
 
-    re_added = _set_up(store, {"program": "demo", "members": [{"project": "consumer"}]})
+    by_name = _set_up(store, {"program": "demo", "members": [{"project": "consumer"}]})
+    by_id = _set_up(store, {"program": "demo", "members": [{"project": "consumer-id"}]})
 
-    assert re_added.changes == ("added member consumer-id",)
-    assert _removed_at(store, "consumer-id") is None
-    with store.read() as transaction:
-        member = get_member_any(transaction, "consumer-id")
-    assert member is not None
-    # Stored as ``named`` with ``["CLAUDE.md"]`` before it was removed; a fresh
-    # registration with no rules field is the default, whatever it had.
-    assert member.settings.rules_from is RulesFrom.CONFIG_DEFAULT
-    assert member.settings.rules_paths == ()
-
-
-def test_a_removed_member_can_join_another_program(store: Store) -> None:
-    _set_up(store, REMOVE_CONSUMER)
-
-    result = _set_up(
-        store, {"program": "elsewhere", "members": [{"project": "consumer", **RULES}]}
-    )
-
-    assert result.outcome is SetUpOutcome.APPLIED
-    assert result.program is not None
-    assert [m.project_id for m in result.program.members] == ["consumer-id"]
-    with store.read() as transaction:
-        member = get_member_any(transaction, "consumer-id")
-    assert member is not None
-    assert member.program_id == "elsewhere"
+    assert _codes(by_name) == [SetUpProblemCode.NOT_A_MEMBER]
+    assert _codes(by_id) == [SetUpProblemCode.NOT_A_MEMBER]
+    assert _removed_at(store, "consumer-id") is not None
 
 
 def test_open_questions_block_the_removal_until_dismissed(store: Store) -> None:
@@ -185,7 +163,7 @@ def test_open_questions_block_the_removal_until_dismissed(store: Store) -> None:
     _dismiss(store, CLAIMED)
     _dismiss(store, WAITING)
 
-    assert _set_up(store, REMOVE_CONSUMER).changes == ("removed member consumer-id",)
+    assert _set_up(store, REMOVE_CONSUMER).changes == ("removed member consumer",)
 
 
 def test_an_answer_not_yet_handed_over_blocks_the_removal_too(store: Store) -> None:
@@ -216,7 +194,6 @@ def test_a_reference_that_is_no_member_is_not_a_member(store: Store) -> None:
 
     assert _codes(by_name) == [SetUpProblemCode.NOT_A_MEMBER]
     assert _codes(unknown) == [SetUpProblemCode.NOT_A_MEMBER]
-    assert "Context Forge has no such project" in unknown.problems[0].detail
     assert _codes(bad_pair) == [SetUpProblemCode.NOT_A_MEMBER]
     assert "remove.pairs.0.provider" in bad_pair.problems[0].detail
 
@@ -265,7 +242,7 @@ def test_clearing_the_concept_in_the_same_request_removes_both(store: Store) -> 
     result = _set_up(store, {**REMOVE_CONSUMER, "concept": None})
 
     assert result.outcome is SetUpOutcome.APPLIED
-    assert "removed member consumer-id" in result.changes
+    assert "removed member consumer" in result.changes
     assert result.program is not None
     assert result.program.concept is None
     with store.read() as transaction:

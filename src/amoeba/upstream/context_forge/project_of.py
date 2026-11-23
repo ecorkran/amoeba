@@ -1,10 +1,9 @@
-"""Which Context Forge project a directory (or a name) belongs to.
+"""Which Context Forge project a directory belongs to.
 
-``cf get --json`` run in a directory prints that directory's project, and with
-``-p <id or name>`` a named one. Worktrees and subdirectories of one checkout give
-the same project ``id`` because Context Forge says so; nothing here adds worktree
-logic. Outside any project Context Forge prints an error document with the code
-``PROJECT_NOT_FOUND``, on stderr in the cases recorded in
+``cf get --json`` run in a directory prints that directory's project. Worktrees and
+subdirectories of one checkout give the same project ``id`` because Context Forge says
+so; nothing here adds worktree logic. Outside any project Context Forge prints an error
+document with the code ``PROJECT_NOT_FOUND``, on stderr in the cases recorded in
 ``tests/fixtures/context_forge``, so both streams are read.
 """
 
@@ -22,11 +21,7 @@ from amoeba.upstream.context_forge.cli_call import (
     CfRun,
     run_cf,
 )
-from amoeba.upstream.context_forge.target_read import (
-    CF_EXECUTABLE,
-    CF_JSON_FLAG,
-    CF_PROJECT_FLAG,
-)
+from amoeba.upstream.context_forge.target_read import CF_EXECUTABLE, CF_JSON_FLAG
 
 CF_GET_COMMAND: Final = "get"
 #: ``cf get`` reads local files; a call that takes this long is stuck.
@@ -90,20 +85,15 @@ def _project(stdout: str) -> CFProject | None:
 
 
 def project_of(
-    *, directory: Path | None = None, reference: str | None = None, run: CfRun
+    *, directory: Path, run: CfRun
 ) -> CFProject | CFProjectNotFound | CfCallFailed:
-    """The project of ``directory``, or the one named by ``reference``.
+    """The project of ``directory``. ``CfCallFailed`` means Context Forge did not give
+    a usable answer, which is not the same as "not a project".
 
-    Exactly one of the two is given. ``CfCallFailed`` means Context Forge did not
-    give a usable answer, which is not the same as "not a project".
+    A member is never asked about by name: names are in the store (261 D6, D10).
     """
-    if (directory is None) == (reference is None):
-        raise ValueError("give exactly one of directory and reference")
     argv = [CF_EXECUTABLE, CF_GET_COMMAND, CF_JSON_FLAG]
-    if reference is not None:
-        argv += [CF_PROJECT_FLAG, reference]
-    caller = run if directory is None else partial(run, cwd=directory)
-    completed = run_cf(argv, caller, CF_GET_TIMEOUT_SECONDS)
+    completed = run_cf(argv, partial(run, cwd=directory), CF_GET_TIMEOUT_SECONDS)
     if isinstance(completed, CfCallFailed):
         return completed
     missing = _not_found((completed.stdout, completed.stderr))

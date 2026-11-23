@@ -193,12 +193,14 @@ def test_a_project_in_no_program_is_registered_with_the_defaults_and_handled(
     result = _check(store, _rig(tmp_path, PAUSE))
 
     assert isinstance(result, Eligible), result
-    assert result.member.project_id == PROJECT_ID
+    # The member has its own id; the Context Forge id is its checkout's (261 D1, D6).
+    assert result.member.project_id != PROJECT_ID
+    assert result.member.name == PROJECT_NAME
     assert result.cf_project_id == PROJECT_ID
     # A one-member program named after the Context Forge project, as `amoeba add`.
     assert result.member.program_id == PROJECT_NAME
     with store.read() as transaction:
-        assert get_member(transaction, PROJECT_ID) == result.member
+        assert get_member(transaction, result.member.project_id) == result.member
 
 
 def test_a_prompt_only_run_is_skipped(tmp_path: Path, store: Store) -> None:
@@ -291,3 +293,24 @@ def test_the_checks_work_against_the_fake_sq_executable(
     assert isinstance(result, Eligible)
     assert result.key.paused_at == PAUSED_AT
     assert shutil.which("sq") == str(fake.directory / "sq")
+
+
+def test_a_refused_registration_is_the_skip_carrying_its_text(
+    tmp_path: Path, store: Store
+) -> None:
+    """The project's name is another member's and there is no origin to say it is the
+    same repo (261 D7 step 5), so ``add`` refuses and the pause is skipped with why."""
+    _with_run_file(tmp_path)
+    register_member(store, "someone-else-id")
+    with store.write() as transaction:
+        transaction.execute(
+            "UPDATE members SET name = ? WHERE project_id = 'someone-else-id'",
+            (PROJECT_NAME,),
+        )
+
+    result = _check(store, _rig(tmp_path, PAUSE))
+
+    assert isinstance(result, Skip)
+    assert result.reason is SkipReason.NOT_IN_PROGRAM
+    assert result.detail is not None
+    assert "no_origin" in result.detail or "one checkout" in result.detail

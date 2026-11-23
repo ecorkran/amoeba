@@ -69,6 +69,9 @@ def test_a_password_is_in_no_output() -> None:
         "host:",
         "C:\\work\\repo",
         "https://[::1]/org/repo",
+        "git@host:secret@:::weird//address",
+        "https://host/org/re po",
+        "git@host:org/repo?token=x",
     ],
 )
 def test_text_with_no_host_and_path_gives_nothing(address: str) -> None:

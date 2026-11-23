@@ -13,7 +13,6 @@ from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.projects import (
     ProjectDetail,
     project_details,
-    project_names,
 )
 
 RECORDING = (
@@ -36,16 +35,16 @@ class _Runner:
         return subprocess.CompletedProcess(list(argv), returncode, stdout, stderr)
 
 
-def test_the_real_recording_parses_to_the_id_to_name_map() -> None:
+def test_the_real_recording_parses_to_the_id_to_detail_map() -> None:
     text = RECORDING.read_text(encoding="utf-8")
     expected = {entry["id"]: entry["name"] for entry in json.loads(text)}
     runner = _Runner(text)
 
-    names = project_names(runner)
+    details = project_details(runner)
 
-    assert names == expected
-    assert isinstance(names, dict)
-    assert names["project_1758069879482_xankquaj6"] == "trading"
+    assert isinstance(details, dict)
+    assert {project_id: d.name for project_id, d in details.items()} == expected
+    assert details["project_1758069879482_xankquaj6"].name == "trading"
     assert runner.calls == [["cf", "list", "projects", "--json"]]
 
 
@@ -93,14 +92,14 @@ def test_the_recording_holds_an_entry_without_a_project_path() -> None:
 def test_output_that_is_not_a_list_of_id_and_name_is_a_call_failure(
     stdout: str,
 ) -> None:
-    result = project_names(_Runner(stdout))
+    result = project_details(_Runner(stdout))
 
     assert isinstance(result, CfCallFailed)
     assert "cf list projects --json" in result.detail
 
 
 def test_a_nonzero_exit_is_a_call_failure_quoting_the_output() -> None:
-    result = project_names(_Runner("", returncode=1, stderr="cf is broken"))
+    result = project_details(_Runner("", returncode=1, stderr="cf is broken"))
 
     assert isinstance(result, CfCallFailed)
     assert "exited 1" in result.detail
@@ -111,6 +110,6 @@ def test_a_cf_that_cannot_run_is_a_call_failure() -> None:
     def missing(argv: Sequence[str], **_kwargs: object) -> None:
         raise FileNotFoundError(argv[0])
 
-    result = project_names(missing)  # pyright: ignore[reportArgumentType]
+    result = project_details(missing)  # pyright: ignore[reportArgumentType]
 
     assert isinstance(result, CfCallFailed)

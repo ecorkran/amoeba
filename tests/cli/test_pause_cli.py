@@ -35,8 +35,9 @@ from user_configs import example_config_text
 from amoeba.answering.values import DeclineReason
 from amoeba.cli.main import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE, main
 from amoeba.config.home import calls_log_dir, config_path, store_path
+from amoeba.operations.caller import find_member
 from amoeba.store.models import MemberSettings, QuestionKey
-from amoeba.store.programs import get_member, upsert_member, upsert_program
+from amoeba.store.programs import upsert_member, upsert_program
 from amoeba.store.questions import NewQuestion, insert_question, settle_waiting
 from amoeba.store.vocabulary import RulesFrom
 
@@ -203,7 +204,7 @@ def test_handle_pause_registers_a_project_in_no_program(
     # Past the membership check: the next check is what stops this call.
     assert _result(completed)["skip_reason"] == "wrong_checkout"
     with open_local_store(store_path()) as store, store.read() as transaction:
-        assert get_member(transaction, fixture_document(DEFAULT_WORKTREE)["id"])
+        assert find_member(transaction, fixture_document(DEFAULT_WORKTREE)["name"])
 
 
 def test_an_operational_failure_exits_three_with_the_error_on_stderr(

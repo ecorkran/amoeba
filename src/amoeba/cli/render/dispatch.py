@@ -6,7 +6,6 @@ cannot disagree between them.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import datetime
 
 from amoeba.cli.render.messages import (
@@ -63,21 +62,20 @@ def render_result(
     result: OperationResult,
     *,
     now: datetime,
-    names: Mapping[str, str],
     default_rules: tuple[str, ...],
     removing: bool = False,
     paint: Painter = PLAIN,
 ) -> str:
     """The text of ``result``.
 
-    ``names``, ``default_rules`` and ``removing`` are for ``add`` and ``rm`` (Context
-    Forge names by id, the config's default rules, and whether it was ``rm``); the
-    others ignore them. ``paint`` colors the headings of ``list`` and ``status``.
+    ``default_rules`` and ``removing`` are for ``add`` and ``rm`` (the config's default
+    rules, and whether it was ``rm``); the others ignore them. ``paint`` colors the
+    headings of ``list`` and ``status``.
     """
     match result:
         case SetUpResult():
             return render_registration(
-                result, names=names, default_rules=default_rules, removing=removing
+                result, default_rules=default_rules, removing=removing
             )
         case ListResult():
             return render_waiting(

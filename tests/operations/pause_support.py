@@ -8,10 +8,10 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import NoReturn
 
 from cf_plan_run import plan_cf_run
 from fake_sq import FakePoller, fake_poller
+from store.seed import insert_checkout
 
 from amoeba.operations.deps import Deps
 from amoeba.operations.processes import Spawner, WaitableChild
@@ -120,8 +120,13 @@ def _unused_list_runs() -> list[ListedRun] | RunListProblem:
     raise AssertionError("this test gave no list_runs reader")
 
 
-def _unused_git_run(*_args: object, **_kwargs: object) -> NoReturn:
-    raise AssertionError("this test gave no git runner")
+def _no_origin_git(
+    argv: Sequence[str], **_kwargs: object
+) -> subprocess.CompletedProcess[str]:
+    """A ``git`` for a repo with no ``origin`` remote: only a pause in a project in no
+    program registers one (``add``'s client part), and the tests' paths are not repos
+    the real ``git`` should be asked about."""
+    return subprocess.CompletedProcess(list(argv), 2, "", "error: No such remote")
 
 
 def unused_amoeba_script() -> Path:
@@ -155,7 +160,7 @@ def build_deps(
 
     deps = Deps(
         cf_run=plan_cf_run(integration_branch="", broken=False),
-        git_run=_unused_git_run,
+        git_run=_no_origin_git,
         poll_run=poll,
         spawn=spawner or recorder,
         clock=clock,
@@ -200,6 +205,15 @@ def register_member(
                 rules_from=RulesFrom.NAMED,
             ),
             name=project_id,
+            now=START,
+        )
+        # The stub ``cf`` answers a directory with this project id, which a pause
+        # looks up as the checkout (261 D6).
+        insert_checkout(
+            transaction,
+            member_id=project_id,
+            cf_project_id=project_id,
+            path=f"/work/{project_id}",
             now=START,
         )
     with store.read() as transaction:

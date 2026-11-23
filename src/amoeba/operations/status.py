@@ -52,6 +52,7 @@ from amoeba.operations.status_runs import (
 from amoeba.operations.status_sessions import read_member_sessions
 from amoeba.operations.status_waiting import MemberWaiting, waiting_entries
 from amoeba.operations.wake_status import read_member_wakes
+from amoeba.store.checkouts import checkouts_on_machine
 from amoeba.store.errors import StoreRowError
 from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Member
@@ -173,9 +174,11 @@ def status(
         )
     # The listing is ``--all`` so the sweep can tell a finished run from an unknown
     # one; completed runs stay out of the per-member run lists, as before.
+    with store.read() as transaction:
+        by_checkout = _members_by_checkout(transaction, members)
     placement = place_runs(
         [run for run in listed if not run.is_completed],
-        members,
+        by_checkout,
         scratch_roots(deps.answering_dir, deps.legacy_home),
         lambda found: project_of(directory=found, run=deps.cf_run),
     )
@@ -196,7 +199,7 @@ def status(
     with store.read() as transaction:
         open_rows = open_questions(transaction, list(members))
     waiting = waiting_entries(open_rows, listed)
-    messages = read_member_messages(store, members, names, deps.clock())
+    messages = read_member_messages(store, members, deps.clock())
     sessions = read_member_sessions(
         store, members, deps.clock(), config.session_stale_seconds
     )
@@ -245,6 +248,20 @@ def _rejected(code: RejectCode, problems: tuple[str, ...]) -> StatusResult:
     return StatusResult(
         outcome=StatusOutcome.REJECTED, rejection=code, problems=problems
     )
+
+
+def _members_by_checkout(
+    transaction: Transaction, members: dict[str, Member]
+) -> dict[str, Member]:
+    """The members in scope by the Context Forge project id of each of their checkouts
+    on this machine: a run is placed by its directory's project (261 D11)."""
+    return {
+        checkout.cf_project_id: members[checkout.member_id]
+        for checkout in checkouts_on_machine(
+            transaction, acting_machine_id(transaction)
+        )
+        if checkout.member_id in members
+    }
 
 
 def _names(members: dict[str, Member]) -> dict[str, str]:

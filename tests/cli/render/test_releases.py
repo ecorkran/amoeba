@@ -89,9 +89,9 @@ def test_a_rejection_prints_its_code_and_each_detail() -> None:
     ]
 
 
-def _pair(name: str | None, *reports: ReleaseReport) -> ProviderPair:
+def _pair(name: str, *reports: ReleaseReport) -> ProviderPair:
     return ProviderPair(
-        provider=MemberRef(id=f"{name or 'unnamed'}-id", name=name),
+        provider=MemberRef(id=f"{name}-id", name=name),
         consumed=ConsumedMode.FROM_SOURCE,
         releases=reports,
     )
@@ -139,11 +139,6 @@ def test_a_listing_with_no_report_text_carries_no_notice() -> None:
     assert QUOTED_DATA_NOTICE not in render_changes(_changes(_pair("core")))
 
 
-def test_an_unnamed_provider_is_shown_by_id_without_a_version() -> None:
-    text = render_changes(_changes(_pair(None, _report())))
-    assert text.splitlines()[1] == f"unnamed-id · {COMMIT}"
-
-
 def test_no_changes_is_said_only_when_every_pair_is_empty() -> None:
     empty = render_changes(_changes(_pair("core"), _pair("lint")))
     assert empty == f"No changes since {SINCE}.\n"
@@ -155,7 +150,7 @@ def test_a_warning_is_printed() -> None:
     warning = ChangesWarning(
         code=ChangesWarningCode.NOT_IN_CONTEXT_FORGE, detail="no name for some-id"
     )
-    text = render_changes(_changes(_pair(None, _report()), warnings=(warning,)))
+    text = render_changes(_changes(_pair("core", _report()), warnings=(warning,)))
     assert text.splitlines()[-1] == "warning: no name for some-id"
 
 

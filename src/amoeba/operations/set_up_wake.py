@@ -1,7 +1,7 @@
 """A wake command on the caller's checkout (slice 261, D7).
 
 The command is a checkout's setting, so it is set on the checkout of the working
-directory: the one at (the acting machine, the working directory's Context Forge id).
+directory: the one at (the acting machine, the gathered Context Forge project id).
 The resolver has already refused a command given for any other entry.
 """
 
@@ -9,18 +9,18 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from amoeba.operations.here_document import HereCaller, HereCheckout
 from amoeba.operations.set_up_models import Change, ChangeSubject, ChangeVerb
-from amoeba.operations.set_up_resolve import ResolvedMember
+from amoeba.operations.set_up_resolve import Gathered, ResolvedMember
 from amoeba.store.checkouts import checkout_at, set_checkout_wake_command
 from amoeba.store.machines import acting_machine_id
 from amoeba.store.store import Transaction
-from amoeba.upstream.context_forge.project_of import CFProject, CFProjectNotFound
 
 
 def apply_wake_commands(
     transaction: Transaction,
     members: tuple[ResolvedMember, ...],
-    working: CFProject | CFProjectNotFound,
+    here: Gathered | HereCaller,
     now: datetime,
     already: list[Change],
 ) -> list[Change]:
@@ -36,13 +36,13 @@ def apply_wake_commands(
     for member in members:
         if not member.wake_command_given:
             continue
-        if isinstance(working, CFProjectNotFound):
-            raise ValueError("a wake command was accepted with no working project")
+        if not isinstance(here, HereCheckout):
+            raise ValueError("a wake command was accepted with no gathered checkout")
         machine_id = acting_machine_id(transaction)
-        checkout = checkout_at(transaction, machine_id, working.id)
+        checkout = checkout_at(transaction, machine_id, here.project_id)
         if checkout is None:
             raise ValueError(
-                f"no checkout at the working directory's project {working.id!r}"
+                f"no checkout at the working directory's project {here.project_id!r}"
             )
         if checkout.wake_command == member.wake_command:
             continue

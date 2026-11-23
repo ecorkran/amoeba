@@ -25,7 +25,6 @@ from amoeba.operations.pause_models import (
 )
 from amoeba.operations.processes import Spawner, WaitableChild
 from amoeba.operations.request_release import MAX_STARTS_PER_CALL
-from amoeba.operations.rm import rm
 from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.answers import add_pm_answer, answers_of, settle_answered
 from amoeba.store.errors import StoreBusyError
@@ -65,6 +64,7 @@ from operations.handle_rig import (
 )
 from operations.held_support import ADDRESSEE, REQUEST_ID, add_addressee, seed_request
 from operations.pause_support import FakeChild, SpawnRecorder
+from operations.rm_placed import rm
 from operations.set_up_support import DIRECTORY, FakeCf
 
 
@@ -343,7 +343,6 @@ def test_a_second_call_after_a_resume_is_settled(tmp_path: Path) -> None:
 # Slice 242, 6.5: held questions started after an operation, and by handle_pause
 
 
-ADDRESSEE_NAME = "addressee-name"
 MARKED_PAUSE = PAUSE.model_copy(
     update={
         "checkpoint": PAUSE.checkpoint.model_copy(
@@ -394,12 +393,9 @@ def test_rm_of_the_addressee_releases_the_held_question_to_the_pm(
         removed = rm(
             w.store,
             w.config,
-            {"members": [ADDRESSEE_NAME]},
+            {"members": [ADDRESSEE]},
             directory=DIRECTORY,
-            run=FakeCf(
-                directory_fixture=DEFAULT_WORKTREE,
-                projects=[(ADDRESSEE, ADDRESSEE_NAME)],
-            ),
+            run=FakeCf(directory_fixture=DEFAULT_WORKTREE),
         )
         assert removed.outcome is SetUpOutcome.APPLIED
 

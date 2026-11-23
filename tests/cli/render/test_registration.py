@@ -32,6 +32,7 @@ def _member(
 ) -> MemberState:
     return MemberState(
         project_id=project_id,
+        name=NAMES.get(project_id, project_id),
         rules_paths=rules,
         rules_from=rules_from,
         authorize_allow=(),
@@ -71,12 +72,12 @@ def _rejected(
 
 
 def _text(result: SetUpResult) -> str:
-    return render_registration(result, names=NAMES, default_rules=DEFAULTS)
+    return render_registration(result, default_rules=DEFAULTS)
 
 
 def test_a_first_run_says_it_created_a_program_and_added_the_member() -> None:
     result = _applied(
-        "core", (_member("id-core"),), "added program core", "added member id-core"
+        "core", (_member("core"),), "added program core", "added member core"
     )
 
     assert _text(result) == (
@@ -88,7 +89,7 @@ def test_a_first_run_says_it_created_a_program_and_added_the_member() -> None:
 
 
 def test_joining_a_program_that_exists_says_so() -> None:
-    result = _applied("group", (_member("id-lib"),), "added member id-lib")
+    result = _applied("group", (_member("lib"),), "added member lib")
 
     assert _text(result) == (
         "added\n"
@@ -99,7 +100,7 @@ def test_joining_a_program_that_exists_says_so() -> None:
 
 def test_a_changed_member_shows_its_named_rules() -> None:
     member = _member("id-core", RulesFrom.NAMED, ("CLAUDE.md", "docs/*.md"))
-    result = _applied("group", (member,), "updated member id-core")
+    result = _applied("group", (member,), "updated member core")
 
     assert _text(result) == (
         "changed\n  changed member core\n    rules: CLAUDE.md, docs/*.md\n"
@@ -109,7 +110,7 @@ def test_a_changed_member_shows_its_named_rules() -> None:
 def test_a_member_with_named_empty_rules_says_none() -> None:
     member = _member("id-core", RulesFrom.NAMED, ())
 
-    result = _applied("group", (member,), "updated member id-core")
+    result = _applied("group", (member,), "updated member core")
 
     assert _text(result).endswith("    rules: none\n")
 
@@ -119,8 +120,8 @@ def test_dependency_and_concept_lines_use_names() -> None:
         "group",
         (),
         "updated program group",
-        "added dependency id-core on id-lib (from_source)",
-        "updated dependency id-core on id-lib (from_release)",
+        "added dependency core on lib (from_source)",
+        "updated dependency core on lib (from_release)",
     )
 
     assert _text(result) == (
@@ -131,20 +132,20 @@ def test_dependency_and_concept_lines_use_names() -> None:
     )
 
 
-def test_removals_use_names_and_an_id_with_no_name_prints_as_itself() -> None:
+def test_removals_print_the_names_the_records_carry() -> None:
     result = _applied(
         "group",
         (),
-        "removed pair id-lib -> id-core",
-        "removed member id-core",
-        "removed member id-gone",
+        "removed pair lib -> core",
+        "removed member core",
+        "removed member gone",
     )
 
     assert _text(result) == (
         "removed\n"
         "  removed pair lib -> core\n"
         "  removed member core\n"
-        "  removed member id-gone\n"
+        "  removed member gone\n"
     )
 
 
@@ -196,9 +197,7 @@ def test_rm_outside_a_project_tells_you_to_name_the_member_not_to_add() -> None:
         working_directory=WorkingDirectoryNotAProject(not_a_project="no project"),
     )
 
-    text = render_registration(
-        result, names=NAMES, default_rules=DEFAULTS, removing=True
-    )
+    text = render_registration(result, default_rules=DEFAULTS, removing=True)
 
     assert text == (
         "rejected: not_a_project: no project here\n"
@@ -262,20 +261,6 @@ def test_a_long_detail_is_cut_to_the_width() -> None:
     assert first.endswith("…")
 
 
-def test_a_rejection_detail_uses_names_for_ids() -> None:
-    result = _rejected(
-        SetUpProblem(
-            code=SetUpProblemCode.MEMBER_OF_OTHER_PROGRAM,
-            detail="members.0: id-core already belongs to program 'x'",
-        )
-    )
-
-    assert _text(result) == (
-        "rejected: member_of_other_program: members.0: core already belongs to "
-        "program 'x'\n"
-    )
-
-
 def test_removing_a_concept_member_says_to_clear_the_concept_first() -> None:
     result = _rejected(
         SetUpProblem(
@@ -284,9 +269,7 @@ def test_removing_a_concept_member_says_to_clear_the_concept_first() -> None:
         )
     )
 
-    removing = render_registration(
-        result, names=NAMES, default_rules=DEFAULTS, removing=True
-    )
+    removing = render_registration(result, default_rules=DEFAULTS, removing=True)
 
     assert removing == (
         "rejected: concept_member_not_member: remove.members.0: 'core' is the concept "

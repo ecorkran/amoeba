@@ -61,7 +61,7 @@ def test_the_chain_from_send_to_done_is_seen_by_every_party(repos: Repos) -> Non
         "squadron needs a flag in cf",
     )
     assert sent["outcome"] == "sent"
-    assert sent["request"]["to_member"] == forge.id
+    assert sent["request"]["to_member"] == repos.member_id(forge)
     forge_inbox = repos.run(forge, "inbox")
     assert requests_by_id(forge_inbox)[PARENT]["direction"] == "received"
     assert requests_by_id(forge_inbox)[PARENT]["state"] == "open"
@@ -247,19 +247,28 @@ def test_a_reply_by_a_non_addressee_is_recorded_and_shown_under_the_caller(
 
 
 def _write_note(
-    note_id: str, sender: RoutedProject, recipients: list[RoutedProject], **to: str
+    repos: Repos,
+    note_id: str,
+    sender: RoutedProject,
+    recipients: list[RoutedProject],
+    **to: str,
 ) -> None:
     """A note written into the CLI's own store, as ``send --note`` will (243 6.1)."""
     note = NewNote(
         note_id,
-        sender.id,
+        repos.member_id(sender),
         to.get("to_member"),
         to.get("to_program"),
         "news",
         "not a request",
     )
     with open_local_store(store_path()) as store, store.write() as transaction:
-        insert_note(transaction, note, [r.id for r in recipients], datetime.now(UTC))
+        insert_note(
+            transaction,
+            note,
+            [repos.member_id(r) for r in recipients],
+            datetime.now(UTC),
+        )
 
 
 def _request_events(document: dict[str, Any]) -> list[tuple[str, str]]:
@@ -270,7 +279,7 @@ def test_notes_in_the_store_leave_the_request_chain_unchanged(repos: Repos) -> N
     """Scenario D again, with a program note sent first and a direct note in the
     middle: every request result and every inbox request list is as without them."""
     squadron, forge, guide = repos.squadron, repos.forge, repos.guide
-    _write_note("note-program", squadron, [forge, guide], to_program="demo")
+    _write_note(repos, "note-program", squadron, [forge, guide], to_program="demo")
 
     sent = repos.run(
         squadron,
@@ -307,7 +316,7 @@ def test_notes_in_the_store_leave_the_request_chain_unchanged(repos: Repos) -> N
         PARENT,
     )
     assert (child["request"]["parent_id"], child["request"]["depth"]) == (PARENT, 2)
-    _write_note("note-direct", guide, [forge], to_member=forge.id)
+    _write_note(repos, "note-direct", guide, [forge], to_member=repos.member_id(forge))
 
     guide_inbox = repos.run(guide, "inbox")
     assert set(requests_by_id(guide_inbox)) == {CHILD}

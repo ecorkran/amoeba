@@ -119,10 +119,9 @@ class RequestEntry(_Model):
 
     id: str
     direction: RequestDirection
-    #: The member at the other end: its project id, and its Context Forge name (null
-    #: when Context Forge no longer lists it).
+    #: The member at the other end: its project id, and its stored name (261 D13).
     other_member: str
-    other_name: str | None
+    other_name: str
     subject: str
     #: The effective state: an open request past its expiry reads ``expired``.
     state: RequestState

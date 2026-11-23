@@ -97,24 +97,6 @@ def test_a_missing_executable_is_a_call_failure() -> None:
     assert isinstance(project_of(directory=DIRECTORY, run=missing), CfCallFailed)
 
 
-def test_a_reference_passes_dash_p_and_the_reference() -> None:
-    seen: list[tuple[list[str], dict[str, object]]] = []
-    replay = fake_cf_run(DEFAULT_WORKTREE)
-
-    def recording(
-        argv: Sequence[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        seen.append((list(argv), kwargs))
-        return replay(argv, **kwargs)
-
-    result = project_of(reference="amoeba", run=recording)
-
-    assert isinstance(result, CFProject)
-    argv, kwargs = seen[0]
-    assert argv[argv.index(CF_PROJECT_FLAG) + 1] == "amoeba"
-    assert "cwd" not in kwargs
-
-
 def test_a_directory_is_the_working_directory_of_the_call() -> None:
     seen: list[dict[str, object]] = []
     replay = fake_cf_run(DEFAULT_WORKTREE)
@@ -140,12 +122,3 @@ def fake_cf_argv(directory: Path) -> list[str]:
 
     project_of(directory=directory, run=run)
     return captured
-
-
-def test_exactly_one_of_directory_and_reference_is_required() -> None:
-    run = fake_cf_run(DEFAULT_WORKTREE)
-
-    with pytest.raises(ValueError):
-        project_of(run=run)
-    with pytest.raises(ValueError):
-        project_of(directory=DIRECTORY, reference="amoeba", run=run)

@@ -20,6 +20,10 @@ _URL_PREFIX: Final = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 _SCP_FORM: Final = re.compile(r"^(?:[^@/:\s]+@)?([^@/:\s]+):(.+)$")
 #: A reduced host: no ``@``, no ``/``, an optional numeric port after one colon.
 _REDUCED_HOST: Final = re.compile(r"^[^\s@:/]+(?::\d+)?$")
+#: A reduced path: the characters a repo path has once lower-cased. Anything else (a
+#: stray ``@`` or ``:`` from an address that is not a host and a path) is no origin,
+#: so text that still holds a password reduces to nothing.
+_REDUCED_PATH: Final = re.compile(r"^[a-z0-9._~%+/-]+$")
 _GIT_SUFFIX: Final = ".git"
 _SLASH: Final = "/"
 _USERINFO_END: Final = "@"
@@ -33,7 +37,7 @@ def _join(host: str, path: str) -> str | None:
     # A trailing slash, then ``.git``, then a slash (D3).
     path = path.removesuffix(_SLASH).removesuffix(_GIT_SUFFIX).removesuffix(_SLASH)
     path = path.lstrip(_SLASH)
-    if not path or "\\" in path or any(part.isspace() for part in path):
+    if not path or _REDUCED_PATH.fullmatch(path) is None:
         return None
     if _REDUCED_HOST.fullmatch(host) is None:
         return None
@@ -82,7 +86,7 @@ def is_reduced_origin(value: str) -> bool:
     if value != value.lower() or "://" in value:
         return False
     host, separator, path = value.partition(_SLASH)
-    if not separator or not path or any(char.isspace() for char in value):
+    if not separator or not path or _REDUCED_PATH.fullmatch(path) is None:
         return False
     if _REDUCED_HOST.fullmatch(host) is None:
         return False

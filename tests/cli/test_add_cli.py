@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -10,7 +12,7 @@ from typing import Any
 import pytest
 import yaml
 from cf_fixtures import DEFAULT_WORKTREE
-from operations.set_up_support import DIRECTORY, FakeCf
+from operations.set_up_support import DIRECTORY, FakeCf, no_origin_git
 from store_open import open_local_store
 from user_configs import example_config_text, user_config
 
@@ -19,10 +21,12 @@ from amoeba.cli.main import main
 from amoeba.cli.parser import build_parser
 from amoeba.cli.registration_arguments import add_document
 from amoeba.config.home import config_path, store_path
+from amoeba.operations.here import gather_checkout
 from amoeba.operations.set_up import set_up
 from cli.cli_support import (
     PROJECT_ID,
     PROJECT_NAME,
+    PROJECT_PATH,
     request_file,
     result_of,
     run_amoeba,
@@ -132,6 +136,7 @@ def test_add_with_no_flag_registers_the_repo_in_a_program_named_for_its_project(
         f"  created program {PROJECT_NAME}\n"
         f"  added member {PROJECT_NAME}\n"
         "    rules: default (CLAUDE.md, AGENTS.md)\n"
+        f"  added checkout {PROJECT_PATH} of {PROJECT_NAME}\n"
     )
 
 
@@ -144,10 +149,10 @@ def test_add_with_no_flag_and_json_prints_the_result_document(tmp_path: Path) ->
     assert result["outcome"] == "applied"
     assert result["program"]["program_id"] == PROJECT_NAME
     (member,) = result["program"]["members"]
-    assert (member["project_id"], member["rules_from"]) == (
-        PROJECT_ID,
-        "config_default",
-    )
+    # The member has its own id (not the Context Forge id) and a name (261 D1).
+    assert re.fullmatch(r"[0-9a-f]{32}", member["project_id"])
+    assert member["project_id"] != PROJECT_ID
+    assert (member["name"], member["rules_from"]) == (PROJECT_NAME, "config_default")
 
 
 def test_a_rerun_says_unchanged(tmp_path: Path) -> None:
@@ -195,24 +200,29 @@ def _row_count(table: str) -> int:
         return int(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
 
 
+def _without_ids(document: Any) -> Any:
+    """``document`` with every 32-hex member id replaced by a marker."""
+    return json.loads(re.sub(r"\b[0-9a-f]{32}\b", "<id>", json.dumps(document)))
+
+
 def test_file_gives_the_result_the_old_set_up_gave_for_the_same_document(
     tmp_path: Path,
 ) -> None:
     write_config()
     path = request_file(tmp_path, REQUEST)
     with open_local_store(tmp_path / "reference.sqlite3") as reference_store:
+        here = gather_checkout(
+            DIRECTORY, FakeCf(directory_fixture=DEFAULT_WORKTREE), no_origin_git
+        )
         expected = set_up(
-            reference_store,
-            user_config(),
-            REQUEST,
-            directory=DIRECTORY,
-            run=FakeCf(directory_fixture=DEFAULT_WORKTREE),
+            reference_store, user_config(), REQUEST, here=here
         ).model_dump(mode="json")
 
     completed = run_amoeba(tmp_path, "add", "--file", str(path), as_json=True)
 
     assert completed.returncode == EXIT_OK, completed.stderr
-    assert result_of(completed) == expected
+    # A new member's id is random, so the two results are compared without it.
+    assert _without_ids(result_of(completed)) == _without_ids(expected)
 
 
 def test_a_request_from_stdin_applies(tmp_path: Path) -> None:
@@ -368,7 +378,7 @@ def test_an_old_command_name_exits_two() -> None:
     assert raised.value.code == EXIT_USAGE
 
 
-def test_cf_failing_to_list_names_still_prints_ids_and_says_so(
+def test_add_needs_no_cf_names_so_a_cf_that_cannot_list_projects_changes_nothing(
     tmp_path: Path,
 ) -> None:
     write_config()
@@ -376,5 +386,43 @@ def test_cf_failing_to_list_names_still_prints_ids_and_says_so(
     completed = run_amoeba(tmp_path, "add", projects=False)
 
     assert completed.returncode == EXIT_OK, completed.stderr
-    assert f"added member {PROJECT_ID}\n" in completed.stdout
-    assert "note: Context Forge names unavailable" in completed.stderr
+    assert f"added member {PROJECT_NAME}\n" in completed.stdout
+    assert "note:" not in completed.stderr
+
+
+def test_the_new_flags_reach_the_request() -> None:
+    parser = build_parser()
+
+    named = add_document(
+        parser.parse_args(["add", "--name", "forge", "--new-member"]), lambda _: None
+    )
+    attached = add_document(
+        parser.parse_args(["add", "--attach-to", "forge"]), lambda _: None
+    )
+
+    assert named == {"name": "forge", "new_member": True}
+    assert attached == {"attach_to": "forge"}
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ["--project", "forge", "--attach-to", "lib"],
+        ["--project", "forge", "--new-member"],
+        ["--attach-to", "forge", "--new-member"],
+    ],
+)
+def test_project_attach_to_and_new_member_are_mutually_exclusive(
+    flags: list[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(["add", *flags])
+
+    assert raised.value.code == EXIT_USAGE
+
+
+def test_file_cannot_be_combined_with_the_new_flags() -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(["add", "--file", "x.yaml", "--name", "forge"])
+
+    assert raised.value.code == EXIT_USAGE

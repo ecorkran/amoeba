@@ -33,9 +33,7 @@ from amoeba.store.decisions import advance_marker, read_marker
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
-from amoeba.upstream.context_forge.projects import ProjectNames
 
-NAMES: ProjectNames = {CORE: "core-name", LINT: "lint-name"}
 LATER = NOW + timedelta(hours=1)
 REASON = "wrong number"
 

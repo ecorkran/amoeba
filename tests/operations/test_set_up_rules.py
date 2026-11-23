@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from store_open import open_local_store
 
+from amoeba.operations.caller import find_member
 from amoeba.operations.set_up_models import (
     Change,
     ChangeSubject,
@@ -21,7 +22,7 @@ from amoeba.store.models import MemberSettings
 from amoeba.store.programs import get_member
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import RulesFrom
-from operations.set_up_support import run_set_up
+from operations.set_up_support import RECORDED_NAME, run_set_up
 
 PROJECTS = [("provider-id", "provider")]
 
@@ -50,10 +51,15 @@ def _stored(store: Store) -> MemberSettings:
 def test_a_new_member_with_no_rules_field_is_added_on_the_default(
     store: Store,
 ) -> None:
-    result = _run(store, _member())
+    # A new member is made by the entry that names no member: this directory's.
+    document: dict[str, Any] = {"program": "demo", "members": [{}]}
+    result = run_set_up(store, document)
 
     assert result.outcome is SetUpOutcome.APPLIED
-    assert (_stored(store).rules_from, _stored(store).rules_paths) == (
+    with store.read() as transaction:
+        member = find_member(transaction, RECORDED_NAME)
+    assert member is not None
+    assert (member.settings.rules_from, member.settings.rules_paths) == (
         RulesFrom.CONFIG_DEFAULT,
         (),
     )
@@ -67,7 +73,7 @@ def test_rules_default_returns_a_named_member_to_the_default(store: Store) -> No
 
     result = _run(store, _member(rules_default=True))
 
-    assert result.changes == ("updated member provider-id",)
+    assert result.changes == ("updated member provider",)
     assert (_stored(store).rules_from, _stored(store).rules_paths) == (
         RulesFrom.CONFIG_DEFAULT,
         (),
@@ -146,11 +152,13 @@ def test_a_change_record_reads_as_its_line(
 def test_the_result_carries_records_and_its_changes_are_their_lines(
     store: Store,
 ) -> None:
-    result = _run(store, _member())
+    document: dict[str, Any] = {"program": "demo", "members": [{}]}
+    result = run_set_up(store, document)
 
     assert [(c.verb, c.subject) for c in result.change_records] == [
         (ChangeVerb.ADDED, ChangeSubject.PROGRAM),
         (ChangeVerb.ADDED, ChangeSubject.MEMBER),
+        (ChangeVerb.ADDED, ChangeSubject.CHECKOUT),
     ]
     assert result.changes == tuple(c.line for c in result.change_records)
     document = result.model_dump(mode="json")

@@ -97,6 +97,17 @@ def checkouts_of_member(
     return tuple(_checkout(row) for row in rows)
 
 
+def checkout_listing(
+    transaction: Transaction, member_id: str
+) -> tuple[tuple[Checkout, str], ...]:
+    """Each checkout of the member with the name of its machine, the one added first
+    first (what ``list members`` shows)."""
+    rows = transaction.execute(
+        sql_checkouts.SELECT_CHECKOUT_LISTING, (member_id,)
+    ).fetchall()
+    return tuple((_checkout(row), text(row[8], "machines.name")) for row in rows)
+
+
 def checkouts_on_machine(
     transaction: Transaction, machine_id: int
 ) -> tuple[Checkout, ...]:
@@ -133,6 +144,11 @@ def first_wakeable_checkout(
         ).fetchone()
     )
     return None if row is None else _checkout(row)
+
+
+def delete_checkout(transaction: Transaction, checkout_id: int) -> None:
+    """Delete one checkout by its id."""
+    transaction.execute(sql_checkouts.DELETE_CHECKOUT, (checkout_id,))
 
 
 def delete_checkouts_of_member(transaction: Transaction, member_id: str) -> int:

@@ -1,8 +1,8 @@
 """``set_up`` removal, step 2: each reference in ``remove`` becomes an id (228 D8).
 
-A reference Context Forge knows resolves to its id. One it does not know is kept as
-written and read as a stored member id, so a member whose Context Forge project was
-deleted can still be removed by its id; the checks then find or reject it.
+A reference is a member's name or id, found in the store (261 D6). A removed member
+is found by its id only. A reference nobody matches is kept as written, so the checks
+reject it as ``not_a_member``.
 
 The three ways a request can contradict itself are ``malformed`` problems here, with
 the path of the offending entry: a member under both ``members`` and
@@ -21,19 +21,20 @@ from amoeba.operations.set_up_models import (
     SetUpProblem,
     SetUpProblemCode,
 )
-from amoeba.upstream.context_forge.project_of import CFProject, CFProjectNotFound
+from amoeba.store.models import Member
 
-#: Asks Context Forge about one reference (each reference once per call).
-type Lookup = Callable[[str], CFProject | CFProjectNotFound]
+#: Finds one reference in the store: an active member by name or id, or a removed one
+#: by id (``caller.find_member_for_removal``).
+type Lookup = Callable[[str], Member | None]
 
 
 @dataclass(frozen=True)
 class Reference:
-    """A reference as written, its id, and whether Context Forge knew it."""
+    """A reference as written, its id, and the member's name when it matched one."""
 
     text: str
     project_id: str
-    known_to_cf: bool
+    name: str | None
 
 
 @dataclass(frozen=True)
@@ -73,9 +74,9 @@ class RequestedPair:
 
 def _reference(text: str, lookup: Lookup) -> Reference:
     found = lookup(text)
-    if isinstance(found, CFProjectNotFound):
-        return Reference(text, text, known_to_cf=False)
-    return Reference(text, found.id, known_to_cf=True)
+    if found is None:
+        return Reference(text, text, name=None)
+    return Reference(text, found.project_id, name=found.name)
 
 
 def _malformed(detail: str) -> SetUpProblem:

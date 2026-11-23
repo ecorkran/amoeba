@@ -17,6 +17,7 @@ from pathlib import Path
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.add import add
+from amoeba.operations.add_gather import gather_add
 from amoeba.operations.caller import NotAProject, NotInProgram, find_caller
 from amoeba.operations.deps import Deps
 from amoeba.operations.here import gather_caller, git_root
@@ -29,7 +30,7 @@ from amoeba.operations.pause_class import (
     observed_from_document,
 )
 from amoeba.operations.pause_models import SkipReason
-from amoeba.operations.set_up_models import SetUpOutcome
+from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
 from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Member, QuestionKey, QuestionRecord
 from amoeba.store.questions import any_answering_run_id, get_question
@@ -173,7 +174,10 @@ def _registered(
 ) -> Member | Skip:
     """Register the project in no program with ``add``'s defaults and resolve it again.
     A registration that does not take is a skip that says why, never a member."""
-    result = add(store, config, {}, directory=directory, run=deps.cf_run, door=Door.CLI)
+    gathered = gather_add({}, directory, deps.cf_run, deps.git_run, Door.CLI)
+    if isinstance(gathered, SetUpResult):
+        raise ValueError("an empty add document is never refused by the CLI door")
+    result = add(store, config, {}, here=gathered)
     if result.outcome is SetUpOutcome.REJECTED:
         problems = "; ".join(problem.detail for problem in result.problems)
         return Skip(

@@ -23,6 +23,7 @@ from amoeba.operations.set_up_remove_resolve import (
     RemovedPair,
     ResolvedRemoval,
 )
+from amoeba.store.checkouts import delete_checkouts_of_member
 from amoeba.store.message_transitions import cancel_member_requests
 from amoeba.store.models import Member
 from amoeba.store.programs import (
@@ -52,11 +53,9 @@ def _member_of_program(
 
 def _not_a_member(path: str, program_id: str, reference: Reference) -> SetUpProblem:
     detail = (
-        f"{path}: {reference.text!r} ({reference.project_id}) is not and was never "
-        f"a member of program {program_id!r}"
+        f"{path}: {reference.text!r} is not and was never a member of program "
+        f"{program_id!r}"
     )
-    if not reference.known_to_cf:
-        detail += "; Context Forge has no such project, so it was read as a member id"
     return _problem(SetUpProblemCode.NOT_A_MEMBER, detail)
 
 
@@ -162,11 +161,14 @@ def apply_removal(
             # 230 D8: its member-reach standing answers end with it, in the same
             # transaction; program and all reach are untouched.
             withdraw_member_standing(transaction, item.reference.project_id, now)
+            # Its checkouts on every machine go with it (261 D8), and their wake
+            # commands with them.
+            delete_checkouts_of_member(transaction, item.reference.project_id)
             changes.append(
                 Change(
                     verb=ChangeVerb.REMOVED,
                     subject=ChangeSubject.MEMBER,
-                    detail=item.reference.project_id,
+                    detail=item.reference.name or item.reference.project_id,
                 )
             )
     return changes

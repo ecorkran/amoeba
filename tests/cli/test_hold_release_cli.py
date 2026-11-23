@@ -18,6 +18,7 @@ from release_child_wait import child_finished, wait_until
 from store_open import open_local_store
 
 from amoeba.config.home import logs_dir, store_path
+from amoeba.operations.caller import find_member
 from amoeba.store.held_questions import HeldQuestion, insert_held
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import get_question
@@ -42,7 +43,9 @@ def repos(tmp_path: Path) -> Repos:
         "--subject", "Need X", "--body", "Please add X",
     )  # fmt: skip
     with open_local_store(store_path()) as store, store.write() as transaction:
-        held = HeldQuestion(HELD, found.squadron.id, "q", str(found.squadron.path))
+        asker = find_member(transaction, found.squadron.name)
+        assert asker is not None
+        held = HeldQuestion(HELD, asker.project_id, "q", str(found.squadron.path))
         assert insert_held(transaction, held, REQUEST_ID, datetime.now(UTC))
     return found
 

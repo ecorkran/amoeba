@@ -1,11 +1,10 @@
 """``list``'s registered views: programs, members and dependencies (slice 229, D3),
 and the standing answers (slice 230, D4).
 
-Each reads the store and one ``cf list projects`` call, and fails with
-``ContextForgeError`` (no partial view) when ``cf`` does not answer. A member whose
-Context Forge project is gone has no name or path and is marked so; a removed member
-is not listed. The models here are the JSON documents, and the CLI renders the same
-objects.
+Each reads the store and nothing else: names, ``origin`` and checkouts are stored
+(slice 261, D13), so no view runs ``cf`` and none can fail on it. A member with no
+checkout on the calling machine has no path and is marked so; a removed member is not
+listed. The models here are the JSON documents, and the CLI renders the same objects.
 """
 
 from __future__ import annotations
@@ -13,16 +12,16 @@ from __future__ import annotations
 from datetime import datetime
 
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.set_up_models import FrozenModel
+from amoeba.store.checkouts import Checkout, checkout_listing, first_checkout_on
+from amoeba.store.errors import StoreRowError
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import DependencyPair, Member, Program
-from amoeba.store.programs import list_programs, members_of, pairs_of
+from amoeba.store.programs import get_member_any, list_programs, members_of, pairs_of
 from amoeba.store.standing import list_standing
-from amoeba.store.store import Store
+from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import ConsumedMode, RulesFrom, StandingReach
 from amoeba.store.wakes import wake_command_of
-from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
-from amoeba.upstream.context_forge.projects import ProjectDetails, project_details
 
 
 class ConceptRow(FrozenModel):
@@ -33,11 +32,10 @@ class ConceptRow(FrozenModel):
 class ProgramRow(FrozenModel):
     program: str
     concept: ConceptRow | None
-    #: Context Forge project ids of the active members.
+    #: The ids of the active members.
     members: tuple[str, ...]
-    #: Context Forge name of each member and of the concept's member; null for a
-    #: project Context Forge no longer lists.
-    names: dict[str, str | None]
+    #: The name of each member and of the concept's member.
+    names: dict[str, str]
 
 
 class ProgramsView(FrozenModel):
@@ -49,12 +47,22 @@ class DependencyRef(FrozenModel):
     consumed: ConsumedMode
 
 
+class CheckoutRow(FrozenModel):
+    """One checkout of a member (261 D13)."""
+
+    machine: str
+    path: str
+    cf_project_id: str
+    wake_command: str | None
+
+
 class MemberRow(FrozenModel):
     project_id: str
-    #: Null when Context Forge no longer lists the project.
-    name: str | None
-    #: Null when Context Forge gives the project no path, or no longer lists it.
+    name: str
+    #: The path of the member's first-added checkout on the calling machine; null when
+    #: it has none there.
     path: str | None
+    #: Whether the member has a checkout on the calling machine.
     in_context_forge: bool
     program: str
     rules_from: RulesFrom
@@ -63,9 +71,14 @@ class MemberRow(FrozenModel):
     rules_paths: tuple[str, ...]
     authorize_allow: tuple[str, ...]
     authorize_deny: tuple[str, ...]
-    #: The command a wake starts for this member, in plain text; null for none (244).
+    #: The command a wake claimed on the calling machine would run, in plain text;
+    #: null for none (244, 261 D9).
     wake_command: str | None
     depends_on: tuple[DependencyRef, ...]
+    #: The reduced remote that says which repo this is; null for none (261 D3).
+    origin: str | None
+    #: Every checkout, on every machine, the one added first first.
+    checkouts: tuple[CheckoutRow, ...]
 
 
 class MembersView(FrozenModel):
@@ -74,9 +87,9 @@ class MembersView(FrozenModel):
 
 class DependencyRow(FrozenModel):
     provider_id: str
-    provider_name: str | None
+    provider_name: str
     consumer_id: str
-    consumer_name: str | None
+    consumer_name: str
     consumed: ConsumedMode
 
 
@@ -91,8 +104,7 @@ class StandingRow(FrozenModel):
     program: str | None
     #: The member's project id; set only for reach ``member``.
     member: str | None
-    #: Context Forge's name for ``member``; null for another reach, or a project
-    #: Context Forge no longer lists.
+    #: The name of ``member``; null for another reach.
     member_name: str | None
     given_at: datetime
     text: str
@@ -114,87 +126,83 @@ def _programs(store: Store, program: str | None) -> list[Program]:
         ]
 
 
-def _details(run: CfRun) -> ProjectDetails:
-    found = project_details(run)
-    if isinstance(found, CfCallFailed):
-        raise ContextForgeError(found.detail)
-    return found
-
-
-def _name(details: ProjectDetails, project_id: str) -> str | None:
-    known = details.get(project_id)
-    return None if known is None else known.name
+def _name_in(transaction: Transaction, member_id: str) -> str:
+    """The name the store holds for a member, removed members included."""
+    member = get_member_any(transaction, member_id)
+    if member is None:
+        raise StoreRowError(f"member {member_id!r} is referenced but not stored")
+    return member.name
 
 
 def programs_view(
-    store: Store, run: CfRun, *, program: str | None, show_empty: bool
+    store: Store, *, program: str | None, show_empty: bool
 ) -> ProgramsView:
     """Each program with its active members; empty ones only with ``show_empty``."""
-    details = _details(run)
-
-    def name_of(project_id: str) -> str | None:
-        return _name(details, project_id)
-
     rows: list[ProgramRow] = []
     for entry in _programs(store, program):
         with store.read() as transaction:
             members = members_of(transaction, entry.program_id)
-        concept = (
-            None
-            if entry.concept_member is None or entry.concept_path is None
-            else ConceptRow(member=entry.concept_member, path=entry.concept_path)
-        )
-        if not members and concept is None and not show_empty:
-            continue
-        ids = tuple(member.project_id for member in members)
-        named = (*ids, *(() if concept is None else (concept.member,)))
+            concept = (
+                None
+                if entry.concept_member is None or entry.concept_path is None
+                else ConceptRow(member=entry.concept_member, path=entry.concept_path)
+            )
+            if not members and concept is None and not show_empty:
+                continue
+            ids = tuple(member.project_id for member in members)
+            named = (*ids, *(() if concept is None else (concept.member,)))
+            names = {
+                project_id: _name_in(transaction, project_id) for project_id in named
+            }
         rows.append(
             ProgramRow(
-                program=entry.program_id,
-                concept=concept,
-                members=ids,
-                names={project_id: name_of(project_id) for project_id in named},
+                program=entry.program_id, concept=concept, members=ids, names=names
             )
         )
     return ProgramsView(programs=tuple(rows))
 
 
 def members_view(
-    store: Store, config: UserConfig, run: CfRun, *, program: str | None
+    store: Store, config: UserConfig, *, program: str | None
 ) -> MembersView:
-    """Each active member with its Context Forge name and path and its settings."""
-    details = _details(run)
+    """Each active member with its name, origin, checkouts and settings."""
     rows: list[MemberRow] = []
     for entry in _programs(store, program):
         with store.read() as transaction:
             members = members_of(transaction, entry.program_id)
             pairs = pairs_of(transaction, entry.program_id)
-            commands = {
-                member.project_id: wake_command_of(transaction, member.project_id)
-                for member in members
-            }
-        rows.extend(
-            _member_row(member, pairs, details, config, commands[member.project_id])
-            for member in members
-        )
+            machine_id = acting_machine_id(transaction)
+            for member in members:
+                listing = checkout_listing(transaction, member.project_id)
+                here = first_checkout_on(transaction, member.project_id, machine_id)
+                rows.append(
+                    _member_row(
+                        member,
+                        pairs,
+                        config,
+                        listing,
+                        here,
+                        wake_command_of(transaction, member.project_id),
+                    )
+                )
     return MembersView(members=tuple(rows))
 
 
-def _member_row(
+def _member_row(  # noqa: PLR0913 - one row's inputs, all read in one transaction
     member: Member,
     pairs: tuple[DependencyPair, ...],
-    details: ProjectDetails,
     config: UserConfig,
+    listing: tuple[tuple[Checkout, str], ...],
+    here: Checkout | None,
     wake_command: str | None,
 ) -> MemberRow:
     settings = member.settings
-    known = details.get(settings.project_id)
     default = settings.rules_from is RulesFrom.CONFIG_DEFAULT
     return MemberRow(
         project_id=settings.project_id,
-        name=None if known is None else known.name,
-        path=None if known is None else known.path,
-        in_context_forge=known is not None,
+        name=member.name,
+        path=None if here is None else here.path,
+        in_context_forge=here is not None,
         program=member.program_id,
         rules_from=settings.rules_from,
         rules_paths=config.default_rules_paths if default else settings.rules_paths,
@@ -206,44 +214,47 @@ def _member_row(
             for pair in pairs
             if pair.consumer_id == settings.project_id
         ),
+        origin=member.origin,
+        checkouts=tuple(
+            CheckoutRow(
+                machine=machine,
+                path=checkout.path,
+                cf_project_id=checkout.cf_project_id,
+                wake_command=checkout.wake_command,
+            )
+            for checkout, machine in listing
+        ),
     )
 
 
-def dependencies_view(
-    store: Store, run: CfRun, *, program: str | None
-) -> DependenciesView:
+def dependencies_view(store: Store, *, program: str | None) -> DependenciesView:
     """Each pair: provider to consumer, what is consumed, and both names."""
-    details = _details(run)
-
-    def name_of(project_id: str) -> str | None:
-        return _name(details, project_id)
-
     rows: list[DependencyRow] = []
     for entry in _programs(store, program):
         with store.read() as transaction:
             pairs = pairs_of(transaction, entry.program_id)
-        rows.extend(
-            DependencyRow(
-                provider_id=pair.provider_id,
-                provider_name=name_of(pair.provider_id),
-                consumer_id=pair.consumer_id,
-                consumer_name=name_of(pair.consumer_id),
-                consumed=pair.consumed,
+            rows.extend(
+                DependencyRow(
+                    provider_id=pair.provider_id,
+                    provider_name=_name_in(transaction, pair.provider_id),
+                    consumer_id=pair.consumer_id,
+                    consumer_name=_name_in(transaction, pair.consumer_id),
+                    consumed=pair.consumed,
+                )
+                for pair in pairs
             )
-            for pair in pairs
-        )
     return DependenciesView(dependencies=tuple(rows))
 
 
-def standing_view(store: Store, run: CfRun, *, include_withdrawn: bool) -> StandingView:
-    """The standing answers, newest first; withdrawn ones with ``include_withdrawn``.
-
-    ``cf`` is read only when a member-reach row needs its member's name.
-    """
+def standing_view(store: Store, *, include_withdrawn: bool) -> StandingView:
+    """The standing answers, newest first; withdrawn ones with ``include_withdrawn``."""
     with store.read() as transaction:
         rows = list_standing(transaction, include_withdrawn=include_withdrawn)
-    needs_names = any(row.member_id is not None for row in rows)
-    details: ProjectDetails = _details(run) if needs_names else {}
+        names = {
+            row.member_id: _name_in(transaction, row.member_id)
+            for row in rows
+            if row.member_id is not None
+        }
     return StandingView(
         standing=tuple(
             StandingRow(
@@ -251,9 +262,7 @@ def standing_view(store: Store, run: CfRun, *, include_withdrawn: bool) -> Stand
                 reach=row.reach,
                 program=row.program_id,
                 member=row.member_id,
-                member_name=None
-                if row.member_id is None
-                else _name(details, row.member_id),
+                member_name=None if row.member_id is None else names[row.member_id],
                 given_at=row.given_at,
                 text=row.text,
                 withdrawn_at=row.withdrawn_at,

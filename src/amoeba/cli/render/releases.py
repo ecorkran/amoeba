@@ -68,7 +68,7 @@ def render_report_release(result: ReportReleaseResult) -> str:
 
 
 def _provider_label(pair: ProviderPair) -> str:
-    return pair.provider.name or pair.provider.id
+    return pair.provider.name
 
 
 def _entry(pair: ProviderPair, report: ReleaseReport) -> list[str]:

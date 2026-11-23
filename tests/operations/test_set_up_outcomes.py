@@ -25,7 +25,12 @@ from amoeba.operations.set_up_models import (
 from amoeba.store.programs import get_member, get_pair, get_program
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ConsumedMode
-from operations.set_up_support import RECORDED_ID, row_counts, run_set_up
+from operations.set_up_support import (
+    RECORDED_ID,
+    RECORDED_NAME,
+    row_counts,
+    run_set_up,
+)
 
 PROJECTS = [("provider-id", "provider"), ("consumer-id", "consumer")]
 CONCEPT_PATH = "project-documents/user/project-guides/000-concept.demo.md"
@@ -164,16 +169,35 @@ def test_concept_null_clears_and_omitted_leaves(store: Store) -> None:
     assert cleared.program is not None and cleared.program.concept is None
 
 
-def test_the_working_directory_reports_not_in_program(store: Store) -> None:
+def test_a_request_naming_every_member_gathers_nothing_so_has_no_working_directory(
+    store: Store,
+) -> None:
     result = _run(store, _request())
 
+    assert result.outcome is SetUpOutcome.APPLIED
+    assert result.working_directory is None
+
+
+def test_the_working_directory_reports_not_in_program_when_its_entry_is_refused(
+    store: Store,
+) -> None:
+    document = {
+        "program": "demo",
+        "members": [{"authorize_allow": ["no_such_item"]}],
+    }
+
+    result = _run(store, document)
+
+    assert result.outcome is SetUpOutcome.REJECTED
     assert result.working_directory == WorkingDirectoryNotInProgram(
         not_in_program=RECORDED_ID
     )
 
 
 def test_the_working_directory_reports_not_a_project(store: Store) -> None:
-    result = _run(store, _request(), directory_fixture=OUTSIDE_ANY_PROJECT)
+    document = {"program": "demo", "members": [{"rules_paths": ["CLAUDE.md"]}]}
+
+    result = _run(store, document, directory_fixture=OUTSIDE_ANY_PROJECT)
 
     assert isinstance(result.working_directory, WorkingDirectoryNotAProject)
     assert result.working_directory.not_a_project
@@ -191,7 +215,7 @@ def test_the_working_directory_reports_its_member_after_the_writes(
 
     assert isinstance(result.working_directory, WorkingDirectoryMember)
     assert result.working_directory.program == "demo"
-    assert result.working_directory.member.project_id == RECORDED_ID
+    assert result.working_directory.member.name == RECORDED_NAME
 
 
 @pytest.mark.parametrize("fixture", [NON_DEFAULT_WORKTREE, SUBDIRECTORY])
@@ -206,5 +230,5 @@ def test_an_omitted_project_from_another_view_of_the_repo_is_the_same_member(
     assert first.outcome is SetUpOutcome.APPLIED
     assert again.outcome is SetUpOutcome.UNCHANGED
     assert isinstance(again.working_directory, WorkingDirectoryMember)
-    assert again.working_directory.member.project_id == RECORDED_ID
+    assert again.working_directory.member.name == RECORDED_NAME
     assert row_counts(store)["members"] == 1

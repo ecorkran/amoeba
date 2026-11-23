@@ -34,6 +34,7 @@ SELECT_FIRST_CHECKOUT_ON: Final = (
     f"SELECT {_COLUMNS} FROM checkouts WHERE member_id = ? AND machine_id = ? "
     f"{_ADDED_ORDER} LIMIT 1"
 )
+DELETE_CHECKOUT: Final = "DELETE FROM checkouts WHERE checkout_id = ?"
 DELETE_CHECKOUTS_OF_MEMBER: Final = "DELETE FROM checkouts WHERE member_id = ?"
 DELETE_CHECKOUTS_ON_MACHINE: Final = "DELETE FROM checkouts WHERE machine_id = ?"
 # Parameters: machine, path with trailing slashes dropped. The stored side drops them
@@ -60,4 +61,13 @@ SELECT_WAKEABLE_CHECKOUT_ON: Final = (
 SELECT_WAKEABLE_CHECKOUT_ANYWHERE: Final = (
     f"SELECT {_COLUMNS} FROM checkouts WHERE member_id = ? "
     f"AND wake_command IS NOT NULL {_ADDED_ORDER} LIMIT 1"
+)
+
+# A member's checkouts with the name of each one's machine, oldest first (D13).
+SELECT_CHECKOUT_LISTING: Final = (
+    "SELECT checkouts.checkout_id, checkouts.member_id, checkouts.machine_id, "
+    "checkouts.cf_project_id, checkouts.path, checkouts.wake_command, "
+    "checkouts.added_at, checkouts.updated_at, machines.name FROM checkouts "
+    "JOIN machines ON machines.machine_id = checkouts.machine_id "
+    "WHERE checkouts.member_id = ? ORDER BY checkouts.added_at, checkouts.checkout_id"
 )

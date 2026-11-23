@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -36,9 +35,7 @@ from amoeba.operations.calls_log import append_call, error_entry, result_entry
 from amoeba.operations.handle_pause import handle_pause
 from amoeba.operations.names import Door, OperationName
 from amoeba.operations.report_release_models import ReportMode
-from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
-from amoeba.upstream.context_forge.projects import project_names
+from amoeba.operations.set_up_models import SetUpResult
 from amoeba.wiring import (
     OperationResult,
     default_deps,
@@ -196,31 +193,17 @@ def run_invoked(name: OperationName, arguments: argparse.Namespace) -> int:
 
 
 def _text_of(result: OperationResult, *, removing: bool) -> str:
-    """The text of a result; ``add`` and ``rm`` also read Context Forge's names."""
-    names: dict[str, str] = {}
+    """The text of a result; ``add`` and ``rm`` also read the default rules."""
     default_rules: tuple[str, ...] = ()
     if isinstance(result, SetUpResult):
         default_rules = load_config().default_rules_paths
-        if result.outcome is not SetUpOutcome.UNCHANGED:
-            names = _project_names()
     return render_result(
         result,
         now=datetime.now(UTC),
-        names=names,
         default_rules=default_rules,
         removing=removing,
         paint=painter_for(sys.stdout, os.environ),
     )
-
-
-def _project_names() -> dict[str, str]:
-    """Names by id for the text; when ``cf`` cannot give them, ids print and stderr
-    says so (the write already happened, so this is not an error exit)."""
-    found = project_names(subprocess.run)
-    if isinstance(found, CfCallFailed):
-        sys.stderr.write(f"note: Context Forge names unavailable: {found.detail}\n")
-        return {}
-    return found
 
 
 def run_handle_pause(layout: StateLayout, run_id: str, *, as_json: bool) -> int:

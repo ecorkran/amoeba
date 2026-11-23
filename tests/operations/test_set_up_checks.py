@@ -16,7 +16,7 @@ from amoeba.operations.set_up import SetUpProblemCode, SetUpResult
 from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.programs import remove_member
 from amoeba.store.store import Store
-from operations.set_up_support import row_counts, run_set_up
+from operations.set_up_support import register_projects, row_counts, run_set_up
 
 NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
 PROJECTS = [("provider-id", "provider"), ("consumer-id", "consumer")]
@@ -30,8 +30,9 @@ def store(tmp_path: Path) -> Iterator[Store]:
 
 
 def _rejected(store: Store, document: dict[str, Any]) -> SetUpResult:
+    register_projects(store, document, PROJECTS)
     before = row_counts(store)
-    result = run_set_up(store, document, projects=PROJECTS, config=user_config())
+    result = run_set_up(store, document, config=user_config())
     assert result.outcome is SetUpOutcome.REJECTED
     assert result.changes == ()
     assert row_counts(store) == before
@@ -42,7 +43,7 @@ def _codes(result: SetUpResult) -> list[SetUpProblemCode]:
     return [problem.code for problem in result.problems]
 
 
-def _seed_other_program(store: Store, member_id: str) -> None:
+def _seed_other_program(store: Store, member_id: str, name: str) -> None:
     with store.write() as transaction:
         insert_program(
             transaction,
@@ -61,6 +62,7 @@ def _seed_other_program(store: Store, member_id: str) -> None:
             authorize_deny=(),
             registered_at=NOW,
             updated_at=NOW,
+            name=name,
         )
 
 
@@ -73,7 +75,7 @@ def test_empty_program(store: Store) -> None:
 
 
 def test_member_of_other_program(store: Store) -> None:
-    _seed_other_program(store, "provider-id")
+    _seed_other_program(store, "provider-id", "provider")
 
     result = _rejected(
         store, {"program": "demo", "members": [{"project": "provider", **RULES}]}
@@ -86,21 +88,19 @@ def test_member_of_other_program(store: Store) -> None:
     assert "other" in detail
 
 
-def test_a_removed_member_of_another_program_is_not_in_that_program(
-    store: Store,
-) -> None:
-    _seed_other_program(store, "provider-id")
+def test_a_removed_member_is_no_member_by_name(store: Store) -> None:
+    """A removed member comes back through ``add`` in a checkout of its repo (D7
+    step 3), never through a reference in a request."""
+    _seed_other_program(store, "provider-id", "provider")
     with store.write() as transaction:
         remove_member(transaction, "provider-id", NOW)
 
-    result = run_set_up(
-        store,
-        {"program": "demo", "members": [{"project": "provider", **RULES}]},
-        projects=PROJECTS,
-        config=user_config(),
+    result = _rejected(
+        store, {"program": "demo", "members": [{"project": "provider", **RULES}]}
     )
 
-    assert result.outcome is SetUpOutcome.APPLIED
+    assert _codes(result) == [SetUpProblemCode.NOT_A_MEMBER]
+    assert "members.0.project" in result.problems[0].detail
 
 
 def test_an_empty_rules_paths_list_counts_as_given(store: Store) -> None:
@@ -115,6 +115,8 @@ def test_an_empty_rules_paths_list_counts_as_given(store: Store) -> None:
 
 
 def test_unknown_provider(store: Store) -> None:
+    # The provider is a member, but of another program.
+    _seed_other_program(store, "provider-id", "provider")
     document = {
         "program": "demo",
         "members": [
@@ -166,6 +168,7 @@ def test_unknown_authorize_item(store: Store, field: str) -> None:
 
 
 def test_concept_member_not_member(store: Store) -> None:
+    _seed_other_program(store, "consumer-id", "consumer")
     document = {
         "program": "demo",
         "concept": {"member": "consumer", "path": "docs/concept.md"},
@@ -206,7 +209,7 @@ def test_a_rejection_against_an_existing_program_returns_its_unchanged_state(
             "program": "demo",
             "members": [
                 {"project": "provider", "rules_paths": []},
-                {"project": "consumer", "authorize_allow": ["no_such_item"]},
+                {"project": "provider", "authorize_allow": ["no_such_item"]},
             ],
         },
     )

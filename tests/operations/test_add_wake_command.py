@@ -14,7 +14,7 @@ from store.wake_support import seed_waking_member
 from store_open import open_local_store
 from user_configs import user_config
 
-from amoeba.operations.add import add
+from amoeba.operations.caller import find_member
 from amoeba.operations.list_registry import members_view
 from amoeba.operations.names import Door
 from amoeba.operations.set_up_models import (
@@ -26,12 +26,14 @@ from amoeba.store.checkouts import checkout_at
 from amoeba.store.machines import acting_machine_id
 from amoeba.store.store import Store
 from amoeba.store.wakes import WakeLimits, claim_wake
-from operations.list_support import ListCf, project_entry
+from operations.add_placed import add
 from operations.set_up_support import (
     DIRECTORY,
     RECORDED_ID,
+    RECORDED_NAME,
     FakeCf,
     row_counts,
+    seed_member,
 )
 
 COMMAND = "wake-agent --max-seconds 60"
@@ -150,11 +152,7 @@ def test_list_members_returns_the_command_and_null_for_none(store: Store) -> Non
         seed_members(transaction)
         seed_waking_member(transaction, "with-command", COMMAND)
         seed_waking_member(transaction, "without-command", None)
-    cf = ListCf(
-        [project_entry("with-command", "a"), project_entry("without-command", "b")]
-    )
-
-    view = members_view(store, user_config(), cf, program=None)
+    view = members_view(store, user_config(), program=None)
 
     assert {row.project_id: row.wake_command for row in view.members} == {
         "with-command": COMMAND,
@@ -183,6 +181,7 @@ def test_the_operation_itself_refuses_a_door_that_may_not_set_it(
 def test_a_bulk_entry_for_another_member_with_a_wake_command_is_malformed(
     store: Store,
 ) -> None:
+    seed_member(store, "demo", "other-id", "other-repo")
     other = {"program": "demo", "members": [{"project": "other-id", FIELD: COMMAND}]}
 
     result = add(
@@ -199,7 +198,7 @@ def test_a_bulk_entry_for_another_member_with_a_wake_command_is_malformed(
     assert result.outcome is SetUpOutcome.REJECTED
     assert [problem.code for problem in result.problems] == [SetUpProblemCode.MALFORMED]
     assert "its own checkout" in result.problems[0].detail
-    assert row_counts(store)["members"] == 0
+    assert row_counts(store)["members"] == 1
 
 
 def test_the_claim_after_an_add_uses_the_checkouts_path_and_command(
@@ -208,9 +207,11 @@ def test_the_claim_after_an_add_uses_the_checkouts_path_and_command(
     _add(store, {FIELD: COMMAND})
 
     with store.write() as transaction:
+        member = find_member(transaction, RECORDED_NAME)
+        assert member is not None
         wake = claim_wake(
             transaction,
-            RECORDED_ID,
+            member.project_id,
             NOW,
             WakeLimits(timeout_seconds=60, max_per_day=3, session_stale_seconds=90),
             "w1",

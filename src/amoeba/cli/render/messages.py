@@ -44,7 +44,6 @@ from amoeba.operations.status_models import (
 
 #: How many of a member's rejected calls the text shows; ``-j`` has them all.
 REJECTED_CALLS_SHOWN: Final = 5
-NOT_IN_CONTEXT_FORGE: Final = "not in Context Forge"
 #: How deep ``inbox`` indents a note.
 INBOX_NOTE_DEPTH: Final = 1
 #: Where a note cut in the text is whole.
@@ -78,7 +77,7 @@ def _requests(members: list[MemberStatus], now: datetime) -> list[str]:
 
 
 def _request_lines(entry: RequestEntry, now: datetime) -> list[str]:
-    other = entry.other_name or f"{entry.other_member} ({NOT_IN_CONTEXT_FORGE})"
+    other = entry.other_name
     parts = (
         entry.id,
         f"{_DIRECTION_WORD[entry.direction]} {other}",

@@ -14,6 +14,7 @@ from datetime import datetime
 
 from amoeba.operations.message_results import RequestDirection
 from amoeba.operations.status_models import RejectedCall, RequestEntry
+from amoeba.store.errors import StoreError
 from amoeba.store.message_rejections import rejections_of
 from amoeba.store.messages import (
     effective_state,
@@ -21,6 +22,7 @@ from amoeba.store.messages import (
     live_requests_of,
 )
 from amoeba.store.models import Message, MessageRejection
+from amoeba.store.programs import get_member_any
 from amoeba.store.store import Store, Transaction
 
 
@@ -35,17 +37,16 @@ class MemberMessages:
 def read_member_messages(
     store: Store,
     member_ids: Iterable[str],
-    names: Mapping[str, str],
     now: datetime,
 ) -> dict[str, MemberMessages]:
     """Each member's requests and rejected calls, read in one transaction.
 
-    ``names`` maps Context Forge project ids to names; an id it lacks shows no name.
+    The other end of a request is named from the store, a removed member included.
     """
     with store.read() as transaction:
         return {
             member: MemberMessages(
-                requests=_requests(transaction, member, names, now),
+                requests=_requests(transaction, member, now),
                 rejected_calls=tuple(
                     _rejected_call(row) for row in rejections_of(transaction, member)
                 ),
@@ -55,20 +56,20 @@ def read_member_messages(
 
 
 def _requests(
-    transaction: Transaction, member: str, names: Mapping[str, str], now: datetime
+    transaction: Transaction, member: str, now: datetime
 ) -> tuple[RequestEntry, ...]:
     children = live_children_of_member(transaction, member)
     return tuple(
-        _request_entry(message, member, children, names, now)
+        _request_entry(transaction, message, member, children, now)
         for message in live_requests_of(transaction, member)
     )
 
 
 def _request_entry(
+    transaction: Transaction,
     message: Message,
     member: str,
     children: Mapping[str, tuple[str, ...]],
-    names: Mapping[str, str],
     now: datetime,
 ) -> RequestEntry:
     state = effective_state(message, now)
@@ -76,11 +77,16 @@ def _request_entry(
         raise ValueError(f"{message.message_id!r} is not a request")
     sent = message.from_member == member
     other = message.to_member if sent else message.from_member
+    other_member = get_member_any(transaction, other)
+    if other_member is None:
+        raise StoreError(
+            f"request {message.message_id!r} names unknown member {other!r}"
+        )
     return RequestEntry(
         id=message.message_id,
         direction=RequestDirection.SENT if sent else RequestDirection.RECEIVED,
         other_member=other,
-        other_name=names.get(other),
+        other_name=other_member.name,
         subject=message.subject,
         state=state,
         created_at=message.created_at,

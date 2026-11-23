@@ -3,7 +3,7 @@
 The first line says what happened: ``added``, ``removed``, ``changed``,
 ``unchanged``, or one ``rejected: <code>: <detail>`` per problem. Then one line per
 change, written from the engine's change lines (defined once in ``set_up_models``)
-with Context Forge names for ids, and each changed member's rules. Two refusals say
+naming members by name, and each changed member's rules. Two refusals say
 how to go on: a working directory that is no Context Forge project prints the fix
 (only then: a ``not_a_project`` about another reference gets none), a member with
 open questions prints the commands that clear them, and removing a concept's member
@@ -11,8 +11,6 @@ says to clear the concept first. Commands are never cut.
 """
 
 from __future__ import annotations
-
-from collections.abc import Mapping
 
 from amoeba.cli.render.commands import (
     NOT_A_PROJECT_FIXES,
@@ -39,21 +37,18 @@ from amoeba.store.vocabulary import RulesFrom
 def render_registration(
     result: SetUpResult,
     *,
-    names: Mapping[str, str],
     default_rules: tuple[str, ...],
     removing: bool = False,
 ) -> str:
     """The text of one ``add`` or ``rm`` result.
 
     Args:
-        names: Context Forge project names by id; an id with no name prints as itself.
         default_rules: The config's ``default_rules_paths``, for a default member.
         removing: The result is ``rm``'s, so a refusal can say how to remove.
     """
     if result.outcome is SetUpOutcome.REJECTED:
         lines = _rejection(
             result.problems,
-            names=names,
             removing=removing,
             offer_project_fix=isinstance(
                 result.working_directory, WorkingDirectoryNotAProject
@@ -62,7 +57,7 @@ def render_registration(
     elif result.outcome is SetUpOutcome.UNCHANGED:
         lines = ["unchanged"]
     else:
-        lines = [_headline(result), *_changes(result, names, default_rules)]
+        lines = [_headline(result), *_changes(result, default_rules)]
     return "\n".join(lines) + "\n"
 
 
@@ -77,15 +72,7 @@ def _headline(result: SetUpResult) -> str:
     return "changed"
 
 
-def _named(text: str, names: Mapping[str, str]) -> str:
-    for project_id, name in names.items():
-        text = text.replace(project_id, name)
-    return text
-
-
-def _changes(
-    result: SetUpResult, names: Mapping[str, str], default_rules: tuple[str, ...]
-) -> list[str]:
+def _changes(result: SetUpResult, default_rules: tuple[str, ...]) -> list[str]:
     changes = result.change_records
     created = any(
         change.verb is ChangeVerb.ADDED and change.subject is ChangeSubject.PROGRAM
@@ -95,11 +82,11 @@ def _changes(
     members = (
         {}
         if result.program is None
-        else {member.project_id: member for member in result.program.members}
+        else {member.name: member for member in result.program.members}
     )
     lines: list[str] = []
     for change in changes:
-        detail = _named(change.detail, names)
+        detail = change.detail
         match (change.verb, change.subject):
             case (ChangeVerb.ADDED, ChangeSubject.PROGRAM):
                 lines.append(indented(f"created program {detail}"))
@@ -135,17 +122,12 @@ def _member_line(
 def _rejection(
     problems: tuple[SetUpProblem, ...],
     *,
-    names: Mapping[str, str],
     removing: bool,
     offer_project_fix: bool,
 ) -> list[str]:
     lines: list[str] = []
     for problem in problems:
-        lines.append(
-            prose_line(
-                f"rejected: {problem.code.value}: ", _named(problem.detail, names)
-            )
-        )
+        lines.append(prose_line(f"rejected: {problem.code.value}: ", problem.detail))
     for problem in problems:
         match problem.code:
             case SetUpProblemCode.NOT_A_PROJECT if offer_project_fix and removing:

@@ -18,24 +18,25 @@ from store.seed import insert_member
 from store_open import open_local_store
 from user_configs import user_config
 
-from amoeba.operations.add import add
-from amoeba.operations.errors import ContextForgeError
-from amoeba.operations.names import Door
-from amoeba.operations.rm import rm
+from amoeba.operations.add import add as add_operation
+from amoeba.operations.caller import find_member
+from amoeba.operations.here_document import HereCheckout
 from amoeba.operations.set_up_models import (
     SetUpOutcome,
     SetUpProblemCode,
     SetUpResult,
 )
+from amoeba.store.member_names import set_member_origin
 from amoeba.store.models import QuestionKey
 from amoeba.store.programs import get_member_any, get_program
 from amoeba.store.questions import dismiss_question, get_question, insert_question
 from amoeba.store.standing import give_standing, list_standing, standing_reaching
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import MEMBER_REMOVED_REASON, StandingReach
+from operations.rm_placed import rm
 from operations.set_up_support import (
     DIRECTORY,
-    RECORDED_ID,
+    RECORDED_NAME,
     FakeCf,
     row_counts,
     run_set_up,
@@ -108,11 +109,21 @@ def _removed(store: Store, project_id: str) -> bool:
     return member.removed_at is not None
 
 
+def _recorded_member_id(store: Store) -> str:
+    """The id of the working directory's member (its own, not Context Forge's)."""
+    with store.read() as transaction:
+        member = find_member(transaction, RECORDED_NAME)
+    assert member is not None
+    return member.project_id
+
+
 def test_no_argument_removes_the_working_directorys_member(store: Store) -> None:
+    member_id = _recorded_member_id(store)
+
     result = _rm(store)
 
-    assert result.changes == (f"removed member {RECORDED_ID}",)
-    assert _removed(store, RECORDED_ID)
+    assert result.changes == (f"removed member {RECORDED_NAME}",)
+    assert _removed(store, member_id)
     assert not _removed(store, "provider-id")
 
 
@@ -120,7 +131,7 @@ def test_no_argument_removes_the_working_directorys_member(store: Store) -> None
 def test_a_member_is_removed_by_name_or_by_id(store: Store, reference: str) -> None:
     result = _rm(store, {"members": [reference]})
 
-    assert result.changes == ("removed member consumer-id",)
+    assert result.changes == ("removed member consumer",)
 
 
 def test_an_id_works_after_the_cf_project_is_gone(store: Store) -> None:
@@ -134,11 +145,12 @@ def test_an_id_works_after_the_cf_project_is_gone(store: Store) -> None:
             authorize_deny=(),
             registered_at=NOW,
             updated_at=NOW,
+            name="gone",
         )
 
     result = _rm(store, {"members": ["gone-id"]})
 
-    assert result.changes == ("removed member gone-id",)
+    assert result.changes == ("removed member gone",)
     assert _removed(store, "gone-id")
 
 
@@ -146,8 +158,8 @@ def test_two_members_of_one_program_are_removed_together(store: Store) -> None:
     result = _rm(store, {"members": ["provider", "consumer"]})
 
     assert sorted(result.changes) == [
-        "removed member consumer-id",
-        "removed member provider-id",
+        "removed member consumer",
+        "removed member provider",
     ]
 
 
@@ -289,17 +301,28 @@ def test_rm_never_creates_a_program(store: Store) -> None:
     assert row_counts(store)["programs"] == before
 
 
-def test_cf_failing_raises_and_removes_nothing(store: Store) -> None:
-    with pytest.raises(ContextForgeError):
-        rm(
-            store,
-            user_config(),
-            {"members": ["provider"]},
-            directory=DIRECTORY,
-            run=fake_cf_run(None),
-        )
+def test_rm_by_name_runs_no_cf_even_when_cf_is_down(store: Store) -> None:
+    result = rm(
+        store,
+        user_config(),
+        {"members": ["provider"]},
+        directory=DIRECTORY,
+        run=fake_cf_run(None),
+    )
 
-    assert not _removed(store, "provider-id")
+    assert result.outcome is SetUpOutcome.APPLIED
+    assert result.working_directory is None
+    assert _removed(store, "provider-id")
+
+
+def test_a_removed_member_is_found_by_id_only(store: Store) -> None:
+    _rm(store, {"members": ["consumer-id"]})
+
+    by_id = _rm(store, {"members": ["consumer-id"]})
+    by_name = _rm(store, {"members": ["consumer"]})
+
+    assert by_id.outcome is SetUpOutcome.UNCHANGED
+    assert _codes(by_name) == [SetUpProblemCode.NOT_A_MEMBER]
 
 
 def test_a_malformed_pair_is_malformed(store: Store) -> None:
@@ -308,23 +331,29 @@ def test_a_malformed_pair_is_malformed(store: Store) -> None:
     assert _codes(result) == [SetUpProblemCode.MALFORMED]
 
 
+ORIGIN = "github.com/org/consumer"
+
+
 def _add(store: Store, document: dict[str, Any]) -> SetUpResult:
-    return add(
-        store,
-        user_config(),
-        document,
-        directory=DIRECTORY,
-        run=FakeCf(directory_fixture=DEFAULT_WORKTREE, projects=PROJECTS),
-        door=Door.CLI,
+    """``add`` run in a checkout of the consumer's repo (its origin is ``ORIGIN``)."""
+    here = HereCheckout(
+        project_id="consumer-cf", name="consumer", path="/work/consumer", origin=ORIGIN
     )
+    return add_operation(store, user_config(), document, here=here)
+
+
+def _rm_consumer_with_an_origin(store: Store) -> None:
+    with store.write() as transaction:
+        set_member_origin(transaction, "consumer-id", ORIGIN, NOW)
+    _rm(store, {"members": ["consumer"]})
 
 
 def test_a_removed_members_add_revives_it_in_its_old_program(store: Store) -> None:
-    _rm(store, {"members": ["consumer"]})
+    _rm_consumer_with_an_origin(store)
 
-    result = _add(store, {"project": "consumer"})
+    result = _add(store, {})
 
-    assert result.changes == ("added member consumer-id",)
+    assert "added member consumer" in result.changes
     assert result.program is not None
     assert result.program.program_id == "demo"
 
@@ -332,11 +361,11 @@ def test_a_removed_members_add_revives_it_in_its_old_program(store: Store) -> No
 def test_a_removed_members_add_with_program_revives_it_in_that_one(
     store: Store,
 ) -> None:
-    _rm(store, {"members": ["consumer"]})
+    _rm_consumer_with_an_origin(store)
 
-    result = _add(store, {"project": "consumer", "program": "second"})
+    result = _add(store, {"program": "second"})
 
-    assert result.changes == ("added member consumer-id",)
+    assert "added member consumer" in result.changes
     assert result.program is not None
     assert result.program.program_id == "second"
     with store.read() as transaction:
@@ -423,9 +452,9 @@ def test_registering_the_member_again_does_not_bring_its_rows_back(
     store: Store,
 ) -> None:
     _give_standing(store)
-    _rm(store, {"members": ["consumer"]})
+    _rm_consumer_with_an_origin(store)
 
-    readded = _add(store, {"project": "consumer"})
+    readded = _add(store, {})
 
     assert readded.outcome is SetUpOutcome.APPLIED
     with store.read() as transaction:

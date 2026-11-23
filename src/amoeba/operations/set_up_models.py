@@ -71,20 +71,22 @@ class FrozenModel(BaseModel):
 
 
 class ConceptRequest(FrozenModel):
-    #: A Context Forge project name or id.
+    #: A member's name or id.
     member: NonBlankText
     path: ConceptPath
 
 
 class DependsOnRequest(FrozenModel):
-    #: A Context Forge project name or id.
+    #: A member's name or id.
     provider: NonBlankText
     consumed: ConsumedMode
 
 
 class MemberRequest(FrozenModel):
-    #: A Context Forge project name or id; omitted means the working directory's.
+    #: A member's name or id; omitted means the working directory's checkout.
     project: NonBlankText | None = None
+    #: Sets or changes the member's name (261 D7).
+    name: NonBlankText | None = None
     #: Omitted leaves the member's rules (a new member gets the config default);
     #: given, including ``[]`` (no rules), replaces them and makes them named.
     rules_paths: tuple[RulesPath, ...] | None = None
@@ -114,7 +116,7 @@ class MemberRequest(FrozenModel):
 
 
 class RemovePairRequest(FrozenModel):
-    #: Context Forge project names or ids.
+    #: Members' names or ids.
     provider: NonBlankText
     consumer: NonBlankText
 
@@ -122,7 +124,7 @@ class RemovePairRequest(FrozenModel):
 class RemoveRequest(FrozenModel):
     """What ``set_up`` takes out (228 D8). Members are removed softly, pairs deleted."""
 
-    #: Context Forge project names or ids.
+    #: Members' names or ids.
     members: tuple[NonBlankText, ...] = ()
     pairs: tuple[RemovePairRequest, ...] = ()
 
@@ -232,9 +234,10 @@ class DependencyState(FrozenModel):
 
 
 class MemberState(FrozenModel):
-    """A member as stored; ids are Context Forge project ids."""
+    """A member as stored: its own id and its name (261 D13)."""
 
     project_id: str
+    name: str
     rules_paths: tuple[str, ...]
     #: ``config_default``: the config's ``default_rules_paths`` apply and
     #: ``rules_paths`` is unused (empty).

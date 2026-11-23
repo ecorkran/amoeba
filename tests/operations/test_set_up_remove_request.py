@@ -17,7 +17,12 @@ from amoeba.operations.set_up_models import (
     SetUpResult,
 )
 from amoeba.store.store import Store
-from operations.set_up_support import row_counts, run_set_up
+from operations.set_up_support import (
+    register_projects,
+    row_counts,
+    run_set_up,
+    seed_member,
+)
 
 PROJECTS = [("provider-id", "provider"), ("consumer-id", "consumer")]
 RULES = {"rules_paths": ["CLAUDE.md"]}
@@ -31,10 +36,12 @@ def store(tmp_path: Path) -> Iterator[Store]:
 
 
 def _malformed(store: Store, document: dict[str, Any]) -> SetUpResult:
-    result = run_set_up(store, document, projects=PROJECTS)
+    register_projects(store, document, PROJECTS)
+    before = row_counts(store)
+    result = run_set_up(store, document)
     assert result.outcome is SetUpOutcome.REJECTED
     assert result.changes == ()
-    assert row_counts(store) == EMPTY
+    assert row_counts(store) == before
     return result
 
 
@@ -181,6 +188,7 @@ def test_removing_a_member_named_as_a_pair_end_is_malformed(store: Store) -> Non
 def test_removing_a_member_another_member_depends_on_is_malformed(
     store: Store,
 ) -> None:
+    seed_member(store, "demo", "provider-id", "provider")
     result = _malformed(
         store,
         {
