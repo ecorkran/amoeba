@@ -106,4 +106,4 @@ def hold(w: World, *, request_id: str = REQUEST_ID, now: datetime = START) -> No
 def target_of(w: World) -> PauseTarget:
     facts = read_run_facts(w.runs_dir, RUN)
     assert isinstance(facts, RunFacts)
-    return PauseTarget(KEY, QUESTION, w.directory, w.member, facts)
+    return PauseTarget(KEY, QUESTION, w.directory, w.member, PROJECT_ID, facts)

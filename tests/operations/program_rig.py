@@ -23,11 +23,16 @@ from amoeba.operations.program_sources import (
     ProgramRead,
     read_program_sources,
 )
+from amoeba.store.checkouts import Checkout
 from amoeba.store.models import Member, MemberSettings, Program
 from amoeba.store.vocabulary import RulesFrom
 
 PROGRAM_ID = "trading"
 CONCEPT_MEMBER = "trading-data"
+#: The Context Forge ids of the concept member's and the asker's checkouts: the ids
+#: the pause path gives ``cf -p``, never the member ids.
+CONCEPT_CF_ID = "cf-id-of-the-concept-checkout"
+ASKER_CF_ID = "cf-id-of-the-asking-checkout"
 ASKING_MEMBER = "trading-engine"
 THIRD_MEMBER = "trading-ui"
 CONCEPT_PATH = "docs/program-concept.md"
@@ -55,7 +60,6 @@ class RoutedRun:
 
     concept_repo: Path
     target: str
-    project_known: bool
     fault: Fault | None
     #: Answers ``cf list ...``; a program-only test never makes those calls.
     plan: PlanCfRun
@@ -89,18 +93,6 @@ class RoutedRun:
     def _cf(self, argv: Sequence[str]) -> subprocess.CompletedProcess[str]:
         if argv[1] == "list":
             return self.plan(argv)
-        if argv[1] == "get":
-            if not self.project_known:
-                document = {"error": True, "code": "PROJECT_NOT_FOUND", "message": "no"}
-                return subprocess.CompletedProcess(
-                    list(argv), 1, "", json.dumps(document)
-                )
-            project = {
-                "id": argv[-1],
-                "name": argv[-1],
-                "projectPath": str(self.concept_repo),
-            }
-            return subprocess.CompletedProcess(list(argv), 0, json.dumps(project), "")
         if argv[1:3] == ["config", "get"]:
             return subprocess.CompletedProcess(
                 list(argv), 0, json.dumps({"value": self.target}), ""
@@ -185,6 +177,8 @@ class ProgramRig:
     asker_commit: str
     the_program: Program
     members: list[Member]
+    #: The concept member's checkout on the acting machine; ``None`` for none here.
+    concept_checkout: Checkout | None
 
     def read(self, *, max_chars: int = BIG) -> ProgramSources | SourcesProblem:
         asker = next(m for m in self.members if m.project_id == self.asker_id)
@@ -196,6 +190,7 @@ class ProgramRig:
                 asker_reads=AskerReads(
                     self.asker_repo, self.asker_commit, self.asker_files
                 ),
+                concept_checkout=self.concept_checkout,
                 max_chars=max_chars,
                 run=self.run,
                 timeout_seconds=TIMEOUT,
@@ -208,7 +203,7 @@ def build_program_rig(
     *,
     asker_holds_concept: bool = False,
     asker_files: tuple[SourceFile, ...] = (),
-    project_known: bool = True,
+    concept_has_checkout: bool = True,
 ) -> ProgramRig:
     """The concept repo is the concept member's checkout; when the asker holds the
     concept it is also the asker's checkout, pinned at its head."""
@@ -222,7 +217,6 @@ def build_program_rig(
         run=RoutedRun(
             concept_repo=repo,
             target="main",
-            project_known=project_known,
             fault=None,
             plan=plan_cf_run(integration_branch="", broken=False),
         ),
@@ -232,4 +226,18 @@ def build_program_rig(
         asker_commit=head,
         the_program=program(),
         members=three_members(),
+        concept_checkout=(
+            Checkout(
+                checkout_id=1,
+                member_id=CONCEPT_MEMBER,
+                machine_id=1,
+                cf_project_id=CONCEPT_CF_ID,
+                path=str(repo),
+                wake_command=None,
+                added_at=REGISTERED,
+                updated_at=REGISTERED,
+            )
+            if concept_has_checkout
+            else None
+        ),
     )

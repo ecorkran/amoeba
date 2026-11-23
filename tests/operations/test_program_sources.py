@@ -29,6 +29,7 @@ from amoeba.operations.program_sources import (
 )
 from operations.program_rig import (
     ASKING_MEMBER,
+    CONCEPT_CF_ID,
     CONCEPT_MEMBER,
     CONCEPT_PATH,
     CONCEPT_TEXT,
@@ -254,14 +255,16 @@ def test_a_non_utf8_concept_file_is_unreadable_and_named(tmp_path: Path) -> None
     assert problem.detail.startswith(f"{PREFIX}: ")
 
 
-def test_a_concept_member_that_is_no_context_forge_project_is_missing(
+def test_a_concept_member_with_no_checkout_on_this_machine_is_missing(
     tmp_path: Path,
 ) -> None:
-    rig = build_program_rig(tmp_path, project_known=False)
+    rig = build_program_rig(tmp_path, concept_has_checkout=False)
 
     problem = _problem(rig.read(), SourcesProblemKind.MISSING)
 
     assert PREFIX in problem.detail
+    assert "no checkout on this machine" in problem.detail
+    assert rig.run.cf_calls == []
 
 
 def test_a_failing_cf_target_read_is_unreadable_with_the_prefix(
@@ -324,14 +327,17 @@ def test_a_concept_over_the_limit_is_too_large(tmp_path: Path) -> None:
     assert PREFIX in problem.detail
 
 
-def test_two_cf_calls_and_four_git_calls_in_the_documented_order(
+def test_one_cf_call_and_four_git_calls_in_the_documented_order(
     tmp_path: Path,
 ) -> None:
     rig = build_program_rig(tmp_path)
 
     _sources(rig.read())
 
-    assert [call[1] for call in rig.run.cf_calls] == ["get", "config"]
+    # The concept checkout's own Context Forge id, never the member's id.
+    assert rig.run.cf_calls == [
+        ("cf", "config", "get", "git.integration_branch", "--json", "-p", CONCEPT_CF_ID)
+    ]
     assert rig.run.git_calls == [
         ("git", "log", "-1", "--format=%H", "main"),
         ("git", "show", f"{rig.head}:docs"),

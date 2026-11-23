@@ -176,6 +176,19 @@ def test_the_hub_reaches_no_client_module_through_any_import() -> None:
     assert not leaked, {name: reached[name] for name in leaked}
 
 
+#: Modules the hub part uses to look up callers and members (slice 261, D5, D6): they
+#: import nothing from ``upstream``, so they never run ``cf``, ``git`` or ``sq``. A rule
+#: about one module is its own test: the tables above are per package.
+HUB_SIDE_MODULES = ("operations/caller.py", "operations/here_document.py")
+
+
+@pytest.mark.parametrize("module", HUB_SIDE_MODULES)
+def test_a_hub_side_lookup_module_imports_nothing_from_upstream(module: str) -> None:
+    source = (SRC / module).read_text(encoding="utf-8")
+
+    assert forbidden_imports(source, ("amoeba.upstream",)) == []
+
+
 def test_the_forbidden_rule_catches_each_way_of_importing() -> None:
     forbidden = ("amoeba.answering",)
 
