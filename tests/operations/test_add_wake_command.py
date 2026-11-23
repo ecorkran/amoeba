@@ -10,6 +10,7 @@ import pytest
 from cf_fixtures import DEFAULT_WORKTREE
 from store.message_support import seed_members
 from store.wake_support import seed_waking_member
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.add import add
@@ -33,7 +34,7 @@ FIELD = "wake_command"
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         yield opened
 
 

@@ -1,6 +1,7 @@
 """Update the installed amoeba to this checkout and migrate the live store.
 
-Run from the checkout, on its target branch, after a slice merges:
+Run from the checkout, on its target branch, as the release skill's last step
+(`.claude/skills/release/SKILL.md`), not after a slice merges:
 
     uv run python scripts/update_live.py update [--previous SHA]
     uv run python scripts/update_live.py restore
@@ -8,7 +9,9 @@ Run from the checkout, on its target branch, after a slice merges:
 ``update`` backs up the store and config, appends any config key the new code
 requires (value from the starter config Amoeba ships), installs this checkout with
 ``uv tool install``, runs ``amoeba list`` (which migrates the store) and reads the
-result back. A failed read-back restores automatically. ``restore`` puts the
+result back (the schema version, integrity, foreign keys, the member count, that
+``owners`` holds its one row and ``machines`` the one ``local`` row, and the MCP tool
+list). A failed read-back restores automatically. ``restore`` puts the
 newest backup back and reinstalls the commit that was installed before it.
 
 Backups live in ``<state home>/backups/<stamp>/``; a successful update deletes
@@ -39,6 +42,7 @@ from amoeba.config.starter import fill_missing_keys, starter_values
 from amoeba.config.user_config import ConfigError
 from amoeba.operations.names import OperationName
 from amoeba.store import sql
+from amoeba.store.machines import LOCAL_MACHINE_NAME
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS
 
@@ -50,6 +54,8 @@ PREVIOUS_COMMIT = "previous-commit"
 INSTALLED_COMMIT = "installed-commit"
 MCP_LIST_TIMEOUT_SECONDS = 30
 INTEGRITY_OK = "ok"
+SELECT_OWNER_COUNT = "SELECT count(*) FROM owners"
+SELECT_MACHINE_NAMES = "SELECT name FROM machines ORDER BY name"
 
 
 class UpdateError(Exception):
@@ -154,12 +160,18 @@ def check_store(expected_members: int) -> list[str]:
         ).fetchone()
         integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
         dangling = connection.execute("PRAGMA foreign_key_check").fetchall()
+        owners = connection.execute(SELECT_OWNER_COUNT).fetchone()[0]
+        machines = [row[0] for row in connection.execute(SELECT_MACHINE_NAMES)]
     if version is None or version[0] != EXPECTED_SCHEMA_VERSION:
         failures.append(f"schema version {version} != {EXPECTED_SCHEMA_VERSION}")
     if integrity != INTEGRITY_OK:
         failures.append(f"integrity_check: {integrity}")
     if dangling:
         failures.append(f"foreign_key_check: {len(dangling)} dangling")
+    if owners != 1:
+        failures.append(f"owners holds {owners} rows, not 1")
+    if machines != [LOCAL_MACHINE_NAME]:
+        failures.append(f"machines holds {machines}, not just {LOCAL_MACHINE_NAME!r}")
     members = member_count(store_path())
     if members != expected_members:
         failures.append(f"members {members} != {expected_members} before")

@@ -1,4 +1,5 @@
-"""The built wheel ships the store's migrations and the ``amoeba`` entry point."""
+"""The built wheel ships the store's migrations, the hub config example and the
+``amoeba`` entry point."""
 
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ BUILD_TIMEOUT_SECONDS = 300
 BASELINE_MIGRATION = "amoeba/store/schema/001_baseline.sql"
 STARTER_CONFIG = "amoeba/config/starter_config.yaml"
 ENTRY_POINT = "amoeba = amoeba.cli.main:main"
+HUB_CONFIG_EXAMPLE = "amoeba/hub/hub.yaml.example"
 
 
 def test_wheel_contains_the_baseline_migration_and_the_entry_point(
@@ -36,3 +38,4 @@ def test_wheel_contains_the_baseline_migration_and_the_entry_point(
     assert BASELINE_MIGRATION in names
     assert STARTER_CONFIG in names
     assert ENTRY_POINT in entry_points
+    assert HUB_CONFIG_EXAMPLE in names

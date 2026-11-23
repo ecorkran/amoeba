@@ -1,0 +1,11 @@
+# What the hub image's build does not need.
+.git
+.venv
+dist
+project-documents
+tests
+scripts
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache

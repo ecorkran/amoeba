@@ -28,6 +28,18 @@ DEFAULT_CONFIG_HOME_PARTS: Final = (".config", "amoeba")
 DEFAULT_STATE_HOME_PARTS: Final = (".local", "state", "amoeba")
 STORE_FILE_NAME: Final = "amoeba.sqlite3"
 CONFIG_FILE_NAME: Final = "config.yaml"
+#: The client file `amoeba join` writes (config home): address, machine, token (260 D1).
+CLIENT_FILE_NAME: Final = "client.yaml"
+#: The hub's own config (config home). A home holding it is a hub's home (260 D1).
+HUB_FILE_NAME: Final = "hub.yaml"
+#: The hub certificate a client saved at `join` (client state home).
+PINNED_CERT_FILE_NAME: Final = "pinned-hub-cert.pem"
+#: The hub's own certificate and key (hub state home).
+HUB_CERT_FILE_NAME: Final = "hub-cert.pem"
+HUB_KEY_FILE_NAME: Final = "hub-key.pem"
+#: The hub's rotating log: ``<logs>/hub/hub.log``.
+HUB_LOG_DIR_NAME: Final = "hub"
+HUB_LOG_FILE_NAME: Final = "hub.log"
 #: Scratch directories of answering runs, one per run id (slice 223, D12).
 ANSWERING_DIR_NAME: Final = "answering"
 #: Stdout and stderr logs of answering runs and resumes.
@@ -108,6 +120,36 @@ def config_path() -> Path:
     return config_home() / CONFIG_FILE_NAME
 
 
+def client_file_path() -> Path:
+    """The client file under the config home."""
+    return config_home() / CLIENT_FILE_NAME
+
+
+def hub_file_path() -> Path:
+    """The hub's ``hub.yaml`` under the config home."""
+    return config_home() / HUB_FILE_NAME
+
+
+def pinned_cert_path() -> Path:
+    """The saved hub certificate under the (client's) state home."""
+    return state_home() / PINNED_CERT_FILE_NAME
+
+
+def hub_cert_path() -> Path:
+    """The hub's certificate under its state home."""
+    return state_home() / HUB_CERT_FILE_NAME
+
+
+def hub_key_path() -> Path:
+    """The hub's private key under its state home."""
+    return state_home() / HUB_KEY_FILE_NAME
+
+
+def hub_log_path() -> Path:
+    """The hub's log file, under the logs directory."""
+    return logs_dir() / HUB_LOG_DIR_NAME / HUB_LOG_FILE_NAME
+
+
 def answering_dir() -> Path:
     """Where each answering run's scratch directory lives, under the state home."""
     return state_home() / ANSWERING_DIR_NAME
@@ -135,6 +177,36 @@ class StateLayout:
     calls_log_dir: Path
     #: The pre-228 home to move state out of, or ``None`` when there is none.
     legacy_home: Path | None
+    #: The client file (config home): its presence means this machine is joined.
+    client_file: Path
+    #: ``hub.yaml`` (config home): its presence makes this home a hub's.
+    hub_file: Path
+    #: The hub certificate saved at `join` (state home).
+    pinned_cert: Path
+    #: The hub's certificate and key (state home), and its log file.
+    hub_cert: Path
+    hub_key: Path
+    hub_log: Path
+
+
+def layout_under(state: Path, config: Path, legacy_home: Path | None) -> StateLayout:
+    """The layout of a state home and a config home. ``state_layout()`` builds the
+    process's from the environment; a test builds one under its own directories."""
+    logs = state / LOGS_DIR_NAME
+    return StateLayout(
+        state_home=state,
+        store_path=state / STORE_FILE_NAME,
+        answering_dir=state / ANSWERING_DIR_NAME,
+        logs_dir=logs,
+        calls_log_dir=logs / CALLS_LOG_DIR_NAME,
+        legacy_home=legacy_home,
+        client_file=config / CLIENT_FILE_NAME,
+        hub_file=config / HUB_FILE_NAME,
+        pinned_cert=state / PINNED_CERT_FILE_NAME,
+        hub_cert=state / HUB_CERT_FILE_NAME,
+        hub_key=state / HUB_KEY_FILE_NAME,
+        hub_log=logs / HUB_LOG_DIR_NAME / HUB_LOG_FILE_NAME,
+    )
 
 
 def state_layout() -> StateLayout:
@@ -143,14 +215,7 @@ def state_layout() -> StateLayout:
     Raises:
         AmoebaHomeError: ``AMOEBA_HOME`` is set but empty or relative.
     """
-    return StateLayout(
-        state_home=state_home(),
-        store_path=store_path(),
-        answering_dir=answering_dir(),
-        logs_dir=logs_dir(),
-        calls_log_dir=calls_log_dir(),
-        legacy_home=legacy_state_home(),
-    )
+    return layout_under(state_home(), config_home(), legacy_state_home())
 
 
 def squadron_runs_dir() -> Path:

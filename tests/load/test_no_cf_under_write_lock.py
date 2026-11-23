@@ -20,10 +20,10 @@ from operations.release_support import (
     release_deps,
 )
 from store.release_support import FULL_HASH, seed_members
+from store_open import open_local_store
 
 from amoeba.operations.report_release import report_release
 from amoeba.operations.report_release_models import ReportOutcome
-from amoeba.store.store import Store
 from load.lock_probe import write_lock_is_held
 
 
@@ -43,7 +43,7 @@ class LockProbingCf:
 
 
 def test_the_probe_sees_a_held_write_lock(tmp_path: Path) -> None:
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         assert not write_lock_is_held(store.path)
         with store.write():
             assert write_lock_is_held(store.path)
@@ -52,7 +52,7 @@ def test_the_probe_sees_a_held_write_lock(tmp_path: Path) -> None:
 def test_report_release_resolves_the_member_without_holding_the_write_lock(
     tmp_path: Path,
 ) -> None:
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         seed_members(store)
         cf = LockProbingCf(store.path)
         deps = release_deps(tmp_path, SettableClock(), cf=cf)

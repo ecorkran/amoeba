@@ -12,7 +12,7 @@ import sys
 import time
 from pathlib import Path
 
-from amoeba.config.home import STORE_FILE_NAME, StateLayout
+from amoeba.config.home import layout_under
 from amoeba.operations.state_move import prepare_state_home
 
 GATE_FILE = "go"
@@ -33,14 +33,7 @@ def main(arguments: list[str]) -> None:
         if time.monotonic() > deadline:
             raise TimeoutError("the parent never opened the gate")
         time.sleep(GATE_POLL_SECONDS)
-    layout = StateLayout(
-        state_home=state,
-        store_path=state / STORE_FILE_NAME,
-        answering_dir=state / "answering",
-        logs_dir=state / "logs",
-        calls_log_dir=state / "logs" / "calls",
-        legacy_home=legacy,
-    )
+    layout = layout_under(state, state, legacy)
     report = prepare_state_home(layout)
     print(json.dumps({"store_moved": report.store_moved}))
 

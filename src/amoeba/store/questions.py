@@ -210,6 +210,7 @@ def insert_question(
             None if new.passages is None else serialize_passages(new.passages),
             moment,
             moment,
+            transaction.acting("questions").owner_id,
         ),
     )
     return cursor.rowcount == 1

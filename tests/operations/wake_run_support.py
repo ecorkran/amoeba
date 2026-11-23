@@ -15,6 +15,7 @@ from typing import Any
 
 from store.message_support import ADDRESSEE, NOW, seed_members
 from store.wake_support import seed_waking_member
+from store_open import open_local_store
 
 from amoeba.operations.processes import WaitableChild
 from amoeba.store.models import Wake
@@ -96,7 +97,9 @@ def claimed_store(
     if checkout is None:
         checkout = tmp_path / "checkout"
         checkout.mkdir(exist_ok=True)
-    store = Store.open(tmp_path / "amoeba.sqlite3" if database is None else database)
+    store = open_local_store(
+        tmp_path / "amoeba.sqlite3" if database is None else database
+    )
     with store.write() as transaction:
         seed_members(transaction)
         seed_waking_member(transaction, ADDRESSEE, command)
@@ -126,7 +129,7 @@ def row_of(store: Store, wake_id: str = WAKE_ID) -> Wake:
 
 def stored_row(tmp_path: Path, wake_id: str = WAKE_ID) -> Wake:
     """The row as the store file holds it now, read through a fresh connection."""
-    with Store.open(tmp_path / "amoeba.sqlite3") as reopened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as reopened:
         return row_of(reopened, wake_id)
 
 

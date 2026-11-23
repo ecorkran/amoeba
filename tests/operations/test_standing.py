@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from cf_fixtures import fake_cf_run
 
+from amoeba.operations.cf_readers import cf_member_resolver
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.standing import standing
 from amoeba.operations.standing_models import (
@@ -39,7 +40,11 @@ def _give(
     store: Store, document: object, cf: RecordingCf | None = None
 ) -> StandingResult:
     return standing(
-        store, document, max_chars=MAX_CHARS, run=cf or RecordingCf(), now=NOW
+        store,
+        document,
+        max_chars=MAX_CHARS,
+        resolve_member=cf_member_resolver(cf or RecordingCf()),
+        now=NOW,
     )
 
 
@@ -85,7 +90,7 @@ def test_a_repeat_is_unchanged_with_the_same_id(store: Store) -> None:
         store,
         {"text": "rule", "member": "alpha-id"},
         max_chars=MAX_CHARS,
-        run=RecordingCf(),
+        resolve_member=cf_member_resolver(RecordingCf()),
         now=NOW + timedelta(hours=1),
     )
 
@@ -132,7 +137,7 @@ def test_a_cf_failure_raises_and_writes_nothing(store: Store) -> None:
             store,
             {"text": "r", "member": "alpha"},
             max_chars=MAX_CHARS,
-            run=fake_cf_run(None),
+            resolve_member=cf_member_resolver(fake_cf_run(None)),
             now=NOW,
         )
 
@@ -194,7 +199,7 @@ def test_the_member_lookup_runs_before_the_write_lock_is_taken(
         store,
         {"text": "r", "member": "alpha"},
         max_chars=MAX_CHARS,
-        run=recording_cf,
+        resolve_member=cf_member_resolver(recording_cf),
         now=NOW,
     )
 

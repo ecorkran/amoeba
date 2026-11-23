@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from cf_fixtures import DEFAULT_WORKTREE, OUTSIDE_ANY_PROJECT, fake_cf_run
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.add import NOT_A_PROJECT_DETAIL, add
@@ -33,7 +34,7 @@ OTHER = [("other-id", "other-repo"), ("lib-id", "lib")]
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         yield opened
 
 
@@ -231,8 +232,8 @@ def test_a_bulk_request_gives_the_result_set_up_gives_for_the_same_document(
         ],
     }
     with (
-        Store.open(tmp_path / "a.sqlite3") as via_add,
-        Store.open(tmp_path / "b.sqlite3") as via_set_up,
+        open_local_store(tmp_path / "a.sqlite3") as via_add,
+        open_local_store(tmp_path / "b.sqlite3") as via_set_up,
     ):
         added = _add(via_add, {"bulk": document})
         set_up_result = run_set_up(via_set_up, document, projects=OTHER)

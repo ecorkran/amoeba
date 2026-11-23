@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: The amoeba command line: each command's arguments, its text and `-j` JSON output and the exit-code table.
 dateCreated: 20261110
-dateUpdated: 20261117
+dateUpdated: 20261122
 status: complete
 ---
 
@@ -64,7 +64,7 @@ the old store untouched.
 | 0 | The operation ran | `add` or `rm` applied or unchanged; `list` and `status` listed; `handle-pause` any outcome, including `skipped`; `answer` recorded; `dismiss` dismissed or unchanged; `retract` retracted or unchanged; `decisions` listed; `mark-read` moved or unchanged; `report-release` recorded, versioned, corrected, unchanged or withdrawn; `changes` listed; `send` sent or unchanged; `inbox` listed; `reply` applied; `cancel` cancelled |
 | 1 | The operation refused the request; the result says why | `add`, `rm`, `list`, `answer`, `dismiss`, `retract`, `status`, `decisions`, `mark-read`, `report-release`, `changes`, `send`, `inbox`, `reply` or `cancel` rejected |
 | 2 | Usage | bad arguments (a missing or non-integer `mark-read --through`, an old command name, `--all` with `list members`, `--file` with another `add` flag, mutually exclusive rules flags, an empty side of `--concept`), or an `add --file` request file that cannot be read, is not UTF-8 or is not YAML, a `send --body-file` that cannot be read or is not UTF-8, or `send --body` with `--body-file` |
-| 3 | Operational failure; message on stderr as `error: <ExceptionName>: <message>` | `ConfigError`, `AmoebaHomeError`, `ContextForgeError`, `SquadronError`, any `StoreError` (including `StoreRelocateError`, a legacy store that could not be moved) |
+| 3 | Operational failure; message on stderr as `error: <ExceptionName>: <message>` | `ConfigError`, `AmoebaHomeError`, `ContextForgeError`, `SquadronError`, any `StoreError` (including `StoreRelocateError`, a legacy store that could not be moved, `LocalStoreClosedError`, `HubHomeError`, `NoActingMachineError` and `HubStoreMissingError`); and, from slice 260, `JoinError`, `ClientFileError`, `HubUnreachableError`, `HubCertificateError`, `HubRefusedError`, `NotServedError`, `HubConfigError`, `HubStartError` and `BackupError` (see "The hub and joined machines") |
 
 A Squadron or Context Forge failure is an exit 3, never a skip: "cannot tell" is not
 "not mine". Nothing is written before it.
@@ -1007,3 +1007,86 @@ template composes from a report with every field at its limit (4000 characters o
 `changed`, 50 touched items of 200 characters, a 128-character version and a
 64-character hash), so it follows those limits and the template. It is composed, not
 caller text, so `send`'s `body` limit does not bind it.
+
+## The hub and joined machines (slice 260)
+
+A machine with a client file (`client.yaml` in the config home, written by
+`amoeba join`) is **joined**: its commands go to the hub, not to a local store. The
+check is made on every call, before anything local is read or written.
+
+| On a joined machine | Result |
+|---|---|
+| `decisions`, `mark-read`, `dismiss`, `retract`, `standing`, `withdraw` | Run on the hub's store. The text, `-j` JSON and exit codes are the ones the local way gives. Members show by their ids until slice 261 |
+| any other command, `handle-pause`, `wake-run`, `amoeba-mcp` start | `NotServedError`: this machine is joined to the hub at `<address>`, and the door does not serve `<operation>` yet. Exit 3, nothing local is read or written |
+| `amoeba hub ...` | `LocalStoreClosedError` naming the hub, before `hub.yaml` is read or any file is written |
+| `amoeba join`, `amoeba leave` | Run (below) |
+
+On a **hub home** (the config home holds `hub.yaml`) every command that opens the
+local store, and `amoeba join`, refuse with `HubHomeError` / `JoinError`: the hub's
+store is served by `amoeba hub serve`, never written behind the door.
+
+### `amoeba join LINE [--set-aside-local] [-j]`
+
+`LINE` is `<address>,<fingerprint>,<token>`, printed by `amoeba hub invite <machine>`.
+It fetches the hub's certificate, checks its fingerprint against the line, saves it,
+makes one `hello` call and writes the client file. Re-running it on a joined machine
+replaces the token. With `--set-aside-local` the local store is marked closed, copied to
+`amoeba.sqlite3.set-aside-<UTC stamp>` and the original deleted; its path is printed.
+Without the flag a local store makes `join` refuse (`JoinError`). A stopped `join` is
+finished by running the same command again, or ended by `amoeba leave`.
+
+Text: `joined the hub at <address> as <machine>`, then the set-aside path when there is
+one. `-j`: `{"machine", "address", "set_aside"}`.
+
+### `amoeba join --address HOST:PORT [-j]`
+
+Changes only the address in the client file and makes no hub call. With no client file
+it is a `JoinError` (the machine is not joined). `-j`: `{"address", "machine"}`.
+
+### `amoeba leave [-j]`
+
+Puts a set-aside store back, deletes the client file, deletes the saved certificate;
+each step is skipped when there is nothing to do, and no hub call is made, so it works
+with the hub down. A store found at the store path that `join` did not make is moved to
+`amoeba.sqlite3.displaced-<UTC stamp>` and its path is printed; only the newest three
+displaced stores are kept, so `leave` deletes the older ones when it makes another.
+`leave` in a hub's home (one with `hub.yaml`) is refused with `JoinError` and changes
+nothing. Where nothing is joined and nothing is set aside it does nothing and exits 0. `-j`: `{"restored", "displaced", "cleared_mark",
+"removed"}`.
+
+| Error | Exit | When |
+|---|---|---|
+| `JoinError` | 3 | A join line that does not parse; a fingerprint that does not match (saves nothing; the token was not sent); a local store without `--set-aside-local`; a hub home; `--address` with no client file |
+| `StoreRelocateError` | 3 | (also, as above) a set-aside store beside a store `join` did not make: the message names both files and says to run `amoeba leave` |
+| `ClientFileError` | 3 | The client file is readable by others (the message gives `chmod 600`), has a missing or unknown key, or the saved certificate is missing (join again with a new line) |
+| `HubUnreachableError` | 3 | No reply within the retry time (30 s), or nothing at the address speaks TLS; a writing call adds that its outcome is unknown and what to run |
+| `HubCertificateError` | 3 | The hub did not present the saved certificate; never retried |
+| `HubRefusedError` | 3 | The hub refused the call; the message holds the hub's address, the code and its text. `door_version` adds the upgrade command and `bad_token` adds `hub invite` and `join` |
+| `NotServedError` | 3 | A joined machine ran a command the door does not serve |
+| `LocalStoreClosedError` | 3 | A command found the machine joined, or a local store set aside for a hub |
+
+### `amoeba hub ...`
+
+CLI-only (no MCP tool), run in a **hub home** (the config home holds `hub.yaml`). The
+first line of each refuses on a machine with a client file (`LocalStoreClosedError`),
+before `hub.yaml` is read or any file is written. Each admin command opens the store
+without creating it: before the hub has finished its first start each fails with
+`HubStoreMissingError` (exit 3) and writes no file. A rejected request is exit 1;
+`HubStartError`, `BackupError`, `HubConfigError` and every operational error are exit 3
+with one stderr line.
+
+| Command | Does | Exit 1 when | `-j` |
+|---|---|---|---|
+| `amoeba hub serve [--from-backup DIR]` | Starts the hub (D14): loads `hub.yaml`, binds the socket, decides the start from what the state directory and `backup_dir` hold, migrates after a pre-migration backup, takes a timed backup if due, serves | — | no |
+| `amoeba hub invite MACHINE` | Makes the machine, or gives an existing one a new token (ending the old one), and prints the join line `<address>,<fingerprint>,<token>`; needs `hub.yaml` for the address and the certificate for the fingerprint | the name is not `[a-z0-9][a-z0-9._-]*`, at most 64 characters | `{"machine", "join_line", "new"}` |
+| `amoeba hub machines` | Lists each machine: name, whether it has a token, last call time and client version | — | a list of `{"name", "has_token", "last_called_at", "client_version"}` |
+| `amoeba hub rm-machine MACHINE` | Deletes the machine, its sessions and its kept results in one transaction; its next call is `bad_token` | no such machine | `{"removed"}` |
+| `amoeba hub backup` | Takes a timed backup now and prints its path; safe while the hub serves | — | `{"path"}` |
+
+`--from-backup DIR` restores a backup's store, certificate and key into the state
+directory first, for one start only: it refuses a state directory that already holds a
+working hub, moves anything else there into `replaced-<UTC stamp>/` and prints that
+path on stderr. Only the newest `backups_kept` `replaced-` directories stay; a finished
+restore deletes the older ones. A restore stopped anywhere is finished by running the same command
+again; until then any other `hub serve` refuses and says so. Never put the flag in a
+compose file.

@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.store import sql
 from amoeba.store.programs import pairs_consumed_by
@@ -23,7 +24,7 @@ FIRST_PROVIDER = "provider-id"
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         with opened.write() as transaction:
             for member in (CONSUMER, SECOND_PROVIDER, OTHER_CONSUMER):

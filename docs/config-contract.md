@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: The user config file Amoeba reads from its home, key by key, with one complete example.
 dateCreated: 20261109
-dateUpdated: 20261117
+dateUpdated: 20261122
 status: complete
 ---
 
@@ -106,3 +106,48 @@ authorize_items:
     screen_phrases: ["change the policy", "change the rules"]
     denied_by_default: true
 ```
+
+## The hub and the client (slice 260)
+
+Three more files, none of them `config.yaml`. Where each lives:
+
+| File | Home | Written by | Meaning |
+|---|---|---|---|
+| `hub.yaml` | hub's config home | a person | How the hub listens and backs up. A home holding it is a **hub home**: ordinary commands refuse there (`HubHomeError`), and `amoeba join` refuses |
+| `config.yaml` | hub's config home | a person | The same file as above, read by the hub for `standing` |
+| `client.yaml` | client's config home | `amoeba join` | Which hub this machine uses. Its presence means the machine is **joined** |
+| `pinned-hub-cert.pem` | client's state home | `amoeba join` | The hub's certificate, saved at `join` and the only one a call trusts |
+| `hub-cert.pem`, `hub-key.pem` | hub's state home | the hub's first start | The hub's certificate and key. Never replaced while a backup could bring them back |
+| `logs/hub/hub.log` | hub's state home | the hub | The rotating hub log |
+
+### `hub.yaml`
+
+Every key is required; the code has no default. A missing key, an unknown key or a bad
+value stops the start (exit 3), naming the file and the key, and every problem is
+listed in one pass.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `bind` | string | The interface to listen on |
+| `port` | integer, 1 to 65535 | The port to listen on |
+| `address` | `host:port` | What clients are told to connect to; printed in join lines |
+| `backup_dir` | absolute path | Where backups go, outside the state directory so it can be another disk |
+| `backup_hours` | number, above 0 | A timed backup is taken when the newest is older than this |
+| `backups_kept` | integer, at least 1 | Backups kept in each kind (timed, and before a migration) |
+| `hub_log_max_bytes` | integer, at least 1 | The hub log rotates at this size |
+| `hub_logs_kept` | integer, at least 2 | Log files kept, counting the current one |
+
+A complete example ships in the wheel as `amoeba/hub/hub.yaml.example`, and in the
+container image at `/usr/share/amoeba/hub.yaml.example`.
+
+### `client.yaml`
+
+Exactly three keys, written by `amoeba join` with mode `0600` through a temporary file
+and a rename. Loading fails (`ClientFileError`, exit 3) when anyone but the owner can
+read it, when a key is missing or unknown, or when `pinned-hub-cert.pem` is missing.
+
+| Key | Meaning |
+|---|---|
+| `address` | The hub's `host:port`. `amoeba join --address <host:port>` changes only this |
+| `machine` | This machine's name, learned from the hub at `join` |
+| `token` | This machine's credential. The hub keeps only its SHA-256 |

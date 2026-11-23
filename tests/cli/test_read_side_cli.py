@@ -28,12 +28,12 @@ from fake_sq import (
 from live_environment import process_environment
 from process_containment import contained_popen
 from store.decision_support import at, automatic_answer, seed_programs
+from store_open import open_local_store
 from user_configs import example_config_text
 
 from amoeba.cli.main import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE
 from amoeba.config.home import config_path, store_path
 from amoeba.store.models import QuestionKey
-from amoeba.store.store import Store
 
 AMOEBA = Path(sys.executable).with_name("amoeba")
 RUN_TIMEOUT_SECONDS = 60
@@ -90,7 +90,7 @@ def _result(completed: subprocess.CompletedProcess[str]) -> dict[str, Any]:
 
 def _seed_one_answer() -> int:
     """The member of the default worktree in one program, with one automatic answer."""
-    with Store.open(store_path()) as store:
+    with open_local_store(store_path()) as store:
         seed_programs(store)
         with store.write() as transaction:
             transaction.execute(

@@ -7,6 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.store.message_transitions import (
     MEMBER_REMOVED_REASON,
@@ -34,7 +35,7 @@ LATER = NOW + timedelta(hours=1)
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
             seed_members(transaction, SENDER, ADDRESSEE)
             send_request(transaction, "open-one")

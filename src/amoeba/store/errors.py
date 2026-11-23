@@ -42,6 +42,27 @@ class StoreRelocateError(StoreError):
     """
 
 
+class NoActingMachineError(StoreError):
+    """A record was inserted into a store that has no acting machine set.
+
+    The owner and the machine of a record come from the acting machine; there is no
+    default. A local store sets ``local`` when it is opened (``open_state_store``); a
+    hub call sets the calling machine.
+    """
+
+
+class LocalStoreClosedError(StoreError):
+    """The local store was set aside for a hub, or this machine is joined to one."""
+
+
+class HubHomeError(StoreError):
+    """The home is a hub's (its config directory holds ``hub.yaml``), not a client's."""
+
+
+class HubStoreMissingError(StoreError):
+    """The hub has no store at its store path; only a first start makes one."""
+
+
 class StoreRowError(StoreError):
     """A stored value is not what its column promises."""
 

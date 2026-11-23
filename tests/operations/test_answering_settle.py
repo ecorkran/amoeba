@@ -16,6 +16,7 @@ from store.question_support import (
     claimed_question,
     seed_members,
 )
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.answering.decide import Declined
@@ -59,7 +60,7 @@ CITED = PassageRef(id="P1", source="CLAUDE.md", question_id=None, date=NOW)
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         with opened.write() as transaction:
             insert_question(transaction, claimed_question(), now=NOW)
@@ -188,7 +189,7 @@ def test_an_item_barred_for_one_member_and_allowed_for_another_differs(
     outcomes: list[object] = []
     for index, allow in enumerate([(), ("push",)]):
         directory = tmp_path / f"case-{index}"
-        with Store.open(directory / "amoeba.sqlite3") as store:
+        with open_local_store(directory / "amoeba.sqlite3") as store:
             seed_members(store)
             with store.write() as transaction:
                 insert_question(transaction, claimed_question(), now=NOW)

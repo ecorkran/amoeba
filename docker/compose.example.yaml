@@ -1,0 +1,36 @@
+# An example for running the Amoeba hub (slice 260, D17). Copy it to `compose.yaml`
+# and run `docker compose up -d`. `restart: always` starts the hub at boot and restarts
+# it on failure.
+#
+# Build the image first, from the repository root, so this file can sit anywhere:
+#   docker build -f docker/Dockerfile -t amoeba-hub .
+#
+# First run: write `hub.yaml` and `config.yaml` into ~/amoeba-hub/config from the two
+# examples in the image (`docker run --rm --entrypoint cat amoeba-hub
+# /usr/share/amoeba/hub.yaml.example`, and the example block of
+# /usr/share/amoeba/config-contract.md), then `docker compose up -d`. Then:
+#   docker exec <container> amoeba hub invite <machine>     (prints a join line)
+#
+# The three host directories are under ~/amoeba-hub/, never your own Amoeba config and
+# state directories, so a hub run on a laptop does not turn the laptop's home into a
+# hub home. On Linux they must be writable by the image's user, uid 1000.
+#
+# RESTORING a backup is one start, run by hand, with the service stopped:
+#   docker compose stop
+#   docker compose run --rm --service-ports hub --from-backup /backups/timed/<stamp>
+# When that start prints its serving line the restore is done and the hub is serving.
+# Stop it, then `docker compose up -d`.
+#
+# Never add `--from-backup` to this file: after the restore the state directory holds
+# a working hub, so every restart with the flag would be refused, and under
+# `restart: always` that repeats until the flag is taken out.
+services:
+  hub:
+    image: amoeba-hub
+    ports:
+      - "8443:8443"
+    volumes:
+      - ~/amoeba-hub/config:/home/amoeba/.config/amoeba
+      - ~/amoeba-hub/state:/home/amoeba/.local/state/amoeba
+      - ~/amoeba-hub/backups:/backups
+    restart: always

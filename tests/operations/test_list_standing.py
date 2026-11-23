@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from user_configs import user_config
 
+from amoeba.operations.cf_readers import cf_member_resolver
 from amoeba.operations.list_registry import StandingView
 from amoeba.operations.list_view import ListOutcome, ListResult, list_view
 from amoeba.operations.reject_codes import RejectCode
@@ -40,7 +41,7 @@ def _give(store: Store, document: dict[str, str], minutes: int) -> int:
         store,
         document,
         max_chars=MAX_CHARS,
-        run=RecordingCf(),
+        resolve_member=cf_member_resolver(RecordingCf()),
         now=NOW + timedelta(minutes=minutes),
     )
     assert given.standing_id is not None

@@ -16,6 +16,7 @@ from store.release_support import (
     START,
     seed_members,
 )
+from store_open import open_local_store
 
 from amoeba.operations.deps import Deps
 from amoeba.operations.members import ContextForgeError
@@ -45,7 +46,7 @@ TOUCHED = ["cli", "store"]
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         yield opened
 

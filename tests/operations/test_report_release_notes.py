@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from store.message_support import delivery_rows
 from store.release_support import FULL_HASH, OTHER_HASH, PROVIDER, seed_members
+from store_open import open_local_store
 
 from amoeba.operations import note_room, release_notes
 from amoeba.operations import report_release as report_release_module
@@ -40,7 +41,7 @@ from operations.release_support import (
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         seed_pairs(opened)
         yield opened

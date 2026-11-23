@@ -7,6 +7,8 @@ their input through unchanged.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
+
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -29,7 +31,6 @@ from amoeba.operations.decisions_models import (
     PmBasis,
     ResumeRecord,
 )
-from amoeba.operations.deps import Deps
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import (
@@ -41,14 +42,18 @@ from amoeba.operations.since import parse_since
 from amoeba.store.decisions import DecisionRow, answers_since, read_marker
 from amoeba.store.errors import StoreRowError
 from amoeba.store.store import Store
-from amoeba.upstream.context_forge.cli_call import CfCallFailed
-from amoeba.upstream.context_forge.projects import ProjectNames
+
+#: Gives each member id the name to show for it. Handed the ids of the members the
+#: listing holds (never asked when it is empty). The local way reads Context Forge's
+#: names; the hub names a member by its id until 261 (260 D11).
+type NamesReader = Callable[[tuple[str, ...]], Mapping[str, str]]
 
 __all__ = [
     "DecisionsOutcome",
     "DecisionsRecord",
     "DecisionsRequest",
     "DecisionsResult",
+    "NamesReader",
     "decisions",
 ]
 
@@ -71,18 +76,19 @@ class DecisionsRequest(BaseModel):
         return parse_since(value)
 
 
-def decisions(store: Store, document: object, *, deps: Deps) -> DecisionsResult:
+def decisions(store: Store, document: object, *, names: NamesReader) -> DecisionsResult:
     """The recorded answers ``document`` asks for, oldest first.
 
     Raises:
-        ContextForgeError: ``cf`` gave no names, or none for a listed member.
+        ContextForgeError: ``names`` found none for a listed member (the local reader
+            also raises it when ``cf`` fails).
         StoreError: The store cannot be used.
     """
     try:
         request = DecisionsRequest.model_validate(document)
     except ValidationError as error:
         return _rejected(RejectCode.MALFORMED, validation_problems(error))
-    # One read transaction, closed before ``cf`` is asked for names.
+    # One read transaction, closed before ``names`` is asked (it may run ``cf``).
     with store.read() as transaction:
         if request.program is not None:
             unknown = unknown_program_problem(transaction, request.program)
@@ -95,8 +101,8 @@ def decisions(store: Store, document: object, *, deps: Deps) -> DecisionsResult:
             since=request.since,
             program=request.program,
         )
-    names = _names_for(rows, deps)
-    records = tuple(_record(row, names) for row in rows)
+    named = _names_for(rows, names)
+    records = tuple(_record(row, named) for row in rows)
     started_at_marker = request.since is None and request.program is None
     return DecisionsResult(
         outcome=DecisionsOutcome.LISTED,
@@ -117,18 +123,14 @@ def _rejected(code: RejectCode, problems: tuple[str, ...]) -> DecisionsResult:
     )
 
 
-def _names_for(rows: tuple[DecisionRow, ...], deps: Deps) -> ProjectNames:
-    """Names of the listed members, from one ``cf`` call; none is asked for when
-    there is nothing to show."""
+def _names_for(rows: tuple[DecisionRow, ...], names: NamesReader) -> Mapping[str, str]:
+    """Names of the listed members; none is asked for when there is nothing to show."""
     if not rows:
         return {}
-    names = deps.project_names()
-    if isinstance(names, CfCallFailed):
-        raise ContextForgeError(names.detail)
-    return names
+    return names(tuple(dict.fromkeys(row.question.member_id for row in rows)))
 
 
-def _record(row: DecisionRow, names: ProjectNames) -> DecisionsRecord:
+def _record(row: DecisionRow, names: Mapping[str, str]) -> DecisionsRecord:
     answer, question = row.answer, row.question
     name = names.get(question.member_id)
     if name is None:

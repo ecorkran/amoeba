@@ -16,6 +16,7 @@ from operations.wake_run_support import (
     row_of,
 )
 from process_containment import contained_popen
+from store_open import open_local_store
 from user_configs import example_config_text
 
 from amoeba.cli import wake_command
@@ -23,7 +24,6 @@ from amoeba.cli.exit_codes import EXIT_ERROR, EXIT_OK, EXIT_REJECTED
 from amoeba.cli.main import main
 from amoeba.config.home import config_path, store_path
 from amoeba.operations.wake_run import run_wake
-from amoeba.store.store import Store
 from amoeba.store.vocabulary import WakeOutcome
 
 SECRET_MARKER = "SECRET-MARKER-IN-A-COMMAND"
@@ -46,7 +46,7 @@ def _claim(tmp_path: Path, command: str) -> None:
 
 
 def _row() -> Any:
-    with Store.open(store_path()) as store:
+    with open_local_store(store_path()) as store:
         return row_of(store)
 
 

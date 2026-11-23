@@ -13,7 +13,9 @@ from importlib.metadata import version
 from typing import Any
 
 from amoeba.cli.answer_first_install import register_answer_first
+from amoeba.cli.hub_commands import register_hub
 from amoeba.cli.init_command import register_init
+from amoeba.cli.join_command import register_join, register_leave
 from amoeba.cli.registration_arguments import (
     register_add,
     register_list,
@@ -146,6 +148,9 @@ def build_parser() -> argparse.ArgumentParser:
     register_messages(commands, parent)
     _register_standing_commands(commands, parent)
     register_wake_run(commands)
+    register_join(commands, parent)
+    register_leave(commands, parent)
+    register_hub(commands, parent)
     register_stand_in(commands)
     register_answer_first(commands)
     register_init(commands)

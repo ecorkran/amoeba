@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from amoeba.operations.cf_readers import cf_member_resolver
 from amoeba.operations.standing import standing
 from amoeba.operations.standing_models import (
     WithdrawOutcome,
@@ -29,7 +30,11 @@ def store(tmp_path: Path) -> Iterator[Store]:
 @pytest.fixture
 def standing_id(store: Store) -> int:
     given = standing(
-        store, {"text": "rule"}, max_chars=MAX_CHARS, run=RecordingCf(), now=NOW
+        store,
+        {"text": "rule"},
+        max_chars=MAX_CHARS,
+        resolve_member=cf_member_resolver(RecordingCf()),
+        now=NOW,
     )
     assert given.standing_id is not None
     return given.standing_id

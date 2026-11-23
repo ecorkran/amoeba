@@ -21,13 +21,13 @@ from pathlib import Path
 from answering.sources_repo import build_sources_repo
 from git_repo import git
 from live_settings import LiveSettings
+from store_open import open_local_store
 
 from amoeba.answering.values import DeclineReason
 from amoeba.store.answers import add_pm_answer
 from amoeba.store.models import QuestionKey
 from amoeba.store.question_json import parse_passages
 from amoeba.store.questions import NewQuestion, insert_question
-from amoeba.store.store import Store
 from amoeba.upstream.squadron.launch import mint_run_id
 from amoeba.upstream.squadron.run_outcome import RunOutcome, RunOutcomeDocument
 from live.pause.harness import (
@@ -90,7 +90,7 @@ class LivePause:
             waiting_reason=DeclineReason.NO_ANSWER_ON_FILE,
             waiting_detail=None,
         )
-        with Store.open(self.world.store) as store, store.write() as transaction:
+        with open_local_store(self.world.store) as store, store.write() as transaction:
             insert_question(transaction, seeded, now=when)
             add_pm_answer(transaction, key, answer, now=when, via=None)
         return key

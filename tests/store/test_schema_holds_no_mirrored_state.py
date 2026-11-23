@@ -173,6 +173,43 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "standing_answers.withdraw_reason",
         }
     ),
+    # Who owns each record and which machine wrote it, and what serves the hub's door.
+    "ownership": frozenset(
+        {
+            "answers.owner_id",
+            "call_results.call_id",
+            "call_results.machine_id",
+            "call_results.operation",
+            "call_results.recorded_at",
+            "call_results.reply",
+            "call_results.request_hash",
+            "closed_mark.closed_at",
+            "closed_mark.hub_address",
+            "closed_mark.mark_key",
+            "deliveries.owner_id",
+            "dependency_pairs.owner_id",
+            "machines.client_version",
+            "machines.created_at",
+            "machines.last_called_at",
+            "machines.machine_id",
+            "machines.name",
+            "machines.owner_id",
+            "machines.token_hash",
+            "members.owner_id",
+            "message_rejections.owner_id",
+            "messages.owner_id",
+            "owners.created_at",
+            "owners.name",
+            "owners.owner_id",
+            "programs.owner_id",
+            "questions.owner_id",
+            "releases.owner_id",
+            "sessions.machine_id",
+            "sessions.owner_id",
+            "standing_answers.owner_id",
+            "wakes.owner_id",
+        }
+    ),
     # Which amoeba-mcp processes are serving now, as their own heartbeats say.
     "presence": frozenset(
         {

@@ -17,7 +17,9 @@ from store.decision_support import (
     seed_programs,
     waiting_then_pm,
 )
+from store_open import open_local_store
 
+from amoeba.operations.cf_readers import cf_names
 from amoeba.operations.decisions import decisions
 from amoeba.operations.mark_read import MarkReadOutcome, mark_read
 from amoeba.operations.reject_codes import RejectCode
@@ -28,7 +30,7 @@ from operations.pause_support import build_deps
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         yield opened
 
@@ -121,7 +123,7 @@ def test_two_threads_advancing_to_different_values_leave_the_higher(
     barrier = threading.Barrier(2)
 
     def advance(through: int) -> None:
-        with Store.open(store.path) as own:
+        with open_local_store(store.path) as own:
             barrier.wait()
             results.append(mark_read(own, {"through": through}).outcome)
 
@@ -143,11 +145,11 @@ def test_a_record_written_after_a_decisions_call_stays_unread(
 ) -> None:
     rig = build_deps(tmp_path, polls={}, spawns=[])
     deps = replace(rig.deps, project_names=lambda: {CORE: "core", LINT: "lint"})
-    listed = decisions(store, {}, deps=deps)
+    listed = decisions(store, {}, names=cf_names(deps))
     assert listed.read_through == seqs[1]
     late = waiting_then_pm(store, replace(FIRST, run_id="late-run"), CORE, 9)
 
     mark_read(store, {"through": listed.read_through})
-    after = decisions(store, {}, deps=deps)
+    after = decisions(store, {}, names=cf_names(deps))
 
     assert [record.seq for record in after.records] == [late]

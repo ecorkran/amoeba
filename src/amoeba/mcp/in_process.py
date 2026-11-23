@@ -50,7 +50,7 @@ def _invoke_logged(
     Raises:
         wiring.DeadlineError: ``answer``'s bound is not below the deadline.
     """
-    if name is OperationName.ANSWER:
+    if name is OperationName.ANSWER and wiring.joined() is None:
         wiring.check_deadline(wiring.load_config(), MCP_CALL_DEADLINE_SECONDS)
     try:
         return wiring.result_document(

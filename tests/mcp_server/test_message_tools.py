@@ -20,12 +20,12 @@ import pytest
 from cf_fixtures import DEFAULT_WORKTREE, write_fake_cf_with_projects
 from cli.cli_support import PROJECT_NAME, result_of, run_amoeba, write_config
 from store.seed import insert_member
+from store_open import open_local_store
 
 from amoeba.cli.exit_codes import EXIT_OK, EXIT_REJECTED
 from amoeba.config.home import store_path
 from amoeba.mcp import server
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
-from amoeba.store.store import Store
 from mcp_server.presence_rig import idle_presence
 
 #: Wall-clock fields; everything else in a result is deterministic.
@@ -251,7 +251,7 @@ SECOND_MEMBER = "second-member-id"
 def _add_a_second_member() -> None:
     """A second active member in the registered member's program, so a program note
     has someone to reach."""
-    with Store.open(store_path()) as store, store.write() as transaction:
+    with open_local_store(store_path()) as store, store.write() as transaction:
         row = transaction.execute(
             "SELECT program_id, registered_at FROM members"
         ).fetchone()
@@ -269,7 +269,7 @@ def _add_a_second_member() -> None:
 
 
 def _program_id() -> str:
-    with Store.open(store_path()) as store, store.read() as transaction:
+    with open_local_store(store_path()) as store, store.read() as transaction:
         row = transaction.execute("SELECT program_id FROM members").fetchone()
     assert row is not None
     return str(row[0])

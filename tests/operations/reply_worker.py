@@ -15,10 +15,10 @@ import time
 from pathlib import Path
 
 from cf_fixtures import OUTSIDE_ANY_PROJECT
+from store_open import open_local_store
 
 from amoeba.operations.reply import reply
 from amoeba.store.errors import StoreBusyError
-from amoeba.store.store import Store
 from operations.message_support import (
     CONFIG,
     RECIPIENT_NAME,
@@ -54,7 +54,7 @@ def main(arguments: list[str]) -> None:
         time.sleep(GATE_POLL_SECONDS)
     document = {"id": request_id, "action": "accept", "member": RECIPIENT_NAME}
     try:
-        with Store.open(store_path) as store:
+        with open_local_store(store_path) as store:
             result = reply(store, CONFIG, document, directory=DIRECTORY, deps=deps)
     except StoreBusyError:
         print(json.dumps({"outcome": BUSY}))

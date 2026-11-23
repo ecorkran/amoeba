@@ -11,9 +11,10 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from store_open import open_local_store
+
 from amoeba.cli.exit_codes import EXIT_OK
 from amoeba.config.home import store_path
-from amoeba.store.store import Store
 from cli.cli_support import (
     PROJECT_ID,
     PROJECT_NAME,
@@ -84,5 +85,5 @@ def send_note(
 
 def stored_rows(table: str) -> list[tuple[Any, ...]]:
     """Every row of ``table`` in the store the subprocesses used."""
-    with Store.open(store_path()) as store, store.read() as transaction:
+    with open_local_store(store_path()) as store, store.read() as transaction:
         return [tuple(row) for row in transaction.execute(f"SELECT * FROM {table}")]

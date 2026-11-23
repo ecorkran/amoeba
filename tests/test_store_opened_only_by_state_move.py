@@ -1,9 +1,10 @@
-"""Only ``state_move.py`` calls ``Store.open`` (slice 228, D2).
+"""Only ``state_move.py`` and the hub's ``store_open.py`` call ``Store.open``.
 
 Every entry point opens the store through ``open_state_store``, which moves legacy
 state first; a second caller of ``Store.open`` could create an empty state-home
-store before the move. The scan walks the parsed source, so a call split across
-lines is still found.
+store before the move. The hub has its own opener, in ``hub``, so the hub never
+imports ``client`` through ``operations`` (slice 260). The scan walks the parsed
+source, so a call split across lines is still found.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from pathlib import Path
 
 SRC = Path(__file__).parents[1] / "src" / "amoeba"
 OPENER = SRC / "operations" / "state_move.py"
+HUB_OPENER = SRC / "hub" / "store_open.py"
 
 
 def calls_store_open(source: str) -> bool:
@@ -26,8 +28,10 @@ def calls_store_open(source: str) -> bool:
     )
 
 
-def test_no_module_but_state_move_calls_store_open() -> None:
-    modules = sorted(path for path in SRC.rglob("*.py") if path != OPENER)
+def test_no_module_but_the_two_openers_calls_store_open() -> None:
+    modules = sorted(
+        path for path in SRC.rglob("*.py") if path not in (OPENER, HUB_OPENER)
+    )
     assert modules, "amoeba has no source"
     for path in modules:
         assert not calls_store_open(path.read_text(encoding="utf-8")), (
@@ -35,8 +39,9 @@ def test_no_module_but_state_move_calls_store_open() -> None:
         )
 
 
-def test_state_move_does_call_it() -> None:
-    assert calls_store_open(OPENER.read_text(encoding="utf-8"))
+def test_the_two_openers_do_call_it() -> None:
+    for opener in (OPENER, HUB_OPENER):
+        assert calls_store_open(opener.read_text(encoding="utf-8"))
 
 
 def test_the_scan_catches_a_wrapped_call_and_ignores_other_opens() -> None:

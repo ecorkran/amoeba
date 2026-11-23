@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 from cf_fixtures import DEFAULT_WORKTREE
 from store.message_support import NOW, delivery_rows, send_request
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations import set_up_remove
@@ -35,7 +36,7 @@ REMOVE_CONSUMER = {"program": "demo", "remove": {"members": ["consumer"]}}
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         result = run_set_up(
             opened,
             {

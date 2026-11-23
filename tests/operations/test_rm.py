@@ -15,6 +15,7 @@ from store.question_support import (
     waiting_question,
 )
 from store.seed import insert_member
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.add import add
@@ -53,7 +54,7 @@ WAITING = QuestionKey("run-waiting", "2026-11-10T11:05:00+00:00")
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
     """``demo`` holds the working directory's project, provider and consumer."""
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         first = run_set_up(
             opened,
             {

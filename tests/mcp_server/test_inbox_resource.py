@@ -17,6 +17,7 @@ from cf_fixtures import OUTSIDE_ANY_PROJECT, fake_cf_run
 from mcp import ClientSession
 from mcp.server import Server
 from mcp.shared.exceptions import MCPError
+from store_open import open_local_store
 
 from amoeba.mcp.inbox_resource import (
     AS_OF_SEQ_FIELD,
@@ -28,7 +29,6 @@ from amoeba.mcp.inbox_resource import (
 from amoeba.mcp.presence import PresenceDeps, PresenceState
 from amoeba.store.deliveries import highest_assigned_seq
 from amoeba.store.errors import StoreBusyError
-from amoeba.store.store import Store
 from amoeba.wiring_presence import StoreOpener
 from mcp_server.presence_rig import (
     MEMBER_ID,
@@ -124,7 +124,7 @@ def test_read_gives_the_member_and_the_number_inbox_reports(store_path: Path) ->
         assert isinstance(contents, types.TextResourceContents)
         document = json.loads(contents.text)
         # ``inbox`` reports ``highest_assigned_seq`` as its ``as_of_seq``.
-        with Store.open(store_path) as store, store.read() as transaction:
+        with open_local_store(store_path) as store, store.read() as transaction:
             reported = highest_assigned_seq(transaction)
         assert reported == 1
         assert document == {MEMBER_FIELD: MEMBER_ID, AS_OF_SEQ_FIELD: reported}

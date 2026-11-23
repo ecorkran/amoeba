@@ -26,6 +26,7 @@ from store.question_support import (
     claimed_question,
     insert_held_row,
 )
+from store_open import open_local_store
 
 from amoeba.answering.standing_passages import STANDING_SOURCE_PREFIX
 from amoeba.answering.values import (
@@ -34,6 +35,7 @@ from amoeba.answering.values import (
     DeclineReason,
     PassageRef,
 )
+from amoeba.operations.cf_readers import cf_names
 from amoeba.operations.decisions import (
     DecisionsOutcome,
     DecisionsResult,
@@ -59,7 +61,7 @@ NAMES: ProjectNames = {CORE: "core-name", LINT: "lint-name"}
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         yield opened
 
@@ -89,7 +91,9 @@ def _rig(
 
 def _run(store: Store, tmp_path: Path, document: object = None) -> DecisionsResult:
     rig, _calls = _rig(tmp_path)
-    return decisions(store, {} if document is None else document, deps=rig.deps)
+    return decisions(
+        store, {} if document is None else document, names=cf_names(rig.deps)
+    )
 
 
 def test_the_default_start_is_after_the_marker(
@@ -130,7 +134,7 @@ def test_an_empty_listing_has_no_read_through_and_asks_cf_nothing(
 ) -> None:
     rig, calls = _rig(tmp_path, CfCallFailed("cf is down"))
 
-    result = decisions(store, {}, deps=rig.deps)
+    result = decisions(store, {}, names=cf_names(rig.deps))
 
     assert result.records == ()
     assert result.read_through is None
@@ -268,7 +272,7 @@ def test_a_member_missing_from_the_names_is_a_context_forge_error(
     rig, _calls = _rig(tmp_path, {CORE: "core-name"})
 
     with pytest.raises(ContextForgeError, match=LINT):
-        decisions(store, {}, deps=rig.deps)
+        decisions(store, {}, names=cf_names(rig.deps))
 
 
 def test_a_names_failure_raises_and_writes_nothing(
@@ -277,7 +281,7 @@ def test_a_names_failure_raises_and_writes_nothing(
     rig, _calls = _rig(tmp_path, CfCallFailed("cf is down"))
 
     with pytest.raises(ContextForgeError, match="cf is down"):
-        decisions(store, {}, deps=rig.deps)
+        decisions(store, {}, names=cf_names(rig.deps))
 
     with store.read() as transaction:
         marker = transaction.execute("SELECT last_seen_seq FROM pm_marker").fetchone()

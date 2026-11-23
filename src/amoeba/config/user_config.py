@@ -31,7 +31,13 @@ from pydantic import (
 from amoeba.answering.settings import ModelAlias, RulesPath
 from amoeba.store.vocabulary import ConsumedMode
 
-#: The command a missing config points at. It writes a complete starter config.
+CONTRACT_DOC: Final = "docs/config-contract.md"
+#: Where the hub image keeps that document (the Dockerfile copies it there), for a
+#: message a person reads inside the container, which has no ``docs/``.
+IMAGE_CONTRACT_DOC: Final = "/usr/share/amoeba/config-contract.md"
+#: How the user config is named in a missing-file message, and the default ``kind``.
+USER_CONFIG_KIND: Final = "config"
+#: The command a missing user config points at. It writes a complete starter config.
 INIT_HINT: Final = "amoeba init"
 #: The longest a request may stay open: ten years, in hours. Stated in the contract.
 MAX_REQUEST_OPEN_TTL_HOURS: Final = 24 * 365 * 10
@@ -143,14 +149,23 @@ class UserConfig(BaseModel):
         return self
 
 
-def read_config_text(path: Path) -> str:
-    """The text of the config at ``path``, or ``ConfigError``."""
+def _missing_file(path: Path, kind: str) -> str:
+    """The missing-file message. Only the user config has a command that writes it."""
+    if kind == USER_CONFIG_KIND:
+        return f"no {kind} at {path}; run `{INIT_HINT}` to create one"
+    return (
+        f"no {kind} at {path}; see {CONTRACT_DOC} "
+        f"(in the hub image: {IMAGE_CONTRACT_DOC})"
+    )
+
+
+def read_config_text(path: Path, *, kind: str = USER_CONFIG_KIND) -> str:
+    """The text of the file at ``path``, or ``ConfigError``. ``kind`` names the file
+    in the missing-file message (``hub.yaml`` is read through this too)."""
     try:
         raw = path.read_bytes()
     except FileNotFoundError as error:
-        raise ConfigError(
-            f"no config at {path}; run `{INIT_HINT}` to create one"
-        ) from error
+        raise ConfigError(_missing_file(path, kind)) from error
     except OSError as error:
         raise ConfigError(f"{path}: cannot read: {error}") from error
     try:
@@ -159,18 +174,28 @@ def read_config_text(path: Path) -> str:
         raise ConfigError(f"{path}: not UTF-8: {error}") from error
 
 
-def config_document(path: Path, text: str) -> dict[str, object]:
-    """``text`` parsed as a config mapping; ``path`` only names the file in errors."""
+def _parsed(path: Path, text: str) -> object:
+    """``text`` parsed as YAML; ``path`` only names the file in the error."""
     try:
-        document = yaml.safe_load(text)
+        return yaml.safe_load(text)
     except yaml.YAMLError as error:
         raise ConfigError(f"{path}: not YAML: {error}") from error
+
+
+def read_yaml_document(path: Path, *, kind: str = USER_CONFIG_KIND) -> object:
+    """The parsed YAML at ``path``, or ``ConfigError``."""
+    return _parsed(path, read_config_text(path, kind=kind))
+
+
+def config_document(path: Path, text: str) -> dict[str, object]:
+    """``text`` parsed as a config mapping; ``path`` only names the file in errors."""
+    document = _parsed(path, text)
     if not isinstance(document, dict):
         raise ConfigError(f"{path}: the top level must be a mapping of keys")
     return cast("dict[str, object]", document)
 
 
-def _problems(path: Path, error: ValidationError) -> list[str]:
+def validation_problems(path: Path, error: ValidationError) -> list[str]:
     """One line per validation problem, each naming the file and the key."""
     return [
         f"{path}: {'.'.join(str(part) for part in problem['loc'])}: {problem['msg']}"
@@ -178,15 +203,16 @@ def _problems(path: Path, error: ValidationError) -> list[str]:
     ]
 
 
-def load_user_config(path: Path) -> UserConfig:
-    """The config at ``path``.
+def load_user_config(path: Path, *, kind: str = USER_CONFIG_KIND) -> UserConfig:
+    """The config at ``path``. ``kind`` names the file in the missing-file message: a
+    hub's ``config.yaml`` must not be told to run `amoeba init`, which fails there.
 
     Raises:
         ConfigError: The file is missing, unreadable, not UTF-8, not YAML, not a
             mapping, or a key is missing, unknown or has a bad value. Every
             problem found is listed, one per line.
     """
-    return user_config_from_text(path, read_config_text(path))
+    return user_config_from_text(path, read_config_text(path, kind=kind))
 
 
 def user_config_from_text(path: Path, text: str) -> UserConfig:
@@ -198,4 +224,4 @@ def user_config_from_text(path: Path, text: str) -> UserConfig:
     try:
         return UserConfig.model_validate(config_document(path, text))
     except ValidationError as error:
-        raise ConfigError("\n".join(_problems(path, error))) from error
+        raise ConfigError("\n".join(validation_problems(path, error))) from error

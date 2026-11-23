@@ -1,0 +1,22 @@
+# The hub's own config: `hub.yaml` in the hub's config directory. Every key is
+# required; there is no default in code. See docs/config-contract.md, or
+# /usr/share/amoeba/config-contract.md in the hub image.
+
+# The interface to listen on. 0.0.0.0 is every interface, which a container needs.
+bind: 0.0.0.0
+# The port to listen on.
+port: 8443
+# host:port clients are told to connect to; `amoeba hub invite` prints it in the
+# join line. Replace the placeholder host with the name or address clients can reach.
+address: replace-with-the-hub-host.example:8443
+# Absolute path of the backup directory: put it on a different disk from the store.
+# In the container it is the /backups mount.
+backup_dir: /backups
+# A timed backup is taken when the newest is older than this many hours.
+backup_hours: 24
+# Backups kept in each kind (timed, and before a migration).
+backups_kept: 14
+# The hub log rotates at this many bytes ...
+hub_log_max_bytes: 10485760
+# ... and keeps this many files, counting the current one (at least 2).
+hub_logs_kept: 5

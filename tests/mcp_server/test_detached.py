@@ -15,11 +15,18 @@ import anyio
 import pytest
 from cf_fixtures import DEFAULT_WORKTREE, write_fake_cf
 from fake_sq import write_fake_sq
+from store_open import open_local_store
 from user_configs import example_config_text
 
 from amoeba import wiring
 from amoeba.cli.parser import build_parser
-from amoeba.config.home import StateLayout, calls_log_dir, config_path, state_layout
+from amoeba.config.home import (
+    StateLayout,
+    calls_log_dir,
+    config_path,
+    layout_under,
+    state_layout,
+)
 from amoeba.mcp import detached
 from amoeba.mcp.detached import (
     AmoebaScriptMissing,
@@ -31,7 +38,6 @@ from amoeba.mcp.detached import (
 from amoeba.mcp.tools import RequestError
 from amoeba.operations.names import OperationName
 from amoeba.operations.prune import prune
-from amoeba.store.store import Store
 from amoeba.upstream.squadron.launch import LaunchLogs
 
 WAIT_SECONDS = 20
@@ -216,14 +222,7 @@ def test_the_real_cli_child_writes_its_calls_log_line(
 
 
 def _layout(root: Path) -> StateLayout:
-    return StateLayout(
-        state_home=root,
-        store_path=root / "amoeba.sqlite3",
-        answering_dir=root / "answering",
-        logs_dir=root / "logs",
-        calls_log_dir=root / "logs" / "calls",
-        legacy_home=None,
-    )
+    return layout_under(root, root, None)
 
 
 def _log(layout: StateLayout, name: str, days_old: float) -> Path:
@@ -241,7 +240,7 @@ def test_an_old_detached_log_is_pruned_with_its_emptied_directories(
     layout = _layout(tmp_path / "state")
     old = _log(layout, "old.stdout.log", 40)
 
-    with Store.open(layout.store_path) as store:
+    with open_local_store(layout.store_path) as store:
         prune(store, layout, NOW, 30)
 
     assert not old.exists()
@@ -253,7 +252,7 @@ def test_a_young_detached_log_stays(tmp_path: Path) -> None:
     old = _log(layout, "old.stdout.log", 40)
     young = _log(layout, "young.stdout.log", 5)
 
-    with Store.open(layout.store_path) as store:
+    with open_local_store(layout.store_path) as store:
         prune(store, layout, NOW, 30)
 
     assert not old.exists()

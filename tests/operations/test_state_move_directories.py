@@ -28,9 +28,9 @@ MOVED_FILES = (
     "logs/resume/run-a/1.log",
 )
 INSERT_LATE_ANSWER = (
-    "INSERT INTO answers (run_id, paused_at, answered_by, answer, recorded_at)"
-    " VALUES ('run-c', '2026-11-01T11:00:00Z', 'answerer', 'late',"
-    " '2026-11-02T00:00:00Z')"
+    "INSERT INTO answers (run_id, paused_at, answered_by, answer, recorded_at,"
+    " owner_id) VALUES ('run-c', '2026-11-01T11:00:00Z', 'answerer', 'late',"
+    " '2026-11-02T00:00:00Z', (SELECT owner_id FROM owners))"
 )
 
 

@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from store.question_support import NOW, claimed_question, waiting_question
 from store.seed import insert_member
+from store_open import open_local_store
 
 from amoeba.operations.dismiss import dismiss
 from amoeba.operations.set_up_models import (
@@ -39,7 +40,7 @@ REMOVE_CONSUMER = {"program": "demo", "remove": {"members": ["consumer"]}}
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         first = run_set_up(opened, _program(), projects=PROJECTS)
         assert first.outcome is SetUpOutcome.APPLIED
         yield opened

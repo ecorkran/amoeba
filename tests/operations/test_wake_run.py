@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 from process_containment import contained_popen
 from store.message_support import NOW
+from store_open import open_local_store
 
 from amoeba.operations import processes
 from amoeba.operations.processes import WaitableChild
@@ -185,7 +186,7 @@ def test_an_ended_row_raises_with_no_command_run_and_no_row_change(
     before = stored_row(tmp_path)
 
     with (
-        Store.open(tmp_path / "amoeba.sqlite3") as reopened,
+        open_local_store(tmp_path / "amoeba.sqlite3") as reopened,
         pytest.raises(WakeRunError),
     ):
         run_wake(
@@ -400,7 +401,7 @@ def test_a_second_run_of_a_wake_that_already_has_a_command_runs_nothing(
     with store, store.write() as transaction:
         set_command_pid(transaction, WAKE_ID, 4242)
     with (
-        Store.open(tmp_path / "amoeba.sqlite3") as reopened,
+        open_local_store(tmp_path / "amoeba.sqlite3") as reopened,
         pytest.raises(WakeRunError, match="already has a command"),
     ):
         run_wake(
@@ -424,7 +425,10 @@ def test_a_run_that_loses_the_race_to_record_its_pid_stops_its_own_command(
     def racing_popen(*args: Any, **kwargs: Any) -> WaitableChild:
         child: WaitableChild = contained_popen(*args, **kwargs)
         started.append(child.pid)
-        with Store.open(tmp_path / "amoeba.sqlite3") as other, other.write() as tx:
+        with (
+            open_local_store(tmp_path / "amoeba.sqlite3") as other,
+            other.write() as tx,
+        ):
             set_command_pid(tx, WAKE_ID, 4242)
         return child
 

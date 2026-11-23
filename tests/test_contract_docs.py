@@ -8,13 +8,16 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.answering.import_follow import IMPORT_DEPTH
 from amoeba.answering.passages import SourcesProblemKind
 from amoeba.answering.values import DeclineReason
 from amoeba.cli import main as cli
 from amoeba.cli.parser import build_parser
+from amoeba.client.client_file import ClientFile
 from amoeba.config.user_config import NotAuthorizedItem, UserConfig
+from amoeba.hub.hub_config import HubConfig
 from amoeba.operations.add import AddRequest
 from amoeba.operations.answer import AnswerRejection
 from amoeba.operations.changes_models import ChangesOutcome, ChangesWarningCode
@@ -62,7 +65,6 @@ from amoeba.operations.status_models import (
     WaitingRunState,
 )
 from amoeba.store.errors import StoreRelocateError
-from amoeba.store.store import Store
 from amoeba.store.vocabulary import ClosedReason, QuestionState
 from amoeba.wiring_messages import worst_case_seconds
 
@@ -79,7 +81,10 @@ INTERNAL_TABLE_PREFIX = "sqlite_"
 
 def _schema(tmp_path: Path) -> dict[str, list[str]]:
     """Each table of a fresh store and its column names, from ``PRAGMA table_info``."""
-    with Store.open(tmp_path / "amoeba.sqlite3") as store, store.read() as transaction:
+    with (
+        open_local_store(tmp_path / "amoeba.sqlite3") as store,
+        store.read() as transaction,
+    ):
         tables = [
             row[0]
             for row in transaction.execute(
@@ -98,7 +103,7 @@ def _schema(tmp_path: Path) -> dict[str, list[str]]:
 def test_the_store_contract_names_every_table_and_column(tmp_path: Path) -> None:
     text = STORE_CONTRACT.read_text(encoding="utf-8")
     schema = _schema(tmp_path)
-    assert len(schema) == 14
+    assert len(schema) == 18
 
     missing = [
         f"{table}.{column}" if column else table
@@ -122,6 +127,15 @@ def test_the_store_contract_states_both_derivations() -> None:
 def test_the_config_contract_names_every_user_config_field() -> None:
     text = CONFIG_CONTRACT.read_text(encoding="utf-8")
     fields = [*UserConfig.model_fields, *NotAuthorizedItem.model_fields]
+
+    missing = [field for field in fields if f"`{field}`" not in text]
+
+    assert not missing, f"config-contract.md does not name {missing}"
+
+
+def test_the_config_contract_names_every_hub_and_client_key() -> None:
+    text = CONFIG_CONTRACT.read_text(encoding="utf-8")
+    fields = [*HubConfig.model_fields, *ClientFile.model_fields]
 
     missing = [field for field in fields if f"`{field}`" not in text]
 

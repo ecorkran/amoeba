@@ -33,6 +33,7 @@ def upsert_session(transaction: Transaction, session: Session) -> None:
     original start time.
     """
     confirmed = session.push_confirmed_at
+    acting = transaction.acting("sessions")
     transaction.execute(
         sql_sessions.UPSERT_SESSION,
         (
@@ -43,6 +44,8 @@ def upsert_session(transaction: Transaction, session: Session) -> None:
             encode_timestamp(session.started_at),
             encode_timestamp(session.heartbeat_at),
             None if confirmed is None else encode_timestamp(confirmed),
+            acting.owner_id,
+            acting.machine_id,
         ),
     )
 

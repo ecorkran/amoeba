@@ -26,6 +26,7 @@ from store.question_support import (
     insert_held_row,
     seed_members,
 )
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.processes import WaitableChild
@@ -38,7 +39,6 @@ from amoeba.store.message_transitions import StateFields, change_state
 from amoeba.store.messages import get_message
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import get_question
-from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, RequestState
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 
@@ -56,7 +56,7 @@ def _seed(path: Path) -> list[QuestionKey]:
     keys = [
         QuestionKey(f"run-{n:02d}", "2026-11-10T11:00:00+00:00") for n in range(ROWS)
     ]
-    with Store.open(path) as store:
+    with open_local_store(path) as store:
         seed_members(store)
         with store.write() as transaction:
             for number, key in enumerate(keys):
@@ -102,14 +102,14 @@ def test_concurrent_callers_start_each_row_once_within_the_bound(
     stop = threading.Event()
 
     def keep_busy() -> None:
-        with Store.open(path) as store:
+        with open_local_store(path) as store:
             while not stop.is_set():
                 with store.write():
                     time.sleep(BUSY_HOLD_SECONDS)
 
     def call_rounds(_caller: int) -> list[tuple[float, int]]:
         calls: list[tuple[float, int]] = []
-        with Store.open(path) as store:
+        with open_local_store(path) as store:
             for _ in range(ROUNDS):
                 this_call.starts = 0
                 began = time.monotonic()
@@ -132,7 +132,7 @@ def test_concurrent_callers_start_each_row_once_within_the_bound(
     assert sum(made for _, made in calls) == ROWS
     assert max(started.values()) == 1, "a row was started twice"
     assert set(started) == {key.run_id for key in keys}
-    with Store.open(path) as store, store.read() as transaction:
+    with open_local_store(path) as store, store.read() as transaction:
         for key in keys:
             row = get_question(transaction, key)
             assert row is not None

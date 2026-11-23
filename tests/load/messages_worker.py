@@ -35,6 +35,7 @@ from operations.message_support import (
 from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY
 from store.message_support import PROGRAM
+from store_open import open_local_store
 
 from amoeba.operations.deps import Deps
 from amoeba.operations.inbox import inbox
@@ -132,7 +133,7 @@ def main(arguments: list[str]) -> None:
         if time.monotonic() > deadline:
             raise TimeoutError("the parent never opened the gate")
         time.sleep(GATE_POLL_SECONDS)
-    with Store.open(store_path) as store:
+    with open_local_store(store_path) as store:
         print(json.dumps(_run(mode, number, store, work)))
 
 

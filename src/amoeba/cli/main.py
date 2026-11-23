@@ -28,15 +28,19 @@ from amoeba.cli.exit_codes import (
     EXIT_REJECTED,
     EXIT_USAGE,
 )
+from amoeba.cli.hub_commands import HUB_COMMAND, run_hub
 from amoeba.cli.init_command import INIT_COMMAND, run_init
+from amoeba.cli.join_command import JOIN_COMMAND, LEAVE_COMMAND, run_join, run_leave
 from amoeba.cli.parser import build_parser
 from amoeba.cli.registration_arguments import check_usage
 from amoeba.cli.stand_in_command import STAND_IN_COMMAND, run_stand_in
 from amoeba.cli.wake_command import run_wake_run
 from amoeba.config.home import StateLayout, state_layout
+from amoeba.hub.backups import BackupError
+from amoeba.hub.errors import HubStartError
 from amoeba.operations.names import OperationName
 from amoeba.operations.wake_run import WAKE_RUN_COMMAND, WakeRunError
-from amoeba.wiring import OPERATIONAL_ERRORS
+from amoeba.wiring import OPERATIONAL_ERRORS, refuse_if_joined
 
 __all__ = [
     "EXIT_ERROR",
@@ -66,18 +70,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             # Sets the machine up: must run before any config load, which would fail.
             return run_init()
         if getattr(arguments, "cli_only", None) == WAKE_RUN_COMMAND:
-            # Before the operation lookup and before any config load (244 D6).
+            # A joined machine's door does not serve it: before anything local is
+            # read, and before the operation lookup and any config load (244 D6).
+            refuse_if_joined(WAKE_RUN_COMMAND)
             return run_wake_run(state_layout(), arguments.wake_id)
+        if getattr(arguments, "cli_only", None) == HUB_COMMAND:
+            return run_hub(arguments)
+        if getattr(arguments, "cli_only", None) == JOIN_COMMAND:
+            return run_join(parser, arguments)
+        if getattr(arguments, "cli_only", None) == LEAVE_COMMAND:
+            return run_leave(arguments)
         if name is None:
             raise AssertionError("a parsed command is an operation or CLI-only")
         if name is OperationName.HANDLE_PAUSE:
+            # Before the layout is built, so a refusal writes no calls-log line.
+            refuse_if_joined(name.cli_name)
             layout = state_layout()
             return run_handle_pause(layout, arguments.run_id, as_json=arguments.json)
         return run_invoked(name, arguments)
     except RequestDocumentError as error:
         sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
         return EXIT_USAGE
-    except (AnswerFirstInstallError, WakeRunError, *OPERATIONAL_ERRORS) as error:
+    except (
+        AnswerFirstInstallError,
+        WakeRunError,
+        HubStartError,
+        BackupError,
+        *OPERATIONAL_ERRORS,
+    ) as error:
         # The process boundary: these are the expected failures, reported once. With
         # no layout (no state home) there is no calls log to write: stderr only.
         sys.stderr.write(f"error: {type(error).__name__}: {error}\n")

@@ -19,7 +19,8 @@ _WAKE_COLUMNS: Final = (
 )
 
 INSERT_WAKE: Final = (
-    f"INSERT INTO wakes ({_WAKE_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    f"INSERT INTO wakes ({_WAKE_COLUMNS}, owner_id) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 SELECT_WAKE: Final = f"SELECT {_WAKE_COLUMNS} FROM wakes WHERE wake_id = ?"
 #: Parameters: member id, now.

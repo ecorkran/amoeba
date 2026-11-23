@@ -14,6 +14,7 @@ from pathlib import Path
 import anyio
 import pytest
 from store.message_support import send_request
+from store_open import open_local_store
 
 from amoeba.mcp.channel_event import CHANNEL_METHOD
 from amoeba.mcp.inbox_resource import INBOX_URI, RESOURCE_UPDATED_METHOD
@@ -22,7 +23,6 @@ from amoeba.mcp.presence import PresenceDeps, PresenceState
 from amoeba.store.deliveries import write_delivery
 from amoeba.store.errors import StoreBusyError, StoreCorruptError
 from amoeba.store.row_values import encode_timestamp
-from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, MessageKind
 from mcp_server.presence_rig import (
     MEMBER_ID,
@@ -202,11 +202,12 @@ def test_a_note_pushes_naming_its_kind_and_sender(
         # The table's note shape written directly; ``test_note_push`` sends notes
         # through the real writers.
         stamp = encode_timestamp(START)
-        with Store.open(store_path) as store, store.write() as transaction:
+        with open_local_store(store_path) as store, store.write() as transaction:
             transaction.execute(
                 "INSERT INTO messages (message_id, kind, from_member, to_member, "
-                "depth, subject, body, created_at, state_changed_at) "
-                "VALUES ('n1', ?, ?, ?, 1, 's', 'b', ?, ?)",
+                "depth, subject, body, created_at, state_changed_at, owner_id) "
+                "VALUES ('n1', ?, ?, ?, 1, 's', 'b', ?, ?, "
+                "(SELECT owner_id FROM owners))",
                 (MessageKind.NOTE.value, PEER, MEMBER_ID, stamp, stamp),
             )
             write_delivery(transaction, MEMBER_ID, "n1", DeliveryEvent.SENT, START)
@@ -267,7 +268,7 @@ def test_the_info_line_has_the_numbers_and_no_message_text(
 
     async def scenario() -> None:
         await eventually(lambda: opener.opens >= 1, "the baseline")
-        with Store.open(store_path) as store, store.write() as transaction:
+        with open_local_store(store_path) as store, store.write() as transaction:
             send_request(transaction, MARKER, from_member=PEER, to_member=MEMBER_ID)
             transaction.execute(
                 "UPDATE messages SET subject = ?, body = ? WHERE message_id = ?",

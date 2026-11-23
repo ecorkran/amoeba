@@ -282,6 +282,9 @@ def main() -> None:
     )
     try:
         resolve_amoeba_script()
+        # A joined machine's door does not serve this server's start: before the
+        # state move and the config load, so nothing local is touched.
+        wiring.refuse_if_joined("amoeba-mcp")
         wiring.prepare_home()
         config = wiring.load_config()
         wiring.check_deadline(config, MCP_CALL_DEADLINE_SECONDS)

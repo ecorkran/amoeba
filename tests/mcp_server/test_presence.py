@@ -14,6 +14,7 @@ from pathlib import Path
 import anyio
 import pytest
 from cf_fixtures import OUTSIDE_ANY_PROJECT, fake_cf_run
+from store_open import open_local_store
 
 from amoeba.mcp.presence import (
     PUSH_ANSWER_SECONDS,
@@ -29,7 +30,6 @@ from amoeba.mcp.presence import (
 from amoeba.operations.members import ContextForgeError
 from amoeba.store.errors import StoreBusyError, StoreCorruptError
 from amoeba.store.sessions import prune_stale_sessions
-from amoeba.store.store import Store
 from amoeba.upstream.context_forge.cli_call import CfRun
 from mcp_server.presence_rig import (
     FAST,
@@ -228,7 +228,7 @@ def test_a_process_suspended_past_the_stale_limit_gets_its_row_back(
             await eventually(lambda: bool(all_session_rows(store_path)), "first beat")
             # The process sleeps; another server's beat prunes its row meanwhile.
             woke = started + timedelta(seconds=FAST.session_stale_seconds + 30)
-            with Store.open(store_path) as other, other.write() as transaction:
+            with open_local_store(store_path) as other, other.write() as transaction:
                 prune_stale_sessions(transaction, woke, FAST.session_stale_seconds)
             assert all_session_rows(store_path) == []
             clock.now = woke

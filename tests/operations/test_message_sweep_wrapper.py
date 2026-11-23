@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from store.message_support import count, delivery_rows, seed_members
+from store_open import open_local_store
 
 from amoeba.operations.message_sweep import sweep_messages
 from amoeba.store.messages import get_message
@@ -35,7 +36,7 @@ SHORT_BUSY_TIMEOUT_SECONDS = 0.2
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(
+    with open_local_store(
         tmp_path / "amoeba.sqlite3", busy_timeout_seconds=SHORT_BUSY_TIMEOUT_SECONDS
     ) as opened:
         with opened.write() as transaction:

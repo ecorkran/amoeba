@@ -11,8 +11,8 @@ interfaces:
 - 263
 - 264
 dateCreated: 20261120
-dateUpdated: 20261121
-status: not_started
+dateUpdated: 20261122
+status: complete
 turns: 28
 promptTokens: 2058924
 cachedTokens: 1863532
@@ -89,7 +89,7 @@ Three new packages and additions to five existing ones. The shared package is na
 
 | Package | Modules | Holds |
 |---|---|---|
-| `amoeba.wire` (new) | `times`, `protocol`, `join_line`, `fingerprint` | What the client and the hub must agree on: the door version, the network times, the call and reply shapes, the refusal codes, the served-operation list, the join line format, the certificate fingerprint. |
+| `amoeba.wire` (new) | `times`, `protocol`, `join_line`, `fingerprint`, `address`, `atomic_file` | What the client and the hub must agree on: the door version, the network times, the call and reply shapes, the refusal codes, the served-operation list, the join line format, the certificate fingerprint. |
 | `amoeba.client` (new) | `client_file`, `trust`, `call`, `join` | Reading and writing the client file and the saved certificate, the pinned TLS setting, one call with retry, and the network and file steps of `join` and `leave`. |
 | `amoeba.hub` (new) | `hub_config`, `certificate`, `backups`, `hub_log`, `calls`, `app`, `serve`, `admin` | `hub.yaml`, the certificate, backups, the log, the handling of one call (a plain function), the web app around it, the start sequence, and the admin commands. |
 | `amoeba.store` | `machines`, `sql_machines`, `call_results`, `schema/011_hub_and_door.sql`; changes to `store.py` and `relocate.py` | Machines, the owner, kept results, the call scope, the acting machine, the closed mark, and setting a store aside and putting it back. |
@@ -106,6 +106,7 @@ Import rules, added to `tests/test_import_boundaries.py`:
 - `wire` imports nothing from any other `amoeba` package. The served names are plain strings in `wire.protocol`, and a test asserts each is an `OperationName` value.
 - `client` imports nothing from `store`, `hub` or `upstream`.
 - `hub` imports nothing from `client`, `upstream`, `cli`, `mcp` or the `wiring` modules.
+- Edges the build added: `operations` imports `client.client_file` (the openers read the hub's address from the client file for their message), `hub` imports `operations.errors`, `operations.served` and its own `hub.store_open` (`open_hub_store`). The hub must not reach `client` through any chain of imports, and `tests/test_import_boundaries.py` follows them to check it; the hub's opener therefore names the client file, not the hub address inside it. None crosses a forbidden direction.
 
 ### Data Flow
 
@@ -132,9 +133,9 @@ With no client file, `wiring.invoke` runs as today. The six operations go throug
 | The saved hub certificate | Client state directory | Overwritten by `amoeba join`; removed by `amoeba leave` |
 | A set-aside local store | Client state directory | Put back by `amoeba leave`. At most one exists (D4) |
 | A set-aside copy in progress, `amoeba.sqlite3.set-aside.partial` | Client state directory | Renamed when complete. One left by a stop is deleted by the next `join` or `leave` (D4) |
-| A displaced store | Client state directory | Made only from a hand-placed file. Never opened; bounded as D4 says |
+| A displaced store | Client state directory | Made only from a hand-placed file. Never opened. `leave` keeps the newest three and deletes the older ones when it makes another (D4) |
 | A restore in progress, `restore.partial/` | Hub state directory | Removed when the restore finishes. One left by a stop is replaced by the next `--from-backup`, and stops any other start until then (D14) |
-| Files a restore moved away, `replaced-<UTC stamp>/` | Hub state directory | Never read. Bounded as D14 says; 264 adds the commands that end one |
+| Files a restore moved away, `replaced-<UTC stamp>/` | Hub state directory | Never read. A finished restore keeps the newest `backups_kept` of them and deletes the older ones (D14) |
 | The backup lock, `<backup_dir>/.lock` | `backup_dir` | One empty file, kept. The lock on it ends with its holder (D15) |
 
 Config is `hub.yaml`, `config.yaml` and the client file. Everything the system writes for itself is in a state directory, except backups (D1).
@@ -218,8 +219,8 @@ Status: decided
 `amoeba join <line>`:
 
 0. Refuses in a hub home, which is a home whose config directory holds `hub.yaml` (D1). Nothing is read or written first.
-1. With no client file, runs the pre-228 state move as every command does today, so only the state-home store counts below. With `--set-aside-local` and a local store, it then opens that store once with the local opener and closes it. The opener migrates it, so `closed_mark` exists before the mark is written, whatever release last opened the store. A store that already holds the mark, from a `join` that stopped, is not opened this way: it was migrated by that earlier run, and the opener would be refused by the mark.
-2. If a local store exists, refuses and names `--set-aside-local`. (`amoeba adopt` is named here too once 264 builds it.)
+1. With no client file and no `--set-aside-local`, looks for a local store, in the state home or still in the pre-228 legacy home, and if one exists refuses and names `--set-aside-local`. (`amoeba adopt` is named here too once 264 builds it.) This step only looks: nothing is moved or opened.
+2. Everything that changes the local store waits until step 4 has succeeded, so a `join` that fails at the hub or at the fingerprint changes nothing local. With no client file and `--set-aside-local`, once the `hello` call has answered, it runs the pre-228 state move as every command does today, then opens a local store once with the local opener and closes it. The opener migrates it, so `closed_mark` exists before the mark is written, whatever release last opened the store. A store that already holds the mark, from a `join` that stopped, is not opened this way: it was migrated by that earlier run, and the opener would be refused by the mark. The set-aside itself follows (D4's table).
 3. Fetches the hub's certificate, waiting at most `CONNECT_SECONDS`. This one connection cannot verify anything, because the client has no certificate yet. It uses a TLS setting with verification off, sends no request bytes, reads the certificate the hub presented and closes. The fingerprint in the line is then compared. Nothing else is done on that connection or with that setting, and the token is first sent in step 4, on the pinned setting of D5.
 4. Saves the certificate, then makes one `hello` call with the token over the pinned connection. `hello` returns the machine's name. 264 adds `hub_version`, the hub's package version, to that reply (264 D10).
 5. Writes the client file.
@@ -228,10 +229,10 @@ What can fail, and what is left behind. None of these is retried by `join`, apar
 
 | Failure | Error | Left behind |
 |---|---|---|
-| Step 0: the home is a hub's | `JoinError` naming `hub.yaml` | Nothing |
+| Step 0: the home is a hub's (`join`, `join --address` and `leave` alike) | `JoinError` naming `hub.yaml` | Nothing. `leave` would otherwise delete the write-ahead log beside a hub store that is missing |
 | The line does not parse (D3) | `JoinError` saying what a join line looks like | Nothing |
 | Step 2: a local store exists and `--set-aside-local` was not given | `JoinError` naming the store and `--set-aside-local` | Nothing |
-| A set-aside store and a local store both exist (below) | `JoinError` naming both files and `amoeba leave` | Nothing |
+| A set-aside store and a local store both exist (below) | `StoreRelocateError` naming both files and `amoeba leave` (the store layer raises it, so it names no command) | Nothing |
 | `join --address` with no client file | `JoinError` saying the machine is not joined | Nothing |
 | Step 3: connection refused, timeout, or the peer does not speak TLS | `HubUnreachableError` naming the address and the cause | Nothing |
 | Step 3: the fingerprint is not the one in the line | `JoinError` with both fingerprints | Nothing. The token was never sent |
@@ -265,7 +266,7 @@ A marked store at the store path beside a set-aside store is the original of a s
 
 The mark is written on a plain connection, which does not make the mark check that store writes make. That is why a re-run `join` can write it again on a store that already holds it.
 
-At most one set-aside store exists. A set-aside store beside a local store that is not its original (no mark, or a different mark) is a pair Amoeba's commands never make: while a set-aside store exists the machine is joined or mid-join, and the guard and the local opener refuse to create a store at the store path. So it comes only from files placed by hand, such as a state-directory backup restored over a joined home. `join` refuses it with `JoinError`, names both files and says to run `amoeba leave`, which ends the pair (step 1 below): the hand-placed store is moved to a dated name and the set-aside store goes back. Nothing of a hand-placed store is deleted.
+At most one set-aside store exists. A set-aside store beside a local store that is not its original (no mark, or a different mark) is a pair Amoeba's commands never make: while a set-aside store exists the machine is joined or mid-join, and the guard and the local opener refuse to create a store at the store path. So it comes only from files placed by hand, such as a state-directory backup restored over a joined home. `join` refuses it with `StoreRelocateError`, names both files and says to run `amoeba leave`, which ends the pair (step 1 below): the hand-placed store is moved to a dated name and the set-aside store goes back. Nothing of a hand-placed store is deleted.
 
 **`amoeba join --address <address>`** needs an existing client file and changes only the address in it. It makes no hub call.
 
@@ -279,7 +280,7 @@ At most one set-aside store exists. A set-aside store beside a local store that 
 2. Delete the client file.
 3. Delete the saved certificate.
 
-Amoeba never opens a displaced store. It is bounded: one comes only from a hand-placed file, and whoever placed it decides what to do with it. That bound is its exit: no record or run is in a waiting state because of it, and no command refuses or waits while it exists, so the "every state has an exit" rule asks only that the design say why it is bounded, which this does.
+Amoeba never opens a displaced store. One comes only from a hand-placed file. Its exit is automatic: `leave` keeps the newest three (`DISPLACED_STORES_KEPT`, a constant in `store.set_aside`; a client has no config for it) and deletes the older ones, with their side files, each time it makes another. No record or run waits on one, and no command refuses while one exists.
 
 Step 1 does not go through either store opener, so the guard in D2 does not stop it. `store.relocate` opens the set-aside file by its own path on a plain SQLite connection, as it already does for the copy in the state move, deletes the `closed_mark` row in one transaction and closes the connection. Closing the only connection to a store folds its write-ahead log into the file and removes the side files, so the set-aside store is again one file, and one rename moves it. The guard covers the openers and the store path; `leave` touches neither until the rename.
 
@@ -327,7 +328,7 @@ One call is one `POST /call/<name>`. `<name>` is a served operation's name or `h
 
 `hello` is the door's own call and not an operation. Its name is `HELLO_CALL` in `wire.protocol`, outside `SERVED_OPERATIONS`, and it has no `OperationName`. The hub accepts a name that is in the served list or is `HELLO_CALL`, and refuses any other as `not_served`. `hello` goes through the same token, version and touch steps as every call (D8), runs no operation and keeps no result. Its body is `{"document": {}}` and its result is `{"machine": <the machine's name>}`. Only `join` sends it; `wiring.invoke` never does.
 
-Request headers: `Authorization: Bearer <token>`, `Amoeba-Door-Version`, `Amoeba-Client-Version` (the installed package version), `Amoeba-Call-Id` (`uuid4().hex`, made once per call and reused by its repeats). The body is JSON with one key, `document`, the operation's existing request document. Later slices add keys beside `document` (Integration Points). The six documents come from flags or from MCP's JSON, so they are always JSON values. 263's `session_tick` and `session_end` also send four `Amoeba-Session-*` headers (263 D6).
+Request headers: `Authorization: Bearer <token>`, `Amoeba-Door-Version`, `Amoeba-Client-Version` (the installed package version), `Amoeba-Call-Id` (`uuid4().hex`, made once per call and reused by its repeats). The call id and the client version are stored (and the version is shown by `hub machines`), so the hub accepts only letters, digits and `. _ + ~ -`, at most 64 characters (`wire.protocol.is_header_value`); anything else is `malformed_call`, and the hub stores neither value. The hub quotes and shortens a door version it refuses, so no control character reaches its log or a terminal. The body is JSON with one key, `document`, the operation's existing request document. Later slices add keys beside `document` (Integration Points). The six documents come from flags or from MCP's JSON, so they are always JSON values. 263's `session_tick` and `session_end` also send four `Amoeba-Session-*` headers (263 D6).
 
 None of the six operations takes the existing `Door` value (CLI or MCP), so the body does not carry it. When 262 serves `answer`, the body gains a `via` key holding that value as the client states it, and the hub records it as today.
 
@@ -376,7 +377,7 @@ Why these values: a container restart takes a few seconds, so 30 seconds of retr
 
 The call's own store open is not a second wait. On the hub the store is already in write-ahead mode and at the current schema, because step 7 of the start migrated it, so opening it only reads, and a read does not wait for the write lock. This was tried on 20261121 with the project's `Store.open`: an open while another connection held the write lock returned at once. A test pins it: with the write lock held by another connection, `open_hub_store` returns in well under the busy time. The existing `ANSWER_STORE_WAITS` counts the open as a wait because a local open can be the one that migrates; the hub's per-call open never is.
 
-Tests pin three relations: `READ_SECONDS` is above `HUB_LOCK_WAITS_PER_CALL` (1, a constant in `hub.calls`) times the store's busy time; `CALL_RESULT_LIFETIME_SECONDS` is above `CALL_BOUND_SECONDS`; and the pair of `DOOR_VERSION` and the time values equals a pinned tuple, so nobody changes a time without changing the version. 263 adds `MCP_CALL_DEADLINE_SECONDS` to that tuple and raises `DOOR_VERSION` by one (263 D9). 262 raises `DOOR_VERSION` to 2 first, because `send` then returns a wake an older client cannot start (262 D8). So it is 3 after 263. 264 adds two times that only the adoption upload uses; they stay outside the tuple and the version does not change (264 D3).
+Tests pin three relations: `READ_SECONDS` is above the store's busy time (a call waits for the write lock once, in its one call scope); `CALL_RESULT_LIFETIME_SECONDS` is above `CALL_BOUND_SECONDS`; and the pair of `DOOR_VERSION` and the time values equals a pinned tuple, so nobody changes a time without changing the version. 263 adds `MCP_CALL_DEADLINE_SECONDS` to that tuple and raises `DOOR_VERSION` by one (263 D9). 262 raises `DOOR_VERSION` to 2 first, because `send` then returns a wake an older client cannot start (262 D8). So it is 3 after 263. 264 adds two times that only the adoption upload uses; they stay outside the tuple and the version does not change (264 D3).
 
 `client.call` takes the times as a `DoorTimes` value that defaults to these constants. Tests pass shorter ones. There is no setting.
 
@@ -486,7 +487,7 @@ SQLite cannot add a `NOT NULL` column without a default, and a default owner wou
 
 `amoeba hub invite` needs no acting machine. It gives a new machine the store's one owner, read from `owners`, and fails if that table does not hold exactly one row.
 
-264 deletes `state_move.py`. `open_hub_store` moves to `hub/store_open.py`, `open_state_store` goes, and its fix runs once inside `amoeba adopt`. The two callers of `Store.open` are then `hub/store_open.py` and `store/handover.py` (264 D2, D7).
+264 deletes `state_move.py`. (`open_hub_store` already lives in `hub/store_open.py`, moved there by this slice's review.) `open_state_store` goes, and its fix runs once inside `amoeba adopt`. The two callers of `Store.open` are then `hub/store_open.py` and `store/handover.py` (264 D2, D7).
 
 Tests that open a local store directly and insert records set the acting machine with the same helper `open_state_store` uses, which makes the `local` machine. This is a mechanical change to the shared store fixtures. The hub fixture's seeding (D18) is different: it opens the hub's store with `open_hub_store` and calls `store.act_as` with the first machine the fixture invited, so a seeded hub store holds no `local` machine.
 
@@ -545,7 +546,7 @@ Status: decided
 5. Copy the backup's three files into `restore.partial/`, then rename them into place: the certificate, the key, and the store last.
 6. Remove `restore.partial/`.
 
-A `replaced-<UTC stamp>/` directory is never read by the hub. One is made only by a `--from-backup` that a person ran and that found files to move, and that run prints its path. It holds a hub's records and key, so this slice has no command that deletes one: that is the choice of whoever ran the restore. That is its bound, by the same reasoning as a displaced store (D4): no record or run waits on it and no command refuses because of it. 264 adds the commands that put one back or delete it (264 D10).
+A `replaced-<UTC stamp>/` directory is never read by the hub. One is made only by a `--from-backup` that a person ran and that found files to move, and that run prints its path. It holds a hub's records and key. Its exit is automatic: a restore that finishes keeps the newest `backups_kept` of them (the same count as each kind of backup) and deletes the older ones. A directory that cannot be deleted then is left for the next restore's pass, and the finished restore is not failed for it. No record or run waits on one and no command refuses because of it. 264 adds the commands that put one back (264 D10).
 
 `--from-backup` is given to one start and is never put in the compose file (D17). After the restore the state directory holds a working hub, so a second start with the flag is refused at step 2, and nothing is restored twice.
 
@@ -603,8 +604,8 @@ A refused call is one line: the hub's time, the caller's address, the code, and 
 ### D17 — The container
 Status: decided
 
-- `docker/Dockerfile`: `python:3.13-slim`, installs Amoeba from the checkout, runs as a non-root user `amoeba`, declares the config, state and backup directories as volumes at that user's default config and state paths and at `/backups`, and has `amoeba hub serve` as its entry point. `AMOEBA_HOME` is not set.
-- `docker/compose.example.yaml`: the three mounts, the published port and `restart: always`, which is what starts the hub at boot and restarts it on failure. The host directories of the three mounts are under `~/amoeba-hub/`, never the user's own Amoeba config and state directories, so a hub run on a laptop does not turn the laptop's home into a hub home (D1).
+- `docker/Dockerfile`: `python:3.13-slim`, installs Amoeba from the checkout with `uv sync --locked`, so the image has the dependency versions of the committed `uv.lock` and a stale lock fails the build, runs as a non-root user `amoeba`, declares the config, state and backup directories as volumes at that user's default config and state paths and at `/backups`, and has `amoeba hub serve` as its entry point. `AMOEBA_HOME` is not set.
+- `docker/compose.example.yaml`: the three mounts, the published port and `restart: always`, which is what starts the hub at boot and restarts it on failure. The host directories of the three mounts are under `~/amoeba-hub/`, never the user's own Amoeba config and state directories, so a hub run on a laptop does not turn the laptop's home into a hub home (D1). It has no `build:` section, so the file works wherever it is copied; a comment gives the build command (`docker build -f docker/Dockerfile -t amoeba-hub .`, from the repository root).
 - Two examples in the image at `/usr/share/amoeba/`: `hub.yaml.example`, which is `src/amoeba/hub/hub.yaml.example` from the wheel, and `config-contract.md`, copied from `docs/`, whose example block is the `config.yaml` example. The contract stays the one source of that example. A test loads `hub.yaml.example` as a valid hub config.
 - 264 changes two of these. The config mount is writable, because adoption writes `config.yaml` there. And `config.yaml.example`, a file in the wheel beside `hub.yaml.example`, becomes the source of the `config.yaml` example, with the contract's block tested equal to it (264 D3, D10).
 
@@ -772,12 +773,10 @@ Nothing beyond the complete slices. The six operations and their documents are u
 
 ### Integration Requirements
 
-- 261 can serve a new operation by adding to the served list and `run_served`, with no change to the call format.
+- 261 can serve a new operation with no change to the call format. The recipe, in `operations/served.py`: add its name to `wire.protocol.SERVED_OPERATIONS` (and to `WRITING_CALLS` and `UNKNOWN_ADVICE` when it writes), one entry to `operations.served.SERVED` (its runner and its result type), and its type to `ServedResult`. `tests/operations/test_served.py` and `tests/wire/test_protocol.py` fail, naming what is missing, if the lists disagree.
 - The PM's install, with no client file, behaves as before the slice.
 
 ### Verification Walkthrough
-
-Draft; refined after implementation. None of these commands exist yet.
 
 Each functional criterion above has a test on the two-machine fixture, under `tests/hub/`, and running them is the demonstration:
 
@@ -785,13 +784,71 @@ Each functional criterion above has a test on the two-machine fixture, under `te
 uv run pytest tests/hub tests/load/test_door_load.py
 ```
 
-The container is the one thing the suite does not run. The implementing agent does this once and records the output in the slice notes:
+The same thing by hand, on one computer, as the person running it. Three directories stand for the hub's home and two machines' homes (`AMOEBA_HOME` makes config and state one directory). Every line was run again on 20261123 as the final check, from the checkout, and the output shown is what it printed (the hub's `last call` times and `client` version differ from run to run; the join line's token is never shown). The `config.yaml` in the hub's home is the yaml block under "## Example" in `docs/config-contract.md`, and the same file in the laptop home for the set-aside part.
+
+```bash
+W=$(mktemp -d); mkdir -p $W/hub $W/backups $W/laptop $W/second
+# The two examples the image ships: hub.yaml, and config.yaml from the contract's example block.
+sed -e "s#/backups#$W/backups#" -e "s#replace-with-the-hub-host.example:8443#127.0.0.1:18443#" \
+    -e "s#bind: 0.0.0.0#bind: 127.0.0.1#" -e "s#port: 8443#port: 18443#" \
+    src/amoeba/hub/hub.yaml.example > $W/hub/hub.yaml
+# (config.yaml: the yaml block under "## Example" in docs/config-contract.md, saved as $W/hub/config.yaml)
+
+AMOEBA_HOME=$W/hub uv run amoeba hub serve &        # stderr: amoeba hub: serving on 127.0.0.1:18443
+AMOEBA_HOME=$W/hub uv run amoeba hub machines       # no machines
+AMOEBA_HOME=$W/hub uv run amoeba hub invite alpha   # <address>,<fingerprint>,<token>
+AMOEBA_HOME=$W/laptop uv run amoeba join "<that line>"
+# joined the hub at 127.0.0.1:18443 as alpha
+AMOEBA_HOME=$W/laptop uv run amoeba standing --text "Fixture versions are never bumped."
+# given: standing answer #1
+#   reach: everything
+AMOEBA_HOME=$W/hub uv run amoeba hub invite beta    # a second line
+AMOEBA_HOME=$W/second uv run amoeba join "<the second line>"
+# joined the hub at 127.0.0.1:18443 as beta
+AMOEBA_HOME=$W/second uv run amoeba standing --text "Fixture versions are never bumped."
+# unchanged: standing answer #1
+AMOEBA_HOME=$W/hub uv run amoeba hub machines
+# alpha  token: yes  last call: <time>  client: <version>
+# beta   token: yes  last call: <time>  client: <version>
+AMOEBA_HOME=$W/laptop uv run amoeba list           # exit 3
+# error: NotServedError: this machine is joined to the hub at 127.0.0.1:18443, and the door does not serve list yet
+AMOEBA_HOME=$W/hub uv run amoeba hub backup         # <backup_dir>/timed/<stamp>
+AMOEBA_HOME=$W/laptop uv run amoeba leave
+# removed $W/laptop/client.yaml
+# removed $W/laptop/pinned-hub-cert.pem
+AMOEBA_HOME=$W/laptop uv run amoeba leave           # exit 0
+# nothing to do: this machine is not joined
+```
+
+Setting a local store aside, from a laptop home that has `config.yaml` and a local store (made by any local command, here `amoeba standing --text "A local ruling."`, which prints `given: standing answer #1`):
+
+```bash
+AMOEBA_HOME=$W/laptop uv run amoeba join "<a line for alpha>"                     # exit 3
+# error: JoinError: a local store exists at $W/laptop/amoeba.sqlite3; run `amoeba join` again with --set-aside-local to set it aside (and `amoeba leave` puts it back)
+AMOEBA_HOME=$W/laptop uv run amoeba join "<a line for alpha>" --set-aside-local
+# joined the hub at 127.0.0.1:18443 as alpha
+# the local store is set aside at $W/laptop/amoeba.sqlite3.set-aside-<stamp>; `amoeba leave` puts it back
+AMOEBA_HOME=$W/laptop uv run amoeba leave
+# the local store is back
+# removed $W/laptop/client.yaml
+# removed $W/laptop/pinned-hub-cert.pem
+AMOEBA_HOME=$W/laptop uv run amoeba standing --text "A local ruling."             # unchanged: standing answer #1
+```
+
+`kill -TERM` of the hub process stops it, as `docker stop` does: in-flight calls finish, then it exits, and `pgrep -f "amoeba hub serve"` finds nothing. The exit status is 143 (128 + SIGTERM), because uvicorn re-raises the signal it captured once it has shut down (`uvicorn/server.py`); that is how a clean stop looks here, not a failure. Started through `uv run`, the status shown is `uv`'s own, also 143.
+
+Caveats found while building:
+
+- The load figures depend on pauses between a client's calls. With none, 16 clients saturate the hub's one process (a `decisions` over 500 answers costs about 25 ms of its CPU and Python threads share one interpreter lock) and the slowest call is 1.2 to 2.0 s. The load test pauses 0.25 s between calls, and its figures are in the Implementation Notes.
+- `uv run amoeba ...` is used so the commands run from the checkout; an installed `amoeba` takes the place of `uv run amoeba`.
+
+The container is the one thing the suite does not run. It was run once by hand on 20261122, and the output is in the Implementation Notes (task 16.2 of the task file):
 
 ```bash
 docker build -f docker/Dockerfile -t amoeba-hub .
 ```
 
-Start it with the mounts from `docker/compose.example.yaml`, with `hub.yaml` copied from `/usr/share/amoeba/hub.yaml.example` and `config.yaml` written from the example in `/usr/share/amoeba/config-contract.md`. `docker exec <container> amoeba hub invite alpha` prints a join line, `amoeba join <line>` in a throwaway home succeeds, and `amoeba standing --text "..." -j` from that home answers `given`.
+Start it with the mounts from `docker/compose.example.yaml` (host directories under `~/amoeba-hub/`, made first), with `hub.yaml` copied from `/usr/share/amoeba/hub.yaml.example` (its `address` set to `127.0.0.1:8443`, the published port) and `config.yaml` written from the example block in `/usr/share/amoeba/config-contract.md`, then `docker compose -f docker/compose.example.yaml up -d`. `docker exec <container> amoeba hub invite alpha` prints a join line, `amoeba join <line>` in a throwaway home succeeds, and `amoeba standing --text "..." -j` from that home answers `given`. The restore: `docker exec <container> amoeba hub backup` prints `/backups/timed/<stamp>`; `docker compose stop`; empty the state mount; `docker compose run --rm --service-ports hub --from-backup /backups/timed/<stamp>` prints `amoeba hub: serving on 0.0.0.0:8443`; stop it; `docker compose up -d`; the same `standing` call from the same home answers `unchanged`, with no new join. Empty means `find ~/amoeba-hub/state -mindepth 1 -delete`: a restore over a state directory that still holds the three files is refused, as D5 says.
 
 ## Risk Assessment
 
@@ -814,6 +871,16 @@ Start it with the mounts from `docker/compose.example.yaml`, with `hub.yaml` cop
 - **Security.** The token and the hub's key never appear in a log line, an error text or a result. `invite` prints the token once, in the join line. Backups hold the key, so their permissions are part of the backup test.
 - **Threads.** Each call has its own connection and shares no mutable state with another. The only state crossing threads is the store itself, ordered by SQLite's lock as today.
 - **The hub's `PATH`.** The fixture hub runs without `cf` and `sq`, so an accidental hub-side call to either fails a test.
+
+### Notes from the build (20261122)
+
+- **Load figures** (`tests/load/test_door_load.py`, in the bare `uv run pytest` and so in CI). Sixteen clients, 320 calls, six runs: slowest call 0.07 to 0.21 s, median 14 to 22 ms. One thread, 100 `decisions` calls on the idle hub: median 2.7 ms. Each client pauses 0.25 s between calls and starts 20 ms after the previous one; with no pause the slowest call was 1.2 to 2.0 s.
+- **Restore of the live store.** `uv run python scripts/update_live.py restore` puts the newest backup's store and config back and reinstalls the commit recorded in it. The backup directory is `~/.local/state/amoeba/backups/<stamp>/`. The script runs as the release skill's last step, not when a slice merges, and now also checks that `owners` holds one row and `machines` holds only `local`. A test runs `update` and `restore` against a copy of a schema-10 store.
+- **Added by the review:** `wire/address.py` (the one `host:port` parser, used by the join line, the client file, `join --address`, `hub.yaml` and the connection), `wire/atomic_file.py` (the one write-through-rename, used for the client file, the pinned certificate and the hub's certificate and key), `cli/output.py` (the shared text-or-JSON print), `config.home.layout_under` (builds a `StateLayout` from a state home and a config home; `state_layout()` uses it, and tests build theirs with it). The store layer raises `StoreRelocateError`, not `JoinError`, for a set-aside store beside a store `join` did not make. `leave` refuses a hub's home. `replaced-` directories and displaced stores rotate (D14, D4). The client call id and version are validated (D6). `HUB_LOCK_WAITS_PER_CALL` and the owner-name constant were dead and are gone. The image installs with `uv sync --locked`, and the compose example no longer builds. Cleanup-only `except BaseException` blocks became `finally` blocks.
+- **Added by the second review:** `split_address` returns the bare host of a bracketed IPv6 address (`[::1]:8443` gives `::1`), which sockets need. `join --set-aside-local` changes nothing local until the hub and the fingerprint have been checked (D4, steps 1 and 2). The hub's missing `config.yaml` message names the contract, not `amoeba init`, which fails in a hub home (`load_user_config(path, kind=...)`). `open_hub_store` moved to `hub/store_open.py`, so the hub no longer reaches `client` through `operations`; `tests/test_import_boundaries.py` checks the whole import chain, and `tests/test_store_opened_only_by_state_move.py` allows the two openers. Which served operation reads `config.yaml` is `ServedOperation.needs_config` in the registry, not a constant in `hub`. A first start beside a stale write-ahead log needs no code: SQLite deletes a log beside a zero-byte database when it opens one, and `test_start.py` pins that. The review's `CLI_ONLY_COMMANDS` comment and an unused lock in the load test were fixed.
+- **Modules added beyond Component Structure:** `hub/start.py` (steps 2 to 8 of the start), `hub/restore.py` (`--from-backup`), `hub/errors.py` (`HubStartError`), `hub/call_refusals.py` (`CallReply`, `Refuser`), `operations/errors.py` (`OPERATION_ERRORS`), `operations/cf_readers.py` (the `cf`-backed readers for `decisions` and `standing`), `client/errors.py` (the four client errors), `store/set_aside.py` (the set-aside code, so `relocate.py` stays under its size), `store/sql_scope.py` and `store/sql_call_results.py`. `wiring_standing.py` was deleted: `run_served` replaced its one function.
+- **Design text changed under the small-conflict rule:** `Transaction.acting(table)` takes the table name (for the error message); `act_as_local` reads first and writes only when `local` is missing; `StateLayout` gained six fields (`client_file`, `hub_file`, `pinned_cert`, `hub_cert`, `hub_key`, `hub_log`); the closed-mark error always names both `amoeba leave` and the same `amoeba join`; `touch_machine` leaves the stored client version when a call sent none; `run_served` dispatches through the dict `SERVED` (each entry holds the runner and the result type `result_from_document` reads back, so a new operation is one entry, not two tables); `prepare_start` takes a `start_log` function (step 6) from its caller; `backup_loop` also survives `HubStoreMissingError` (a store file that went missing under a serving hub), which the criterion on a removed store needs; a restore that finds `replaced-<stamp>` already there takes `replaced-<stamp>-2`; backup directory names carry microseconds; `timed_backup_due` treats a `backup_dir` that does not exist yet as holding none; `wiring_door.local_served_edges(deps, load_config)` takes the `Deps` `wiring` already builds; `join`'s `hello` carries the placeholder machine name `<machine>` until the hub names the machine.
+- **Container** (task 16.2, run by hand on 20261122 with the real `docker/compose.example.yaml` mounts under `~/amoeba-hub/`, removed afterwards). The first build failed: hatchling reads the `LICENSE` file `pyproject.toml` names while generating metadata, and the Dockerfile's build stage did not copy it (`OSError: License file does not exist: LICENSE`). The build stage now copies `LICENSE`, and `tests/test_container_files.py` checks that it copies every file `pyproject.toml` names. After that: the build succeeded; `docker compose up -d` printed `amoeba hub: serving on 0.0.0.0:8443`; `docker exec ... amoeba hub invite alpha` printed a join line; `amoeba join` in a throwaway home printed `joined the hub at 127.0.0.1:8443 as alpha`; `amoeba standing --text "..." -j` answered `given` (standing answer 1). `docker exec ... amoeba hub backup` printed `/backups/timed/<stamp>`. After `docker compose stop` and emptying the state mount, `docker compose run --rm --service-ports hub --from-backup /backups/timed/<stamp>` printed the serving line; after stopping it and `docker compose up -d`, the same `standing` call from the same home answered `unchanged` (answer 1), with no new join. A restore tried first with the state mount not yet empty was refused (`HubStartError: ... already holds a working hub`), as D5 says. The container, network and `~/amoeba-hub` were removed.
 
 ## Operator Walkthrough
 

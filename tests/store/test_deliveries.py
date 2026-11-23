@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.store.deliveries import (
     NONE_ASSIGNED,
@@ -28,7 +29,7 @@ from store.message_support import (
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
             seed_members(transaction, SENDER, ADDRESSEE, THIRD)
             send_request(transaction, "first")

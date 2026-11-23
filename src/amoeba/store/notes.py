@@ -75,6 +75,7 @@ def insert_note(
             note.body,
             stamp,
             stamp,
+            transaction.acting("messages").owner_id,
         ),
     )
     for recipient in recipient_ids:

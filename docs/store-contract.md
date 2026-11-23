@@ -70,7 +70,7 @@ file, pid file or read-only mode, and a missing store is created.
 ## Migrations
 
 - Numbered files in `src/amoeba/store/schema/` (`001_baseline.sql`, `002_pause_handling.sql`,
-  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`, `009_wakes.sql`, `010_standing_answers.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (10).
+  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`, `009_wakes.sql`, `010_standing_answers.sql`, `011_hub_and_door.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (11).
 - Opening applies the missing files in order inside one write transaction and stamps
   `schema_meta.version`. A store stamped higher than the code expects is refused
   (`StoreSchemaError`) and left untouched.
@@ -350,6 +350,74 @@ The reach `CHECK`s tie `program_id` and `member_id` to the reach, and `withdrawn
 `withdraw_reason` are both null or both set. No index: the table grows only with the
 PM's rulings.
 
+### `owners` (migration `011`, slice 260)
+
+The owner of every record. The migration inserts exactly one row, named `pm`; nothing
+else writes this table, and `the_owner` fails unless it holds exactly one row.
+
+| Column | Meaning |
+|---|---|
+| `owner_id` | Key; `AUTOINCREMENT`. |
+| `name` | Unique. `pm` for the one row. |
+| `created_at` | UTC time the row was made (the migration's time). |
+
+### `machines` (migration `011`)
+
+One row per machine that acts on the store: `local` for a store opened on a laptop, and
+one per machine invited with `amoeba hub invite` on a hub. The migration makes none.
+
+| Column | Meaning |
+|---|---|
+| `machine_id` | Key; `AUTOINCREMENT`, so a later rename touches one row. |
+| `name` | Unique; `[a-z0-9][a-z0-9._-]*`, at most 64 characters. |
+| `owner_id` | The owner; not null; references `owners`. |
+| `token_hash` | SHA-256 of the machine's token, hex; unique; null for a machine with no token (`local`). The token itself is never stored. |
+| `created_at` | UTC time the machine was made. |
+| `last_called_at` | UTC time of its last call to the hub; null until one. |
+| `client_version` | The package version its last call reported; null until one. |
+
+### `call_results` (migration `011`)
+
+The kept result of a writing call, so a call repeated with the same id applies once.
+Written in the same transaction as the operation, and deleted by the next call once
+older than `CALL_RESULT_LIFETIME_SECONDS`, or with its machine by `rm-machine`.
+
+| Column | Meaning |
+|---|---|
+| `machine_id` | The calling machine; references `machines`. Part of the key. |
+| `call_id` | The client's call id. Part of the key, so another machine's same id is a different row. |
+| `operation` | The served operation's name. |
+| `request_hash` | SHA-256 of the request body, hex; a repeat with another body is refused as `call_id_reused`. |
+| `reply` | The reply body, as sent. |
+| `recorded_at` | UTC time kept; the index `(recorded_at)` serves the expiry delete. |
+
+### `closed_mark` (migration `011`)
+
+At most one row (a `CHECK` on `mark_key`), empty in a store in use. When a row is
+there, every write transaction rolls back and raises `LocalStoreClosedError` naming the
+hub. Written by `join --set-aside-local`, cleared by `leave`.
+
+| Column | Meaning |
+|---|---|
+| `mark_key` | Always 1. |
+| `hub_address` | The hub's `host:port` the store went to. |
+| `closed_at` | UTC time the mark was written. |
+
+### `owner_id` and `sessions.machine_id` (migration `011`)
+
+`owner_id` is on the twelve tables that hold records: `programs`, `members`,
+`dependency_pairs`, `releases`, `questions`, `answers`, `standing_answers`, `messages`,
+`deliveries`, `message_rejections`, `sessions` and `wakes`. It references `owners` and is
+set to the one owner on every row that existed. A column cannot be added `NOT NULL`
+without a default, and a default owner would be a silent fallback, so each table has a
+`BEFORE INSERT` trigger (`<table>_owner_required`) that aborts when `owner_id` is null.
+Every insert binds it from the store's acting machine. A store with no acting machine
+fails its first insert with `NoActingMachineError`.
+
+`sessions.machine_id` references `machines`, with the same kind of trigger
+(`sessions_machine_required`). Rows written before the migration keep a null machine;
+the heartbeat prune removes them.
+
 ### `pm_marker` (moved by slice 224)
 
 | Column | Meaning |
@@ -377,6 +445,8 @@ places and its reason is stated.
 - **rulings**: the rulings the PM gave ahead of time and whether each still holds. Amoeba is the only place they exist. Columns: `standing_answers.given_at`, `standing_answers.id`, `standing_answers.member_id`, `standing_answers.program_id`, `standing_answers.reach`, `standing_answers.text`, `standing_answers.withdraw_reason`, `standing_answers.withdrawn_at`.
 
 - **marker**: how far the PM has read the decisions. Columns: `pm_marker.id`, `pm_marker.last_seen_seq`.
+
+- **ownership**: who owns each record and which machine wrote it, the machines that may call the hub, and the kept results and closed mark of the door (slice 260). Amoeba is the only place this exists. Columns: `answers.owner_id`, `call_results.call_id`, `call_results.machine_id`, `call_results.operation`, `call_results.recorded_at`, `call_results.reply`, `call_results.request_hash`, `closed_mark.closed_at`, `closed_mark.hub_address`, `closed_mark.mark_key`, `deliveries.owner_id`, `dependency_pairs.owner_id`, `machines.client_version`, `machines.created_at`, `machines.last_called_at`, `machines.machine_id`, `machines.name`, `machines.owner_id`, `machines.token_hash`, `members.owner_id`, `message_rejections.owner_id`, `messages.owner_id`, `owners.created_at`, `owners.name`, `owners.owner_id`, `programs.owner_id`, `questions.owner_id`, `releases.owner_id`, `sessions.machine_id`, `sessions.owner_id`, `standing_answers.owner_id`, `wakes.owner_id`.
 
 - **presence**: which `amoeba-mcp` processes are serving now, as their own heartbeats say. Nothing else knows this, and a row that stops beating stops counting. Columns: `sessions.client`, `sessions.directory`, `sessions.heartbeat_at`, `sessions.member_id`, `sessions.push_confirmed_at`, `sessions.session_id`, `sessions.started_at`.
 
@@ -528,6 +598,31 @@ note write fails the report rolls back with it.
 Text from other repos is data: `subject`, `body`, `result` and `reason` are written by
 other repos' agents and stored as given, with the limits of the CLI contract. Amoeba
 never acts on a request's text.
+
+## Machines, owners and who writes them (slice 260)
+
+One owner, `pm`, is inserted by migration 011 and is the owner of every record. A
+laptop's store has one machine, `local`, made by the local opener on its first open
+(`open_state_store`, never by a migration, so a hub's store gets none). A hub's store
+has one machine per `amoeba hub invite`, made or re-tokened in one transaction; the
+hub opens its store with `open_hub_store`, which creates no machine and sets no acting
+machine, and `handle_call` sets the calling machine for the one call.
+
+| Writer | Writes |
+|---|---|
+| `open_state_store` | the machine `local` (once) |
+| `amoeba hub invite` | a `machines` row, or a new `token_hash` on an existing one |
+| every hub call | `machines.last_called_at` and `client_version` (the touch, committed even when the call is refused); for a writing call, a `call_results` row in the same transaction as the operation |
+| the next call scope | deletes `call_results` rows older than `CALL_RESULT_LIFETIME_SECONDS` |
+| `amoeba hub rm-machine` | deletes the machine's `sessions` and `call_results` rows and the machine |
+| `amoeba join --set-aside-local` | the `closed_mark` row, on a plain connection, then the store is copied aside and the original deleted |
+| `amoeba leave` | deletes the `closed_mark` row of the set-aside store, which is renamed back |
+
+How each ends with nobody editing a file: a kept result is deleted by the next call
+after its lifetime; a machine ends with `rm-machine` (and a token with a re-invite); the
+closed mark ends with `leave`, or with the same `join` run again. Every write transaction
+reads the mark first, so a store that is set aside takes no more writes
+(`LocalStoreClosedError`).
 
 ## Sessions and who writes them (slice 241)
 

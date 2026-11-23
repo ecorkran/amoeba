@@ -20,6 +20,7 @@ from operations.release_support import SettableClock, release_deps
 from operations.status_support import FakeCf
 from rule_blocks import real_rule_blocks
 from store.seed import insert_member, insert_pair, insert_program
+from store_open import open_local_store
 
 from amoeba.operations.changes import changes
 from amoeba.operations.changes_models import ChangesResult
@@ -70,7 +71,7 @@ def flow_rig(
     clock = SettableClock(day(1))
     names = {PROVIDER_ID: "provider", CONSUMER_ID: "consumer"}
     deps = release_deps(tmp_path, clock, cf=cf, names=names)
-    with Store.open(tmp_path / "amoeba.sqlite3") as store:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
         _seed(store, consumed)
         yield FlowRig(store, deps, clock, provider_repo, consumer_repo)
 

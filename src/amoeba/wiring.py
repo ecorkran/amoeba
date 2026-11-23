@@ -18,41 +18,49 @@ from functools import partial
 from pathlib import Path
 from typing import Final, assert_never
 
+from amoeba.client.errors import (
+    ClientFileError,
+    HubCertificateError,
+    HubRefusedError,
+    HubUnreachableError,
+)
 from amoeba.config.home import (
-    AmoebaHomeError,
     StateLayout,
     config_path,
     squadron_runs_dir,
     state_layout,
 )
-from amoeba.config.user_config import ConfigError, UserConfig, load_user_config
+from amoeba.config.user_config import UserConfig, load_user_config
 from amoeba.operations.answer import answer
 from amoeba.operations.answering_run import STDERR_LOG_SUFFIX, STDOUT_LOG_SUFFIX
-from amoeba.operations.decisions import decisions
 from amoeba.operations.deps import Deps, production_deps
-from amoeba.operations.dismiss import dismiss
-from amoeba.operations.mark_read import mark_read
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import OPERATION_ERRORS
 from amoeba.operations.names import Door, OperationName
 from amoeba.operations.processes import start_child
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
 from amoeba.operations.resume import LOG_STAMP_FORMAT, resume_bound_seconds
-from amoeba.operations.retract import retract
+from amoeba.operations.served import run_served
 from amoeba.operations.state_move import open_state_store, prepare_state_home
 from amoeba.operations.status import status
-from amoeba.store.errors import StoreError
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
-from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
+from amoeba.wire.join_line import JoinError
+from amoeba.wiring_door import (
+    NotServedError,
+    joined,
+    local_served_edges,
+    refuse_if_joined,
+    route,
+)
 from amoeba.wiring_messages import place_message
 from amoeba.wiring_registry import place_add, place_list, place_rm
 from amoeba.wiring_release import start_after
 from amoeba.wiring_releases import place_release
 from amoeba.wiring_results import OperationResult, is_rejected, result_document
-from amoeba.wiring_standing import place_standing
 
 __all__ = [
+    "NotServedError",
     "OPERATIONAL_ERRORS",
     "DeadlineError",
     "Door",
@@ -68,10 +76,12 @@ __all__ = [
     "default_deps",
     "detached_logs",
     "invoke",
+    "joined",
     "is_rejected",
     "load_config",
     "open_store",
     "prepare_home",
+    "refuse_if_joined",
     "result_document",
     "start_child",
 ]
@@ -82,11 +92,13 @@ OperationDeps = Deps
 #: The failures a door reports as ``<ExceptionName>: <message>`` and an exit-3 or
 #: ``isError`` answer: config, home, Context Forge, Squadron and store failures.
 OPERATIONAL_ERRORS: Final = (
-    AmoebaHomeError,
-    ConfigError,
-    ContextForgeError,
-    SquadronError,
-    StoreError,
+    *OPERATION_ERRORS,
+    JoinError,
+    ClientFileError,
+    HubUnreachableError,
+    HubCertificateError,
+    HubRefusedError,
+    NotServedError,
 )
 
 
@@ -164,6 +176,9 @@ def invoke(
             directory-taking operation got none.
         OPERATIONAL_ERRORS: As the operation raises them.
     """
+    served = route(name, document)
+    if served is not None:
+        return served
     layout = state_layout()
     with open_store(layout) as store:
         try:
@@ -220,14 +235,20 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
                 directory=_required_directory(name, directory),
                 deps=default_deps(layout),
             )
-        case OperationName.DECISIONS:
-            return decisions(store, document, deps=default_deps(layout))
-        case OperationName.MARK_READ:
-            return mark_read(store, document)
-        case OperationName.DISMISS:
-            return dismiss(store, document, clock=default_deps(layout).clock)
-        case OperationName.RETRACT:
-            return retract(store, document, clock=default_deps(layout).clock)
+        case (
+            OperationName.DECISIONS
+            | OperationName.MARK_READ
+            | OperationName.DISMISS
+            | OperationName.RETRACT
+            | OperationName.STANDING
+            | OperationName.WITHDRAW
+        ):
+            return run_served(
+                name,
+                store,
+                document,
+                local_served_edges(default_deps(layout), load_config),
+            )
         case OperationName.REPORT_RELEASE | OperationName.CHANGES:
             return place_release(
                 name,
@@ -250,10 +271,6 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
                 document,
                 _required_directory(name, directory),
                 default_deps(layout),
-            )
-        case OperationName.STANDING | OperationName.WITHDRAW:
-            return place_standing(
-                name, store, load_config, document, default_deps(layout)
             )
         case OperationName.HANDLE_PAUSE:
             raise ValueError(

@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: Installing and registering amoeba-mcp, the MCP server that gives an agent session the amoeba commands, and what its tools, timeouts and start-up checks do.
 dateCreated: 20261112
-dateUpdated: 20261117
+dateUpdated: 20261122
 status: complete
 ---
 
@@ -332,7 +332,25 @@ one stderr line (which the client shows) if:
 - `config.yaml` is missing or invalid (`ConfigError`), including a missing
   `notify_poll_seconds`, `session_heartbeat_seconds` or `session_stale_seconds`;
 - `resume_wait_seconds` is too large for the deadline: the message names the key and
-  the largest value that passes.
+  the largest value that passes;
+- this machine is joined to a hub (slice 260; a `client.yaml` is in the config home):
+  `NotServedError`, before the state move and the config load, so nothing local is
+  read or written. `amoeba-mcp` does not start on a joined machine until the door
+  serves it.
 
 The only state the server writes is its session row ("Push and presence"), deleted
 when it ends. It ends when the client closes its end.
+
+## On a joined machine (slice 260)
+
+A machine joined to a hub (`amoeba join`) has no local store. `amoeba-mcp` does not
+start there (see "Start-up"). A server that was already running when the machine
+joined keeps serving its tools, and each tool call goes through `wiring.invoke` like
+the CLI's: the six operations the door serves (`decisions`, `mark_read`, `dismiss`,
+`retract`, `standing`, `withdraw`) go to the hub, and any other tool returns an error
+result naming `NotServedError`. The `answer` deadline check, which reads the local
+config, runs only when the machine is not joined. Presence and push stop with a log
+line (the heartbeat's and the inbox watcher's next store read raises
+`LocalStoreClosedError`, handled where store errors already are); no store file is
+opened or created. Push stopping without a message to the agent is acceptable while only
+fixtures join: a later slice makes the tick a hub call.

@@ -12,15 +12,20 @@ from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from types import TracebackType
-from typing import Final, Self
+from typing import TYPE_CHECKING, Final, Self
 
-from amoeba.store import sql
+from amoeba.store import sql, sql_machines, sql_scope
 from amoeba.store.errors import (
+    LocalStoreClosedError,
+    NoActingMachineError,
     StoreError,
     StorePermissionError,
     store_error_for,
 )
 from amoeba.store.migrations import migrate
+
+if TYPE_CHECKING:
+    from amoeba.store.machines import ActingMachine
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +42,25 @@ class Transaction:
         *,
         path: Path,
         busy_timeout_seconds: float,
+        acting_machine: ActingMachine | None = None,
     ) -> None:
         self._connection = connection
         self._path = path
         self._busy_timeout_seconds = busy_timeout_seconds
+        self._acting_machine = acting_machine
+
+    def acting(self, table: str) -> ActingMachine:
+        """The store's acting machine, for an insert into ``table``.
+
+        Raises:
+            NoActingMachineError: No acting machine is set; there is no default.
+        """
+        if self._acting_machine is None:
+            raise NoActingMachineError(
+                f"the store at {self._path} has no acting machine set, so the "
+                f"insert into {table} cannot say whose it is"
+            )
+        return self._acting_machine
 
     def execute(
         self, statement: str, parameters: Sequence[object] = ()
@@ -70,6 +90,12 @@ class Store:
         self._connection = connection
         self.path = path
         self._busy_timeout_seconds = busy_timeout_seconds
+        self._acting_machine: ActingMachine | None = None
+        self._in_call_scope = False
+
+    def act_as(self, machine: ActingMachine) -> None:
+        """Make ``machine`` the owner and machine of every record this store inserts."""
+        self._acting_machine = machine
 
     @classmethod
     def open(
@@ -118,32 +144,103 @@ class Store:
     @contextmanager
     def write(self) -> Generator[Transaction, None, None]:
         """A write transaction holding the lock from its start; commits on exit,
-        rolls back if the block raises."""
-        with self._transaction(sql.BEGIN_IMMEDIATE) as transaction:
+        rolls back if the block raises. Inside :meth:`call_scope` it is a savepoint.
+
+        Raises:
+            LocalStoreClosedError: The store was set aside for a hub (D4).
+        """
+        if self._in_call_scope:
+            with self._savepoint() as transaction:
+                yield transaction
+            return
+        with self._transaction(sql.BEGIN_IMMEDIATE, check_closed=True) as transaction:
             yield transaction
 
     @contextmanager
     def read(self) -> Generator[Transaction, None, None]:
-        """A read transaction: one consistent view; commits on exit."""
-        with self._transaction(sql.BEGIN_DEFERRED) as transaction:
+        """A read transaction: one consistent view; commits on exit. Inside
+        :meth:`call_scope` it is a savepoint."""
+        if self._in_call_scope:
+            with self._savepoint() as transaction:
+                yield transaction
+            return
+        with self._transaction(sql.BEGIN_DEFERRED, check_closed=False) as transaction:
             yield transaction
 
     @contextmanager
-    def _transaction(self, begin: str) -> Generator[Transaction, None, None]:
-        transaction = Transaction(
+    def call_scope(self) -> Generator[Transaction, None, None]:
+        """One write transaction for a whole hub call (D8).
+
+        Commits on a normal exit and rolls back on an exception. Inside it,
+        ``write()`` and ``read()`` are savepoints: released on a normal exit, rolled
+        back to on an exception (which propagates), so an operation that raises
+        inside its own block undoes only itself.
+
+        Raises:
+            RuntimeError: Already inside a call scope (a programming error).
+            LocalStoreClosedError: The store was set aside for a hub (D4).
+        """
+        if self._in_call_scope:
+            raise RuntimeError("call_scope cannot be entered inside a call scope")
+        with self._transaction(sql.BEGIN_IMMEDIATE, check_closed=True) as transaction:
+            self._in_call_scope = True
+            try:
+                yield transaction
+            finally:
+                self._in_call_scope = False
+
+    def _new_transaction(self) -> Transaction:
+        return Transaction(
             self._connection,
             path=self.path,
             busy_timeout_seconds=self._busy_timeout_seconds,
+            acting_machine=self._acting_machine,
         )
-        transaction.execute(begin)
+
+    @contextmanager
+    def _savepoint(self) -> Generator[Transaction, None, None]:
+        transaction = self._new_transaction()
+        transaction.execute(sql_scope.SAVEPOINT)
+        completed = False
         try:
             yield transaction
+            completed = True
+        finally:
+            if not completed:
+                # Undo only this block's statements, keep the enclosing scope open;
+                # the failure propagates.
+                self._connection.execute(sql_scope.ROLLBACK_TO_SAVEPOINT)
+                self._connection.execute(sql_scope.RELEASE_SAVEPOINT)
+        transaction.execute(sql_scope.RELEASE_SAVEPOINT)
+
+    @contextmanager
+    def _transaction(
+        self, begin: str, *, check_closed: bool
+    ) -> Generator[Transaction, None, None]:
+        transaction = self._new_transaction()
+        transaction.execute(begin)
+        committed = False
+        try:
+            if check_closed:
+                self._refuse_if_closed(transaction)
+            yield transaction
             transaction.execute(sql.COMMIT)
-        except BaseException:
-            # Roll back on any failure, then let it propagate.
-            if self._connection.in_transaction:
+            committed = True
+        finally:
+            # Roll back on any failure; the failure propagates.
+            if not committed and self._connection.in_transaction:
                 self._connection.execute(sql.ROLLBACK)
-            raise
+
+    def _refuse_if_closed(self, transaction: Transaction) -> None:
+        """Raise when the store holds the closed mark (D4); the caller rolls back."""
+        mark = transaction.execute(sql_machines.SELECT_CLOSED_MARK).fetchone()
+        if mark is None:
+            return
+        raise LocalStoreClosedError(
+            f"the local store at {self.path} was set aside for the hub at "
+            f"{mark[0]}, so it takes no more writes. Run `amoeba leave` to put it "
+            "back, or run the same `amoeba join` again if the join stopped"
+        )
 
     def close(self) -> None:
         self._connection.close()

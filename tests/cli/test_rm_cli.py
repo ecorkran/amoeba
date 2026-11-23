@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 from store.question_support import NOW, claimed_question
+from store_open import open_local_store
 
 from amoeba.cli.exit_codes import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE
 from amoeba.cli.main import main
 from amoeba.config.home import store_path
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
-from amoeba.store.store import Store
 from cli.cli_support import (
     PROJECT_ID,
     PROJECT_NAME,
@@ -91,7 +91,7 @@ def test_open_questions_refuse_and_print_the_commands_that_clear_them(
     tmp_path: Path,
 ) -> None:
     _registered(tmp_path)
-    with Store.open(store_path()) as store, store.write() as transaction:
+    with open_local_store(store_path()) as store, store.write() as transaction:
         insert_question(
             transaction, claimed_question(KEY, member_id=PROJECT_ID), now=NOW
         )

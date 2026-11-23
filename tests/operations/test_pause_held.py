@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from store_open import open_local_store
 
 from amoeba.answering.values import DeclineReason
 from amoeba.operations import pause_held
@@ -208,8 +209,9 @@ def _seed_note(store: Store, note_id: str) -> None:
     with store.write() as transaction:
         transaction.execute(
             "INSERT INTO messages (message_id, kind, from_member, to_member, depth, "
-            "subject, body, created_at, state_changed_at) "
-            "VALUES (?, 'note', ?, ?, 1, 's', 'b', ?, ?)",
+            "subject, body, created_at, state_changed_at, owner_id) "
+            "VALUES (?, 'note', ?, ?, 1, 's', 'b', ?, ?, "
+            "(SELECT owner_id FROM owners))",
             (note_id, PROJECT_ID, ADDRESSEE, START.isoformat(), START.isoformat()),
         )
 
@@ -292,7 +294,7 @@ def test_two_calls_racing_on_a_done_request_claim_once(tmp_path: Path) -> None:
 
         def call() -> None:
             try:
-                with Store.open(tmp_path / "amoeba.sqlite3") as own:
+                with open_local_store(tmp_path / "amoeba.sqlite3") as own:
                     results.append(
                         handle_pause(
                             own, w.config, RUN, directory=w.directory, deps=deps

@@ -12,6 +12,7 @@ import pytest
 from process_containment import contained_popen
 from store.decision_support import CORE, LINT, seed_programs
 from store.wake_support import COMMAND, claim
+from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.cli.render.waiting import NOTHING_NEEDS_YOU, render_waiting
@@ -38,7 +39,7 @@ PID = 4242
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
-    with Store.open(tmp_path / "amoeba.sqlite3") as opened:
+    with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_programs(opened)
         _set_command(opened, COMMAND)
         yield opened
