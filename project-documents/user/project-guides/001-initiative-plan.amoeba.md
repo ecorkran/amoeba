@@ -19,8 +19,8 @@ Reordered 20261121 by the PM: every initiative is judged by whether it reduces t
 Reordered again 20261122 by the PM, replacing the order and the no-kit decision of 20261121:
 
 - **The hub goes first.** What the PM needs from Amoeba is one coherent place: he, the session agents in every repo, and one persistent agent that can see what is going on. The hub is the plumbing of that place.
-- **The agent parts come from `agent-kit`,** which the PM created as its own project on 20261122 (`repos/manta/agent-kit`; its concept is `notes/007-agent-kit-concept.amoeba.md`). Amoeba builds no loop, timer, scheduler, runner, cost cap or memory curation.
-- **The stand-in is built on the kit, after the hub,** once the kit's substrate runs. Standing in for the PM is one function of Amoeba's persistent agent, not the whole of it.
+- **The agent parts come from `agent-kit`,** which the PM created as its own project on 20261122 (`repos/manta/agent-kit`; its own concept governs, and `notes/007-agent-kit-concept.amoeba.md` is only the hand-off). Amoeba builds no loop, timer, scheduler, runner, cost cap or memory curation.
+- **The stand-in is built on the kit, after the hub,** once the kit has a general substrate. The kit's first build is one simplified review agent that uses Squadron as a library; the general substrate comes out of that afterwards, so this is more than one kit build away. Standing in for the PM is one function of Amoeba's persistent agent, not the whole of it.
 - **Why:** the stand-in's first piece, the turn-end hook, ran for two days. Alone, it cut needless questions. It also issued orders the PM never gave (`#46`, fixed in 0.2.5), and a second hook added beside it (answer-first) made the pair loop and was removed. A model writing decisions in the PM's name is the weak part, and it is not built further until it runs on the kit, bounded and measured.
 
 ## Index Convention
@@ -82,7 +82,7 @@ Initiatives 100 to 240 are built. They are not redone. Each new initiative says 
 
 - **Claude Code**, checked 20261121 against 2.1.325 and its hooks documentation: a `Stop` hook receives the agent's final text as `last_assistant_message`, blocks the stop with `{"decision": "block", "reason": ...}`, re-fires with `stop_hook_active` true, is overridden after eight blocks in a row, and does not fire on a user interrupt. `SubagentStop` is a separate event. Hooks do not run under `claude -p --bare`.
 - **Squadron.** A pipeline step on a Claude model runs through the Agent SDK and loads the repo's settings, not the PM's user settings, unless `pipeline.user_settings` is on. So a turn-end hook reaches pipeline runs only through the repo's settings or that key. A run on any other provider has no hooks; for those, the entry points are the pause and the finished run. `ecorkran/squadron#382` (reviews that read the whole document) was closed 20261121, so designs are reviewed through Squadron again.
-- **agent-kit**, created 20261122 and not yet built: the PM's own project for long-running agents. 320 needs its substrate (a definition file that becomes a bounded, remembering agent). 260 needs nothing from it.
+- **agent-kit**, created 20261122 and not yet built: the PM's own project for long-running agents. 320 needs its general substrate (a definition file that becomes a bounded, remembering agent), which follows the kit's first build, a single review agent. 260 needs nothing from it.
 - **Codex**, read 20261120: runs without a window and resumes a session. No turn, time or cost cap was found, so the runner enforces all three.
 
 ## Sequencing

@@ -7,10 +7,17 @@ description: Hand-off concept for a standalone kit for long-running agents, sepa
 dependsOn: [notes/006-long-running-agents.amoeba.md]
 dateCreated: 20261120
 dateUpdated: 20261122
-status: in-progress
+status: complete
 ---
 
 # Agent kit: hand-off concept
+
+> **Superseded 20261122.** This is the hand-off as it left Amoeba. The project now has its own concept, `project-documents/user/project-guides/000-concept.agent-kit.md` in the `agent-kit` repo, and that document governs. The PM changed two things there the same day:
+>
+> - **Squadron is used as a library.** The "never depends on Squadron" decision below no longer holds: the first agent needs Squadron for its own review, so Squadron is already required.
+> - **The first build is a simplified review agent,** not the general substrate. The general kit is expected to come out of it afterwards.
+>
+> Read the rest as background only.
 
 The project is `agent-kit`, in its own repo beside the PM's others at `repos/manta/agent-kit` (named and created 20261122, registered with Context Forge).
 

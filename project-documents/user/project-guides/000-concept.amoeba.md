@@ -151,6 +151,7 @@ Standing in for the PM is a role. The room is a place, and the place is what the
 - **What the persistent agent does there.** It settles what the record settles (the stand-in's job), carries messages between agents and repos, tells sessions the standing facts they would otherwise rediscover, reads detail so the PM does not have to, and notices what crosses projects. Later it directs work the PM asked for in the room. Directing work is one function of it. The room is not a hierarchy of a boss and workers.
 - **The PM's seat is a session like any other,** in his editor, opened on the room. The chat is a component he places beside whatever else he is doing. Amoeba builds no dashboard.
 - **Smaller rooms are later work.** The PM will want to talk to some agents and not all, most often every agent in one program. The first version is one room in which a message can be addressed to a member or to a program.
+- **What agents share.** Two repos' agents share information through the room without noise, clutter or bloat. The bar for sending: something the other repo relies on has changed. Anything else is not sent. What a receiving agent keeps, if anything, has no rule yet, and it needs one: the aim is a thing that learns and gets better, and nothing in Amoeba says today what learning is.
 - **The test:** the PM stops having to visit a session to unblock it.
 
 ### Judgment
@@ -292,6 +293,7 @@ The architecture answers these itself.
 6. **What the audit keeps.** Today's code is sorted against this concept into keep, change or delete.
 7. **The PM's seat.** Whether the session the PM sits in is the persistent agent itself, attended, with the same memory and record as its unattended runs, and how a hand-off that arrives while he is typing is shown.
 8. **How an answer given in the room reaches a session that has stopped,** in each runtime, without the PM opening that session.
+9. **What a receiving agent keeps.** A rule for what received information changes on the receiving side, and a measure that shows learning. Two proposals to test, neither decided: keep only by correcting something that already exists (a document, a rule, a memory entry), never by adding to a pile; and count a correction the PM has to give twice as the sign that learning failed.
 
 ### Development approach
 
