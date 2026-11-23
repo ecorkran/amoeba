@@ -63,6 +63,14 @@ class HubStoreMissingError(StoreError):
     """The hub has no store at its store path; only a first start makes one."""
 
 
+class NotAHubHomeError(StoreError):
+    """A hub admin command was run in a home that is not a hub's (no ``hub.yaml``)."""
+
+
+class HubStoreBehindError(StoreError):
+    """The hub's store needs migrating, which only ``amoeba hub serve`` does."""
+
+
 class StoreRowError(StoreError):
     """A stored value is not what its column promises."""
 

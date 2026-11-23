@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -14,9 +16,12 @@ from amoeba.config.user_config import IMAGE_CONTRACT_DOC, ConfigError
 from amoeba.hub.admin import machines
 from amoeba.hub.start import prepare_start
 from amoeba.hub.store_open import open_hub_store
+from amoeba.store import sql
 from amoeba.store.machines import hash_token, machine_for_token
+from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION, read_schema_version
 from amoeba.wire.fingerprint import fingerprint
 from amoeba.wire.join_line import parse_join_line
+from amoeba.wiring import open_store
 from hub.call_support import NOW
 from hub.start_support import complete_state, free_port, tree, write_hub_yaml
 
@@ -195,3 +200,60 @@ def test_a_hub_with_no_config_yaml_is_not_told_to_run_init(tmp_path: Path) -> No
 
     assert "amoeba init" not in str(raised.value)
     assert IMAGE_CONTRACT_DOC in str(raised.value)
+
+
+ADMIN_COMMANDS = [
+    ["hub", "invite", "alpha"],
+    ["hub", "machines"],
+    ["hub", "rm-machine", "local"],
+    ["hub", "backup"],
+]
+
+
+def _schema_version(layout: StateLayout) -> int:
+    with closing(sqlite3.connect(layout.store_path)) as connection:
+        return read_schema_version(connection)
+
+
+def _sessions_and_machines(layout: StateLayout) -> list[tuple[object, ...]]:
+    with closing(sqlite3.connect(layout.store_path)) as connection:
+        return list(connection.execute("SELECT name FROM machines ORDER BY name"))
+
+
+@pytest.mark.parametrize("argv", ADMIN_COMMANDS)
+def test_admin_commands_refuse_a_home_that_is_not_a_hubs_and_leave_its_store_alone(
+    capsys: pytest.CaptureFixture[str], argv: list[str]
+) -> None:
+    """A laptop's own store, with no ``hub.yaml``: nothing of it is opened."""
+    layout = state_layout()
+    with open_store(layout):
+        pass
+    machines_before = _sessions_and_machines(layout)
+    assert machines_before  # the laptop's own machine row is there to lose
+
+    code, _out, err = _run(capsys, *argv)
+
+    assert code == EXIT_ERROR
+    assert "NotAHubHomeError" in err
+    assert _sessions_and_machines(layout) == machines_before
+
+
+@pytest.mark.parametrize("argv", ADMIN_COMMANDS)
+def test_admin_commands_refuse_a_hub_store_that_needs_migrating(
+    hub_home: StateLayout, capsys: pytest.CaptureFixture[str], argv: list[str]
+) -> None:
+    """Only ``amoeba hub serve`` migrates, after its backup; an admin command never."""
+    older = EXPECTED_SCHEMA_VERSION - 1
+    with closing(sqlite3.connect(hub_home.store_path)) as connection:
+        connection.execute(
+            "UPDATE schema_meta SET version = ? WHERE id = ?",
+            (older, sql.SCHEMA_META_ROW_ID),
+        )
+        connection.commit()
+
+    code, _out, err = _run(capsys, *argv)
+
+    assert code == EXIT_ERROR
+    assert "HubStoreBehindError" in err
+    assert "amoeba hub serve" in err
+    assert _schema_version(hub_home) == older

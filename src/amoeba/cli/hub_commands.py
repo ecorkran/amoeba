@@ -33,7 +33,7 @@ from amoeba.hub.hub_config import HubConfig
 from amoeba.hub.hub_log import start_hub_log
 from amoeba.hub.serve import BackupCheck, make_server, run
 from amoeba.hub.start import FROM_BACKUP_FLAG, prepare_start
-from amoeba.hub.store_open import open_hub_store
+from amoeba.hub.store_open import open_hub_store, refuse_unless_a_ready_hub
 from amoeba.operations.state_move import refuse_local_store_if_joined
 
 HUB_COMMAND: Final = "hub"
@@ -181,6 +181,8 @@ def run_hub(arguments: argparse.Namespace) -> int:
     layout = state_layout()
     refuse_local_store_if_joined(layout)
     action: str = getattr(arguments, ACTION)
+    if action != SERVE:
+        refuse_unless_a_ready_hub(layout)
     try:
         if action == SERVE:
             return run_serve(layout, arguments.from_backup)

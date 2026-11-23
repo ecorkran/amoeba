@@ -1069,15 +1069,18 @@ nothing. Where nothing is joined and nothing is set aside it does nothing and ex
 
 CLI-only (no MCP tool), run in a **hub home** (the config home holds `hub.yaml`). The
 first line of each refuses on a machine with a client file (`LocalStoreClosedError`),
-before `hub.yaml` is read or any file is written. Each admin command opens the store
-without creating it: before the hub has finished its first start each fails with
-`HubStoreMissingError` (exit 3) and writes no file. A rejected request is exit 1;
+before `hub.yaml` is read or any file is written. Each admin command (every one but
+`serve`) then refuses a home with no `hub.yaml` (`NotAHubHomeError`), so it never
+opens an ordinary machine's own store, and refuses a hub store whose schema is behind
+(`HubStoreBehindError`), because only `serve` migrates, after its backup. Each admin
+command opens the store without creating it: before the hub has finished its first
+start each fails with `HubStoreMissingError` (exit 3) and writes no file. A rejected request is exit 1;
 `HubStartError`, `BackupError`, `HubConfigError` and every operational error are exit 3
 with one stderr line.
 
 | Command | Does | Exit 1 when | `-j` |
 |---|---|---|---|
-| `amoeba hub serve [--from-backup DIR]` | Starts the hub (D14): loads `hub.yaml`, binds the socket, decides the start from what the state directory and `backup_dir` hold, migrates after a pre-migration backup, takes a timed backup if due, serves | — | no |
+| `amoeba hub serve [--from-backup DIR]` (`DIR` may be relative) | Starts the hub (D14): loads `hub.yaml`, binds the socket, decides the start from what the state directory and `backup_dir` hold, migrates after a pre-migration backup, takes a timed backup if due, serves | — | no |
 | `amoeba hub invite MACHINE` | Makes the machine, or gives an existing one a new token (ending the old one), and prints the join line `<address>,<fingerprint>,<token>`; needs `hub.yaml` for the address and the certificate for the fingerprint | the name is not `[a-z0-9][a-z0-9._-]*`, at most 64 characters | `{"machine", "join_line", "new"}` |
 | `amoeba hub machines` | Lists each machine: name, whether it has a token, last call time and client version | — | a list of `{"name", "has_token", "last_called_at", "client_version"}` |
 | `amoeba hub rm-machine MACHINE` | Deletes the machine, its sessions and its kept results in one transaction; its next call is `bad_token` | no such machine | `{"removed"}` |
