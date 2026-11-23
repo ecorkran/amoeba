@@ -459,9 +459,11 @@ Before `add`'s rewrite, so a command is never written to a checkout while the cl
 
 ## 15. The two-machine fixture and cross-machine tests (D15; effort 5)
 
-- [ ] **15.1 `tests/hub_fixture.py` (test infrastructure)**
-  - [ ] Each client home gets its own `cf` stub on its `PATH`, so one repo has a different project id on each machine; a helper clones a repo into each client home with `origin` in the SSH form on one and the HTTPS form on the other. The hub's `PATH` still holds no `cf`, `sq` or `git`
-  - [ ] Success: 260's fixture tests still pass
+- [x] **15.1 `tests/hub_fixture.py` (test infrastructure)**
+  - [x] Each client home gets its own `cf` stub on its `PATH`, so one repo has a different project id on each machine; a helper clones a repo into each client home with `origin` in the SSH form on one and the HTTPS form on the other. The hub's `PATH` still holds no `cf`, `sq` or `git`
+  - [x] Success: 260's fixture tests still pass
+
+  Note: new `tests/hub_clients.py`: `install_client_tools` writes a stub `cf` and a stub `sq` into each client home's `bin`, first on its PATH. The cf stub answers `cf get` from `cf-projects.json` by nearest directory, else Context Forge's own PROJECT_NOT_FOUND recording. The sq stub prints `sq-runs.json`. Also `clone_repo`, `add_worktree`, `set_runs`, `SSH_ORIGIN` and `HTTPS_ORIGIN`. `tests/hub_fixture.py` joins each client with those tools; `ClientHome` gains `clone`, `worktree`, `set_runs` and `run_in(directory, ...)`; `FixtureHub._env` became public `env_for`; the hub's PATH is now the venv `bin` only (`hub_path`), so `cf`, `sq` and `git` are all missing there (before, only cf and sq were). Tests in `tests/hub/test_clients_fixture.py`.
 
 **Commit**: `test: give the two-machine fixture per-machine Context Forge and clones`
 
