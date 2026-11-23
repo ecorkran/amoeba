@@ -31,6 +31,7 @@ ACTIVE_READS = frozenset(
         "SELECT_PAIR",
         "SELECT_MEMBER_BY_NAME",  # 261
         "SELECT_MEMBER_BY_ORIGIN",  # 261
+        "SELECT_ACTIVE_MEMBERS_WITHOUT_CHECKOUT_ON",  # 261: the live update's read-back
     }
 )
 #: Statements that name ``members`` and are not active-only reads.

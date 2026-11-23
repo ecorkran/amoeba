@@ -154,6 +154,14 @@ SELECT_UNNAMED_MEMBERS: Final = (
     "SELECT project_id, removed_at IS NOT NULL, wake_command FROM members "
     "WHERE name IS NULL ORDER BY registered_at, project_id"
 )
+# Parameter: the machine's name. The active members with no checkout on it: what the
+# live update's read-back compares with the projects `cf` lists (261 D16).
+SELECT_ACTIVE_MEMBERS_WITHOUT_CHECKOUT_ON: Final = (
+    f"SELECT project_id FROM members WHERE {ACTIVE_MEMBER} AND NOT EXISTS ("
+    "SELECT 1 FROM checkouts JOIN machines ON machines.machine_id = "
+    "checkouts.machine_id WHERE checkouts.member_id = members.project_id "
+    "AND machines.name = ?) ORDER BY project_id"
+)
 # Parameter: member id. Naming moved the command to a checkout (or dropped it, logged),
 # so the retired column is always null afterwards (D4).
 CLEAR_MEMBER_WAKE_COMMAND: Final = (
