@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from git_repo import commit_file, head_of, make_repo
+from git_repo import commit_file, git, head_of, make_repo
 
 from amoeba.upstream.git_read import (
     GIT_SUBCOMMANDS,
@@ -20,6 +20,7 @@ from amoeba.upstream.git_read import (
     ls_tree_args,
     parse_tree_directories,
     parse_tree_listing,
+    remote_origin_args,
     resolve_commit_args,
     show_object_args,
 )
@@ -79,8 +80,54 @@ def test_a_timeout_and_a_missing_executable_are_failures_not_exceptions(
 # Slice 143, D2: show and log read objects at a pinned commit.
 
 
-def test_the_allowlist_holds_the_two_read_commands() -> None:
-    assert GIT_SUBCOMMANDS == {"show", "log", "ls-tree"}
+def test_the_allowlist_holds_the_four_read_commands() -> None:
+    assert GIT_SUBCOMMANDS == {"show", "log", "ls-tree", "remote"}
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("remote", "add", "origin", "https://example.com/x"),
+        ("remote", "set-url", "origin", "https://example.com/x"),
+        ("remote", "get-url", "upstream"),
+        ("remote",),
+        ("--no-pager", "remote", "get-url", "origin"),
+    ],
+)
+def test_remote_is_refused_except_as_get_url_origin(
+    args: tuple[str, ...], tmp_path: Path
+) -> None:
+    calls: list[list[str]] = []
+
+    def run(argv: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    with pytest.raises(ValueError, match="remote"):
+        git_read(args, tmp_path, run, TIMEOUT)
+
+    assert calls == []
+
+
+def test_remote_get_url_origin_reads_the_address(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path / "repo")
+    git(repo, "remote", "add", "origin", "git@github.com:org/Repo.git")
+
+    answer = git_read(remote_origin_args(), repo, subprocess.run, TIMEOUT)
+
+    assert isinstance(answer, GitReadResult)
+    assert answer.stdout.strip() == "git@github.com:org/Repo.git"
+
+
+def test_remote_get_url_origin_exits_two_when_there_is_no_remote(
+    tmp_path: Path,
+) -> None:
+    repo = make_repo(tmp_path / "repo")
+
+    answer = git_read(remote_origin_args(), repo, subprocess.run, TIMEOUT)
+
+    assert isinstance(answer, GitReadResult)
+    assert answer.exit_code == 2
 
 
 def test_the_object_read_builders_give_exact_arguments() -> None:

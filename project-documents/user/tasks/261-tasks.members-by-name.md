@@ -112,17 +112,18 @@ revision_number: 4
 
 ## 3. The `origin` rule (D3; effort 2)
 
-- [ ] **3.1 `operations/origin.py` and `git remote get-url origin` through `git_read`**
-  - [ ] `reduce_origin(address) -> str | None`, pure, never raises: accepts `scheme://[user[:password]@]host[:port]/path` and `[user@]host:path`; drops scheme, user and password; keeps a port; lower-cases; removes a trailing slash, then `.git`, then a slash. No host (a path, `file://`) or unreadable text gives `None`
-  - [ ] `is_reduced_origin(value) -> bool`: `host[:port]/path` with a host and a path, lower case, no `://`, no `@` in the host, no trailing slash, no trailing `.git`. Imports only the standard library
-  - [ ] `upstream/git_read.py`: `SUBCOMMAND_REMOTE = "remote"` joins `GIT_SUBCOMMANDS`; `remote_origin_args()` returns the tuple for `remote get-url origin`. For `remote`, `git_read` accepts only that exact tuple and raises `ValueError` otherwise, so no write is reachable
-  - [ ] `tests/upstream/test_git_read.py`: the allowlist pin gains `"remote"`, and the test's title states the new count. `git_read.py`'s module docstring, which says the allowlist is three read commands, names the fourth and that only `remote get-url origin` is accepted
-  - [ ] Success: pyright clean; the `git_read` tests pass
-- [ ] **3.2 Tests**
-  - [ ] `tests/operations/test_origin.py`: D3's two forms of this repo, `git@github.com:ecorkran/amoeba.git` and `https://github.com/ecorkran/Amoeba/`, both reduce to `github.com/ecorkran/amoeba`; a URL with `user:password@` reduces with no password; a port is kept (`https://host:8443/org/repo`); `ssh://git@host/org/repo.git`; a local path, `file:///x/y` and empty text give `None`; every non-`None` output passes `is_reduced_origin`
-  - [ ] `is_reduced_origin` refuses: upper case, `https://...`, `git@host:...`, a trailing slash, a trailing `.git`, no path, no host
-  - [ ] `git_read` with `("remote", "add", ...)` and `("remote", "set-url", ...)` raises `ValueError` and runs nothing
-  - [ ] Success: checks pass
+- [x] **3.1 `operations/origin.py` and `git remote get-url origin` through `git_read`**
+  - [x] `reduce_origin(address) -> str | None`, pure, never raises: accepts `scheme://[user[:password]@]host[:port]/path` and `[user@]host:path`; drops scheme, user and password; keeps a port; lower-cases; removes a trailing slash, then `.git`, then a slash. No host (a path, `file://`) or unreadable text gives `None`
+  - [x] `is_reduced_origin(value) -> bool`: `host[:port]/path` with a host and a path, lower case, no `://`, no `@` in the host, no trailing slash, no trailing `.git`. Imports only the standard library
+  - [x] `upstream/git_read.py`: `SUBCOMMAND_REMOTE = "remote"` joins `GIT_SUBCOMMANDS`; `remote_origin_args()` returns the tuple for `remote get-url origin`. For `remote`, `git_read` accepts only that exact tuple and raises `ValueError` otherwise, so no write is reachable
+  - [x] `tests/upstream/test_git_read.py`: the allowlist pin gains `"remote"`, and the test's title states the new count. `git_read.py`'s module docstring, which says the allowlist is three read commands, names the fourth and that only `remote get-url origin` is accepted
+  - [x] Success: pyright clean; the `git_read` tests pass
+  - Note: reduce_origin returns None for a host that is not host[:port] (for example an IPv6 literal) and for a path with whitespace or a backslash, so every output passes is_reduced_origin; remote_origin_args is in upstream/git_read.py.
+- [x] **3.2 Tests**
+  - [x] `tests/operations/test_origin.py`: D3's two forms of this repo, `git@github.com:ecorkran/amoeba.git` and `https://github.com/ecorkran/Amoeba/`, both reduce to `github.com/ecorkran/amoeba`; a URL with `user:password@` reduces with no password; a port is kept (`https://host:8443/org/repo`); `ssh://git@host/org/repo.git`; a local path, `file:///x/y` and empty text give `None`; every non-`None` output passes `is_reduced_origin`
+  - [x] `is_reduced_origin` refuses: upper case, `https://...`, `git@host:...`, a trailing slash, a trailing `.git`, no path, no host
+  - [x] `git_read` with `("remote", "add", ...)` and `("remote", "set-url", ...)` raises `ValueError` and runs nothing
+  - [x] Success: checks pass
 
 **Commit**: `feat: add the origin rule that decides when two checkouts are one repo`
 
