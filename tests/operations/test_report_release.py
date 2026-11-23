@@ -19,7 +19,7 @@ from store.release_support import (
 from store_open import open_local_store
 
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.report_release import report_release
 from amoeba.operations.report_release_models import (

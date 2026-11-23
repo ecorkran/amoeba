@@ -13,7 +13,7 @@ from cf_fixtures import OUTSIDE_ANY_PROJECT, fake_cf_run
 from store.message_support import count, delivery_rows
 
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.message_models import ReplyOutcome
 from amoeba.operations.message_results import ReplyResult, RequestDirection
 from amoeba.operations.reject_codes import RejectCode

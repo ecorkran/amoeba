@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
 from amoeba.upstream.context_forge.project_of import CFProject, project_of
 

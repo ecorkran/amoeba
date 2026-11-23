@@ -12,6 +12,7 @@ from store.seed import insert_member, insert_pair, insert_program
 from store_open import open_local_store
 from user_configs import user_config
 
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.list_registry import (
     DependenciesView,
     MembersView,
@@ -20,7 +21,6 @@ from amoeba.operations.list_registry import (
     members_view,
     programs_view,
 )
-from amoeba.operations.members import ContextForgeError
 from amoeba.store.programs import remove_member
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import ConsumedMode, RulesFrom

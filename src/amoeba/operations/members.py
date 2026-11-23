@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from amoeba.operations.errors import ContextForgeError
 from amoeba.store.models import Member
 from amoeba.store.programs import get_member
 from amoeba.store.store import Store
@@ -19,10 +20,6 @@ from amoeba.upstream.context_forge.project_of import (
     CFProjectNotFound,
     project_of,
 )
-
-
-class ContextForgeError(Exception):
-    """``cf`` is not working: not a member, and not a non-member either."""
 
 
 @dataclass(frozen=True)

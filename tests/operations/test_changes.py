@@ -28,7 +28,7 @@ from amoeba.operations.changes_models import (
     ChangesWarningCode,
 )
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.report_release import report_release
 from amoeba.store import releases, sql

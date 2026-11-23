@@ -47,6 +47,8 @@ class Deps:
     ``decisions``."""
 
     cf_run: CfRun
+    #: Runs ``git`` for the reads of ``operations.here`` (slice 261, D5).
+    git_run: CfRun
     poll_run: PollRun
     spawn: Spawner
     clock: Callable[[], datetime]
@@ -87,6 +89,7 @@ def production_deps(
     """The real edges: ``subprocess.run``, ``poll_run``, ``start_child``, the clock."""
     return Deps(
         cf_run=subprocess.run,
+        git_run=subprocess.run,
         poll_run=partial(poll_run, timeout_seconds=RUN_POLL_TIMEOUT_SECONDS),
         spawn=start_child,
         clock=_utc_now,

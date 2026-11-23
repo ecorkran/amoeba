@@ -21,8 +21,8 @@ from pydantic import (
 from amoeba.config.user_config import NonBlank, UserConfig
 from amoeba.operations.decisions_models import MemberName
 from amoeba.operations.deps import Deps
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.members import (
-    ContextForgeError,
     NotAProject,
     NotInProgram,
     resolve_member,

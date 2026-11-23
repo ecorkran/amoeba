@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import NoReturn
 
 from cf_plan_run import plan_cf_run
 from fake_sq import FakePoller, fake_poller
@@ -125,6 +126,10 @@ def _unused_list_runs() -> list[ListedRun] | RunListProblem:
     raise AssertionError("this test gave no list_runs reader")
 
 
+def _unused_git_run(*_args: object, **_kwargs: object) -> NoReturn:
+    raise AssertionError("this test gave no git runner")
+
+
 def unused_amoeba_script() -> Path:
     raise AssertionError("this test gave no amoeba script")
 
@@ -156,6 +161,7 @@ def build_deps(
 
     deps = Deps(
         cf_run=plan_cf_run(integration_branch="", broken=False),
+        git_run=_unused_git_run,
         poll_run=poll,
         spawn=spawner or recorder,
         clock=clock,

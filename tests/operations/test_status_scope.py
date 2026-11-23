@@ -11,7 +11,7 @@ from store.question_support import NOW
 from store.seed import insert_program
 from store_open import open_local_store
 
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.status import ScopedProgram, ScopeRejected, resolve_scope
 from amoeba.store.store import Store

@@ -27,7 +27,7 @@ from amoeba.mcp.presence import (
     note_inbox_called,
     resolve_presence,
 )
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.store.errors import StoreBusyError, StoreCorruptError
 from amoeba.store.sessions import prune_stale_sessions
 from amoeba.upstream.context_forge.cli_call import CfRun

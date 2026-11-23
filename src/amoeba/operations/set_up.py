@@ -19,7 +19,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.set_up_checks import check_request
 from amoeba.operations.set_up_interim import ensure_checkout, member_name_for_write
 from amoeba.operations.set_up_models import (

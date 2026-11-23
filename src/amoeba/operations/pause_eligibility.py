@@ -18,6 +18,7 @@ from pathlib import Path
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.add import add
 from amoeba.operations.deps import Deps
+from amoeba.operations.here import git_root
 from amoeba.operations.members import (
     NotAProject,
     NotInProgram,
@@ -125,11 +126,7 @@ def _run_only_skip(pause_class: PauseClass, polled: RunOutcomeDocument) -> Skip:
 def _checkout_of(directory: Path) -> Path:
     """The checkout holding ``directory``: its nearest ancestor with a ``.git`` entry
     (a directory, or the file a linked worktree has), else ``directory`` itself."""
-    resolved = directory.resolve()
-    for candidate in (resolved, *resolved.parents):
-        if (candidate / ".git").exists():
-            return candidate
-    return resolved
+    return git_root(directory) or directory.resolve()
 
 
 def _wrong_checkout(directory: Path, started_in: Path | None) -> Skip | None:

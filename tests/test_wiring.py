@@ -35,9 +35,9 @@ from amoeba.operations.changes_models import (
 )
 from amoeba.operations.decisions import DecisionsResult
 from amoeba.operations.dismiss import DismissResult
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
-from amoeba.operations.members import ContextForgeError
 from amoeba.operations.message_models import (
     CancelOutcome,
     InboxOutcome,

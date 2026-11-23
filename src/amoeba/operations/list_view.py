@@ -21,6 +21,7 @@ from pydantic import ValidationError, field_validator
 from amoeba.answering.values import AnsweredBy
 from amoeba.config.user_config import NonBlank, UserConfig
 from amoeba.operations.deps import Deps
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.list_registry import (
     DependenciesView,
     MembersView,
@@ -31,7 +32,6 @@ from amoeba.operations.list_registry import (
     programs_view,
     standing_view,
 )
-from amoeba.operations.members import ContextForgeError
 from amoeba.operations.reject_codes import (
     RejectCode,
     unknown_program_problem,

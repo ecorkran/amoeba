@@ -14,7 +14,7 @@ from store.message_support import count, delivery_rows
 
 from amoeba.operations.cancel import cancel
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.message_models import MAX_REASON_LENGTH, CancelOutcome
 from amoeba.operations.message_results import CancelResult, RequestDirection
 from amoeba.operations.reject_codes import RejectCode

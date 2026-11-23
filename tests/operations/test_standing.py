@@ -12,7 +12,7 @@ import pytest
 from cf_fixtures import fake_cf_run
 
 from amoeba.operations.cf_readers import cf_member_resolver
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.standing import standing
 from amoeba.operations.standing_models import (
     StandingOutcome,

@@ -17,8 +17,8 @@ from cf_fixtures import (
 )
 from store_open import open_local_store
 
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.members import (
-    ContextForgeError,
     NotAProject,
     NotInProgram,
     resolve_member,

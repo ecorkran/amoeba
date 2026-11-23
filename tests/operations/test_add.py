@@ -12,7 +12,7 @@ from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.add import NOT_A_PROJECT_DETAIL, add
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.names import Door
 from amoeba.operations.set_up_models import (
     SetUpOutcome,

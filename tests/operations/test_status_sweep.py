@@ -18,7 +18,7 @@ from store.question_support import NOW, claimed_question, waiting_question
 from store_open import open_local_store
 from user_configs import user_config
 
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.resume import resume_bound_seconds
 from amoeba.operations.status import StatusResult, status
 from amoeba.store.answers import add_pm_answer, latest_answer

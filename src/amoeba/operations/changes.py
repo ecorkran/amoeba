@@ -21,7 +21,7 @@ from amoeba.operations.changes_models import (
     ProviderPair,
 )
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.release_member import resolve_release_member
 from amoeba.operations.report_release_models import (
     ReleaseProblem,

@@ -16,7 +16,7 @@ from user_configs import user_config
 from amoeba.config.user_config import UserConfig
 from amoeba.operations import send_write
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.message_models import (
     MAX_BODY_LENGTH,
     MAX_ID_LENGTH,

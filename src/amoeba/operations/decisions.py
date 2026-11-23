@@ -31,7 +31,7 @@ from amoeba.operations.decisions_models import (
     PmBasis,
     ResumeRecord,
 )
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import (
     RejectCode,

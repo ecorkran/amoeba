@@ -11,7 +11,7 @@ from cf_fixtures import OUTSIDE_ANY_PROJECT, fake_cf_run
 from store_open import open_local_store
 from user_configs import user_config
 
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.set_up import SetUpProblemCode, SetUpResult, set_up
 from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.store import Store

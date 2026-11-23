@@ -36,7 +36,7 @@ from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.pause_eligibility import Eligible, Skip, check_eligibility
 from amoeba.operations.pause_models import SkipReason
 from amoeba.store.models import QuestionKey

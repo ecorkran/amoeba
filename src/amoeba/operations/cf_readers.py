@@ -11,7 +11,7 @@ from collections.abc import Mapping
 
 from amoeba.operations.decisions import NamesReader
 from amoeba.operations.deps import Deps
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.standing import MemberResolver
 from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
 from amoeba.upstream.context_forge.project_of import CFProjectNotFound, project_of

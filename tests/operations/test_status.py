@@ -12,7 +12,7 @@ from store.question_support import NOW, waiting_question
 from store_open import open_local_store
 from user_configs import user_config
 
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.status import StatusOutcome, StatusResult, status

@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.set_up_models import FrozenModel
 from amoeba.store.models import DependencyPair, Member, Program
 from amoeba.store.programs import list_programs, members_of, pairs_of

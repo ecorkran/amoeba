@@ -11,7 +11,7 @@ from cf_fixtures import DEFAULT_WORKTREE, OUTSIDE_ANY_PROJECT, fake_cf_run
 from store.message_support import NOW, seed_members
 from store_open import open_local_store
 
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.message_member import (
     Caller,
     Recipient,

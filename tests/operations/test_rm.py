@@ -19,7 +19,7 @@ from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.add import add
-from amoeba.operations.members import ContextForgeError
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.names import Door
 from amoeba.operations.rm import rm
 from amoeba.operations.set_up_models import (
