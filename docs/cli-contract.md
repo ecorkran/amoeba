@@ -139,7 +139,7 @@ The MCP `add` tool takes the same fields (`program`, `project`, `rules_paths`,
 never both, plus `directory`; it does not take `wake_command`, in the single fields or
 in a bulk member, and a call that passes it is `rejected` as an unknown field. `add` builds a request for the `set_up` engine and returns
 its result (`SetUpResult`): `outcome` (`applied`, `unchanged` or `rejected`), `changes`
-(one line per changed row, `<added|updated|removed> <program|member|dependency|pair>
+(one line per changed row, `<added|updated|removed> <program|member|dependency|pair|checkout>
 ...`), `change_records` (the same changes as `{verb, subject, detail}`), `problems` (empty unless rejected), `program` (the program as stored, or null)
 and `working_directory` (informational, or null for a malformed request). Exit 1 when
 `rejected`.
@@ -147,8 +147,9 @@ and `working_directory` (informational, or null for a malformed request). Exit 1
 Each problem has a `code`, a `detail` naming the field at fault, and `open_questions` (empty except for `member_has_open_questions`, where it lists each blocking question as `{run_id, paused_at}`). Codes: `malformed`,
 `not_a_project`, `empty_program`, `member_of_other_program`,
 `unknown_provider`, `self_dependency`, `unknown_authorize_item`,
-`concept_member_not_member`, `member_has_open_questions` and `not_a_member`. Any problem
-rejects the whole request and writes nothing. A new member needs no rules: it gets the
+`concept_member_not_member`, `member_has_open_questions`, `not_a_member`, and from slice
+261 `name_taken`, `origin_taken`, `no_origin`, `member_has_checkouts` and `not_a_checkout`.
+Any problem rejects the whole request and writes nothing. A new member needs no rules: it gets the
 default.
 
 ## `amoeba rm`

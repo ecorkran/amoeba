@@ -154,6 +154,8 @@ class ChangeSubject(StrEnum):
     MEMBER = "member"
     DEPENDENCY = "dependency"
     PAIR = "pair"
+    #: A checkout added or removed (261 D7, D8).
+    CHECKOUT = "checkout"
 
 
 class Change(FrozenModel):
@@ -190,6 +192,17 @@ class SetUpProblemCode(StrEnum):
     CONCEPT_MEMBER_NOT_MEMBER = "concept_member_not_member"
     MEMBER_HAS_OPEN_QUESTIONS = "member_has_open_questions"
     NOT_A_MEMBER = "not_a_member"
+    #: ``add`` (261 D7): the name is another member's, or another member's id.
+    NAME_TAKEN = "name_taken"
+    #: ``add`` replaced a member's ``origin`` with one another active member has.
+    ORIGIN_TAKEN = "origin_taken"
+    #: ``add`` found the name taken and this checkout has no ``origin`` to say it is
+    #: the same repo.
+    NO_ORIGIN = "no_origin"
+    #: ``add --attach-to`` named a member that already has a checkout.
+    MEMBER_HAS_CHECKOUTS = "member_has_checkouts"
+    #: ``rm --checkout`` named a path with no checkout on this machine (D8).
+    NOT_A_CHECKOUT = "not_a_checkout"
 
 
 class OpenQuestion(FrozenModel):
