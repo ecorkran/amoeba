@@ -10,15 +10,15 @@ the caller, in the transaction that found it.
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
 from typing import Final
 
 from pydantic import ValidationError
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.deps import Deps
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_document import declared_text
-from amoeba.operations.message_member import Refusal, resolve_caller
+from amoeba.operations.message_member import Refusal, caller_of
 from amoeba.operations.message_models import (
     ReplyAction,
     ReplyOutcome,
@@ -70,19 +70,16 @@ def reply(
     config: UserConfig,
     document: object,
     *,
-    directory: Path,
+    here: HereCaller | HereNotAProject,
     deps: Deps,
 ) -> ReplyResult:
-    """Apply the reply in ``document`` for the member ``directory`` belongs to.
+    """Apply the reply in ``document`` for the member whose checkout ``here`` is.
 
     Raises:
-        ContextForgeError: ``cf`` failed or timed out; nothing was written.
         StoreError: The store cannot be used.
     """
     now = deps.clock()
-    caller = resolve_caller(
-        store, directory, declared_text(document, "member"), deps.cf_run
-    )
+    caller = caller_of(store, here, declared_text(document, "member"))
     if isinstance(caller, Refusal):
         record_declared(store, caller, OperationName.REPLY.value, document, now)
         return ReplyResult.rejected(caller.code, (caller.detail,))

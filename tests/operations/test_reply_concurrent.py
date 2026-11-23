@@ -12,7 +12,7 @@ from typing import Any
 
 from live_environment import process_environment
 from process_containment import contained_popen
-from store.message_support import NOW, seed_members, send_request
+from store.message_support import NOW, send_request
 from store_open import open_local_store
 
 from amoeba.operations.message_models import ReplyOutcome
@@ -20,7 +20,7 @@ from amoeba.operations.reject_codes import RejectCode
 from amoeba.store.messages import get_message
 from amoeba.store.row_values import encode_timestamp
 from amoeba.store.vocabulary import RequestState
-from operations.message_support import RECIPIENT, SENDER, THIRD
+from operations.message_support import RECIPIENT, SENDER, seed_message_members
 from operations.reply_worker import GATE_FILE
 
 WORKER = Path(__file__).with_name("reply_worker.py")
@@ -61,7 +61,7 @@ def test_two_accepts_at_once_have_exactly_one_winner(tmp_path: Path) -> None:
     gate = tmp_path / "gate"
     gate.mkdir()
     with open_local_store(store_path) as store, store.write() as transaction:
-        seed_members(transaction, SENDER, RECIPIENT, THIRD)
+        seed_message_members(transaction)
         send_request(
             transaction, REQUEST_ID, from_member=SENDER, to_member=RECIPIENT, now=NOW
         )

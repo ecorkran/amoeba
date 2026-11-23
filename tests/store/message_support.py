@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
 from amoeba.store.messages import insert_request
@@ -18,8 +19,14 @@ ADDRESSEE = "addressee-member"
 THIRD = "third-member"
 
 
-def seed_members(transaction: Transaction, *project_ids: str) -> None:
-    """The program ``demo`` and one active member for each id."""
+def seed_members(
+    transaction: Transaction,
+    *project_ids: str,
+    names: Mapping[str, str] | None = None,
+) -> None:
+    """The program ``demo`` and one active member for each id.
+
+    A member is named by its id unless ``names`` gives it another name."""
     insert_program(
         transaction,
         program_id=PROGRAM,
@@ -38,6 +45,7 @@ def seed_members(transaction: Transaction, *project_ids: str) -> None:
             authorize_deny=(),
             registered_at=NOW,
             updated_at=NOW,
+            name=None if names is None else names.get(project_id),
         )
 
 

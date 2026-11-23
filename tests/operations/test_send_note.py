@@ -24,11 +24,11 @@ from amoeba.operations.message_models import (
 )
 from amoeba.operations.message_results import SendResult
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.operations.send import send
 from amoeba.store.messages import get_message
 from amoeba.store.programs import remove_member
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import MessageKind
+from operations.message_placed import send
 from operations.message_support import (
     RECIPIENT,
     RECIPIENT_NAME,

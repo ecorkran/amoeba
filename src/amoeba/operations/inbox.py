@@ -10,13 +10,13 @@ member each see every delivery after their own point.
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
 
 from pydantic import ValidationError
 
 from amoeba.operations.deps import Deps
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_document import declared_text
-from amoeba.operations.message_member import Refusal, resolve_caller
+from amoeba.operations.message_member import Refusal, caller_of
 from amoeba.operations.message_models import InboxOutcome, InboxRequest
 from amoeba.operations.message_results import (
     DeliveryView,
@@ -37,18 +37,15 @@ __all__ = ["InboxResult", "inbox"]
 
 
 def inbox(
-    store: Store, document: object, *, directory: Path, deps: Deps
+    store: Store, document: object, *, here: HereCaller | HereNotAProject, deps: Deps
 ) -> InboxResult:
-    """The inbox of the member ``directory`` belongs to.
+    """The inbox of the member whose checkout ``here`` is.
 
     Raises:
-        ContextForgeError: ``cf`` failed or timed out.
         StoreError: The store cannot be used.
     """
     now = deps.clock()
-    caller = resolve_caller(
-        store, directory, declared_text(document, "member"), deps.cf_run
-    )
+    caller = caller_of(store, here, declared_text(document, "member"))
     if isinstance(caller, Refusal):
         return InboxResult.rejected(caller.code, (caller.detail,), since=None)
     try:

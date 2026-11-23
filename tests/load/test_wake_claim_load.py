@@ -18,18 +18,18 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from cf_fixtures import DEFAULT_WORKTREE
-from operations.message_support import message_deps
+from operations.message_placed import send
+from operations.message_support import CHECKOUT_PATH, message_deps
 from operations.pause_support import FakeChild
 from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY, RECORDED_ID, FakeCf
 from store.message_support import NOW, PROGRAM, seed_members
-from store.seed import insert_member
+from store.seed import insert_checkout, insert_member
 from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.names import OperationName
 from amoeba.operations.processes import WaitableChild
-from amoeba.operations.send import send
 from amoeba.operations.wake import WAKE_BOUND_SECONDS
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.wiring_messages import worst_case_seconds
@@ -72,7 +72,14 @@ def _targets(count: int) -> list[tuple[str, str]]:
 def _seed(path: Path, members: Sequence[tuple[str, str]]) -> None:
     with open_local_store(path) as setup, setup.write() as transaction:
         seed_members(transaction, RECORDED_ID)
-        for project_id, _ in members:
+        insert_checkout(
+            transaction,
+            member_id=RECORDED_ID,
+            cf_project_id=RECORDED_ID,
+            path=str(CHECKOUT_PATH),
+            now=NOW,
+        )
+        for project_id, name in members:
             insert_member(
                 transaction,
                 project_id=project_id,
@@ -83,6 +90,14 @@ def _seed(path: Path, members: Sequence[tuple[str, str]]) -> None:
                 registered_at=NOW,
                 updated_at=NOW,
                 wake_command=COMMAND,
+                name=name,
+            )
+            insert_checkout(
+                transaction,
+                member_id=project_id,
+                cf_project_id=project_id,
+                path=str(CHECKOUT_PATH),
+                now=NOW,
             )
 
 

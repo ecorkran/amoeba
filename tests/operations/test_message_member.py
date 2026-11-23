@@ -1,17 +1,22 @@
-"""``resolve_caller`` and ``resolve_recipient`` with the stub ``cf`` (slice 240, D3)."""
+"""``resolve_caller`` and ``resolve_recipient`` on the store (slice 240, D3; 261, D6).
+
+The caller is a gathered ``here`` looked up as a checkout on the acting machine; no
+``cf`` runs here, so nothing in this file has a ``cf`` stub.
+"""
 
 from __future__ import annotations
 
-import subprocess
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from cf_fixtures import DEFAULT_WORKTREE, OUTSIDE_ANY_PROJECT, fake_cf_run
+from cf_fixtures import OUTSIDE_ANY_PROJECT, fixture_document
 from store.message_support import NOW, seed_members
+from store.seed import insert_checkout
 from store_open import open_local_store
 
-from amoeba.operations.errors import ContextForgeError
+from amoeba.operations.caller import acting_machine_id
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_member import (
     Caller,
     Recipient,
@@ -22,60 +27,77 @@ from amoeba.operations.message_member import (
     resolve_recipient,
 )
 from amoeba.operations.reject_codes import RejectCode
+from amoeba.store.machines import invite_machine
 from amoeba.store.programs import remove_member
 from amoeba.store.store import Store
-from amoeba.upstream.context_forge.cli_call import CfRun
-from operations.set_up_support import RECORDED_ID, RECORDED_NAME, FakeCf
+from operations.set_up_support import RECORDED_ID, RECORDED_NAME
 
-DIRECTORY = Path("/work/checkout")
 OTHER_ID = "other-project-id"
 OTHER_NAME = "other-project-name"
 STRANGER = "stranger-project"
+CHECKOUT = "/work/checkout"
+
+IN_A_MEMBER = HereCaller(project_id=RECORDED_ID)
+IN_A_PROJECT_WITH_NO_PROGRAM = HereCaller(project_id="project-in-no-program")
+IN_NO_PROJECT = HereNotAProject(
+    not_a_project=str(fixture_document(OUTSIDE_ANY_PROJECT)["message"])
+)
 
 
 @pytest.fixture
 def store(tmp_path: Path) -> Iterator[Store]:
     with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
-            seed_members(transaction, RECORDED_ID, OTHER_ID)
+            seed_members(
+                transaction,
+                RECORDED_ID,
+                OTHER_ID,
+                names={RECORDED_ID: RECORDED_NAME, OTHER_ID: OTHER_NAME},
+            )
+            insert_checkout(
+                transaction,
+                member_id=RECORDED_ID,
+                cf_project_id=RECORDED_ID,
+                path=CHECKOUT,
+                now=NOW,
+            )
         yield opened
 
 
-def _cf(directory_fixture: str = DEFAULT_WORKTREE) -> FakeCf:
-    return FakeCf(
-        directory_fixture=directory_fixture, projects=[(OTHER_ID, OTHER_NAME)]
-    )
+def _caller(
+    store: Store, here: HereCaller | HereNotAProject, member: str | None
+) -> Caller | Refusal:
+    with store.read() as transaction:
+        return resolve_caller(transaction, acting_machine_id(transaction), here, member)
 
 
-def _timeout(argv: Sequence[str], **_kwargs: object) -> None:
-    raise subprocess.TimeoutExpired(list(argv), 1.0)
+def _actor(
+    store: Store, here: HereCaller | HereNotAProject, member: str | None
+) -> Caller | UnknownActor | Refusal:
+    with store.read() as transaction:
+        return resolve_actor(transaction, acting_machine_id(transaction), here, member)
 
 
-def test_a_directory_in_a_member_is_the_caller(store: Store) -> None:
-    cf = _cf()
+def _recipient(store: Store, reference: str) -> Recipient | Refusal:
+    with store.read() as transaction:
+        return resolve_recipient(transaction, acting_machine_id(transaction), reference)
 
-    caller = resolve_caller(store, DIRECTORY, None, cf)
 
-    assert caller == Caller(RECORDED_ID)
-    assert len(cf.calls) == 1
+def test_a_checkout_of_a_member_is_the_caller(store: Store) -> None:
+    assert _caller(store, IN_A_MEMBER, None) == Caller(RECORDED_ID)
 
 
 @pytest.mark.parametrize("explicit", [RECORDED_ID, RECORDED_NAME])
 def test_an_explicit_member_naming_the_same_member_is_accepted(
     store: Store, explicit: str
 ) -> None:
-    cf = _cf()
-
-    caller = resolve_caller(store, DIRECTORY, explicit, cf)
-
-    assert caller == Caller(RECORDED_ID)
-    assert len(cf.calls) == 2
+    assert _caller(store, IN_A_MEMBER, explicit) == Caller(RECORDED_ID)
 
 
-def test_an_explicit_member_naming_another_is_a_mismatch_under_the_directorys(
+def test_an_explicit_member_naming_another_is_a_mismatch_under_the_checkouts(
     store: Store,
 ) -> None:
-    caller = resolve_caller(store, DIRECTORY, OTHER_NAME, _cf())
+    caller = _caller(store, IN_A_MEMBER, OTHER_NAME)
 
     assert isinstance(caller, Refusal)
     assert caller.code is RejectCode.MEMBER_MISMATCH
@@ -83,21 +105,24 @@ def test_an_explicit_member_naming_another_is_a_mismatch_under_the_directorys(
     assert OTHER_NAME in caller.detail
 
 
+def test_an_explicit_member_nobody_has_is_a_mismatch_for_a_member_checkout(
+    store: Store,
+) -> None:
+    caller = _caller(store, IN_A_MEMBER, STRANGER)
+
+    assert isinstance(caller, Refusal)
+    assert caller.code is RejectCode.MEMBER_MISMATCH
+
+
 @pytest.mark.parametrize("explicit", [OTHER_ID, OTHER_NAME])
 def test_a_directory_in_no_project_takes_the_explicit_member(
     store: Store, explicit: str
 ) -> None:
-    caller = resolve_caller(store, DIRECTORY, explicit, _cf(OUTSIDE_ANY_PROJECT))
-
-    assert caller == Caller(OTHER_ID)
+    assert _caller(store, IN_NO_PROJECT, explicit) == Caller(OTHER_ID)
 
 
-def test_a_project_in_no_program_takes_the_explicit_member(tmp_path: Path) -> None:
-    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
-        with store.write() as transaction:
-            seed_members(transaction, OTHER_ID)
-
-        caller = resolve_caller(store, DIRECTORY, OTHER_NAME, _cf())
+def test_a_project_in_no_program_takes_the_explicit_member(store: Store) -> None:
+    caller = _caller(store, IN_A_PROJECT_WITH_NO_PROGRAM, OTHER_NAME)
 
     assert caller == Caller(OTHER_ID)
 
@@ -105,7 +130,7 @@ def test_a_project_in_no_program_takes_the_explicit_member(tmp_path: Path) -> No
 def test_no_member_anywhere_is_not_a_member_and_records_nothing(
     store: Store,
 ) -> None:
-    caller = resolve_caller(store, DIRECTORY, None, _cf(OUTSIDE_ANY_PROJECT))
+    caller = _caller(store, IN_NO_PROJECT, None)
 
     assert isinstance(caller, Refusal)
     assert caller.code is RejectCode.NOT_A_MEMBER
@@ -116,25 +141,39 @@ def test_no_member_anywhere_is_not_a_member_and_records_nothing(
 def test_an_explicit_member_that_is_no_active_member_is_not_a_member(
     store: Store,
 ) -> None:
-    caller = resolve_caller(store, DIRECTORY, STRANGER, _cf(OUTSIDE_ANY_PROJECT))
+    caller = _caller(store, IN_NO_PROJECT, STRANGER)
 
     assert isinstance(caller, Refusal)
     assert caller.code is RejectCode.NOT_A_MEMBER
     assert STRANGER in caller.detail
 
 
+def test_the_same_project_id_on_another_machine_is_not_in_a_program(
+    store: Store,
+) -> None:
+    with store.write() as transaction:
+        invite_machine(transaction, "beta", "d" * 64, NOW)
+        beta = int(
+            transaction.execute(
+                "SELECT machine_id FROM machines WHERE name = 'beta'"
+            ).fetchone()[0]
+        )
+        caller = resolve_caller(transaction, beta, IN_A_MEMBER, None)
+
+    assert isinstance(caller, Refusal)
+    assert caller.code is RejectCode.NOT_A_MEMBER
+
+
 def test_an_actor_resolution_gives_an_unknown_actor_when_no_member_is_named(
     store: Store,
 ) -> None:
-    outside = _cf(OUTSIDE_ANY_PROJECT)
-
-    assert resolve_actor(store, DIRECTORY, None, outside) == UnknownActor()
+    assert _actor(store, IN_NO_PROJECT, None) == UnknownActor()
 
 
 def test_an_actor_resolution_refuses_an_explicit_member_that_is_no_member(
     store: Store,
 ) -> None:
-    actor = resolve_actor(store, DIRECTORY, STRANGER, _cf(OUTSIDE_ANY_PROJECT))
+    actor = _actor(store, IN_NO_PROJECT, STRANGER)
 
     assert isinstance(actor, Refusal)
     assert actor.code is RejectCode.NOT_A_MEMBER
@@ -143,47 +182,25 @@ def test_an_actor_resolution_refuses_an_explicit_member_that_is_no_member(
 
 
 def test_an_actor_resolution_still_refuses_a_mismatch(store: Store) -> None:
-    caller = resolve_actor(store, DIRECTORY, OTHER_NAME, _cf())
+    caller = _actor(store, IN_A_MEMBER, OTHER_NAME)
 
     assert isinstance(caller, Refusal)
     assert caller.code is RejectCode.MEMBER_MISMATCH
     assert caller.record_under == RECORDED_ID
 
 
-@pytest.mark.parametrize("run", [fake_cf_run(None), _timeout])
-def test_a_cf_failure_or_timeout_propagates_for_the_directory(
-    store: Store, run: CfRun
-) -> None:
-    with pytest.raises(ContextForgeError):
-        resolve_caller(store, DIRECTORY, None, run)
-
-
-def test_a_cf_failure_on_the_explicit_member_propagates(store: Store) -> None:
-    cf = _cf()
-
-    def failing_on_reference(
-        argv: Sequence[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        if "-p" in argv:
-            return fake_cf_run(None)(argv)
-        return cf(argv, **kwargs)
-
-    with pytest.raises(ContextForgeError):
-        resolve_caller(store, DIRECTORY, OTHER_NAME, failing_on_reference)
-
-
-@pytest.mark.parametrize("reference", [OTHER_ID, OTHER_NAME])
-def test_a_name_and_an_id_both_resolve_a_recipient(
+@pytest.mark.parametrize("reference", [OTHER_ID, OTHER_NAME, OTHER_NAME.upper()])
+def test_a_name_in_any_case_and_an_id_both_resolve_a_recipient(
     store: Store, reference: str
 ) -> None:
-    recipient = resolve_recipient(store, reference, _cf())
+    recipient = _recipient(store, reference)
 
     assert isinstance(recipient, Recipient)
     assert recipient.member_id == OTHER_ID
 
 
 def test_an_unregistered_recipient_is_unknown(store: Store) -> None:
-    recipient = resolve_recipient(store, STRANGER, _cf())
+    recipient = _recipient(store, STRANGER)
 
     assert isinstance(recipient, Refusal)
     assert recipient.code is RejectCode.UNKNOWN_RECIPIENT
@@ -195,15 +212,7 @@ def test_a_removed_recipient_is_unknown(store: Store) -> None:
     with store.write() as transaction:
         assert remove_member(transaction, OTHER_ID, NOW)
 
-    recipient = resolve_recipient(store, OTHER_NAME, _cf())
+    recipient = _recipient(store, OTHER_NAME)
 
     assert isinstance(recipient, Refusal)
     assert recipient.code is RejectCode.UNKNOWN_RECIPIENT
-
-
-@pytest.mark.parametrize("run", [fake_cf_run(None), _timeout])
-def test_a_cf_failure_or_timeout_propagates_for_the_recipient(
-    store: Store, run: CfRun
-) -> None:
-    with pytest.raises(ContextForgeError):
-        resolve_recipient(store, OTHER_NAME, run)

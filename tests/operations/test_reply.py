@@ -17,11 +17,11 @@ from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.message_models import ReplyOutcome
 from amoeba.operations.message_results import ReplyResult, RequestDirection
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.operations.reply import reply
 from amoeba.store.messages import get_message
 from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import RequestState
+from operations.message_placed import reply
 from operations.message_support import (
     CONFIG,
     RECIPIENT,
@@ -315,7 +315,7 @@ def test_a_cf_failure_raises_and_writes_nothing(
         assert count(transaction, "message_rejections") == 0
 
 
-def test_a_reply_makes_at_most_two_cf_lookups(
+def test_a_reply_makes_one_cf_lookup(
     store: Store, sender_deps: Deps, tmp_path: Path, clock: SettableClock
 ) -> None:
     send_request_as_sender(store, sender_deps, "ask")
@@ -323,7 +323,7 @@ def test_a_reply_makes_at_most_two_cf_lookups(
 
     _reply(store, message_deps(tmp_path, clock, cf), "ask", "accept")
 
-    assert len(cf.calls) == 2
+    assert len(cf.calls) == 1
 
 
 def test_the_sender_name_is_not_needed_to_reply(

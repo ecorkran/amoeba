@@ -11,18 +11,18 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime
-from pathlib import Path
 
 from pydantic import ValidationError
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.deps import Deps
+from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_document import declared_text
 from amoeba.operations.message_member import (
     Recipient,
     Refusal,
-    resolve_caller,
-    resolve_recipient,
+    caller_of,
+    recipient_of,
 )
 from amoeba.operations.message_models import SendRequest
 from amoeba.operations.message_rejection import record_declared
@@ -43,19 +43,16 @@ def send(
     config: UserConfig,
     document: object,
     *,
-    directory: Path,
+    here: HereCaller | HereNotAProject,
     deps: Deps,
 ) -> SendResult:
-    """Send the request in ``document`` from the member ``directory`` belongs to.
+    """Send the request in ``document`` from the member whose checkout ``here`` is.
 
     Raises:
-        ContextForgeError: ``cf`` failed or timed out; nothing was written.
         StoreError: The store cannot be used.
     """
     now = deps.clock()
-    caller = resolve_caller(
-        store, directory, declared_text(document, "member"), deps.cf_run
-    )
+    caller = caller_of(store, here, declared_text(document, "member"))
     if isinstance(caller, Refusal):
         return _refuse(store, caller, document, now)
     try:
@@ -65,9 +62,7 @@ def send(
         malformed = Refusal(RejectCode.MALFORMED, "; ".join(problems), caller.member_id)
         return _refuse(store, malformed, document, now, problems)
     recipient: Recipient | Refusal | None = (
-        None
-        if request.to is None
-        else resolve_recipient(store, request.to, deps.cf_run)
+        None if request.to is None else recipient_of(store, request.to)
     )
     if isinstance(recipient, Refusal):
         return _refuse(

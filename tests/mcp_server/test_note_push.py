@@ -15,8 +15,8 @@ import pytest
 from operations.message_support import (
     RECIPIENT,
     SENDER,
-    THIRD,
     message_deps,
+    seed_message_members,
     send_note_as_sender,
 )
 from operations.release_support import (
@@ -25,7 +25,7 @@ from operations.release_support import (
     note_rows,
     release_deps,
 )
-from store.message_support import PROGRAM, seed_members
+from store.message_support import PROGRAM
 from store.release_support import FULL_HASH, PROVIDER
 from store.seed import insert_member, insert_pair
 from store_open import open_local_store
@@ -49,7 +49,7 @@ PROGRAM_NOTE_ID = "push-program-note"
 def store(tmp_path: Path) -> Iterator[Store]:
     with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         with opened.write() as transaction:
-            seed_members(transaction, SENDER, RECIPIENT, THIRD)
+            seed_message_members(transaction)
             insert_member(
                 transaction,
                 project_id=PROVIDER,

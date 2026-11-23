@@ -1,14 +1,15 @@
 """The message operations stay inside the MCP call deadline (slice 240, Timeouts).
 
-Each operation's worst case is its ``cf`` lookups at their timeout plus its store waits
-at theirs. The lookup counts are checked against what the stub ``cf`` actually saw, so
-a lookup added to an operation without raising its constant fails here. Slice 242
-adds the run-start term: ``send``, ``reply`` and ``cancel`` are followed by
-``start_ended_held``, whose worst case is ``START_BOUND_SECONDS``. ``add``, ``rm``,
-``status`` and ``list`` are followed by it too, but have no fixed worst case to add it
-to: they make one ``cf`` lookup per member or reference in the request (``add``,
-``rm``) or per run directory in the listing (``status``, ``list``), a count no constant
-bounds. ``MCP_CALL_DEADLINE_SECONDS`` is their cap (242 D6).
+Each operation's worst case is its ``cf`` lookup at its timeout (the one ``cf get`` of
+the caller's directory, 261 D10) plus its store waits at theirs. The lookup counts are
+checked against what the stub ``cf`` actually saw, so a lookup added to an operation
+without raising its constant fails here. Slice 242 adds the run-start term: ``send``,
+``reply`` and ``cancel`` are followed by ``start_ended_held``, whose worst case is
+``START_BOUND_SECONDS``. ``add``, ``rm``, ``status`` and ``list`` are followed by it
+too, but have no fixed worst case to add it to: they make one ``cf`` lookup per member
+or reference in the request (``add``, ``rm``) or per run directory in the listing
+(``status``, ``list``), a count no constant bounds. ``MCP_CALL_DEADLINE_SECONDS`` is
+their cap (242 D6).
 """
 
 from __future__ import annotations
@@ -30,13 +31,9 @@ from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY, FakeCf
 
 from amoeba.mcp.in_process import MCP_CALL_DEADLINE_SECONDS
-from amoeba.operations.cancel import cancel
 from amoeba.operations.deps import Deps
-from amoeba.operations.inbox import inbox
 from amoeba.operations.names import OperationName
-from amoeba.operations.reply import reply
 from amoeba.operations.request_release import MAX_STARTS_PER_CALL, START_BOUND_SECONDS
-from amoeba.operations.send import send
 from amoeba.operations.wake import WAKE_BOUND_SECONDS
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.context_forge.project_of import CF_GET_TIMEOUT_SECONDS
@@ -44,6 +41,7 @@ from amoeba.wiring_messages import (
     MESSAGE_LOOKUPS,
     MESSAGE_STORE_WAITS,
     MessageOperation,
+    place_message,
     worst_case_seconds,
 )
 from amoeba.wiring_release import START_AFTER_OPERATIONS
@@ -54,12 +52,20 @@ UNBOUNDED_START_OPERATIONS = frozenset(
     {OperationName.ADD, OperationName.RM, OperationName.STATUS, OperationName.LIST}
 )
 
-#: Each operation run with an explicit ``member``, so every lookup it can make happens.
+#: Each operation run with an explicit ``member`` through its placement, which runs
+#: the client part (the one ``cf`` lookup) and then the operation.
 type Run = Callable[[Store, Deps], object]
+
+
+def _placed(name: MessageOperation, document: dict[str, object]) -> Run:
+    return lambda store, deps: place_message(
+        name, store, CONFIG, document, DIRECTORY, deps
+    )
+
+
 RUNS: dict[MessageOperation, Run] = {
-    OperationName.SEND: lambda store, deps: send(
-        store,
-        CONFIG,
+    OperationName.SEND: _placed(
+        OperationName.SEND,
         {
             "id": "ask",
             "to": RECIPIENT_NAME,
@@ -67,25 +73,13 @@ RUNS: dict[MessageOperation, Run] = {
             "body": "b",
             "member": SENDER_NAME,
         },
-        directory=DIRECTORY,
-        deps=deps,
     ),
-    OperationName.INBOX: lambda store, deps: inbox(
-        store, {"member": SENDER_NAME}, directory=DIRECTORY, deps=deps
+    OperationName.INBOX: _placed(OperationName.INBOX, {"member": SENDER_NAME}),
+    OperationName.REPLY: _placed(
+        OperationName.REPLY, {"id": "ask", "action": "accept", "member": SENDER_NAME}
     ),
-    OperationName.REPLY: lambda store, deps: reply(
-        store,
-        CONFIG,
-        {"id": "ask", "action": "accept", "member": SENDER_NAME},
-        directory=DIRECTORY,
-        deps=deps,
-    ),
-    OperationName.CANCEL: lambda store, deps: cancel(
-        store,
-        CONFIG,
-        {"id": "ask", "member": SENDER_NAME},
-        directory=DIRECTORY,
-        deps=deps,
+    OperationName.CANCEL: _placed(
+        OperationName.CANCEL, {"id": "ask", "member": SENDER_NAME}
     ),
 }
 
@@ -115,12 +109,12 @@ def test_an_operation_makes_no_more_cf_lookups_than_its_constant(
     assert len(cf.calls) == MESSAGE_LOOKUPS[name]
 
 
-def test_send_makes_three_lookups_and_the_others_two() -> None:
+def test_each_message_operation_makes_one_lookup() -> None:
     assert MESSAGE_LOOKUPS == {
-        OperationName.SEND: 3,
-        OperationName.INBOX: 2,
-        OperationName.REPLY: 2,
-        OperationName.CANCEL: 2,
+        OperationName.SEND: 1,
+        OperationName.INBOX: 1,
+        OperationName.REPLY: 1,
+        OperationName.CANCEL: 1,
     }
     assert MESSAGE_STORE_WAITS == 3
 

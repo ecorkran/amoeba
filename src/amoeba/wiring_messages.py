@@ -15,6 +15,7 @@ from typing import Final, Literal, assert_never
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.cancel import cancel
 from amoeba.operations.deps import Deps
+from amoeba.operations.here import gather_caller
 from amoeba.operations.inbox import inbox
 from amoeba.operations.message_results import (
     CancelResult,
@@ -36,13 +37,14 @@ type MessageOperation = Literal[
 ]
 type MessageResult = SendResult | InboxResult | ReplyResult | CancelResult
 
-#: The most ``cf`` lookups each operation makes: the caller's directory, an explicit
-#: ``member`` (counted whether or not one is given), and for ``send`` the recipient.
+#: The ``cf`` lookups each operation makes: the one ``cf get`` of the caller's
+#: directory, in the client part (``operations.here``). A named recipient or member is
+#: a store read (261 D6, D10).
 MESSAGE_LOOKUPS: Final = {
-    OperationName.SEND: 3,
-    OperationName.INBOX: 2,
-    OperationName.REPLY: 2,
-    OperationName.CANCEL: 2,
+    OperationName.SEND: 1,
+    OperationName.INBOX: 1,
+    OperationName.REPLY: 1,
+    OperationName.CANCEL: 1,
 }
 #: Store waits one call can make, each at most one busy timeout: the legacy-move lock,
 #: the store open and the operation's own transaction.
@@ -66,14 +68,16 @@ def place_message(
     directory: Path,
     deps: Deps,
 ) -> MessageResult:
+    # The client part first: a ``cf`` failure raises here, before any store work.
+    here = gather_caller(directory, deps.cf_run)
     match name:
         case OperationName.SEND:
-            return send(store, config, document, directory=directory, deps=deps)
+            return send(store, config, document, here=here, deps=deps)
         case OperationName.INBOX:
-            return inbox(store, document, directory=directory, deps=deps)
+            return inbox(store, document, here=here, deps=deps)
         case OperationName.REPLY:
-            return reply(store, config, document, directory=directory, deps=deps)
+            return reply(store, config, document, here=here, deps=deps)
         case OperationName.CANCEL:
-            return cancel(store, config, document, directory=directory, deps=deps)
+            return cancel(store, config, document, here=here, deps=deps)
         case _:
             assert_never(name)

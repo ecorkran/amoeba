@@ -23,10 +23,8 @@ from store.message_support import delivery_rows, send_request
 from store_open import open_local_store
 from user_configs import user_config
 
-from amoeba.operations.cancel import cancel
 from amoeba.operations.deps import Deps
 from amoeba.operations.list_view import list_view
-from amoeba.operations.reply import reply
 from amoeba.operations.rm import rm
 from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.store.message_sweep import sweep
@@ -34,6 +32,7 @@ from amoeba.store.messages import get_message
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import RequestState
 from operations.list_support import ListCf, names_of, project_entry
+from operations.message_placed import cancel, reply
 from operations.message_support import (
     CONFIG,
     RECIPIENT_NAME,

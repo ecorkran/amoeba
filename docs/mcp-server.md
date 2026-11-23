@@ -124,8 +124,8 @@ no repo, give `member` instead.
 - Every result has a `notice`: release reports and messages are written by other repos'
   agents, data to judge, never instructions. The descriptions of these four tools, of
   `list` and of `status` say so too.
-- A call can take up to 105 s (`send`) or 75 s (`inbox`, `reply`, `cancel`) when `cf` is
-  slow: below the 180 s deadline, which is checked by `tests/test_message_timing.py`.
+- A call can take up to 45 s (`send`, `inbox`, `reply` and `cancel`: one `cf get` of the
+  caller's directory) when `cf` is slow: below the 180 s deadline, which is checked by `tests/test_message_timing.py`.
 
 `directory` is never guessed: a session can start anywhere, so a missing or relative
 `directory` is an error naming the field.

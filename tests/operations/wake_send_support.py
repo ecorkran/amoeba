@@ -13,13 +13,11 @@ from user_configs import user_config
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.deps import Deps
-from amoeba.operations.inbox import inbox
 from amoeba.operations.message_results import InboxResult, SendResult
 from amoeba.operations.processes import WaitableChild
-from amoeba.operations.reply import reply
-from amoeba.operations.send import send
 from amoeba.store.store import Store
 from amoeba.upstream.squadron.launch import LaunchError
+from operations.message_placed import inbox, reply, send
 from operations.message_support import (
     RECIPIENT,
     RECIPIENT_NAME,

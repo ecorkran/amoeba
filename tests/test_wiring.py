@@ -36,6 +36,7 @@ from amoeba.operations.changes_models import (
 from amoeba.operations.decisions import DecisionsResult
 from amoeba.operations.dismiss import DismissResult
 from amoeba.operations.errors import ContextForgeError
+from amoeba.operations.here_document import HereCaller
 from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
 from amoeba.operations.message_models import (
@@ -431,20 +432,28 @@ MESSAGE_OPERATIONS = (
 
 
 @pytest.mark.parametrize("name", MESSAGE_OPERATIONS, ids=lambda name: name.value)
-def test_invoke_gives_each_message_operation_the_directory_and_the_document(
+def test_invoke_gives_each_message_operation_the_gathered_caller_and_the_document(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, name: OperationName
 ) -> None:
-    seen: list[tuple[object, Path]] = []
+    seen: list[tuple[object, HereCaller]] = []
+    gathered: list[Path] = []
+    caller = HereCaller(project_id="gathered-project")
 
-    def recording(*arguments: object, directory: Path, **_keywords: object) -> object:
-        seen.append((arguments[-1], directory))
+    def gathering(directory: Path, _run: object) -> HereCaller:
+        gathered.append(directory)
+        return caller
+
+    def recording(*arguments: object, here: HereCaller, **_keywords: object) -> object:
+        seen.append((arguments[-1], here))
         return _message_result(name)
 
+    monkeypatch.setattr(wiring_messages, "gather_caller", gathering)
     monkeypatch.setattr(wiring_messages, name.value, recording)
 
     wiring.invoke(name, {"marker": 1}, tmp_path, Door.CLI)
 
-    assert seen == [({"marker": 1}, tmp_path)]
+    assert gathered == [tmp_path]
+    assert seen == [({"marker": 1}, caller)]
 
 
 @pytest.mark.parametrize("name", MESSAGE_OPERATIONS, ids=lambda name: name.value)

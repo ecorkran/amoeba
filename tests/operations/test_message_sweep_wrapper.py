@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from store.message_support import count, delivery_rows, seed_members
+from store.message_support import count, delivery_rows
 from store_open import open_local_store
 
 from amoeba.operations.message_sweep import sweep_messages
@@ -24,8 +24,8 @@ from operations.message_support import (
     CONFIG,
     RECIPIENT,
     SENDER,
-    THIRD,
     message_deps,
+    seed_message_members,
     send_request_as_sender,
 )
 from operations.release_support import SettableClock
@@ -40,7 +40,7 @@ def store(tmp_path: Path) -> Iterator[Store]:
         tmp_path / "amoeba.sqlite3", busy_timeout_seconds=SHORT_BUSY_TIMEOUT_SECONDS
     ) as opened:
         with opened.write() as transaction:
-            seed_members(transaction, SENDER, RECIPIENT, THIRD)
+            seed_message_members(transaction)
         yield opened
 
 
