@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import stat
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -157,3 +158,33 @@ def test_a_fault_on_the_second_insert_leaves_no_program_row(
             programs = transaction.execute("SELECT count(*) FROM programs").fetchone()
 
     assert programs[0] == 0
+
+
+def test_processes_opening_a_new_store_at_once_all_get_it(tmp_path: Path) -> None:
+    """Switching a new file to WAL fails at once, busy handler or not, when another
+    connection is mid-switch. Two sessions starting together on a first run hit it
+    (the stdio smoke test failed on it under load), so the open retries it."""
+    rounds = 40
+    openers = 6
+    failures: list[str] = []
+
+    def open_and_close(path: Path, barrier: threading.Barrier) -> None:
+        barrier.wait()
+        try:
+            Store.open(path).close()
+        except StoreBusyError as error:
+            failures.append(str(error))
+
+    for round_number in range(rounds):
+        path = tmp_path / f"round-{round_number}" / "amoeba.sqlite3"
+        barrier = threading.Barrier(openers)
+        threads = [
+            threading.Thread(target=open_and_close, args=(path, barrier))
+            for _ in range(openers)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+    assert failures == []

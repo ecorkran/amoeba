@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import time
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -31,6 +32,30 @@ logger = logging.getLogger(__name__)
 
 #: How long a connection waits on another writer's lock before ``StoreBusyError``.
 BUSY_TIMEOUT_SECONDS: Final = 5.0
+#: The pause between tries of the WAL switch of a new store.
+WAL_RETRY_SECONDS: Final = 0.01
+
+
+def _enable_wal(connection: sqlite3.Connection, timeout_seconds: float) -> None:
+    """Switch the file to WAL, retrying while another connection is mid-switch.
+
+    On a new file this fails at once with SQLITE_BUSY, the busy handler not being
+    consulted, when a second connection is switching or migrating it; two sessions
+    starting together on a first run hit it. After ``timeout_seconds`` the error is
+    raised as it was, and the caller reports ``StoreBusyError``.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        try:
+            connection.execute(sql.PRAGMA_JOURNAL_MODE_WAL)
+        except sqlite3.OperationalError as error:
+            if error.sqlite_errorcode != sqlite3.SQLITE_BUSY:
+                raise
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(WAL_RETRY_SECONDS)
+        else:
+            return
 
 
 class Transaction:
@@ -126,7 +151,7 @@ class Store:
                 error, path=path, busy_timeout_seconds=busy_timeout_seconds
             ) from error
         try:
-            connection.execute(sql.PRAGMA_JOURNAL_MODE_WAL)
+            _enable_wal(connection, busy_timeout_seconds)
             connection.execute(sql.PRAGMA_FOREIGN_KEYS_ON)
             migrate(connection)
         except StoreError:
