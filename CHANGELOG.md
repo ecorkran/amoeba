@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-11-23
+
 ### Added
 
 - Slice 260: the hub and the door. `amoeba hub serve` holds the store and serves six operations (`decisions`, `mark_read`, `dismiss`, `retract`, `standing`, `withdraw`) over TLS pinned to the hub's own certificate, with a token per machine (`amoeba hub invite`, `machines`, `rm-machine`), kept results so a repeated call applies once, timed and pre-migration backups, `--from-backup`, and a rotating hub log. `amoeba join <line>` points a machine at a hub (`--set-aside-local` sets a local store aside, `--address` changes the address) and `amoeba leave` undoes it; a joined machine says the door does not serve any other command yet. A container image and compose example are in `docker/`. Store migration 011 (version 11) adds owners, machines, kept results and the closed mark. `cryptography`, `starlette` and `uvicorn` are now declared dependencies. See `docs/cli-contract.md`, `docs/config-contract.md` and `docs/store-contract.md`.
@@ -26,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `scripts/update_live.py` installs the released version from PyPI (`amoeba-ai>=X.Y.Z`; a restore reinstalls the exact previous version), never a build of the checkout, and says so when the version is not on PyPI yet.
+- Two sessions opening a brand-new store at the same moment no longer fail with `StoreBusyError`: the switch to WAL is retried until the busy timeout.
+- Two members whose ids differ only in case no longer stop the store opening: the second is named apart (`-2`) and logged. A path naming cannot read gives its member no `origin` and a log line, not an `IndexError`.
 - `scripts/update_live.py`: an update killed after the migration no longer loses its restore point on the rerun, and a failed `amoeba list` (a `cf` failure during naming) restores the store, config and previous version by itself. The read-back also checks that every member has a name and every listed member a checkout (#45).
 - On a joined machine `amoeba add` and `rm` no longer read the local `config.yaml` for their text (they exited 3 after the hub had applied the change), and the way on in `name_taken` and its kin is no longer cut in the text.
 

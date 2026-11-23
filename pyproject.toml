@@ -1,6 +1,6 @@
 [project]
 name = "amoeba-ai"
-version = "0.2.7"
+version = "0.2.8"
 description = "Amoeba: a tool that answers a paused run's first-level questions and keeps the record"
 readme = "README.md"
 requires-python = ">=3.12"
