@@ -29,7 +29,7 @@ from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.naming import name_members
 from amoeba.operations.state_move import open_state_store
 from amoeba.store.checkouts import checkouts_of_member
-from amoeba.store.errors import StoreError, StoreRowError
+from amoeba.store.errors import StoreError
 from amoeba.store.models import Member
 from amoeba.store.programs import get_member_any
 from amoeba.store.store import Store, Transaction
@@ -515,35 +515,61 @@ def test_a_path_the_file_system_never_answers_for_gives_no_origin_within_the_bou
     opened.store.close()
 
 
-def test_two_hub_ids_that_differ_only_in_case_fail_loudly_not_with_an_index_error(
-    tmp_path: Path,
+def test_a_path_that_cannot_be_read_gives_no_origin_and_says_why(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The name index compares without case, so naming both by their ids would clash
-    (261 review): the opener says which two members, and names neither."""
+    """A probe that raises must not end as an ``IndexError`` that hides the real error
+    and fails every command (261 review): naming goes on and logs the error."""
+    opened = _world(tmp_path)
+
+    def denied(_path: Path) -> None:
+        raise PermissionError("no access to the mount")
+
+    monkeypatch.setattr(here, "git_root", denied)
+    with caplog.at_level(logging.WARNING):
+        name_members(opened.store, opened.cf, _git_must_not_run)
+
+    assert "no access to the mount" in caplog.text
+    with opened.store.read() as transaction:
+        origins = transaction.execute("SELECT origin FROM members").fetchall()
+    assert all(row[0] is None for row in origins)
+    opened.store.close()
+
+
+def test_two_hub_ids_that_differ_only_in_case_open_with_the_second_named_apart(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The name index compares without case, so naming both by their ids would clash.
+    The store must still open (a refusing opener left no command to fix it, 261
+    review): the first keeps its id, the second gets a free name and a log line."""
     layout = make_layout(tmp_path)
     build_schema_11_store(layout.store_path, [OldMember("Abc"), OldMember("abc")])
 
-    with pytest.raises(StoreRowError, match="already has that name in another case"):
-        open_hub_store(layout)
+    with caplog.at_level(logging.WARNING):
+        open_hub_store(layout).close()
 
     with closing(sqlite3.connect(layout.store_path)) as connection:
-        names = connection.execute("SELECT name FROM members").fetchall()
-    assert names == [(None,), (None,)], "the write rolled back as a whole"
+        names = connection.execute(
+            "SELECT project_id, name FROM members ORDER BY project_id"
+        ).fetchall()
+    assert names == [("Abc", "Abc"), ("abc", "abc-2")]
+    assert "another case" in caplog.text
 
 
-def test_naming_by_id_refuses_a_case_only_clash_loudly_and_names_nobody(
+def test_naming_by_id_names_a_case_only_clash_apart_so_the_store_opens(
     tmp_path: Path,
 ) -> None:
     """Two members cf does not list, with ids that differ only in case: the second's id
-    would clash in the name index, so naming says which two (261 review)."""
+    would clash in the name index, so it is named apart, not refused (261 review)."""
     database = tmp_path / "old.sqlite3"
     build_schema_11_store(database, [OldMember("Abc"), OldMember("abc")])
     opened = open_local_store(database)
 
-    with pytest.raises(StoreRowError, match="already has that name in another case"):
-        name_members(opened, cf_listing(), subprocess.run)
+    name_members(opened, cf_listing(), subprocess.run)
 
     with opened.read() as transaction:
-        names = transaction.execute("SELECT name FROM members").fetchall()
-    assert names == [(None,), (None,)]
+        names = transaction.execute(
+            "SELECT project_id, name FROM members ORDER BY project_id"
+        ).fetchall()
+    assert names == [("Abc", "Abc"), ("abc", "abc-2")]
     opened.close()

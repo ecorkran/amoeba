@@ -31,8 +31,8 @@ from amoeba.store.member_names import (
     UnnamedMember,
     active_member_by_name,
     active_member_by_origin,
+    name_by_own_id,
     name_is_other_members_id,
-    refuse_id_clash,
     retire_wake_command,
     set_member_name,
     set_member_origin,
@@ -59,21 +59,40 @@ def _git_root_within(path: Path, seconds: float) -> tuple[bool, Path | None]:
     """``here.git_root(path)``, or ``(False, None)`` when the file system does not
     answer within ``seconds``. The probe stats ``path``, which a hung mount can block
     for good and no subprocess timeout reaches, so it runs in a daemon thread that is
-    left behind when it does not return."""
+    left behind when it does not return.
+
+    Raises:
+        OSError: The probe failed; its own error, not an empty result.
+    """
     found: list[Path | None] = []
-    probe = threading.Thread(
-        target=lambda: found.append(here.git_root(path)), daemon=True
-    )
+    failed: list[OSError] = []
+
+    def probe_root() -> None:
+        try:
+            found.append(here.git_root(path))
+        except OSError as error:  # handed to the caller, which re-raises it
+            failed.append(error)
+
+    probe = threading.Thread(target=probe_root, daemon=True)
     probe.start()
     probe.join(seconds)
     if probe.is_alive():
         return False, None
+    if failed:
+        raise failed[0]
     return True, found[0]
 
 
 def _read_origin(path: Path, git: CfRun) -> str | None:
     """The reduced ``origin`` of the repo at ``path``, or ``None`` with a warning."""
-    answered, root = _git_root_within(path, here.ORIGIN_READ_TIMEOUT_SECONDS)
+    try:
+        answered, root = _git_root_within(path, here.ORIGIN_READ_TIMEOUT_SECONDS)
+    except OSError as error:
+        # An unreadable path costs its member the origin, not every command the store.
+        logger.warning(
+            "naming: cannot read %s: %s; its member has no origin", path, error
+        )
+        return None
     if not answered:
         logger.warning(
             "naming: %s did not answer within %ss (a hung mount?); its member has no "
@@ -158,12 +177,12 @@ def _name_for(
 def _by_id(transaction: Transaction, member: UnnamedMember, reason: str) -> str:
     """The member's own id as its name, said in the log so ``list members`` showing an
     id has a reason on record (``amoeba add --project ID --name NAME`` renames it). An
-    id the name index would refuse is refused here, naming both members."""
-    refuse_id_clash(transaction, member)
+    id the name index would refuse gets a free ``-N`` suffix, so the store opens."""
+    name = name_by_own_id(transaction, member)
     logger.warning(
         "naming: member %s is named by its id: %s", member.project_id, reason
     )
-    return member.project_id
+    return name
 
 
 def _origin_for(

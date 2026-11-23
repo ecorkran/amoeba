@@ -17,7 +17,7 @@ import logging
 from datetime import UTC, datetime
 
 from amoeba.store.member_names import (
-    refuse_id_clash,
+    name_by_own_id,
     retire_wake_command,
     set_member_name,
     unnamed_members,
@@ -31,12 +31,11 @@ def name_by_id(store: Store, *, now: datetime | None = None) -> None:
     """Give each unnamed member its id as its name, in one write.
 
     Ids are unique, but the name index compares without case, so an id can still clash
-    with another active member's name or id that differs only in case. That is refused
-    loudly, naming both members, rather than left to the index's raw error.
+    with another active member's name that differs only in case. That member is named
+    apart (the id with a ``-N`` suffix) and the log says so, so the store still opens.
 
     Raises:
-        StoreRowError: An active member's id equals, in another case, a name an active
-            member already has.
+        StoreRowError: No suffix up to ``NAME_SUFFIX_LIMIT`` is free for a clashing id.
     """
     with store.read() as transaction:
         if not unnamed_members(transaction):
@@ -45,8 +44,8 @@ def name_by_id(store: Store, *, now: datetime | None = None) -> None:
     with store.write() as transaction:
         # Re-read under the lock: another call may have named them meanwhile.
         for member in unnamed_members(transaction):
-            refuse_id_clash(transaction, member)
-            set_member_name(transaction, member.project_id, member.project_id, stamp)
-            logger.info("named member %s by its id", member.project_id)
+            name = name_by_own_id(transaction, member)
+            set_member_name(transaction, member.project_id, name, stamp)
+            logger.info("named member %s %s", member.project_id, name)
             # No checkout exists on a hub store, so none takes the command (D4).
             retire_wake_command(transaction, member, took=False)

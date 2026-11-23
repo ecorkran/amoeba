@@ -17,8 +17,12 @@ from amoeba.store.models import Member
 from amoeba.store.programs import member_from_row
 from amoeba.store.row_values import encode_timestamp, integer, optional_text, text
 from amoeba.store.store import Transaction
+from amoeba.store.vocabulary import is_member_name
 
 logger = logging.getLogger(__name__)
+
+#: The highest ``-N`` suffix tried when an id's own name clashes in another case.
+NAME_SUFFIX_LIMIT = 99
 
 
 def active_member_by_name(transaction: Transaction, name: str) -> Member | None:
@@ -93,23 +97,45 @@ def clear_member_wake_command(transaction: Transaction, member_id: str) -> None:
     transaction.execute(sql.CLEAR_MEMBER_WAKE_COMMAND, (member_id,))
 
 
-def refuse_id_clash(transaction: Transaction, member: UnnamedMember) -> None:
-    """Refuse naming ``member`` by its own id when the name index would: an active
-    member already has that name in another case. The index compares without case, so
-    the write would fail with its raw error and so would every command, until someone
-    read it; this says which two members instead.
+def _name_held_by_another(transaction: Transaction, name: str, member_id: str) -> bool:
+    """Whether an active member other than ``member_id`` has ``name``, in any case."""
+    holder = active_member_by_name(transaction, name)
+    return holder is not None and holder.project_id != member_id
+
+
+def name_by_own_id(transaction: Transaction, member: UnnamedMember) -> str:
+    """The name for a member with nothing better: its own id, or, when the name index
+    would refuse that, the id with the first free ``-N`` suffix.
+
+    The index compares without case, so an id can clash with an active member's name
+    that differs only in case. Refusing would fail every command that opens the store,
+    and the rename command is one of them, so the member is named apart and the log
+    says so; ``amoeba add --project ID --name NAME`` renames it.
 
     Raises:
-        StoreRowError: An active member already has the id as its name, in another case.
+        StoreRowError: No suffix up to ``NAME_SUFFIX_LIMIT`` is free and valid.
     """
-    if member.removed:
-        return  # a removed member's name is not in the index
-    holder = active_member_by_name(transaction, member.project_id)
-    if holder is not None and holder.project_id != member.project_id:
-        raise StoreRowError(
-            f"member {member.project_id!r} cannot be named by its id: member "
-            f"{holder.project_id!r} already has that name in another case"
-        )
+    own = member.project_id
+    if member.removed or not _name_held_by_another(transaction, own, own):
+        return own  # a removed member's name is not in the index
+    for number in range(2, NAME_SUFFIX_LIMIT + 1):
+        candidate = f"{own}-{number}"
+        if (
+            is_member_name(candidate)
+            and not _name_held_by_another(transaction, candidate, own)
+            and not name_is_other_members_id(transaction, candidate, own)
+        ):
+            logger.warning(
+                "naming: member %s cannot be named by its id (another member has it "
+                "in another case), so it is named %s",
+                own,
+                candidate,
+            )
+            return candidate
+    raise StoreRowError(
+        f"member {own!r} cannot be named: its id clashes in another case and no name "
+        f"{own}-2 to {own}-{NAME_SUFFIX_LIMIT} is free"
+    )
 
 
 def retire_wake_command(
