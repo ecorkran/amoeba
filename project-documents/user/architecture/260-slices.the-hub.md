@@ -8,8 +8,8 @@ component: the-hub
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 260. The hub process, its door and machines; then members known by name across machines; then the work that needs local files, run through the hub; then sessions across machines; then moving the PM's live store to the hub and deleting the local-store way; then members in several programs.
 dateCreated: 20261120
-dateUpdated: 20261121
-status: not_started
+dateUpdated: 20261122
+status: in_progress
 ---
 
 # Slice Plan: The Hub
@@ -31,7 +31,7 @@ Slice numbers are execution order. The first slice takes the plan's index (260).
 
 ## Foundation Work
 
-1. [ ] **(260) Hub and Door** — The hub process, the door, and machines.
+1. [x] **(260) Hub and Door** — The hub process, the door, and machines.
    - **The process.** `amoeba hub serve` in a container, with the image definition and an example `hub.yaml` shipped. `hub.yaml` holds `bind`, the port, the `address` clients are told (both added by the slice design), `backup_dir`, `backup_hours`, `backups_kept` and the log limits, each required with no default in code; a missing or bad key stops the start and names it. Store work runs in a worker thread on its own connection per request.
    - **Certificate.** Made at first start in the state directory, with an end date that is never a limit. `cryptography` becomes a direct dependency.
    - **Machines.** A migration adds machines (name, token hash, last-called time, client version), the owner, and the owner on every record. The local store gets one machine standing for the install. `amoeba hub invite` (a new machine, or a new token for an existing one), `amoeba hub machines`, `amoeba hub rm-machine` (ends the token and removes the machine's session rows; later slices add what else it must end).
