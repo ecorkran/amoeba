@@ -274,10 +274,11 @@ Before `add`'s rewrite, so a command is never written to a checkout while the cl
 
 ## 9. `add` (D1, D5, D6, D7; effort 5)
 
-- [ ] **9.1 The client part of `add`**
-  - [ ] `operations/add_gather.py` (client part, kept out of `add.py` so the hub's add path never imports `here`): `gather_add(request, directory, run, git, door)` decides by D5's table whether `here` is needed (an entry naming no member: bare `add`, `--attach-to`, `--new-member`, a bulk entry with no member) and returns `gather_checkout`'s value, else none and no `cf` call. `refuse_door_fields(document, door)` (from `add_door.py`) runs here first, with the `Door` the placement was called through; the hub part takes no `Door`. Nothing calls `gather_add` until 9.9
-  - [ ] Tests, calling `gather_add` only (the engine `add()` still calls `project_of` at this commit, until 9.9): no `cf` call for `--project` or an all-named bulk file; bare `add` returns the checkout; an MCP `add` with `wake_command` is refused before any gather
-  - [ ] Success: checks pass
+- [x] **9.1 The client part of `add`**
+  - [x] `operations/add_gather.py` (client part, kept out of `add.py` so the hub's add path never imports `here`): `gather_add(request, directory, run, git, door)` decides by D5's table whether `here` is needed (an entry naming no member: bare `add`, `--attach-to`, `--new-member`, a bulk entry with no member) and returns `gather_checkout`'s value, else none and no `cf` call. `refuse_door_fields(document, door)` (from `add_door.py`) runs here first, with the `Door` the placement was called through; the hub part takes no `Door`. Nothing calls `gather_add` until 9.9
+  - [x] Tests, calling `gather_add` only (the engine `add()` still calls `project_of` at this commit, until 9.9): no `cf` call for `--project` or an all-named bulk file; bare `add` returns the checkout; an MCP `add` with `wake_command` is refused before any gather
+  - [x] Success: checks pass
+  - Note: `gather_add(document, directory, run, git, door)` returns the door's refusal (a rejected SetUpResult), or the gathered HereCheckout/HereNotAProject, or None (no gather: --project, an all-named bulk file, or a document that does not parse); names_no_member says when. The --attach-to and --new-member cases are tested in 9.10/9.12 when AddRequest gains those fields (9.9). tests/operations/test_add_gather.py.
 
 **Commit**: `feat: add the client part of add`
 
