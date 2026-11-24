@@ -412,6 +412,8 @@ Checked against the source 20261124; fixes are in the task file.
 
 Later the same day the resumed revise round (commit 3db8470f) also worked the dropped F006, F012, F013, F014, F016, F018, F019 and F020 into the task file: `answer` loses its `refused` fallback, 6.5 and 6.6 split into 6.5 to 6.8, the other `mark_start_attempted` callers, the child's log directory, the bound's value, the grown files in 10.2, the steps the load test times, and the version note.
 
+A re-sent revise round on 20261123 local time rechecked all twenty-one findings against the task file and the source: each was already in place, apart from F011's `docs/cli-contract.md` paragraph that still names `logs/request-release/`. 6.7 now rewrites it, and 10.2's search matches `request-release` too. sq 0.24.38 and cf 0.19.28 were read again.
+
 ### Run Digest
 
 - Response length: 34893 chars
