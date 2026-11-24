@@ -14,16 +14,17 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261123
 dateUpdated: 20261123
-reviewedSha: d580473e73ebb147e1e300aeb526b89d5e7cb32f
-reviewedBlob: aaae7697eea2b90f432f1c9e1aa9ca5b4cdd5b3e
+reviewedSha: f54bc4b62b1bd986cd26eb83e2980971029f67b4
+reviewedBlob: d654779de4da5c738b331762b307528529d08da2
 reviewedBlobCurrent: false
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 76
+toolCallsMade: 80
 injected:
   - key: input
     path: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md"
-    chars: 43242
-    sha256: 807b988a34ea6024cb98ab2707668f009adfa2f9758ff11302efa69fd745cc12
+    chars: 48319
+    sha256: 2c2bec6e3375bffecb9d1158267d534f3b370d26a19d1d2b5fce9f4f0b15d69a
     whole: true
   - key: against
     path: "project-documents/user/slices/262-slice.local-work-through-the-hub.md"
@@ -36,207 +37,197 @@ injected:
     sha256: 2387512002bb2a73aa247bc36bc98d7162c5b5110ded41f56319d098d282ddbc
     whole: true
 filesRead:
-  - "src/amoeba/operations/resume.py"
-  - "tests/store/test_migration_012.py"
-  - "tests/store/test_schema_holds_no_mirrored_state.py"
-  - "tests/wire/test_times.py"
-  - "src/amoeba/wire/times.py"
-  - "tests/hub/test_door_operations.py"
-  - "tests/hub/test_joined_entry_points.py"
-  - "tests/store/test_migrations.py"
-  - "tests/hub_fixture.py"
-  - "src/amoeba/operations/status.py"
-  - "src/amoeba/operations/pause_class.py"
-  - "src/amoeba/operations/request_release.py"
-  - "src/amoeba/operations/handle_pause.py"
-  - "src/amoeba/operations/question_sweep.py"
-  - "src/amoeba/wiring_release.py"
-  - "src/amoeba/wiring.py"
-  - "src/amoeba/wiring_door.py"
-  - "tests/load/test_start_ended_held_load.py"
+  - "src/amoeba/store/wakes.py"
+  - "src/amoeba/store/answers.py"
   - "src/amoeba/store/held_questions.py"
-  - "src/amoeba/answering/values.py"
-  - "src/amoeba/operations/state_move.py"
-  - "src/amoeba/wire/protocol.py"
+  - "tests/store/test_question_closing.py"
+  - "tests/operations/test_question_sweep.py"
+  - "tests/store/test_held_questions.py"
+  - "src/amoeba/operations/resume.py"
+  - "src/amoeba/wire/times.py"
+  - "src/amoeba/operations/request_release.py"
+  - "src/amoeba/wiring.py"
+  - "src/amoeba/store/sql.py"
   - "src/amoeba/hub/calls.py"
-  - "src/amoeba/client/call.py"
-  - "pyproject.toml"
-  - "src/amoeba/store/schema/011_hub_and_door.sql"
+  - "tests/load/test_door_load.py"
+  - "tests/hub_fixture.py"
+  - "tests/test_ci_gates_load.py"
+  - "tests/store/test_schema_holds_no_mirrored_state.py"
+  - "tests/hub/test_handle_call.py"
+  - "tests/hub/test_app.py"
+  - "src/amoeba/wire/protocol.py"
+  - "src/amoeba/cli/main.py"
+  - "src/amoeba/cli/commands.py"
+  - "src/amoeba/cli/wake_command.py"
+  - "src/amoeba/operations/send.py"
+  - "src/amoeba/operations/wake_door.py"
+  - "src/amoeba/operations/wake.py"
+  - "src/amoeba/operations/pause_existing.py"
+  - "src/amoeba/hub/admin.py"
+  - "tests/test_import_boundaries.py"
+  - "tests/operations/test_every_state_exits.py"
 searches:
-  - "list_files src/amoeba/store/schema/*.sql in ."
-  - "grep EXPECTED_SCHEMA_VERSION|DOOR_VERSION|CALL_BOUND_SECONDS\\s*= in /Users/manta/source/repos/manta/amoeba"
-  - "grep def resume_bound_seconds|def answering_wait_seconds|resume_bound|pause_claim|MAX_STARTS_PER_CALL|def classify_run_only|classify_run_only in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep MACHINE_REMOVED|class ClosedReason|class WakeOutcome|class DeclineReason|class SkipReason|class ClaimResult|STARTS_EXHAUSTED in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep EXPECTED_SCHEMA_VERSION|DOOR_VERSION|CALL_BOUND_SECONDS\\s*[:=]|STORE_WAIT|BUSY_TIMEOUT_SECONDS\\s*[:=] in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep EXPECTED_SCHEMA_VERSION|DOOR_VERSION|schema_version|== 12|, 12\\)|\\b12\\b.*version in /Users/manta/source/repos/manta/amoeba/tests"
-  - "grep CREATE (TABLE|INDEX|TRIGGER|UNIQUE INDEX)|CHECK|REFERENCES|ALTER TABLE|PRAGMA|DROP|RENAME in /Users/manta/source/repos/manta/amoeba/src/amoeba/store/schema"
-  - "grep ^- \\*\\*[a-z ]+\\*\\*: in /Users/manta/source/repos/manta/amoeba/docs/store-contract.md"
-  - "grep INSERT INTO (questions|wakes|answers|messages)\\b in /Users/manta/source/repos/manta/amoeba"
-  - "grep def (insert_question|insert_held|claim_wake|can_wake|mark_resume_started|record_resume|settle_answered|settle_waiting|settle_held_waiting|replace_claim|claim_held|mark_start_attempted|close_question|finish_wake|wake_summary|effective_state)\\b in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep def (act_as_local|act_as|call_scope|open_state_store|open_hub_store|rm_machine|refuse_if_joined|start_after|start_claimed|invoke|check_deadline|_dispatch|steps_for)\\b|OPERATIONAL_ERRORS|OPERATION_ERRORS|NotServedError in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep resume_wait_seconds|answering_wait_seconds|RUN_POLL_TIMEOUT_SECONDS\\s*[:=]|TERMINATE_GRACE_SECONDS\\s*[:=]|prune_after_days|wake_timeout_seconds|max_wakes_per_day in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep can_wake\\(|mark_resume_started\\(|claim_wake\\(|mark_start_attempted\\(|record_resume\\(|request_release|start_ended_held|_due_rows|sweep_candidates|wake_door|not_served in /Users/manta/source/repos/manta/amoeba"
-  - "list_files tests/{live/hold,live/waking,hub/in_process_hub.py,hub_fixture.py,load/test_door_load.py,scripts/test_update_live.py,test_contract_docs.py,test_import_boundaries.py,test_wiring_release.py,operations/test_pause_eligibility.py,operations/test_pause_claim_held.py,operations/test_question_sweep.py,store\u2026 in /Users/manta/source/repos/manta/amoeba"
-  - "list_files src/amoeba/{operations/steps,operations/store_steps.py,operations/work_start.py,operations/resume_run.py,wiring_steps.py,cli/resume_command.py,operations/resume_attempt.py,hub/call_work.py,operations/wake_door.py,operations/request_release.py,wiring_release.py,mcp/detached.py,operations/state_move.p\u2026 in /Users/manta/source/repos/manta/amoeba"
-  - "grep two_machine_hub|class DoorHooks|sq_stub|PATH|SQ_STUB|runs_dir|squadron|def clock|settable|set_clock|now\\s*=|200|2\\.0|16|median|CLIENTS|BOUND in /Users/manta/source/repos/manta/amoeba/tests"
-  - "list_files tests/live/* in /Users/manta/source/repos/manta/amoeba"
-  - "grep def (update|restore|_read_back|read_back|_check|main|_backup|_restore|_list)\\b|add_argument|subcommand|\"list\"|amoeba list|STORE_BACKUP|CONFIG_BACKUP|def _verify|read-back|readback in /Users/manta/source/repos/manta/amoeba/scripts/update_live.py"
-  - "grep class |clock|DoorHooks|def |hooks in /Users/manta/source/repos/manta/amoeba/tests/hub/in_process_hub.py"
-  - "grep class DoorHooks|DoorHooks|def handle_call|def _store_call|after_commit|drop|def _refuse|OPERATION_ERRORS|MAX_CALL_BYTES|not_served|NOT_SERVED|SERVED_OPERATIONS|WRITING_CALLS|HELLO_CALL in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep def classify_runs|answering_wait|claim_age|limit|updated_at|claimed_at in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations/status_runs.py"
-  - "grep def route|def run_served|return None|return result|def place_served|check_deadline\\(|def _refuse_in_a_hub_home|def open_store|def load_config in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep def test_|wiring_release|start_after|request_release|import in /Users/manta/source/repos/manta/amoeba/tests/test_wiring_release.py"
-  - "grep def test_.*(answering|answer_run|own_pause|cf|skip)|def test_.*(unresumed|not_delivered|bound)|def test_.*(limit|held) in /Users/manta/source/repos/manta/amoeba/tests/operations"
-  - "grep request_release|wiring_release|start_ended_held|MAX_STARTS_PER_CALL|START_FAILED_OUTCOME|REQUEST_RELEASE_LOG_DIRECTORY|start_after in /Users/manta/source/repos/manta/amoeba/tests"
-  - "grep request_release|wiring_release|REQUEST_RELEASE|def test_|FORBIDDEN|RULES|store\\.store|amoeba\\.store in /Users/manta/source/repos/manta/amoeba/tests/test_import_boundaries.py"
-  - "grep request_release|wiring_release|start_ended_held in /Users/manta/source/repos/manta/amoeba/tests/test_message_timing.py"
-  - "grep DeclineReason|ClosedReason|WakeOutcome|def test_|waiting_reason in /Users/manta/source/repos/manta/amoeba/tests/store/test_vocabulary_pinning.py"
-  - "grep act_as_local\\(|act_as\\(|ActingMachine|machine_id in /Users/manta/source/repos/manta/amoeba/src/amoeba/store"
-  - "grep ^ in /Users/manta/source/repos/manta/amoeba/src/amoeba/hub/calls.py"
-  - "grep ^ in /Users/manta/source/repos/manta/amoeba/src/amoeba/wiring.py"
-  - "grep ^ in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations/handle_pause.py"
-  - "grep ^ in /Users/manta/source/repos/manta/amoeba/src/amoeba/cli/main.py"
-  - "grep ^ in /Users/manta/source/repos/manta/amoeba/src/amoeba/store/sql.py"
-  - "list_files tests/live/hold/** in /Users/manta/source/repos/manta/amoeba"
-  - "grep def squadron_runs_dir|SQUADRON_|\\.config/squadron|expanduser|Path\\.home in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep runs|HOME|environ|sq in /Users/manta/source/repos/manta/amoeba/tests/sq_stub.py"
-  - "list_files tests/live/waking/*.py in /Users/manta/source/repos/manta/amoeba"
-  - "grep UNKNOWN_ADVICE|def run_served|case OperationName|case \"|class ServedEdges|def _refuse in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep def _needs_config|_NEEDS_CONFIG|NEEDS_CONFIG|def _loaded|def find_kept|def keep in /Users/manta/source/repos/manta/amoeba/src/amoeba/hub"
-  - "grep ^SERVED|SERVED: |needs_config|class ServedOperation|SERVED = |import.*SERVED in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep \"answer\"|'answer'|not_served|NOT_SERVED in /Users/manta/source/repos/manta/amoeba/tests"
-  - "grep answering_wait_seconds|resume_bound|dead|claim in /Users/manta/source/repos/manta/amoeba/docs/config-contract.md"
-  - "grep def test_|requires|contract|columns|docs/ in /Users/manta/source/repos/manta/amoeba/tests/test_contract_docs.py"
-  - "grep ^class (ClientFileError|HubUnreachableError|HubRefusedError|StepReplyError)|^def (find_caller|find_member|here|run_gather)\\b|^class ServedEdges|ServedEdges\\b.*import|import.*ServedEdges|^from amoeba.operations.served_types import|^def (run_served|gather_caller_always) in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep ^def (run_handle_pause|run_wake_run|prune|handle_pause|wake_run|resume_record|answer|send|status_runs_entry)\\(|^def (run_handle_pause|run_wake_run) in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep refuse_if_joined|NotServedError in /Users/manta/source/repos/manta/amoeba/src/amoeba/cli"
-  - "list_files {.github/workflows/*.yml,.github/workflows/*.yaml,pyproject.toml,tests/load/conftest.py,tests/conftest.py} in /Users/manta/source/repos/manta/amoeba"
-  - "grep load|markers|addopts|testpaths|norecursedirs|ignore in /Users/manta/source/repos/manta/amoeba/pyproject.toml"
-  - "grep pytest|load|live|run:|ruff|pyright|uv  in /Users/manta/source/repos/manta/amoeba/.github/workflows/ci.yml"
+  - "list_files src/amoeba/store/schema/01*.sql in ."
+  - "list_files src/amoeba/operations/{request_release,wiring_release,wake_door,work_start,resume_run,resume_attempt,store_steps,handle_pause,pause_eligibility,pause_class,pause_claim,pause_held,pause_existing,pause_results,pause_context,claim_waiting,answering_settle,resume,wake_run,prune,status_runs,question_swee\u2026 in ."
+  - "list_files src/amoeba/{wiring_release,wiring_steps,wiring_door,wiring_messages,wiring,wake_command,cli/*}.py in ."
+  - "list_files tests/**/{in_process_hub,hub_fixture,fault_injection,sq_stub,sq_stub_resume,cf_stub,store_open,release_child_wait,schema_11,schema_12,seed,test_start_ended_held_load,test_door_load,test_ci_gates_load,test_update_live,test_vocabulary_pinning,test_import_boundaries,test_wiring_release,test_question_sw\u2026 in ."
+  - "list_files src/amoeba/{hub/*,store/{questions,held_questions,wakes,answers,sql,sql_held,sql_wakes,sql_messages,vocabulary,models,store,question_closing,messages}*,wire/*,client/*,answering/values.py}.py in ."
+  - "list_files {scripts/update_live.py,docs/*.md,tests/live/**/*,tests/hub/*.py,tests/load/*.py,.claude/skills/release/SKILL.md} in ."
+  - "list_files src/amoeba/operations/steps/** in ."
+  - "list_files src/amoeba/hub/*.py in ."
+  - "list_files src/amoeba/store/*.py in ."
+  - "list_files src/amoeba/{wire,client,answering}/*.py in ."
+  - "list_files scripts/update_live.py in ."
+  - "list_files tests/hub/*.py in ."
+  - "grep MAX_STARTS_PER_CALL|request_release|wiring_release|start_after|wake_door|can_wake|mark_resume_started|mark_start_attempted|claim_wake\\b in /Users/manta/source/repos/manta/amoeba"
+  - "grep owner_id|owner in /Users/manta/source/repos/manta/amoeba/src/amoeba/store/schema"
+  - "grep def acting|owner_id|class Acting|def act_as|def call_scope in /Users/manta/source/repos/manta/amoeba/src/amoeba/store"
+  - "grep BOUND|resume_bound|answering_wait|CALL_BOUND|^NOW|^OLD|^LATER|def _sweep|def _answered in /Users/manta/source/repos/manta/amoeba/tests/operations/test_question_sweep.py"
+  - "grep def resume_bound_seconds|CALL_BOUND_SECONDS[:= ]|DOOR_VERSION[:=]|BUSY_TIMEOUT_SECONDS[:=]|answering_wait_seconds[:=]|resume_bound_seconds[:=]|def classify_pause|def classify_runs|def _judge|def mark_start_attempted|MAX_AUTOMATIC in /Users/manta/source/repos/manta/amoeba/src"
+  - "grep RUN_POLL_TIMEOUT_SECONDS[:=]|TERMINATE_GRACE_SECONDS[:=]|MAX_WORK|wake_timeout|max_wakes_per_day[:=]|session_stale in /Users/manta/source/repos/manta/amoeba/src"
+  - "grep OPERATIONAL_ERRORS|OPERATION_ERRORS\\b.*=|class NotServedError|def refuse_if_joined|def route\\b|def invoke|def _dispatch|def check_deadline|class ClientFileError|class HubUnreachableError|class HubRefusedError|class LocalStoreClosedError|class HubHomeError|def run_handle_pause|def run_wake_run|refuse\u2026 in /Users/manta/source/repos/manta/amoeba/src"
+  - "grep class DoorHooks|after_commit|def two_machine_hub|def env_for|PATH|HOME|def clock|set_clock|class InProcessHub|def load_test|LOAD_|0\\.2|200|median|500|def _seed|seed_|claim_work|in-process|two_machine in /Users/manta/source/repos/manta/amoeba/tests"
+  - "grep insert\\s+into\\s+\"?(questions|wakes|held)|INSERT\\s+INTO\\s+\\\"?(questions|wakes) in /Users/manta/source/repos/manta/amoeba"
+  - "grep COLUMN_REASONS|\"record\"|\"waking\"|\"messages\"|mirrored in /Users/manta/source/repos/manta/amoeba/tests/store/test_schema_holds_no_mirrored_state.py"
+  - "grep def test_a_send_to_a_member_a_wake_is_due_for_is_not_served|def test_a_hub_part_refusal_keeps_no_result_for_a_repeat|def test_an_unserved_name_is_not_served|not_served|DOOR_VERSION|\\(1,|\"answer\"|'answer'|OperationName.ANSWER|handle-pause|wake-run|HANDLE|WAKE_RUN in /Users/manta/source/repos/manta/amoeba/tests"
+  - "grep release|start_ended|START_FAILED|held_start|prune\\(|prune\\b in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep \\bprune\\b|deps\\.prune|\\.prune\\( in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep def open_state_store|def open_hub_store|def act_as_local|def acting_machine_id|def act_as\\b|def call_scope|def acting\\b|def the_owner|def open_store|LOCAL_MACHINE_NAME[:=]|EXPECTED_SCHEMA_VERSION[:=] in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep answering_wait_seconds|classify_run_only|claim_age_limit|claim_stale|updated_at.*claim|stale in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep def rm_machine|def restore|def update|def read_back|list|def _verify|def main|argparse|add_parser|\\\"restore\\\"|'restore'|def _check|amoeba.*list in /Users/manta/source/repos/manta/amoeba/scripts/update_live.py"
+  - "grep def rm_machine|DELETE FROM machines|machines WHERE|machine_id|owner|def _ in /Users/manta/source/repos/manta/amoeba/src/amoeba/hub/admin.py"
+  - "grep _needs_config|def _serve|def _done|def _keep|def _lookup|kept|def handle_call|def for_exception|load_config\\( in /Users/manta/source/repos/manta/amoeba/src/amoeba/hub"
+  - "grep ^from amoeba|^import amoeba|^from \\.|^    from amoeba in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep ^import subprocess|^from subprocess|Popen|def param_problem|def spawn|subprocess\\.|^from amoeba|^import in /Users/manta/source/repos/manta/amoeba/src/amoeba/upstream/squadron/launch.py"
+  - "grep open\\(|read_text|Path\\(.*\\)\\.read|read_bytes|from amoeba|import amoeba in /Users/manta/source/repos/manta/amoeba/src/amoeba/answering/artifacts.py"
+  - "grep start_after|START_AFTER|wiring_release|^def test_|^from amoeba|^import in /Users/manta/source/repos/manta/amoeba/tests/test_wiring_release.py"
+  - "grep \"store\": \\( in /Users/manta/source/repos/manta/amoeba/tests/test_import_boundaries.py"
+  - "grep clock|now|class |def  in /Users/manta/source/repos/manta/amoeba/tests/hub/in_process_hub.py"
+  - "list_files docs/{store-contract,cli-contract,config-contract,squadron-hook,mcp-server}.md in ."
+  - "grep answering_run|def test_.*answering|cf|exit in /Users/manta/source/repos/manta/amoeba/tests/operations/test_pause_eligibility.py"
+  - "grep def seed|act_as|def acting|raise .*acting|no acting machine|NoActing|acting machine in /Users/manta/source/repos/manta/amoeba"
+  - "grep class ServedEdges|def run_served|class CallRefused|def find_caller|def find_member|class DoorHooks|def remove_machine|def classify_run_only|def runs_document|def build_runs|class RunsDocument|def run_gather|def here\\b|def place_served|def route\\b|OPERATIONAL_ERRORS: Final in /Users/manta/source/repos/manta/amoeba/src"
+  - "grep ServedEdges in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations/served.py"
+  - "grep classify_pause\\(|classify_runs\\(|resume_bound_seconds|answering_wait_seconds|claim_age_limit|BOUND\\s*= in /Users/manta/source/repos/manta/amoeba/tests"
+  - "grep NOT_DELIVERED|not_delivered|resume_bound|answering_wait|BOUND in /Users/manta/source/repos/manta/amoeba/tests"
+  - "grep unreadable|PollFailure|SquadronError|pytest.raises|nothing is|no write|writes nothing|records nothing in /Users/manta/source/repos/manta/amoeba/tests/operations/test_resume.py"
+  - "grep def test_|STRUCT|ENUM|Enum|import|SkipReason|OperationName|wire|protocol|\\.md in /Users/manta/source/repos/manta/amoeba/tests/test_contract_docs.py"
+  - "grep def worst_case_seconds|WAKE|START|BUSY|CALL_BOUND|send|SEND|return in /Users/manta/source/repos/manta/amoeba/src/amoeba/wiring_messages.py"
+  - "grep ^version\\s*=|^name\\s*= in /Users/manta/source/repos/manta/amoeba/pyproject.toml"
 sectionsInDocument: 12
 sectionsCovered: 12
 effort: xhigh
-turns: 77
-promptTokens: 6597957
-cachedTokens: 6316301
-cacheWriteTokens: 281590
-completionTokens: 136873
-durationSeconds: 597.8
-costUsd: 0.834681
+turns: 81
+promptTokens: 9756530
+cachedTokens: 9469253
+cacheWriteTokens: 287179
+completionTokens: 147763
+durationSeconds: 651.8
+costUsd: 1.028539
 costBasis: provider
 runId: run-20261124-p5-86ef1af7
 squadronVersion: 0.24.38
 findings:
   - id: F001
     severity: fail
-    category: test-allowlist
-    summary: "The test-edit allowlist forbids the changes 5.1, 7.1 and 7.4 require"
-    location: "tests/hub/test_handle_call.py:173"
+    category: layering
+    summary: "wake_due is placed where store/wakes.py must call it, breaking the store layering rule"
+    location: "src/amoeba/store/wakes.py:170"
   - id: F002
     severity: fail
-    category: sequencing
-    summary: "The after-step never runs on a joined machine"
-    location: "src/amoeba/wiring.py:168"
+    category: coverage
+    summary: "Tests that D9 reverses are not among the named edits"
+    location: "tests/operations/test_every_state_exits.py:251"
   - id: F003
     severity: concern
-    category: sequencing
-    summary: "Writing steps are not wired into the keep, advice, or config paths"
-    location: "src/amoeba/hub/calls.py:228"
+    category: existing-code
+    summary: "The 2.5 wake_due signature drops the WakeScope that can_wake takes"
+    location: "src/amoeba/store/wakes.py:159"
   - id: F004
     severity: concern
-    category: test-coverage
-    summary: "No test for the first-poll refusal"
-    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md:135"
+    category: coverage
+    summary: "Task 2.2 says \"name each\" but names no test that pins the stale age or resume bound"
+    location: "tests/operations/test_every_state_exits.py:229"
   - id: F005
     severity: concern
     category: existing-code
-    summary: "The migration-012 test pins schema 12 and is not in the plan"
-    location: "tests/store/test_migration_012.py:44"
+    summary: "Task 3.4 says existing resume tests pass, but one pins the first-poll behaviour that D6 reverses"
+    location: "tests/operations/test_resume.py:261"
   - id: F006
     severity: concern
     category: existing-code
-    summary: "Raw SQL inserts fail under the new machine trigger"
-    location: "tests/store/test_migrations.py:363"
+    summary: "Task 6.2 makes mark_start_attempted accept claimed rows, against an existing refusal test"
+    location: "tests/store/test_held_questions.py:183"
   - id: F007
     severity: concern
-    category: contract-docs
-    summary: "The reason labels for the new columns do not exist"
-    location: "tests/store/test_schema_holds_no_mirrored_state.py:23"
+    category: existing-code
+    summary: "Task 7.1 misses the test that asserts answer is NOT_SERVED"
+    location: "tests/hub/test_handle_call.py:365"
   - id: F008
     severity: concern
-    category: sequencing
-    summary: "The claim-age list in 2.1 is incomplete"
-    location: "src/amoeba/operations/question_sweep.py:190"
+    category: existing-code
+    summary: "Task 2.3 does not list the callers of mark_resume_started that it removes"
+    location: "src/amoeba/store/questions.py:27"
   - id: F009
     severity: concern
-    category: existing-code
-    summary: "Deleting two modules breaks test files the plan does not name"
-    location: "tests/load/test_start_ended_held_load.py:33"
+    category: coverage
+    summary: "Import-boundary rules are assigned to no task for resume, prune, resume_run and work_start"
+    location: "tests/test_import_boundaries.py:30"
   - id: F010
     severity: concern
-    category: task-clarity
-    summary: "The fixture shares one HOME, and 7.5 does not name the mechanism"
-    location: "tests/hub_fixture.py:198"
+    category: sequencing
+    summary: "run_handle_pause still loads config and opens the store, which 7.4's no-config test rules out"
+    location: "src/amoeba/cli/commands.py:214"
   - id: F011
     severity: concern
-    category: scope
-    summary: "`steps_for` takes inputs that nothing in this slice uses"
-    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md:232"
+    category: consistency
+    summary: "6.6 keeps test_wiring_release.py, which imports the deleted module; the 10.2 grep will match it"
+    location: "tests/test_wiring_release.py:41"
   - id: F012
     severity: concern
-    category: granularity
-    summary: "4.5 and 6.5 are each too large for one pass"
-    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md:167"
+    category: proportionality
+    summary: "Task 4.4 bundles pause_begin, the close-sweep change and a test edit"
+    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md:165"
   - id: F013
-    severity: concern
-    category: ci-gating
-    summary: "CI gating for the door load test is implicit"
-    location: ".github/workflows/ci.yml:40"
+    severity: note
+    category: proportionality
+    summary: "Context Summary says sql.py gets only edited inserts, but 2.3 must change existing statements"
+    location: "src/amoeba/store/sql.py"
   - id: F014
     severity: note
-    category: test-coverage
-    summary: "Two design rules in D3 have no test"
-    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md:256"
+    category: consistency
+    summary: "Context Summary places ServedEdges in served.py; it is defined in served_types.py"
+    location: "src/amoeba/operations/served_types.py:66"
   - id: F015
     severity: note
-    category: granularity
-    summary: "1.1 is too small to be its own item, and 1.5 needs a consistency fix"
-    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md:67"
+    category: consistency
+    summary: "Task 9.1 names the wrapper, not the function that holds the transaction"
+    location: "src/amoeba/hub/admin.py:90"
   - id: F016
     severity: note
-    category: structure
-    summary: "Two large source files will grow"
-    location: "src/amoeba/store/sql.py"
+    category: coverage
+    summary: "The 10.2 grep omits start_ended_held, so stale docstring references survive"
+    location: "src/amoeba/operations/status_runs.py:252"
   - id: F017
     severity: note
-    category: sequencing
-    summary: "5.1 uses a body key that 7.1 creates"
-    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md:187"
+    category: coverage
+    summary: "The local-store walkthrough in the design has no step in 10.1"
+    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md:331"
   - id: F018
     severity: note
-    category: test-coverage
-    summary: "Nothing tests that a removed machine's wakes name it"
-    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md:305"
+    category: coverage
+    summary: "Task 8.4 does not say how the 500 requests and the second machine are seeded"
+    location: "tests/load/test_door_load.py:130"
   - id: F019
     severity: note
-    category: process
-    summary: "The slice branch's target has an uncommitted change"
-    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md:54"
+    category: coverage
+    summary: "A pinned worst-case figure for send is not covered by any task"
+    location: "src/amoeba/wiring_messages.py:42"
   - id: F020
     severity: note
-    category: facts
-    summary: "The tool versions are unverified"
+    category: consistency
+    summary: "Frontmatter tool versions are not verified in this review"
     location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md:13"
-  - id: F021
-    severity: pass
-    category: coverage
-    summary: "Success criteria are covered by tasks"
-    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md"
-  - id: F022
-    severity: pass
-    category: sequencing
-    summary: "Each implementation section is followed by its tests"
-    location: "project-documents/user/tasks/262-tasks.local-work-through-the-hub.md"
 ---
 
 # Review: tasks — slice 262
@@ -246,131 +237,115 @@ findings:
 
 ## Findings
 
-### [FAIL] The test-edit allowlist forbids the changes 5.1, 7.1 and 7.4 require
+### [FAIL] wake_due is placed where store/wakes.py must call it, breaking the store layering rule
 
-The Context Summary (task line 46) says "If any other test fails, fix the code, not the test", and allows five kinds of edit. Three changes the plan requires break tests that pin the old refusals, and none of the five kinds covers them:
-- `answer` joins `SERVED_OPERATIONS` (7.1, line 248). `tests/hub/test_handle_call.py:173-176` and `:365-372` use `answer` as the unserved probe. `tests/hub/test_app.py:121` and `:144` do the same. `tests/operations/test_served.py:118-119` expects `run_served("answer")` to raise `ValueError`.
-- `send` stops refusing `not_served` (5.1, line 189). `tests/hub/test_door_operations.py:237-274` asserts `NOT_SERVED` for a due wake, twice.
-- `handle-pause` and `wake-run` stop refusing on a joined machine (7.4, line 261). `tests/hub/test_joined_entry_points.py:69-86` expects `NotServedError` and exit 3 for `answer`, `handle-pause` and `wake-run`.
+Task 2.5 (lines 111-114) puts `wake_due` in `steps/wake.py` and has `claim_wake` call it. `claim_wake` is defined in `amoeba.store.wakes`. `tests/test_import_boundaries.py:37` forbids the `store` package from importing `amoeba.operations`, so the import 2.5 requires fails that test as soon as it is written. The design's D8 makes the same placement, so the conflict comes from the design. Fix: define `wake_due` in `store/wakes.py`, which needs only store reads (`first_wakeable_checkout`, `live_member_ids`, the live-wake and window counts), and have `operations/steps/wake.py` re-export it or call it. Name the placement change in 2.5.
 
-Read literally, line 46 requires restoring the refusals, which contradicts 5.1 and 7.1, and the checks cannot pass. Add these to the Migration Plan's allowed edits and to 5.1, 7.1 and 7.4. Each probe should use a name that stays unserved, such as `handle_pause`. The `send` and joined-CLI assertions should be rewritten to the new behavior.
+### [FAIL] Tests that D9 reverses are not among the named edits
 
-### [FAIL] The after-step never runs on a joined machine
+Task 4.4 (lines 168-169) names only the split in `test_question_sweep.py`. Two other tests assert what D9 removes:
+- `test_every_state_exits.py:251-263` expects the sweep to mark an answered, unresumed answer `NOT_DELIVERED` once its bound passes. D9 says the sweep leaves it.
+- `tests/operations/test_status_sweep.py:170-190` expects `status` to mark an old unresumed answer `NOT_DELIVERED`. Task 5.4 (lines 206-210) does not name it.
 
-6.5 (line 233) says `wiring.invoke` calls `after_call` after every CLI operation. The existing `start_after` sits in the `finally` of the local branch (`wiring.py:173-180`). `invoke` returns earlier when `route` returns a door result (`wiring.py:168-172`). `route` returns for every served operation on a joined machine (`wiring_door.py:109-124`). So on a joined machine no after-step runs. Criterion 676 (alpha's next call resumes the run), the first 8.1 test (line 277), and the walkthrough's `amoeba list` on alpha all depend on it. 6.5 or 7.3 must state that `after_call` also runs on the `route` result, with `steps_for` choosing `DoorSteps`.
+Line 48 allows only the five named kinds of edit and says a failing test is fixed in the code. An implementer following it cannot implement D9. Name both tests as design-allowed edits in 4.4 and 5.4.
 
-### [CONCERN] Writing steps are not wired into the keep, advice, or config paths
+### [CONCERN] The 2.5 wake_due signature drops the WakeScope that can_wake takes
 
-7.1 and 7.2 add the step names and say a step's "kept result" commits with it. They never say what decides that, and the existing code keys everything on names that exclude steps:
-- The hub keeps a result only when `request.name in WRITING_CALLS` (`calls.py:228`). The client adds `UNKNOWN_ADVICE` only for `WRITING_CALLS` (`client/call.py:146`). Both checks are false for every step. Writing steps' results would not be kept, so a dropped `claim_work` or `resume_record` reply could not be replayed, which 8.2 depends on. Their advice would never print.
-- `_needs_config` looks names up in the `SERVED` table (`calls.py:110-113`, `served.py:109`) and returns False for an unknown name. Any step whose edges call `load_config` then hits `_loaded` and an `AssertionError` (`calls.py:215-218`, `241-244`).
+`can_wake(transaction, member_id, now, limits, scope=WakeScope.ACTING_MACHINE)` takes a scope. Task 2.5 (line 113) gives `wake_due(transaction, member, now, limits)` with none. Task 5.1 needs the all-machines check for `wake_waiting_on` (line 193), and `operations/wake_door.py:34-35` passes `WakeScope.ALL_MACHINES`. `tests/store/test_wake_on_checkout.py:123-126` passes the scope as a fifth argument. So the claim in 2.6 (line 118), "existing 244 wake tests pass unchanged apart from the renamed function", is false. Add `scope` to the signature and say so.
 
-7.2 should say that keep and advice use `WRITING_STEPS` as well as `WRITING_CALLS`. It should also register each step in the `needs_config` table, with `resume_record`, `wake_set_pid` and `wake_finish` false, as D10 requires.
+### [CONCERN] Task 2.2 says "name each" but names no test that pins the stale age or resume bound
 
-### [CONCERN] No test for the first-poll refusal
+Task 2.2 (line 101) defers the list of tests with "(name each)". Twelve test files reference `answering_wait_seconds`, `resume_bound_seconds`, `classify_pause`, `classify_runs` or `claim_age_limit`. `test_every_state_exits.py:229-239` expects a claim to go stale at `answering_wait_seconds`, which 2.1 moves to `pause_claim_seconds`, so it fails. `test_question_sweep.py:56` still uses `resume_bound_seconds` for BOUND, which passes only by accident. Line 48 requires the names to be in the task, not left to the implementer.
 
-D6 (design line 318) and the Integration Requirements (design line 748) say a first poll that cannot be read records `refused` with the reason, where today nothing is stored, and that this frees the claim. 3.3 (line 134) describes it. 3.4 (lines 136-139) covers the started-with-unreadable-poll case, the attempt-file table, and a failed write. It does not cover the case with no attempt file. Add that test: no file, first poll unreadable, `refused` recorded with the reason, and the next `claim_resume` gets the claim.
+### [CONCERN] Task 3.4 says existing resume tests pass, but one pins the first-poll behaviour that D6 reverses
 
-### [CONCERN] The migration-012 test pins schema 12 and is not in the plan
+`test_an_unreadable_first_poll_raises_and_writes_nothing` asserts a `SquadronError` and that nothing is stored. Tasks 3.3 (line 136) and 3.4 (lines 140-141) make an unreadable first poll with no attempt file record `refused` and free the claim. Task 3.4 bullet 1 (line 138) still says existing resume tests pass with `LocalSteps`. Name this test as a changed assertion.
 
-The fixture asserts `migrate(opened) == read_schema_version(opened) == 12`. After 1.2 sets `EXPECTED_SCHEMA_VERSION` to 13, every test in that file errors. 1.2 (line 75) names only `test_schema_holds_no_mirrored_state.py` as a schema-version pin. Name this file and line in 1.2, or the commit at line 89 does not pass its suite.
+### [CONCERN] Task 6.2 makes mark_start_attempted accept claimed rows, against an existing refusal test
 
-### [CONCERN] Raw SQL inserts fail under the new machine trigger
+`mark_start_attempted` (`src/amoeba/store/held_questions.py:124-143`) matches only `WAITING_ON_REQUEST`, through `sql_held.MARK_START_ATTEMPTED`. Task 6.2 (line 224) says it applies to `claimed` rows too. `test_mark_start_attempted_refuses_a_row_no_longer_held` (lines 183-188) makes a claimed row and asserts refusal. The test is not in 6.3 or the migration list. The SQL change in `sql_held.py` is also unmentioned.
 
-1.2 (line 74) adds a `BEFORE INSERT` trigger that aborts when `machine_id` is null. `test_a_closed_question_needs_a_known_reason` runs `migrate` to the latest schema (line 366), then inserts a question with no machine (line 382, not wrapped in `pytest.raises`). It fails with `IntegrityError` before its assertions. The test at line 342 passes for the wrong reason. 1.5 (line 86) covers insert tests that bind through the acting machine, not raw-SQL fixtures. Name these tests in 1.5 and say to add `machine_id` to their inserts.
+### [CONCERN] Task 7.1 misses the test that asserts answer is NOT_SERVED
 
-### [CONCERN] The reason labels for the new columns do not exist
+Task 7.1 (lines 258-259) names `test_an_unserved_name_is_not_served` and the `test_app.py` case. `test_hello_with_an_empty_document_keeps_no_result_and_answer_is_not_served` (lines 365-373) asserts `answer` gets `NOT_SERVED`. It fails once `answer` joins `SERVED_OPERATIONS` (line 257). Name it. The `answer` call at line 336 only produces a log side effect, but check it still yields a refusal.
 
-1.2 (line 75) gives claim id and start counts the reason "run state". The test requires one of the keys in `COLUMN_REASONS`: record, membership, settings, messages, waking, marker, rulings, ownership, presence. Each is also a bullet in `docs/store-contract.md`. "run state" is none of them. The stamps beside these columns (`answers.resume_started_at`, `questions.start_attempted_at`) are under "record", so use record. "membership" is the PM's program registration, so it does not fit the machine columns either. "ownership" already covers which machine wrote a row (`sessions.machine_id`, `call_results.machine_id`).
+### [CONCERN] Task 2.3 does not list the callers of mark_resume_started that it removes
 
-### [CONCERN] The claim-age list in 2.1 is incomplete
+Task 2.3 (line 106) says `mark_resume_started` is "replaced by claim_resume at every caller". Callers outside `answers.py` and `resume.py` are:
+- the re-export in `store/questions.py` (line 27, and line 65 in `__all__`);
+- `tests/operations/test_dismiss.py:32,128`;
+- `tests/operations/test_question_sweep.py:35,186`;
+- `tests/store/test_question_closing.py:16,326-339`.
 
-2.1 (line 95) says every place that judges a claim stale at `answering_wait_seconds` moves to `pause_claim_seconds`, and lists `classify_pause`, `pause_existing` and `mcp/detached.py`. Two more do this. The close sweep closes claimed rows by `claimed_at` at `answering_wait_seconds` (`question_sweep.py:190`). The status classifier passes that limit into `classify_runs` (`status.py:197`), which calls `classify_pause` (`status_runs.py:178`). Left as written, the sweep and `status` would call a claim dead at 600 s while its owner is still inside its own limit, which D5 exists to prevent. 4.4 (line 164) does not name the sweep's claim check either. Name both sites in 2.1 or 4.4, with a test.
+`record_resume` also gains a claim-id parameter (line 105) that every existing test call must pass. None of this is named.
 
-### [CONCERN] Deleting two modules breaks test files the plan does not name
+### [CONCERN] Import-boundary rules are assigned to no task for resume, prune, resume_run and work_start
 
-6.5 (line 234) deletes `request_release.py` and `wiring_release.py`, and says to move their remaining tests. These importers are not named anywhere in the plan:
-- `tests/load/test_start_ended_held_load.py:33-37`. This load test guards the busy-store, no-double-start contract, which the recent #48 fix made a regression test. No task carries that contract forward. 6.3 covers `claim_work` threads, not a busy writer.
-- `tests/test_message_timing.py:39` and `:52`.
-- `tests/release_child_wait.py:11`.
-- `tests/operations/test_request_release.py`, `test_request_release_child.py`, `test_held_question_exits.py`.
-- `tests/operations/test_handle_pause.py:27` (`MAX_STARTS_PER_CALL`).
-- `tests/operations/test_status_calls.py:22` (`START_FAILED_OUTCOME`).
-- `tests/test_wiring_release.py:41` imports `START_AFTER_OPERATIONS` from the deleted module. 235 assumes the import can be renamed.
+Task 3.1 (line 129) lists these as client-run modules and says rules are added in the task that moves each one. Tasks 4.5, 4.6 and 5.3 add theirs. Task 3.3 (resume), 5.5 (prune) and 6.4 (`work_start`, `resume_run`) add none. `FORBIDDEN` (lines 30-45) is keyed by package, so per-module rules need a mechanism the task does not describe.
 
-Assign the load test to 6.3, rewritten for `claim_work`, or name its deletion. List the other importers under 6.5, and add them to 0.1's file list.
+### [CONCERN] run_handle_pause still loads config and opens the store, which 7.4's no-config test rules out
 
-### [CONCERN] The fixture shares one HOME, and 7.5 does not name the mechanism
+`run_handle_pause` calls `load_config()` (line 215) and `open_store(layout)` (line 218) before `handle_pause`. Tasks 4.5 (lines 173-174) and 7.4 (lines 273-277) say only "builds LocalSteps" and "uses steps_for". The 7.4 test requires a joined machine with no local `config.yaml` to pass, so the `load_config()` call must be removed. The same applies to `run_wake_run`'s `open_store` (`src/amoeba/cli/wake_command.py:67`, task 5.3). Name both removals.
 
-`env_for` gives the hub and every client the same `HOME` (line 198). `squadron_runs_dir()` is `Path.home()/.config/squadron/runs` (`src/amoeba/config/home.py:221-223`). The sq stub keeps its state under `$HOME/.sq-stub/runs` (`tests/sq_stub.py:73-74`). Today both fixture homes read and write one runs directory. The design's statement that two fixture homes have separate runs (design line 88) is therefore not true of the fixture. 7.5 (line 266) asks for "its own Squadron runs directory under that home" but does not say the change is a per-home `HOME`. Name it, so the test at line 267 can be built.
+### [CONCERN] 6.6 keeps test_wiring_release.py, which imports the deleted module; the 10.2 grep will match it
 
-### [CONCERN] `steps_for` takes inputs that nothing in this slice uses
+Task 6.6 (lines 243-244) keeps the MCP `reply`/`cancel` test in this file. The file imports `START_AFTER_OPERATIONS` from `amoeba.wiring_release` (line 41) and names `start_after` in its docstring (line 5). Deleting `wiring_release.py` breaks it at import. Task 10.2 (line 335) requires `rg ... wiring_release|start_after ... tests` to find nothing. Say in 6.6 that the import and docstring change.
 
-6.5 gives `steps_for` the door times and an optional session identity (263's four header values). No caller, test or criterion in 262 uses them. 263's tick adds them. D3 mentions them, but the plan should not build them before the slice that needs them. Drop them here.
+### [CONCERN] Task 4.4 bundles pause_begin, the close-sweep change and a test edit
 
-### [CONCERN] 4.5 and 6.5 are each too large for one pass
+Task 4.4 (lines 165-170) combines a seven-step transaction, its reply shape, the D9 change to the shared `question_sweep` (which `status` also uses, per 5.4), a design-allowed test split and three test bullets. Split it into `pause_begin` (the transaction and reply, with its tests) and the D9 sweep change (with its tests). Each part can then be checked on its own.
 
-4.5 moves ten modules to `Steps`, adds the `register` callable and two new skips, rewires `cli.commands.run_handle_pause`, adds an import rule, updates skip docs, and edits a test. Split it into (a) the modules take `Steps`, with no new behavior, and (b) `register`, the skips `OTHER_MACHINE` and `RESUME_IN_PROGRESS`, the answering-run ordering, and the docs. 6.5 bundles the after-step, `steps_for`, the `invoke` wiring, two deletions and the test moves. Put the deletions and test moves in their own task.
+### [NOTE] Context Summary says sql.py gets only edited inserts, but 2.3 must change existing statements
 
-### [CONCERN] CI gating for the door load test is implicit
+Context Summary line 42 says `store/sql.py` "gets only the edited inserts". Task 2.3 must change the existing `RECORD_RESUME` and `MARK_RESUME_STARTED` statements (`answers.py` calls `sql.RECORD_RESUME` and `sql.MARK_RESUME_STARTED`). Either allow that edit or move the new statements to `sql_local_work.py`.
 
-8.4 adds load bounds (2 s per call, 200 ms median) but names no CI wiring. CI runs a bare `uv run pytest` (`ci.yml:40`), and `pyproject.toml:70` ignores only `tests/live`, so `tests/load` does run in CI today. The gate exists but the plan does not name it. Say in 8.4 and 10.2 that this CI step gates `tests/load/test_door_load.py`.
+### [NOTE] Context Summary places ServedEdges in served.py; it is defined in served_types.py
 
-### [NOTE] Two design rules in D3 have no test
+Context Summary line 39 lists `operations/served.py (run_served, ServedEdges)`. `ServedEdges` is defined in `served_types.py:66` and imported into `served.py:79`. Correct the pointer.
 
-D3 (design lines 204-205) says a machine that joins during a `LocalSteps` command fails its next store step with `LocalStoreClosedError`. It also says a hub home refuses the local opener with `HubHomeError`, so no client-run command runs on a hub's store. 7.3 and 7.4 test only the reverse direction. Add one test for each.
+### [NOTE] Task 9.1 names the wrapper, not the function that holds the transaction
 
-### [NOTE] 1.1 is too small to be its own item, and 1.5 needs a consistency fix
+Task 9.1 (line 318) says "`hub/admin.rm_machine`, in its one transaction". `rm_machine` (`hub/admin.py:90-98`) only opens the transaction and calls `remove_machine` (`src/amoeba/store/machines.py:198`), which is where the closing logic must go. Name it there. It must stay in the store, for the layering reason above.
 
-1.1 adds two enum members. Merge it into 1.2, where the `CHECK` lists are edited. The Context Summary (line 40) says `tests/store/schema_12.py` is added by 1.2, but 1.5 (line 82) is where it is first used.
+### [NOTE] The 10.2 grep omits start_ended_held, so stale docstring references survive
 
-### [NOTE] Two large source files will grow
+Task 6.6 says to remove references, and the module-level docstring mentions survive at `status_runs.py:252` and `store/models.py:140`. Task 10.2 (line 335) searches only `request_release|wiring_release|start_after|wake_door|MAX_STARTS_PER_CALL`. Add `start_ended_held` to that search.
 
-`sql.py` is 543 lines and `wiring.py` is 297. 1.3 adds machine reads to `sql.py`, and 3.5, 6.5 and 7.x add to `wiring.py`. 10.2 (line 321) checks only new files. Put the machine reads in a new module, and put the after-step in `wiring_steps.py`, so `wiring.py` does not grow.
+### [NOTE] The local-store walkthrough in the design has no step in 10.1
 
-### [NOTE] 5.1 uses a body key that 7.1 creates
+The design's criterion (design line 793) says the 242 and 244 walkthroughs "behave as before" on the local store. Task 10.1 (lines 331-333) runs the two pytest commands and the by-hand pass, but no step runs those walkthroughs on the local store. Add one line.
 
-5.1 sets `log_stem` from "the new body key `logs_dir`". 7.1 (line 248) is where that key is added. Before 7, the local `send` has no body. Say how the local path passes the logs directory, for example as a parameter of the hub part, so 5.2's wake tests have a path.
+### [NOTE] Task 8.4 does not say how the 500 requests and the second machine are seeded
 
-### [NOTE] Nothing tests that a removed machine's wakes name it
+The existing `_seed_answers` seeds 500 answers through `hub.seed(...)`, which acts as `alpha` by default (`tests/hub_fixture.py:331`). Task 8.4 (line 307) asks for 500 questions and 500 requests across both machines. The task does not say how requests are seeded or that `beta`'s share needs `acting_as=SECOND`.
 
-Criterion 692 says the wakes `rm-machine` ends name the machine in their detail. 9.1 (line 305) tests the `log_stem` and the open questions, not the detail.
+### [NOTE] A pinned worst-case figure for send is not covered by any task
 
-### [NOTE] The slice branch's target has an uncommitted change
+`tests/test_contract_docs.py:408-411` pins `worst_case_seconds(SEND)` in `mcp-server.md`, computed from `MESSAGE_LOOKUPS` and `MESSAGE_STORE_WAITS`. D8 and D10 add a mark write, a wake claim and an after-step to `send`. Nothing says whether the figure still holds. Add a check to 9.2 or 10.2.
 
-0.1 requires that the design and this file are committed with no other uncommitted change. At review time the working tree shows this task file as modified (`M`). That is expected until the planning commit is made, but 0.1 cannot pass before then.
+### [NOTE] Frontmatter tool versions are not verified in this review
 
-### [NOTE] The tool versions are unverified
-
-The frontmatter says `sq` 0.24.38 and `cf` 0.19.28 on 20261123. The design says `sq` 0.24.34. I could not run `sq --version` or `cf --version` here. 0.1 (line 57) runs them, so keep that step.
-
-### [PASS] Success criteria are covered by tasks
-
-I traced each functional criterion (design lines 676-727) and the technical and integration requirements to a task. The gaps are the ones listed above. No task is out of scope for the criteria. The fixture's PATH check for `cf`, `sq` and `git` already exists (`tests/hub_fixture.py:80-84`), so 3.1 does not need a new one.
-
-### [PASS] Each implementation section is followed by its tests
-
-Sections 1 to 9 pair each implementation task with its tests, and each section ends with a plain `**Commit**:` line. The commit points are right only once the test-edit gaps above are closed.
+Frontmatter gives `sq 0.24.38` and `cf 0.19.28`, read on 20261123. This review had no shell, so I could not run `sq --version` or `cf --version`. Task 0.1 re-reads them, so this is informational.
 
 ### Run Digest
 
-- Response length: 20396 chars
+- Response length: 29161 chars
 - Response is newline-free: no
-- Tool calls made: 76
-- Tool calls failed: 0
+- Tool calls made: 80
+- Tool calls failed: 1
 - Stop reason: end_turn
 - Output budget: backend default
 - System prompt: preset+append
 - Settings sources: none
 - Reasoning characters: 0
 - Effort: xhigh
-- Turns: 77
-- Tokens — prompt / cached / cache write / completion / reasoning: 6597957 / 6316301 / 281590 / 136873 / not computed
-- Duration: 597.8 s
-- Cost: $0.83 (provider)
+- Turns: 81
+- Tokens — prompt / cached / cache write / completion / reasoning: 9756530 / 9469253 / 287179 / 147763 / not computed
+- Duration: 651.8 s
+- Cost: $1.03 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 22
+- Finding-shaped matches — whole response: 20
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 22
-- Finding-shaped matches — surviving validation: 22
+- Finding-shaped matches — in findings section: 20
+- Finding-shaped matches — surviving validation: 20
