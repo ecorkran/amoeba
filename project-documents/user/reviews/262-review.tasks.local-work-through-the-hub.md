@@ -6,7 +6,7 @@ slice: local-work-through-the-hub
 conventionsSource: AGENTS.md
 projectRules: [general.md]
 project: amoeba
-verdict: FAIL
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/262-tasks.local-work-through-the-hub.md
 aiModel: claude-haiku-5-5
@@ -282,6 +282,8 @@ findings:
 # Review: tasks — slice 262
 
 **Verdict:** FAIL
+
+> Verdict note: the frontmatter verdict is CONCERNS. The reviewer stated FAIL; its fail finding was fixed; all twenty-one findings were checked against the source 20261124; thirteen changed the task file, eight were dropped, see Resolution.
 **Model:** claude-haiku-5-5
 
 ## Findings
@@ -381,6 +383,32 @@ The schema directory holds 001 to 012. The Context precondition names I checked 
 ### [PASS] Success criteria trace to tasks
 
 I mapped the functional, technical and integration criteria to task items, and each one has at least one. Items for the design's D2, D5, D9 to D11 and D13 also appear. I found no scope creep.
+
+## Resolution
+
+Checked against the source 20261124; fixes are in the task file.
+
+- F001 fixed: 2.5 adds a seed helper that sets the wake mark, the six direct-claim tests call it, the local `send` sets the mark before its claim, and 2.6 no longer says the wake tests are unchanged.
+- F002 fixed: 1.2 names `sql.INSERT_QUESTION` and `seed.insert_question` binding the machine.
+- F003 fixed: 1.1 adds `machine_removed` to `docs/cli-contract.md`.
+- F004 fixed: 1.1 gives `ENDED_TEXT` a `machine_removed` text.
+- F005 fixed: 2.3 names `claim_id: str | None`, with no default, and what each caller passes.
+- F006 dropped: `answer` always resumes a fresh answer seq, so no earlier attempt file can hold `started`; the raise D6 describes cannot reach `answer`.
+- F007 fixed: 6.5 has `route` lift `work` and `work_problem` before `result_from_document` into the holder `DoorSteps` uses.
+- F008 fixed: 2.1 measures the stale age from `updated_at` everywhere, as D5 says.
+- F009 fixed: 6.6 lists `tests/cli/test_hold_release_cli.py`.
+- F010 fixed: Context and 6.5 name the reversed `inbox` assertion and `OTHER_START_WORST_CASE_SECONDS`.
+- F011 fixed: 6.6 rewrites the three store-contract passages and the import-boundary strings; 10.2 searches `docs`.
+- F012 dropped: size only; each task still has one commit and one test group.
+- F013 dropped: Context's existing-tests rule covers the other callers, and 6.2 says which state each kind passes.
+- F014 dropped: the log walk prunes everything under `logs/` by age, so the directory name is the implementer's.
+- F015 fixed: 4.4 replaces `open_rows_of_run` with the by-machine read on this path.
+- F016 dropped: 6.5 already defines the bound and the test it pins.
+- F017 fixed: sections 3, 4 and 5 commit as `feat:`.
+- F018 dropped: Context already sends the new logic to new modules; existing files get call sites only.
+- F019 dropped: 8.4 already seeds the questions and requests the steps read.
+- F020 dropped: 0.1 runs both version commands at the start.
+- F021 fixed: 7.4 names `docs/cli-contract.md`.
 
 ### Run Digest
 
