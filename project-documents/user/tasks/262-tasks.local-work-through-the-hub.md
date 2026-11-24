@@ -10,25 +10,26 @@ projectState: Slices 220 to 244, 260 and 261 are merged on main. Package version
   store schema 12 (migrations 001 to 012). The door serves 261's operations; handle-pause
   and wake-run refuse on a joined machine with NotServedError; held questions are
   started by request_release through wiring_release.start_after after seven operations.
-  sq 0.24.38 and cf 0.19.28, read with `sq --version` and `cf --version` on 20261123 and again at the second revision the same day.
+  sq 0.24.38 and cf 0.19.28, read with `sq --version` and `cf --version` on 20261123
+  and again at the second revision the same day.
 dateCreated: 20261123
 dateUpdated: 20261124
 status: not_started
-turns: 49
-promptTokens: 6201502
-cachedTokens: 5998458
-cacheWriteTokens: 202952
-completionTokens: 67278
-durationSeconds: 598.5
-costUsd: 4.169533
-usageRounds: 2
-pricedRounds: 2
+turns: 68
+promptTokens: 10375116
+cachedTokens: 10138043
+cacheWriteTokens: 236945
+completionTokens: 84530
+durationSeconds: 782.4
+costUsd: 5.614578
+usageRounds: 3
+pricedRounds: 3
 usageByModel:
   claude-opus-5-5:
-    rounds: 2
-    costUsd: 4.1695329999999995
-    completionTokens: 67278
-revision_number: 1
+    rounds: 3
+    costUsd: 5.614577999999998
+    completionTokens: 84530
+revision_number: 2
 ---
 
 # Tasks: Local Work Through the Hub
