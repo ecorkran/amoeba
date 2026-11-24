@@ -8,7 +8,7 @@ component: the-hub
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 260. The hub process, its door and machines; then members known by name across machines; then the work that needs local files, run through the hub; then sessions across machines; then moving the PM's live store to the hub and deleting the local-store way; then members in several programs.
 dateCreated: 20261120
-dateUpdated: 20261122
+dateUpdated: 20261124
 status: in_progress
 ---
 
@@ -86,7 +86,7 @@ Slice numbers are execution order. The first slice takes the plan's index (260).
    **Risk Level:** Medium. It changes the key every table refers to and deletes a large part of registration.
    **Relative Effort:** 4
 
-3. [ ] **(262) Local Work Through the Hub** — The commands that need local files run on their machine and make their store steps as hub calls.
+3. [x] **(262) Local Work Through the Hub** — The commands that need local files run on their machine and make their store steps as hub calls.
    - **Two checks first,** from the architecture's note under Anticipated Slices: list every transaction in the pause path and the answering settle that runs a check or reads a local value inside it (`settle_answered` is the known case), and every store function that takes the current time from its caller or sweep that compares a client's time with a store time. The design states how each one moves before anything is split.
    - **`handle_pause`, the answering run's store reads and its settle, and the sweeps** become client-run with hub steps. The answer limit is applied on the hub. Settings come from the hub with the first call.
    - **`answer` and the resume.** The answer is recorded on the hub. The resume gets a real claim: taken only when the started mark is empty, or older than the resume's bound with no outcome. The bound allows for the network retry time. A refused resume is not handed out again.
