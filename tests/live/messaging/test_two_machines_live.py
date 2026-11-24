@@ -12,59 +12,18 @@ Run it with ``uv run pytest tests/live/messaging`` (a bare ``uv run pytest`` ski
 
 from __future__ import annotations
 
-import json
-import os
-import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
-from git_repo import git
-from hub_fixture import FIRST, SECOND, ClientHome, FixtureHub, two_machine_hub
-from live_environment import process_environment
+from hub_fixture import FIRST, SECOND, FixtureHub, two_machine_hub
 
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
+from live.machines import Machine
 
 PROGRAM = "live-demo"
-CF_TIMEOUT_SECONDS = 120
 HASH = "ab12" * 10
-
-
-class Machine:
-    """One client machine: its home, its own Context Forge data directory, its repos."""
-
-    def __init__(self, hub: FixtureHub, client: ClientHome) -> None:
-        self.client = client
-        self.data_dir = client.home / "cf-data"
-        self.data_dir.mkdir()
-        self.environment = {
-            "PATH": os.environ["PATH"],
-            "CONTEXT_FORGE_DATA_DIR": str(self.data_dir),
-        }
-        hub.home_environment[client.home] = self.environment
-
-    def repo(self, name: str) -> Path:
-        """A committed git repo that is a Context Forge project on this machine."""
-        repo = self.client.home / "repos" / name
-        repo.mkdir(parents=True)
-        git(repo, "init", "-q", "-b", "main")
-        (repo / "README.md").write_text(f"{name}\n", encoding="utf-8")
-        git(repo, "add", "-A")
-        git(repo, "commit", "-q", "-m", "seed")
-        subprocess.run(
-            ["cf", "init", "--lite", "--name", name],
-            cwd=repo,
-            env=process_environment(os.environ, **self.environment),
-            capture_output=True,
-            text=True,
-            timeout=CF_TIMEOUT_SECONDS,
-            check=True,
-        )
-        git(repo, "add", "-A")
-        if git(repo, "status", "--porcelain").stdout.strip():
-            git(repo, "commit", "-q", "-m", "cf init")
-        return repo
 
 
 class World:
@@ -79,10 +38,7 @@ class World:
         self, where: tuple[Machine, Path], *args: str, expect: int = 0
     ) -> dict[str, Any]:
         machine, repo = where
-        done = machine.client.run_in(repo, *args, "-j")
-        assert done.code == expect, done.err + done.out
-        document: dict[str, Any] = json.loads(done.out)
-        return document
+        return machine.run(repo, *args, expect=expect)
 
 
 @pytest.fixture

@@ -12,15 +12,25 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from hub_fixture import two_machine_hub
+from live_settings import LiveSettings
 
 from live.hold.harness import HoldWorld, build_hold_world
+from live.hold.split import SplitHold, build_split_hold
 from live.pause.conftest import live_settings, pause_world
 from live.pause.harness import PauseWorld
 
-__all__ = ["hold_world", "live_settings", "pause_world"]
+__all__ = ["hold_world", "live_settings", "pause_world", "split_hold"]
 
 
 @pytest.fixture
 def hold_world(tmp_path: Path, pause_world: PauseWorld) -> Iterator[HoldWorld]:
     """``sq-s`` and ``cf-s`` in one program and one throwaway store."""
     yield build_hold_world(tmp_path, pause_world)
+
+
+@pytest.fixture
+def split_hold(tmp_path: Path, live_settings: LiveSettings) -> Iterator[SplitHold]:
+    """The asking repo on ``alpha`` and ``cf-s`` on ``beta``, behind a real hub."""
+    with two_machine_hub(tmp_path) as hub:
+        yield build_split_hold(hub, live_settings)

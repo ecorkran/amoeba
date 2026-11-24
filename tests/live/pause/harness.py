@@ -97,7 +97,7 @@ def build_world(
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "cf init", check=False)
     world = PauseWorld(repo, environ, amoeba_home, settings)
-    _write_config(world, passages_max_chars)
+    write_config(world, passages_max_chars)
     # No rules flag: the member reads the config's default rules (229 D7), which for
     # this repo is its CLAUDE.md (an absent AGENTS.md is skipped).
     registered = run_amoeba(world, "add", "--program", PROGRAM_ID)
@@ -114,16 +114,23 @@ def inert_hook(world: PauseWorld) -> PauseWorld:
     absolute ``AMOEBA`` path, so only the hook meets the stub. A test that wants the
     hook sets a project-level command with the absolute path instead.
     """
-    stub_dir = world.repo.parent / "hook-stub"
-    stub_dir.mkdir(exist_ok=True)
-    stub = stub_dir / "amoeba"
-    stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    stub.chmod(0o755)
+    stub_dir = inert_amoeba_dir(world.repo.parent)
     path = str(stub_dir) + os.pathsep + world.environ["PATH"]
     return replace(world, environ={**world.environ, "PATH": path})
 
 
-def _write_config(world: PauseWorld, passages_max_chars: int | None) -> None:
+def inert_amoeba_dir(parent: Path) -> Path:
+    """``parent/hook-stub``, holding a do-nothing ``amoeba`` (see ``inert_hook``)."""
+    stub_dir = parent / "hook-stub"
+    stub_dir.mkdir(exist_ok=True)
+    stub = stub_dir / "amoeba"
+    stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    stub.chmod(0o755)
+    return stub_dir
+
+
+def write_config(world: PauseWorld, passages_max_chars: int | None = None) -> None:
+    """The example config with the live settings, in ``world.amoeba_home``."""
     config = yaml.safe_load(example_config_text())
     if passages_max_chars is not None:
         config["passages_max_chars"] = passages_max_chars

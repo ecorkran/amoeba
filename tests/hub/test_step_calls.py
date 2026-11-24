@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from store.decision_support import CORE, FIRST, automatic_answer
+from store.seed import mark_wake_wanted
 
 from amoeba.config.user_config import ConfigError, UserConfig
 from amoeba.store.store import Store
@@ -162,3 +163,22 @@ def test_a_client_at_door_version_1_sending_is_refused_and_writes_nothing(
     assert refused.code is RefusalCode.DOOR_VERSION
     assert rig.rows("SELECT COUNT(*) FROM messages") == [(0,)]
     assert rig.rows("SELECT COUNT(*) FROM wakes") == [(0,)]
+
+
+def test_a_kept_reply_gets_its_flag_acting_as_the_caller_when_a_wake_is_due(
+    rig: HubRig,
+) -> None:
+    """The flag's wake check reads the acting machine; a repeat that returns a kept
+    result must act as the caller too."""
+    first = _done(rig, "mark_read", {"through": 0}, "mark")
+    with _as_alpha(rig) as store, store.write() as transaction:
+        transaction.execute(
+            "UPDATE checkouts SET wake_command = 'wake-agent' WHERE member_id = ?",
+            (CORE,),
+        )
+        mark_wake_wanted(transaction, CORE, rig.clock())
+
+    repeat = _done(rig, "mark_read", {"through": 0}, "mark")
+
+    assert first.result[WORK_REPLY_KEY] is False
+    assert repeat.result[WORK_REPLY_KEY] is True

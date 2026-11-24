@@ -96,6 +96,11 @@ def agent_command(world: WakingWorld, *flags: str) -> str:
     """The wake command that runs the fixture agent with its own cap, plus the case's
     ``flags``. The throwaway Context Forge data directory reaches it through the wake
     environment, as a real agent's would."""
+    return fixture_agent_command(*flags)
+
+
+def fixture_agent_command(*flags: str) -> str:
+    """``agent_command`` for a member that is not in a ``WakingWorld``."""
     return shlex.join(
         [
             sys.executable,
@@ -142,7 +147,12 @@ def send(
 
 def wake_rows(world: WakingWorld) -> list[WakeRow]:
     """Every ``wakes`` row of the throwaway store, oldest first (a read-only look)."""
-    uri = f"file:{world.sender.store}?mode=ro"
+    return read_wake_rows(world.sender.store)
+
+
+def read_wake_rows(store: Path) -> list[WakeRow]:
+    """Every ``wakes`` row of ``store``, oldest first (a read-only look)."""
+    uri = f"file:{store}?mode=ro"
     with closing(sqlite3.connect(uri, uri=True)) as connection:
         rows = connection.execute(
             f"SELECT {WAKE_COLUMNS} FROM wakes ORDER BY started_at"

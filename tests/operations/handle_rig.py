@@ -32,6 +32,7 @@ from fake_sq import (
     SQUADRON_FIXTURES,
     poll_result,
 )
+from hub.call_support import HubRig
 from user_configs import user_config
 
 from amoeba.answering.settings import AnswererSettings
@@ -106,6 +107,8 @@ class World:
     #: How ``handle`` reaches the store: in process, or through a joined client's
     #: door to an in-process hub whose store ``store`` is (262 D16).
     way: str = LOCAL
+    #: The hub's rig on the door way: its clock and config can be changed.
+    hub_rig: HubRig | None = None
 
     def handle(self) -> HandlePauseResult:
         if self.way == LOCAL:
@@ -220,6 +223,7 @@ def world(  # noqa: PLR0913 - the knobs a handle_pause test turns
             runs_dir=runs_dir,
             answering_poll=answering_poll,
             way=way,
+            hub_rig=hub_rig,
         )
         if hub_rig is not None:
             hub_rig.config = lambda: worldview.config

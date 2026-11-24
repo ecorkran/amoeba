@@ -11,7 +11,15 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 # The tier's shared modules live beside the other harnesses in ``tests/``.
 _TESTS_DIRECTORY = str(Path(__file__).parent.parent)
 if _TESTS_DIRECTORY not in sys.path:
     sys.path.insert(0, _TESTS_DIRECTORY)
+
+
+@pytest.fixture(autouse=True)
+def fake_cf_on_path() -> None:
+    """The live tier runs the real ``cf``: this replaces the recorded one that
+    ``tests/conftest.py`` puts first on ``PATH`` for every other test."""

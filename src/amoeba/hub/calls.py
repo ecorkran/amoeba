@@ -269,6 +269,8 @@ def _serve(
         if machine is None:
             # The token ended between the read and the scope (rm-machine, re-invite).
             return refuser.refuse(RefusalCode.BAD_TOKEN, _BAD_TOKEN), False
+        # Every read after this acts as the caller, a kept result's work flag too.
+        store.act_as(machine)
         if checked.refusal is not None:
             code, message = checked.refusal
             return refuser.refuse(code, message, label), True

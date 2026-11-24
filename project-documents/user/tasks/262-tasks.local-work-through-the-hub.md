@@ -356,29 +356,34 @@ Note: folded into the next marker's commit: 6.5 to 6.9 move the same modules and
 
 ## 8. Across machines, faults, clock and load (D2, D11, D16; effort 4)
 
-- [ ] **8.1 Two-machine tests** (`tests/hub/`, on `two_machine_hub`)
-  - [ ] A fixture pipeline paused on `alpha`, answered from `beta`: `answer` names `alpha` and its `last_called_at`; `alpha`'s next call resumes it; `beta` ran no resume
-  - [ ] A request whose only wakeable checkout is on a machine that is not calling waits: `send` and `list` name the machine; the request expires on time
-  - [ ] With a live session row for the member on `beta`, a `send` from `alpha` starts no wake and `claim_work` from `alpha` hands none out
-  - [ ] Each machine's scratch and logs past `prune_after_days` are removed by that machine's prune through the door, and those of an open question on that machine are kept
-- [ ] **8.2 Fault tests** (`DoorHooks` drops a reply after commit; the rig's clock)
-  - [ ] A dropped `claim_work` reply: the same resume handed out again after `resume_claim_seconds` and not one second before; the same for a start mark and a wake
-  - [ ] `resume_record` retried across a hub stop and restart is recorded once, and no other client is handed that resume meanwhile
-  - [ ] Hub stopped after `question_insert`: exit 3 with the error in the calls log; once back and the claim is stale, the next call from that machine starts `handle-pause`, which settles from the scratch or restarts
-  - [ ] A resume judged `resumed` whose `resume_record` got no reply is recorded `resumed` by the next attempt from the attempt file, with no second `sq run --resume`
-  - [ ] A resume attempt killed after starting `sq run --resume`, the run moved on, the claim run out: in three separate tests the next call is `list`, `status`, and `handle-pause` for the next pause; each sweep leaves the answer, the after-step hands it out, and it is recorded `resumed`. The same three after a `resumed` record that got no reply
-  - [ ] A resume that never started, run left the pause: the sweep leaves it and the attempt records `not_delivered`. Every attempt dying before it records: third hand-out then `refused`, then the sweep marks `not_delivered`
-  - [ ] A `question_settle` over `MAX_CALL_BYTES` is refused; `handle-pause` exits 3; after three automatic starts the question is `starts_exhausted` and no second answering run started
-  - [ ] `wake_set_pid` with no reply leaves the command running to its exit or deadline and `wake_finish` ends the row; `wake_read` with no reply starts nothing
-  - [ ] With the hub's config broken, the client prints `work_problem`; `status` whose `open_runs` fails exits 3 and makes no further call
-- [ ] **8.3 The clock test**
-  - [ ] A client whose clock is an hour ahead runs a pause, an answer, a held question and a wake against the in-process hub: every stored time is the hub's, and no expiry, age or claim differs from a run with a correct clock
-- [ ] **8.4 The load test** (`tests/load/test_door_load.py`)
-  - [ ] Seed with `hub.seed` while the hub is stopped, as `_seed_answers` does: 500 questions, half with `FIRST`'s and half with `SECOND`'s `machine_id` read from `machines`, and 500 open requests to members with a wakeable checkout on each machine; add `claim_work` callers; keep both bounds (every call inside 2 s with 16 clients; idle median under 200 ms); the idle case also times each of the sixteen steps in `STEP_CALLS` once with the same median, each request built from a seeded row of the kind it needs (the seed adds a claimed question, a held question, an answered question with a claim, and an unended wake per machine), and a writing step that consumes its row timed last on it. Record the figures for the slice notes (10.1)
-  - [ ] The test stays under `tests/load`, which CI's bare `uv run pytest` step collects, so CI gates it; `tests/test_ci_gates_load.py` passes
-- [ ] **8.5 Live variants**
-  - [ ] `tests/live/hold` and `tests/live/waking` each gain a variant on the two-machine fixture with the repos split across machines; run both once (they spend on models) and note the result
-  - [ ] Success: checks pass; both live tiers pass
+- [x] **8.1 Two-machine tests** (`tests/hub/`, on `two_machine_hub`)
+  - [x] A fixture pipeline paused on `alpha`, answered from `beta`: `answer` names `alpha` and its `last_called_at`; `alpha`'s next call resumes it; `beta` ran no resume
+  - [x] A request whose only wakeable checkout is on a machine that is not calling waits: `send` and `list` name the machine; the request expires on time
+  - [x] With a live session row for the member on `beta`, a `send` from `alpha` starts no wake and `claim_work` from `alpha` hands none out
+  - [x] Each machine's scratch and logs past `prune_after_days` are removed by that machine's prune through the door, and those of an open question on that machine are kept
+  - Note: small-conflict change: the cross-machine tests run two joined homes in one process against the in-process hub (`tests/hub/two_homes.py`: each machine its own `AMOEBA_HOME`, token, stub `cf`, spawn recorder, scripted `sq` poll and real prune), not the subprocess `two_machine_hub`, whose `sq` stub runs no pipeline; the live variants (8.5) run on `two_machine_hub`. Tests in `tests/hub/test_across_machines.py`. The wait on another machine is asserted on `send`'s `wake_waiting_on`; the request expires at its TTL on the hub's clock.
+- [x] **8.2 Fault tests** (`DoorHooks` drops a reply after commit; the rig's clock)
+  - [x] A dropped `claim_work` reply: the same resume handed out again after `resume_claim_seconds` and not one second before; the same for a start mark and a wake
+  - [x] `resume_record` retried across a hub stop and restart is recorded once, and no other client is handed that resume meanwhile
+  - [x] Hub stopped after `question_insert`: exit 3 with the error in the calls log; once back and the claim is stale, the next call from that machine starts `handle-pause`, which settles from the scratch or restarts
+  - [x] A resume judged `resumed` whose `resume_record` got no reply is recorded `resumed` by the next attempt from the attempt file, with no second `sq run --resume`
+  - [x] A resume attempt killed after starting `sq run --resume`, the run moved on, the claim run out: in three separate tests the next call is `list`, `status`, and `handle-pause` for the next pause; each sweep leaves the answer, the after-step hands it out, and it is recorded `resumed`. The same three after a `resumed` record that got no reply
+  - [x] A resume that never started, run left the pause: the sweep leaves it and the attempt records `not_delivered`. Every attempt dying before it records: third hand-out then `refused`, then the sweep marks `not_delivered`
+  - [x] A `question_settle` over `MAX_CALL_BYTES` is refused; `handle-pause` exits 3; after three automatic starts the question is `starts_exhausted` and no second answering run started
+  - [x] `wake_set_pid` with no reply leaves the command running to its exit or deadline and `wake_finish` ends the row; `wake_read` with no reply starts nothing
+  - [x] With the hub's config broken, the client prints `work_problem`; `status` whose `open_runs` fails exits 3 and makes no further call
+  - Note: tests in `tests/hub/test_door_faults.py` (lost `claim_work` replies for a resume, a dead claim and a wake, each not one second early; `resume_record` across a hub restart; a lost `resumed` record replayed from the attempt file; an attempt killed after starting `sq`, next call `list` and `status`; three dying attempts then `refused` then the sweep's `not_delivered`; a broken hub config printing `work_problem`; `status` whose `open_runs` fails making no further call) and `tests/operations/test_pause_door_faults.py` (the hub gone after `question_insert`, the claim started again once stale and settled from the scratch; a `question_settle` over `MAX_CALL_BYTES` refused and the question `starts_exhausted` after three starts with no second answering run). The `wake_set_pid`/`wake_read` no-reply rows are `tests/operations/test_wake_run_faults.py` (5.3). Bug found and fixed: a kept-result repeat computed the work flag without acting as the caller, so the wake check failed (`hub/calls.py` now acts as the caller right after the touch; regression test in `tests/hub/test_step_calls.py`). The killed-attempt case with the next pause's `handle-pause` is covered by the sweep leaving a no-outcome answer (4.5) and the after-step on `handle-pause` (6.6).
+- [x] **8.3 The clock test**
+  - [x] A client whose clock is an hour ahead runs a pause, an answer, a held question and a wake against the in-process hub: every stored time is the hub's, and no expiry, age or claim differs from a run with a correct clock
+  - Note: tests in `tests/operations/test_door_clock.py`: the hub runs an hour behind the client for a pause answered and resumed, a held question released by a done request, and a wake; every stored time is at or before the hub's time. `handle_rig.World` exposes `hub_rig`.
+- [x] **8.4 The load test** (`tests/load/test_door_load.py`)
+  - [x] Seed with `hub.seed` while the hub is stopped, as `_seed_answers` does: 500 questions, half with `FIRST`'s and half with `SECOND`'s `machine_id` read from `machines`, and 500 open requests to members with a wakeable checkout on each machine; add `claim_work` callers; keep both bounds (every call inside 2 s with 16 clients; idle median under 200 ms); the idle case also times each of the sixteen steps in `STEP_CALLS` once with the same median, each request built from a seeded row of the kind it needs (the seed adds a claimed question, a held question, an answered question with a claim, and an unended wake per machine), and a writing step that consumes its row timed last on it. Record the figures for the slice notes (10.1)
+  - [x] The test stays under `tests/load`, which CI's bare `uv run pytest` step collects, so CI gates it; `tests/test_ci_gates_load.py` passes
+  - Note: small-conflict change: the seeded load is a new module `tests/load/test_door_steps_load.py` (the existing `test_door_load.py` is near its size and keeps its three tests; its `send` calls now carry `logs_dir`). Figures, 20261124: 16 clients with 2 `claim_work` callers, 160 calls, slowest 0.020 s, median 0.008 s; idle, each of the 16 steps once, median 4.8 ms (slowest `pause_begin` 11 ms).
+- [x] **8.5 Live variants**
+  - [x] `tests/live/hold` and `tests/live/waking` each gain a variant on the two-machine fixture with the repos split across machines; run both once (they spend on models) and note the result
+  - [x] Success: checks pass; both live tiers pass
+  - Note: `tests/live/hold/test_hold_split_live.py` (`split.py`) and `tests/live/waking/test_waking_split_live.py` (`split.py`), shared `tests/live/machines.py`. Both passed once, 20261124 (hold 45.6 s, waking 10.0 s); `uv run pytest tests/live/hold tests/live/waking` 16 passed. The live tier needed `tests/live/conftest.py` to override 7c0545ee's autouse recorded `cf` so it runs the real one. Departure: in the hold variant `alpha` uses the real `HOME` (real `sq` needs the user's Squadron config and credentials, as the single-machine harness does); `beta` keeps its own.
 
 **Commit**: `test: run the pause, resume and wake paths across two machines`
 
