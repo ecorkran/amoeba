@@ -410,6 +410,8 @@ Checked against the source 20261124; fixes are in the task file.
 - F020 dropped: 0.1 runs both version commands at the start.
 - F021 fixed: 7.4 names `docs/cli-contract.md`.
 
+Later the same day the resumed revise round (commit 3db8470f) also worked the dropped F006, F012, F013, F014, F016, F018, F019 and F020 into the task file: `answer` loses its `refused` fallback, 6.5 and 6.6 split into 6.5 to 6.8, the other `mark_start_attempted` callers, the child's log directory, the bound's value, the grown files in 10.2, the steps the load test times, and the version note.
+
 ### Run Digest
 
 - Response length: 34893 chars
