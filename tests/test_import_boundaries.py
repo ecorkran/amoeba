@@ -323,10 +323,16 @@ RUNS_EXTERNAL_TOOLS = (
     "amoeba.operations.processes",
     "amoeba.operations.deps",
 )
+#: The one ``upstream`` module that runs nothing: it only cuts text to a bound.
+UPSTREAM_ALLOWED_TO_STEPS = ("amoeba.upstream.bounded_text",)
 #: The only ``answering`` modules a step may reach: they read no file. The rest of
 #: ``answering`` reads the checkout's sources, which only the client may do.
 ANSWERING_ALLOWED_TO_STEPS = frozenset(
-    {"amoeba.answering.values", "amoeba.answering.settings"}
+    {
+        "amoeba.answering.values",
+        "amoeba.answering.settings",
+        "amoeba.answering.gate",
+    }
 )
 
 
@@ -354,7 +360,17 @@ def _answering_modules_that_read_files() -> tuple[str, ...]:
 def test_steps_import_no_module_that_runs_cf_sq_or_git() -> None:
     assert _step_sources()
     for path in _step_sources():
-        found = forbidden_imports(path.read_text(encoding="utf-8"), RUNS_EXTERNAL_TOOLS)
+        source = path.read_text(encoding="utf-8")
+        names = _imported_names(source) - {
+            name
+            for name in _imported_names(source)
+            if any(_mentions({name}, ok) for ok in UPSTREAM_ALLOWED_TO_STEPS)
+        }
+        found = [
+            prefix
+            for prefix in RUNS_EXTERNAL_TOOLS
+            if any(_mentions({name}, prefix) for name in names)
+        ]
         assert not found, f"{path.relative_to(SRC)} imports {found}"
 
 

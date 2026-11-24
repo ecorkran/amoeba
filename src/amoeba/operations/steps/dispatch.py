@@ -12,7 +12,16 @@ from pydantic import ValidationError
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.steps.context import StepContext
 from amoeba.operations.steps.models import STEP_MODELS, StepModel
+from amoeba.operations.steps.pause import (
+    question_claim_held,
+    question_hold,
+    question_insert,
+    question_replace_claim,
+    question_wait,
+)
 from amoeba.operations.steps.resume import resume_claim, resume_read, resume_record
+from amoeba.operations.steps.settle import question_settle
+from amoeba.operations.steps.sources import pause_sources
 from amoeba.store.store import Store
 
 type StepFunction = Callable[[StepContext, Any], StepModel]
@@ -22,6 +31,13 @@ STEP_FUNCTIONS: Final[dict[str, StepFunction]] = {
     "resume_claim": resume_claim,
     "resume_read": resume_read,
     "resume_record": resume_record,
+    "question_insert": question_insert,
+    "question_hold": question_hold,
+    "question_claim_held": question_claim_held,
+    "question_replace_claim": question_replace_claim,
+    "question_wait": question_wait,
+    "question_settle": question_settle,
+    "pause_sources": pause_sources,
 }
 
 

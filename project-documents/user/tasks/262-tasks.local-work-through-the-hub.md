@@ -174,15 +174,18 @@ revision_number: 3
 
 ## 4. The pause path on steps (D1, D4, D5, D9; effort 5)
 
-- [ ] **4.1 The question claim steps** (`steps/pause.py`, `steps/models.py`)
-  - [ ] `question_insert`, `question_hold`, `question_claim_held`, `question_replace_claim`, `question_wait` per D4: each wraps today's store call and its compare-and-set; `question_insert` and `question_hold` write the acting machine; `question_hold` returns its request's effective state; `question_claim_held` says on loss whether a claim or an answer won; `question_replace_claim` applies only when the row is claimed by the answering run id in the request; `question_wait` takes the reason, detail and evidence for a named claim or a held row
-- [ ] **4.2 Claim-step tests**, one per row of D4's "what each claim step matches" table on a throwaway store: the winning case and the losing case of each
-  - [ ] Two `question_replace_claim` calls for one stale claim: one applies, the other loses as `already_claimed`
-- [ ] **4.3 `question_settle` and `pause_sources`**
-  - [ ] `question_settle`: the hub builds the gate (reserved-term screen and answer limit) from its own config and the member's settings and runs `settle_answered` with it in the transaction. Answered: writes the answer and takes the resume claim (`claim_resume`), returned in the reply. Gate refused: `waiting_on_pm` with the reason (today's `_wait_on_pm`). Claim gone: superseded
-  - [ ] `pause_sources`: what `pause_context._read_store` and `pause_claim._read_request` read today: the member's program, its members with each one's checkout path and Context Forge id on the calling machine, the PM precedent, the standing answers, and a named request's result or that it is no longer stored
-  - [ ] Tests: answered settle returns a claim; a gate refusal waits; a superseded settle starts no resume; two settles for one run at once with one answer left under the limit: one answered, the other `answer_limit_reached`. `pause_sources` returns the calling machine's checkout ids, never member ids
-  - [ ] Success: checks pass
+- [x] **4.1 The question claim steps** (`steps/pause.py`, `steps/models.py`)
+  - [x] `question_insert`, `question_hold`, `question_claim_held`, `question_replace_claim`, `question_wait` per D4: each wraps today's store call and its compare-and-set; `question_insert` and `question_hold` write the acting machine; `question_hold` returns its request's effective state; `question_claim_held` says on loss whether a claim or an answer won; `question_replace_claim` applies only when the row is claimed by the answering run id in the request; `question_wait` takes the reason, detail and evidence for a named claim or a held row
+  - Note: models are split across `steps/model_base.py` (StepModel, Step), `models_resume.py`, `models_pause.py` and `models.py` (the one table, STEP_MODELS), to keep the files near 300 lines and avoid import rings. Request models carry a passage's date as its stored text (`PassageRefModel.date: str`) so no request has a date or time field; replies may (`HeldRequestModel.done_at`). `question_hold` returns `RequestFacts` (effective state, reason, the done request's result). `settle_answered_in` was split out of `store/answers.py:settle_answered` so a step can run the settle inside its own transaction.
+- [x] **4.2 Claim-step tests**, one per row of D4's "what each claim step matches" table on a throwaway store: the winning case and the losing case of each
+  - [x] Two `question_replace_claim` calls for one stale claim: one applies, the other loses as `already_claimed`
+  - Note: tests in `tests/operations/test_claim_steps.py`.
+- [x] **4.3 `question_settle` and `pause_sources`**
+  - [x] `question_settle`: the hub builds the gate (reserved-term screen and answer limit) from its own config and the member's settings and runs `settle_answered` with it in the transaction. Answered: writes the answer and takes the resume claim (`claim_resume`), returned in the reply. Gate refused: `waiting_on_pm` with the reason (today's `_wait_on_pm`). Claim gone: superseded
+  - [x] `pause_sources`: what `pause_context._read_store` and `pause_claim._read_request` read today: the member's program, its members with each one's checkout path and Context Forge id on the calling machine, the PM precedent, the standing answers, and a named request's result or that it is no longer stored
+  - [x] Tests: answered settle returns a claim; a gate refusal waits; a superseded settle starts no resume; two settles for one run at once with one answer left under the limit: one answered, the other `answer_limit_reached`. `pause_sources` returns the calling machine's checkout ids, never member ids
+  - [x] Success: checks pass
+  - Note: `question_settle` is in `steps/settle.py` and `pause_sources` in `steps/sources.py`; the concept member's checkout comes back as `CheckoutRef(path, cf_project_id)` so the wake command is never returned. `amoeba.answering.gate` (pure) and `amoeba.upstream.bounded_text` are allowed to steps in tests/test_import_boundaries.py. Tests in `tests/operations/test_settle_step.py`.
 
 **Commit**: `feat: add the question claim, settle and source steps`
 

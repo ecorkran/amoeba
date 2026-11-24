@@ -243,49 +243,75 @@ def settle_answered(
     gate: Callable[[int], GateRefusal | None],
     now: datetime,
 ) -> Settled | GateRefusal | Lost:
-    """Settle ``claimed -> answered`` for the claim ``answering_run_id`` holds.
+    """Settle ``claimed -> answered`` for the claim ``answering_run_id`` holds, in one
+    immediate transaction of its own: see :func:`settle_answered_in`."""
+    with store.write() as transaction:
+        return settle_answered_in(
+            transaction,
+            key,
+            answering_run_id,
+            answer=answer,
+            cited=cited,
+            evidence=evidence,
+            gate=gate,
+            now=now,
+        )
 
-    One immediate transaction: ``gate`` gets the count of prior automatic answers
-    this run, so two settles cannot both pass the limit. A claim that is already
-    gone is ``Lost`` before the gate runs; a decline writes nothing.
+
+def settle_answered_in(
+    transaction: Transaction,
+    key: QuestionKey,
+    answering_run_id: str,
+    *,
+    answer: str,
+    cited: tuple[str, ...],
+    evidence: AnsweringEvidence,
+    gate: Callable[[int], GateRefusal | None],
+    now: datetime,
+) -> Settled | GateRefusal | Lost:
+    """Settle ``claimed -> answered`` for the claim ``answering_run_id`` holds, in the
+    caller's write transaction (a hub step runs it inside its own).
+
+    ``gate`` gets the count of prior automatic answers this run, so two settles cannot
+    both pass the limit. A claim that is already gone is ``Lost`` before the gate
+    runs; a decline writes nothing.
     """
     moment = encode_timestamp(now)
-    with store.write() as transaction:
-        prior = automatic_answer_count(transaction, key.run_id)
-        refusal = gate(prior)
-        held = transaction.execute(
-            sql.SELECT_QUESTION_CLAIM, (key.run_id, key.paused_at)
-        ).fetchone()
-        if held is None or tuple(held) != (
+    prior = automatic_answer_count(transaction, key.run_id)
+    refusal = gate(prior)
+    held = transaction.execute(
+        sql.SELECT_QUESTION_CLAIM, (key.run_id, key.paused_at)
+    ).fetchone()
+    if held is None or tuple(held) != (
+        QuestionState.CLAIMED.value,
+        answering_run_id,
+    ):
+        return Lost()
+    if refusal is not None:
+        return refusal
+    transaction.execute(
+        sql.SETTLE_ANSWERED,
+        (
+            QuestionState.ANSWERED.value,
+            serialize_evidence(evidence),
+            moment,
+            key.run_id,
+            key.paused_at,
             QuestionState.CLAIMED.value,
             answering_run_id,
-        ):
-            return Lost()
-        if refusal is not None:
-            return refusal
-        transaction.execute(
-            sql.SETTLE_ANSWERED,
-            (
-                QuestionState.ANSWERED.value,
-                serialize_evidence(evidence),
-                moment,
-                key.run_id,
-                key.paused_at,
-                QuestionState.CLAIMED.value,
-                answering_run_id,
-            ),
-        )
-        cursor = transaction.execute(
-            sql.INSERT_RECORDED_ANSWER,
-            (
-                key.run_id,
-                key.paused_at,
-                AnsweredBy.ANSWERER.value,
-                answer,
-                serialize_cited(cited),
-                moment,
-                None,  # automatic answers are carried by no door
-                transaction.acting("answers").owner_id,
-            ),
-        )
-        return Settled(integer(cursor.lastrowid, "answers.seq"))
+        ),
+    )
+    cursor = transaction.execute(
+        sql.INSERT_RECORDED_ANSWER,
+        (
+            key.run_id,
+            key.paused_at,
+            AnsweredBy.ANSWERER.value,
+            answer,
+            serialize_cited(cited),
+            moment,
+            None,  # automatic answers are carried by no door
+            transaction.acting("answers").owner_id,
+        ),
+    )
+    return Settled(integer(cursor.lastrowid, "answers.seq"))
