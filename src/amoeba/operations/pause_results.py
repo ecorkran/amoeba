@@ -25,6 +25,7 @@ from amoeba.operations.pause_models import (
     SkipReason,
 )
 from amoeba.operations.resume import resume
+from amoeba.operations.steps.limits import resume_claim_seconds
 from amoeba.store.models import Member, QuestionKey
 from amoeba.store.questions import get_question
 from amoeba.store.store import Store
@@ -113,6 +114,7 @@ def resume_answer(  # noqa: PLR0913 - the pieces of one resume
         answer_seq,
         deps=deps,
         wait_seconds=config.resume_wait_seconds,
+        claim_seconds=resume_claim_seconds(config),
     )
     return HandlePauseResult(
         _OUTCOME_OF_RESUME[resumed.outcome],

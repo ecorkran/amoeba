@@ -11,9 +11,9 @@ from store_open import open_local_store
 
 from amoeba.store.machines import ActingMachine, invite_machine, the_owner
 from amoeba.store.store import Store, Transaction
-from amoeba.store.wakes import WakeScope, can_wake, claim_wake, get_wake
+from amoeba.store.wakes import WakeScope, claim_wake, get_wake, wake_due
 from store.message_support import ADDRESSEE, NOW, SENDER, seed_members
-from store.seed import insert_checkout
+from store.seed import insert_checkout, mark_wake_wanted
 from store.wake_support import (
     COMMAND,
     LIMITS,
@@ -77,12 +77,13 @@ def test_of_two_checkouts_with_a_command_the_first_added_is_used(store: Store) -
 def test_a_member_with_no_checkout_gets_no_claim(store: Store) -> None:
     with store.write() as transaction:
         assert claim(transaction, "w1") is None
-        assert not can_wake(transaction, ADDRESSEE, NOW, LIMITS)
+        assert not wake_due(transaction, ADDRESSEE, NOW, LIMITS)
 
 
 def test_the_wake_row_carries_the_checkouts_path_and_command(store: Store) -> None:
     with store.write() as transaction:
         _add(transaction, "cf-1", "/work/checkout", COMMAND)
+        mark_wake_wanted(transaction, ADDRESSEE, NOW)
         claimed = claim_wake(transaction, ADDRESSEE, NOW, LIMITS, "w9", "/logs/w9")
         row = get_wake(transaction, "w9")
 
@@ -120,7 +121,8 @@ def test_a_command_only_on_another_machine_is_seen_by_the_wider_scope_only(
 
     with store.write() as transaction:
         assert claim(transaction, "w1") is None
-        assert not can_wake(
+        mark_wake_wanted(transaction, ADDRESSEE, NOW)
+        assert not wake_due(
             transaction, ADDRESSEE, NOW, LIMITS, WakeScope.ACTING_MACHINE
         )
-        assert can_wake(transaction, ADDRESSEE, NOW, LIMITS, WakeScope.ALL_MACHINES)
+        assert wake_due(transaction, ADDRESSEE, NOW, LIMITS, WakeScope.ALL_MACHINES)

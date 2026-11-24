@@ -110,6 +110,8 @@ def answer_row(
         retract_reason=None,
         resume_started_at=None,
         via=None,
+        resume_claim_id=None,
+        resume_start_count=0,
     )
 
 

@@ -36,7 +36,7 @@ from amoeba.store.vocabulary import (
     StandingReach,
 )
 from amoeba.store.wakes import WakeLimits, claim_wake
-from store.seed import insert_checkout, insert_member, insert_program
+from store.seed import insert_checkout, insert_member, insert_program, mark_wake_wanted
 from store.seed import insert_question as seed_question
 
 NOW = datetime(2026, 11, 20, 12, 0, tzinfo=UTC)
@@ -92,6 +92,7 @@ def _seed(path: Path) -> None:
             claimed_at=NOW,
             updated_at=NOW,
         )
+        mark_wake_wanted(transaction, "m2", NOW)
         insert_request(
             transaction,
             message_id="r1",

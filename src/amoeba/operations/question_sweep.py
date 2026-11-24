@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.resume import resume_bound_seconds
+from amoeba.operations.steps.limits import pause_claim_seconds
 from amoeba.store.answers import latest_answer, mark_not_delivered
 from amoeba.store.errors import StoreBusyError
 from amoeba.store.models import AnswerRecord, QuestionKey, QuestionRecord
@@ -186,8 +187,9 @@ def _judge(  # noqa: PLR0913 - one row of the D4 table and its outputs
         case QuestionState.WAITING_ON_PM | QuestionState.WAITING_ON_REQUEST:
             _close(transaction, row, fate, now, closed)
         case QuestionState.CLAIMED:
-            # A young claim is left alone: its answering run may still settle.
-            if now - row.claimed_at >= timedelta(seconds=config.answering_wait_seconds):
+            # A young claim is left alone: its answering run may still settle. Its
+            # age is from the last write to it, as every judge of a claim measures it.
+            if now - row.updated_at >= timedelta(seconds=pause_claim_seconds(config)):
                 _close(transaction, row, fate, now, closed)
         case QuestionState.ANSWERED:
             _mark_undelivered(transaction, config, row, fate, now, undelivered)

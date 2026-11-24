@@ -63,6 +63,7 @@ from amoeba.operations.status_runs import (
 )
 from amoeba.operations.status_sessions import read_member_sessions
 from amoeba.operations.status_waiting import MemberWaiting, waiting_entries
+from amoeba.operations.steps.limits import pause_claim_seconds
 from amoeba.operations.wake_status import read_member_wakes
 from amoeba.store.checkouts import checkouts_on_machine
 from amoeba.store.errors import StoreRowError
@@ -194,7 +195,7 @@ def status(
         placement.placed,
         rows,
         requests,
-        config.answering_wait_seconds,
+        pause_claim_seconds(config),
         clock(),
     )
     with_calls = attach_last_calls(member_runs, runs)

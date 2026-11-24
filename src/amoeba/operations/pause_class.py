@@ -114,7 +114,7 @@ def classify_pause(  # noqa: PLR0913 - the D3 table's inputs, each a value
 ) -> PauseClass:
     """The D3 class of a pause.
 
-    ``claim_age_limit`` is ``answering_wait_seconds``; a claim as old as the limit is
+    ``claim_age_limit`` is ``pause_claim_seconds``; a claim as old as the limit is
     stale. ``latest_answer`` is the question's newest answer, required for an
     ``answered`` row.
 

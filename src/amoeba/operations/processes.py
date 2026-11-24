@@ -18,6 +18,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Final, Protocol
 
+from amoeba.operations.resume_timing import TERMINATE_GRACE_SECONDS
 from amoeba.upstream.squadron.faults import LaunchFailure
 from amoeba.upstream.squadron.launch import (
     LaunchError,
@@ -25,8 +26,6 @@ from amoeba.upstream.squadron.launch import (
     spawn,
 )
 
-#: How long a stopped child gets to exit after SIGTERM before it is killed.
-TERMINATE_GRACE_SECONDS: Final = 5.0
 #: How often the stop looks again at the child and its group.
 GROUP_POLL_SECONDS: Final = 0.05
 

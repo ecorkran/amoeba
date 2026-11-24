@@ -159,7 +159,13 @@ def test_settled_holds_what_ended_inside_the_window_with_names(
         )
         seq = add_pm_answer(transaction, ANSWERED, "yes", now=NOW, via=None)
         record_resume(
-            transaction, seq, ResumeOutcome.RESUMED, detail=None, log=None, at=NOW
+            transaction,
+            seq,
+            ResumeOutcome.RESUMED,
+            detail=None,
+            log=None,
+            at=NOW,
+            claim_id=None,
         )
 
     result = _list(store, tmp_path, {"all": True})

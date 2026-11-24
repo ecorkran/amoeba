@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 from store_open import open_local_store
 
+from amoeba.operations.steps.resume import ResumeClaimed, ResumeFinal, claim_resume
 from amoeba.store.answers import (
     add_pm_answer,
     latest_answer,
     mark_not_delivered,
-    mark_resume_started,
     record_resume,
     retract_answer,
 )
@@ -46,6 +46,10 @@ from store.question_support import (
 LATER = NOW + timedelta(minutes=5)
 SECOND = QuestionKey(KEY.run_id, "2026-11-10T13:00:00+00:00")
 THIRD = QuestionKey(KEY.run_id, "2026-11-10T14:00:00+00:00")
+
+
+#: Any limit will do: these tests never let a claim run out.
+CLAIM_SECONDS = 600.0
 
 
 @pytest.fixture
@@ -183,7 +187,15 @@ def test_dismiss_closes_an_answered_question_and_marks_its_answer_not_delivered(
     seq = _answer_unresumed(store, KEY)
     if outcome is not None:
         with store.write() as transaction:
-            record_resume(transaction, seq, outcome, detail="lock", log="/log", at=NOW)
+            record_resume(
+                transaction,
+                seq,
+                outcome,
+                detail="lock",
+                log="/log",
+                at=NOW,
+                claim_id=None,
+            )
 
     assert _dismiss(store)
 
@@ -205,7 +217,9 @@ def test_dismiss_refuses_an_answered_question_whose_answer_is_final(
     _seed_waiting(store)
     seq = _answer_unresumed(store, KEY)
     with store.write() as transaction:
-        record_resume(transaction, seq, outcome, detail=None, log=None, at=NOW)
+        record_resume(
+            transaction, seq, outcome, detail=None, log=None, at=NOW, claim_id=None
+        )
     before = _row(store)
 
     assert not _dismiss(store)
@@ -239,7 +253,13 @@ def _seed_every_state(store: Store) -> None:
         add_pm_answer(transaction, SECOND, "unresumed", now=NOW, via=None)
         third_seq = add_pm_answer(transaction, THIRD, "resumed", now=NOW, via=None)
         record_resume(
-            transaction, third_seq, ResumeOutcome.RESUMED, detail=None, log=None, at=NOW
+            transaction,
+            third_seq,
+            ResumeOutcome.RESUMED,
+            detail=None,
+            log=None,
+            at=NOW,
+            claim_id=None,
         )
     _dismiss(store, fourth)
 
@@ -283,7 +303,13 @@ def test_an_answered_question_with_a_delivered_answer_is_not_a_members_open_ques
         assert len(member_open_questions(transaction, MEMBER_ID)) == 1
     with store.write() as transaction:
         record_resume(
-            transaction, seq, ResumeOutcome.RESUMED, detail=None, log=None, at=NOW
+            transaction,
+            seq,
+            ResumeOutcome.RESUMED,
+            detail=None,
+            log=None,
+            at=NOW,
+            claim_id=None,
         )
 
     with store.read() as transaction:
@@ -312,7 +338,13 @@ def test_mark_not_delivered_never_overwrites_a_resumed_answer(store: Store) -> N
     seq = _answer_unresumed(store, KEY)
     with store.write() as transaction:
         record_resume(
-            transaction, seq, ResumeOutcome.RESUMED, detail=None, log=None, at=NOW
+            transaction,
+            seq,
+            ResumeOutcome.RESUMED,
+            detail=None,
+            log=None,
+            at=NOW,
+            claim_id=None,
         )
         assert not mark_not_delivered(transaction, seq, "late", now=LATER)
 
@@ -323,21 +355,38 @@ def test_mark_not_delivered_never_overwrites_a_resumed_answer(store: Store) -> N
 
 
 @pytest.mark.parametrize("final", [ResumeOutcome.RESUMED, ResumeOutcome.NOT_DELIVERED])
-def test_mark_resume_started_is_refused_once_the_outcome_is_final(
+def test_a_resume_claim_is_refused_once_the_outcome_is_final(
     store: Store, final: ResumeOutcome
 ) -> None:
     _seed_waiting(store)
     seq = _answer_unresumed(store, KEY)
     with store.write() as transaction:
-        assert mark_resume_started(transaction, seq, now=LATER)  # first resume
+        first = claim_resume(transaction, seq, LATER, CLAIM_SECONDS)  # first resume
+        assert isinstance(first, ResumeClaimed)
         record_resume(
-            transaction, seq, ResumeOutcome.REFUSED, detail="x", log=None, at=NOW
+            transaction,
+            seq,
+            ResumeOutcome.REFUSED,
+            detail="x",
+            log=None,
+            at=NOW,
+            claim_id=first.claim_id,
         )
-        assert mark_resume_started(transaction, seq, now=LATER)  # a retry
-        record_resume(transaction, seq, final, detail=None, log=None, at=NOW)
+        retry = claim_resume(transaction, seq, LATER, CLAIM_SECONDS)  # a retry
+        assert isinstance(retry, ResumeClaimed)
+        record_resume(
+            transaction,
+            seq,
+            final,
+            detail=None,
+            log=None,
+            at=NOW,
+            claim_id=retry.claim_id,
+        )
 
-        assert not mark_resume_started(transaction, seq, now=LATER)
+        refused = claim_resume(transaction, seq, LATER, CLAIM_SECONDS)
 
+    assert refused == ResumeFinal(final)
     with store.read() as transaction:
         answer = latest_answer(transaction, KEY)
     assert answer is not None

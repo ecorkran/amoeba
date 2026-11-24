@@ -31,7 +31,7 @@ Later slices add keys; each is required too, so an old file fails naming the new
 | `max_cost_usd` | number > 0 | Cost cap of one answering run, in US dollars |
 | `answer_limit` | integer >= 1 | Most automatic answers one run may take |
 | `passages_max_chars` | integer >= 1 | Most characters of passages an answering run is sent. Rules and plan passages are never trimmed, so it must cover all of them: the rules (after duplicates are dropped), the slice's plan files, the program concept, and room for precedent. The example, 250000, suits a repo whose slice plan files run to about 150 KB; see `rules.md` |
-| `answering_wait_seconds` | number > 0 | Longest one answering run may take before it is stopped; also the age at which an unfinished claim counts as dead, and the least time between two starts of `handle-pause` for one held question (slice 242) |
+| `answering_wait_seconds` | number > 0 | Longest one answering run may take before it is stopped, and the least time between two starts of `handle-pause` for one question (slice 242). It is no longer the age at which a claim counts as dead: that is `pause_claim_seconds` (derived, below) |
 | `resume_wait_seconds` | number > 0 | Longest a resumed run may take to start running before the resume is judged refused |
 | `prune_after_days` | integer >= 1 | Age in days after which settled answering scratch, logs and calls-log days are deleted; anything tied to an open question is kept |
 | `request_open_ttl_hours` | integer, 1 to 87600 (ten years) | Hours an open request waits for an answer before it reads `expired`. Fixed into each request when it is sent, so changing the key never moves an existing request's expiry. An accepted request never expires |
@@ -53,6 +53,17 @@ Each `authorize_items` entry has all four fields, and no others:
 | `description` | string | What the answer and check steps are told. Never matched on |
 | `screen_phrases` | list of strings, may be empty | Phrases the deterministic answer screen matches |
 | `denied_by_default` | boolean | `true`: on every member's not-authorized list unless the member allows it. `false`: only on lists of members that deny it |
+
+## Derived limits
+
+Two ages are worked out from the keys above, in `operations/steps/limits.py`, so no key
+holds them and there is one definition for the local way and the hub way. `CALL_BOUND_SECONDS`
+is the longest one door call can take (43 seconds: the retry time, one connect and one read).
+
+| Limit | Worked out as | Used for |
+|---|---|---|
+| `pause_claim_seconds` | `answering_wait_seconds` + 2 × `CALL_BOUND_SECONDS` | The age of a pause claim's last write (`updated_at`) at which it counts as dead: in `handle-pause`, in `status`, and in the close sweep. The claimant may get its claim's reply one call bound late, then waits up to `answering_wait_seconds`, and its settle may take one more call bound |
+| `resume_claim_seconds` | the resume's own bound (`resume_wait_seconds`, its polls and terminate graces) + 2 × `CALL_BOUND_SECONDS` in place of its one store wait | The age at which a resume claim with no outcome may be taken again, and the bound the close sweep gives a refused answer. 216.5 seconds with the starter config |
 
 ## Example
 

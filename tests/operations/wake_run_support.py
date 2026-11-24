@@ -14,6 +14,7 @@ from textwrap import dedent
 from typing import Any
 
 from store.message_support import ADDRESSEE, NOW, seed_members
+from store.seed import mark_wake_wanted
 from store.wake_support import seed_waking_member
 from store_open import open_local_store
 
@@ -103,6 +104,7 @@ def claimed_store(
     with store.write() as transaction:
         seed_members(transaction)
         seed_waking_member(transaction, ADDRESSEE, command, str(checkout))
+        mark_wake_wanted(transaction, ADDRESSEE, claimed_at)
         claimed = claim_wake(
             transaction,
             ADDRESSEE,

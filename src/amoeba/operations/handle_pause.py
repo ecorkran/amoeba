@@ -31,6 +31,7 @@ from amoeba.operations.pause_results import PauseTarget, skipped
 from amoeba.operations.question_sweep import sweep_note, sweep_run
 from amoeba.operations.request_link import NoLink
 from amoeba.operations.request_release import start_ended_held
+from amoeba.operations.steps.limits import pause_claim_seconds
 from amoeba.store.answers import latest_answer
 from amoeba.store.errors import StoreError, StoreRowError
 from amoeba.store.store import Store
@@ -151,7 +152,7 @@ def _handle_polled(  # noqa: PLR0913 - the pieces of one call
         existing,
         latest,
         checked.run_facts,
-        config.answering_wait_seconds,
+        pause_claim_seconds(config),
         deps.clock(),
     )
     if existing is None:

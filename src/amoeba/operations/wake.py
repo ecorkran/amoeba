@@ -28,12 +28,13 @@ from amoeba.operations.message_member import Recipient
 from amoeba.operations.message_models import SendOutcome
 from amoeba.operations.message_results import SendResult
 from amoeba.operations.processes import WaitableChild
+from amoeba.operations.steps.limits import wake_limits
 from amoeba.operations.wake_run import WAKE_RUN_COMMAND
 from amoeba.store.errors import StoreError
 from amoeba.store.models import Wake
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.store.vocabulary import RequestState, WakeOutcome
-from amoeba.store.wakes import WakeLimits, can_wake, claim_wake, finish_wake
+from amoeba.store.wakes import claim_wake, finish_wake, wake_due
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 
 logger = logging.getLogger(__name__)
@@ -48,15 +49,6 @@ STDERR_LOG_SUFFIX: Final = ".stderr.log"
 #: timeout: the legacy-move lock, the open, and up to three transactions (the read, the
 #: claim and a failure write).
 WAKE_BOUND_SECONDS: Final = 5 * BUSY_TIMEOUT_SECONDS
-
-
-def wake_limits(config: UserConfig) -> WakeLimits:
-    """The limits a claim and a due-check apply, from the config."""
-    return WakeLimits(
-        timeout_seconds=config.wake_timeout_seconds,
-        max_per_day=config.max_wakes_per_day,
-        session_stale_seconds=config.session_stale_seconds,
-    )
 
 
 def wake_for_sent_request(
@@ -108,7 +100,7 @@ def _claim_and_start(
     now = deps.clock()
     limits = wake_limits(config)
     with store.read() as transaction:
-        wakeable = can_wake(transaction, recipient.member_id, now, limits)
+        wakeable = wake_due(transaction, recipient.member_id, now, limits)
     if not wakeable:
         return None
     wake_id = uuid4().hex

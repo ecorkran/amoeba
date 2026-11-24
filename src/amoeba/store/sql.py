@@ -377,7 +377,7 @@ def select_open_rows_of_members(member_count: int) -> str:
 
 ANSWER_COLUMNS: Final = """seq, run_id, paused_at, answered_by, answer, cited,
     recorded_at, resume_outcome, resume_detail, resume_log, resume_at, retracted_at,
-    retract_reason, resume_started_at, via"""
+    retract_reason, resume_started_at, via, resume_claim_id, resume_start_count"""
 SELECT_ANSWERS_OF: Final = (
     f"SELECT {ANSWER_COLUMNS} FROM answers WHERE run_id = ? AND paused_at = ? "
     "ORDER BY seq"
@@ -401,10 +401,14 @@ INSERT INTO answers (run_id, paused_at, answered_by, answer, cited, recorded_at,
     via, owner_id)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 """
-# ``resumed`` and ``not_delivered`` are final; only ``refused`` may be retried.
+# ``resumed`` and ``not_delivered`` are final; only ``refused`` may be retried. The
+# claim id is cleared only when it is the caller's, so a late outcome from a claim that
+# ran out cannot free a newer claim; a null caller id clears nothing (262 D6).
+# Parameters: outcome, detail, log, resume_at, the caller's claim id, seq, refused.
 RECORD_RESUME: Final = """
 UPDATE answers SET resume_outcome = ?, resume_detail = ?, resume_log = ?,
-    resume_at = ?
+    resume_at = ?,
+    resume_claim_id = CASE WHEN resume_claim_id = ? THEN NULL ELSE resume_claim_id END
 WHERE seq = ? AND (resume_outcome IS NULL OR resume_outcome = ?)
 """
 # Retraction is set once (228 D6). Parameters: retracted_at, reason, seq.
@@ -412,12 +416,7 @@ RETRACT_ANSWER: Final = """
 UPDATE answers SET retracted_at = ?, retract_reason = ?
 WHERE seq = ? AND retracted_at IS NULL
 """
-# Both compare-and-set on an outcome that is not final (null or refused).
-# Parameters: started_at, seq, refused.
-MARK_RESUME_STARTED: Final = """
-UPDATE answers SET resume_started_at = ?
-WHERE seq = ? AND (resume_outcome IS NULL OR resume_outcome = ?)
-"""
+# Compare-and-set on an outcome that is not final (null or refused).
 # Parameters: not_delivered, detail, resume_at, seq, refused. ``resume_log`` stays
 # as an earlier refused resume left it.
 MARK_NOT_DELIVERED: Final = """

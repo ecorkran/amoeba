@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from store.message_support import count, delivery_rows
+from store.seed import mark_wake_wanted
 from store.wake_support import give_checkout_command
 from store_open import open_local_store
 
@@ -170,6 +171,7 @@ def test_the_expire_step_never_expires_a_note(
 def _claim_wake(store: Store, when: datetime) -> None:
     with store.write() as transaction:
         give_checkout_command(transaction, RECIPIENT, "wake-agent", "/work/checkout")
+        mark_wake_wanted(transaction, RECIPIENT, when)
         claimed = claim_wake(
             transaction,
             RECIPIENT,

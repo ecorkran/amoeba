@@ -29,10 +29,11 @@ from amoeba.operations.question_sweep import (
     sweep_run,
 )
 from amoeba.operations.resume import resume_bound_seconds
+from amoeba.operations.steps.limits import pause_claim_seconds, resume_claim_seconds
+from amoeba.operations.steps.resume import claim_resume
 from amoeba.store.answers import (
     add_pm_answer,
     latest_answer,
-    mark_resume_started,
     record_resume,
 )
 from amoeba.store.models import AnswerRecord, QuestionKey, QuestionRecord
@@ -43,7 +44,7 @@ from amoeba.upstream.squadron.run_outcome import RunOutcome, RunOutcomeDocument
 
 RUN = "demo-run"
 CONFIG = user_config()
-WAIT = CONFIG.answering_wait_seconds
+WAIT = pause_claim_seconds(CONFIG)
 PAUSE = poll_result(PAUSED_AGENT_QUESTION, RUN)
 assert PAUSE.checkpoint is not None
 CURRENT = PAUSE.checkpoint.paused_at_text or ""
@@ -53,6 +54,7 @@ COMPLETED_DOC = poll_result(COMPLETED, RUN)
 OTHER_PAUSE = poll_result(LOCK_BEFORE, RUN)
 GONE = RunOutcomeDocument(run_id=RUN, outcome=RunOutcome.NOT_FOUND)
 UNREADABLE = RunOutcomeDocument(run_id=RUN, outcome=RunOutcome.UNREADABLE)
+CLAIM_SECONDS = resume_claim_seconds(CONFIG)
 BOUND = timedelta(seconds=resume_bound_seconds(CONFIG))
 
 
@@ -183,7 +185,8 @@ def test_an_answer_inside_the_bound_stays_including_one_with_a_fresh_resume_star
     assert not _sweep(store, COMPLETED_DOC, after=just_inside).changed_anything
 
     with store.write() as transaction:
-        mark_resume_started(transaction, seq, now=NOW + BOUND)  # a retry in flight
+        # a retry in flight
+        claim_resume(transaction, seq, NOW + BOUND, CLAIM_SECONDS)
 
     result = _sweep(store, COMPLETED_DOC, after=BOUND + just_inside)
 
@@ -201,6 +204,7 @@ def test_a_refused_answer_is_judged_from_its_newest_sign_of_life(store: Store) -
             detail="lock",
             log=None,
             at=NOW + BOUND,
+            claim_id=None,
         )
 
     assert not _sweep(store, COMPLETED_DOC, after=BOUND + BOUND / 2).changed_anything
@@ -211,7 +215,13 @@ def test_a_delivered_answer_is_left_alone(store: Store) -> None:
     seq = _answered(store, OLD)
     with store.write() as transaction:
         record_resume(
-            transaction, seq, ResumeOutcome.RESUMED, detail=None, log=None, at=NOW
+            transaction,
+            seq,
+            ResumeOutcome.RESUMED,
+            detail=None,
+            log=None,
+            at=NOW,
+            claim_id=None,
         )
 
     assert not _sweep(store, COMPLETED_DOC, after=BOUND * 10).changed_anything

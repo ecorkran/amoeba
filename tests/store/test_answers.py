@@ -173,7 +173,13 @@ def test_record_resume_never_overwrites_resumed_or_not_delivered_but_does_refuse
     def record(outcome: ResumeOutcome, detail: str) -> bool:
         with store.write() as transaction:
             return record_resume(
-                transaction, seq, outcome, detail=detail, log="/log", at=NOW
+                transaction,
+                seq,
+                outcome,
+                detail=detail,
+                log="/log",
+                at=NOW,
+                claim_id=None,
             )
 
     def stored() -> tuple[ResumeOutcome | None, str | None]:
@@ -196,10 +202,22 @@ def test_not_delivered_is_final_too(store: Store) -> None:
         insert_question(transaction, waiting_question(), now=NOW)
         seq = add_pm_answer(transaction, KEY, "use 300", now=NOW, via=None)
         assert record_resume(
-            transaction, seq, ResumeOutcome.NOT_DELIVERED, detail=None, log=None, at=NOW
+            transaction,
+            seq,
+            ResumeOutcome.NOT_DELIVERED,
+            detail=None,
+            log=None,
+            at=NOW,
+            claim_id=None,
         )
         assert not record_resume(
-            transaction, seq, ResumeOutcome.RESUMED, detail=None, log=None, at=NOW
+            transaction,
+            seq,
+            ResumeOutcome.RESUMED,
+            detail=None,
+            log=None,
+            at=NOW,
+            claim_id=None,
         )
 
 

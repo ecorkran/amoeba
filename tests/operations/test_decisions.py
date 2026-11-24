@@ -174,6 +174,7 @@ def test_a_resume_outcome_is_part_of_the_record(
             detail="run is busy",
             log=None,
             at=at(5),
+            claim_id=None,
         )
 
     record = _run(store).records[0]
@@ -320,6 +321,7 @@ def _answered_held(store: Store) -> int:
             detail=None,
             log=None,
             at=at(6),
+            claim_id=None,
         )
     return settled.answer_seq
 

@@ -61,3 +61,25 @@ DELETE_AGED_WAKES: Final = "DELETE FROM wakes WHERE started_at < ?"
 SELECT_AGED_WAKE_EXISTS: Final = (
     "SELECT EXISTS (SELECT 1 FROM wakes WHERE started_at < ?)"
 )
+
+# --- the wake mark (262 D8) ---------------------------------------------------
+
+#: The newest mark among the member's open, unexpired requests; one null column when
+#: there is none. Parameters: member id, the open state, now.
+SELECT_NEWEST_WAKE_MARK: Final = (
+    "SELECT MAX(wake_wanted_at) FROM messages "
+    "WHERE to_member = ? AND kind = 'request' AND state = ? AND expires_at > ? "
+    "AND wake_wanted_at IS NOT NULL"
+)
+#: Whether a wake of the member answers the mark: claimed at or after it, except a
+#: claim nobody picked up (unended, no pid, past its deadline). A row with a pid is
+#: its mark's wake whatever became of it. Parameters: member id, the mark, now.
+SELECT_WAKE_FOR_MARK_EXISTS: Final = (
+    "SELECT EXISTS (SELECT 1 FROM wakes WHERE member_id = ? AND started_at >= ? "
+    "AND NOT (ended_at IS NULL AND command_pid IS NULL AND deadline_at <= ?))"
+)
+#: Sets the mark on one request that is still open. Parameters: now, message id, the
+#: open state.
+SET_WAKE_MARK: Final = (
+    "UPDATE messages SET wake_wanted_at = ? WHERE message_id = ? AND state = ?"
+)

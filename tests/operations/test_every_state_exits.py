@@ -26,6 +26,7 @@ from amoeba.operations.dismiss import (
 from amoeba.operations.question_sweep import SweepResult, sweep_run
 from amoeba.operations.resume import resume_bound_seconds
 from amoeba.operations.retract import RetractOutcome, retract
+from amoeba.operations.steps.limits import pause_claim_seconds
 from amoeba.store.answers import (
     Settled,
     add_pm_answer,
@@ -229,7 +230,7 @@ def _sweep(w: World, after: timedelta) -> SweepResult:
 def test_claimed_exits_by_the_sweep_once_it_is_old_enough(tmp_path: Path) -> None:
     with world(tmp_path) as w:
         _claim(w)
-        wait = timedelta(seconds=w.config.answering_wait_seconds)
+        wait = timedelta(seconds=pause_claim_seconds(w.config))
 
         assert not _sweep(w, wait - timedelta(seconds=1)).changed_anything
         assert _sweep(w, wait).changed_anything

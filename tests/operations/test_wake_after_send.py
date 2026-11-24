@@ -329,6 +329,9 @@ def test_a_same_id_retry_of_an_open_request_wakes_again_after_a_start_failure(
     error = LaunchError(LaunchFailure.SPAWN_ERROR, "cannot start")
     rig = wake_rig(tmp_path, results=[error, FakeChild(None)])
     send_request(store, rig, "ask")
+    # A wake claimed at the mark's own time is that mark's wake (262 D8): the retry
+    # must come later than the failed claim to want a new one.
+    at(rig, NOW + TICK)
 
     retried = send_request(store, rig, "ask")
 

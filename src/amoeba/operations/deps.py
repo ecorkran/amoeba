@@ -16,17 +16,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
-from typing import Final
 
 from amoeba.amoeba_script import resolve_amoeba_script
 from amoeba.operations.processes import Spawner, start_child
 from amoeba.operations.prune_models import Prune
+from amoeba.operations.resume_timing import RUN_POLL_TIMEOUT_SECONDS
 from amoeba.upstream.context_forge.cli_call import CfRun
 from amoeba.upstream.squadron.run_list import ListedRun, RunListProblem, list_runs
 from amoeba.upstream.squadron.run_outcome import RunPoll, poll_run
-
-#: One ``sq runs wait --timeout 0`` call reads a run file; a call this long is stuck.
-RUN_POLL_TIMEOUT_SECONDS: Final = 30.0
 
 #: Reads one run's outcome without waiting: ``poll_run`` with its timeout bound.
 type PollRun = Callable[[str], RunPoll]

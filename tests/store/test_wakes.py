@@ -1,4 +1,4 @@
-"""`claim_wake` and `can_wake`: the checks, their order and the row (244, D2, D3)."""
+"""`claim_wake` and `wake_due`: the checks, their order and the row (244, D2, D3)."""
 
 from __future__ import annotations
 
@@ -16,11 +16,12 @@ from amoeba.store.store import Store
 from amoeba.store.vocabulary import WakeOutcome
 from amoeba.store.wakes import (
     WAKE_WINDOW,
-    can_wake,
     finish_wake,
     get_wake,
+    wake_due,
 )
 from store.message_support import ADDRESSEE, NOW, SENDER, seed_members
+from store.seed import mark_wake_wanted
 from store.wake_support import (
     COMMAND,
     DIRECTORY,
@@ -51,7 +52,7 @@ def test_a_removed_member_is_not_claimed(store: Store) -> None:
     with store.write() as transaction:
         remove_member(transaction, ADDRESSEE, NOW)
         assert claim(transaction, "w1") is None
-        assert not can_wake(transaction, ADDRESSEE, NOW, LIMITS)
+        assert not wake_due(transaction, ADDRESSEE, NOW, LIMITS)
 
 
 def test_an_unknown_member_is_not_claimed(store: Store) -> None:
@@ -63,14 +64,14 @@ def test_a_member_with_no_command_is_not_claimed(store: Store) -> None:
     with store.write() as transaction:
         transaction.execute("UPDATE checkouts SET wake_command = NULL")
         assert claim(transaction, "w1") is None
-        assert not can_wake(transaction, ADDRESSEE, NOW, LIMITS)
+        assert not wake_due(transaction, ADDRESSEE, NOW, LIMITS)
 
 
 def test_a_push_confirmed_live_session_blocks_the_claim(store: Store) -> None:
     with store.write() as transaction:
         confirmed_session(transaction)
         assert claim(transaction, "w1") is None
-        assert not can_wake(transaction, ADDRESSEE, NOW, LIMITS)
+        assert not wake_due(transaction, ADDRESSEE, NOW, LIMITS)
 
 
 def test_a_session_that_is_not_push_confirmed_does_not_block(store: Store) -> None:
@@ -94,7 +95,7 @@ def test_a_live_wake_blocks_the_claim(store: Store) -> None:
     with store.write() as transaction:
         assert claim(transaction, "w1") is not None
         assert claim(transaction, "w2", now=NOW + TICK) is None
-        assert not can_wake(transaction, ADDRESSEE, NOW + TICK, LIMITS)
+        assert not wake_due(transaction, ADDRESSEE, NOW + TICK, LIMITS)
 
 
 def test_the_limit_blocks_the_claim_and_writes_no_row(store: Store) -> None:
@@ -197,13 +198,14 @@ def test_a_member_with_no_checkout_here_gets_no_claim_and_no_wake_row(
 def test_can_wake_agrees_with_claim_wake_over_the_same_fixtures(store: Store) -> None:
     cases: list[bool] = []
     with store.write() as transaction:
-        cases.append(can_wake(transaction, ADDRESSEE, NOW, LIMITS))
+        mark_wake_wanted(transaction, ADDRESSEE, NOW)
+        cases.append(wake_due(transaction, ADDRESSEE, NOW, LIMITS))
         claimed = claim(transaction, "w1")
         cases.append(claimed is not None)
-        cases.append(can_wake(transaction, ADDRESSEE, NOW, LIMITS))
+        cases.append(wake_due(transaction, ADDRESSEE, NOW, LIMITS))
         cases.append(claim(transaction, "w2") is not None)
         confirmed_session(transaction)
-        cases.append(can_wake(transaction, ADDRESSEE, NOW, LIMITS))
+        cases.append(wake_due(transaction, ADDRESSEE, NOW, LIMITS))
 
     assert cases == [True, True, False, False, False]
 

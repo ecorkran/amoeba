@@ -57,6 +57,8 @@ def answer_from_row(row: Sequence[object]) -> AnswerRecord:
         retract_reason=optional_text(row[12], "answers.retract_reason"),
         resume_started_at=optional_timestamp(row[13], "answers.resume_started_at"),
         via=None if row[14] is None else vocabulary(row[14], Door, "answers.via"),
+        resume_claim_id=optional_text(row[15], "answers.resume_claim_id"),
+        resume_start_count=integer(row[16], "answers.resume_start_count"),
     )
 
 
@@ -167,9 +169,13 @@ def record_resume(
     detail: str | None,
     log: str | None,
     at: datetime,
+    claim_id: str | None,
 ) -> bool:
     """Record a resume outcome unless one is final: ``resumed`` and
-    ``not_delivered`` are never overwritten, ``refused`` is. True if it wrote."""
+    ``not_delivered`` are never overwritten, ``refused`` is. True if it wrote.
+
+    The resume claim is freed only when ``claim_id`` is the one that holds it (262 D6);
+    ``None`` frees nothing."""
     cursor = transaction.execute(
         sql.RECORD_RESUME,
         (
@@ -177,6 +183,7 @@ def record_resume(
             detail,
             log,
             encode_timestamp(at),
+            claim_id,
             answer_seq,
             ResumeOutcome.REFUSED.value,
         ),
@@ -191,18 +198,6 @@ def retract_answer(
     already retracted or does not exist. The answer stays delivered (228 D6)."""
     cursor = transaction.execute(
         sql.RETRACT_ANSWER, (encode_timestamp(now), reason, seq)
-    )
-    return cursor.rowcount == 1
-
-
-def mark_resume_started(
-    transaction: Transaction, answer_seq: int, *, now: datetime
-) -> bool:
-    """Record that a resume is about to be spawned. False when the answer's outcome
-    is already final (``resumed`` or ``not_delivered``): nothing may be spawned."""
-    cursor = transaction.execute(
-        sql.MARK_RESUME_STARTED,
-        (encode_timestamp(now), answer_seq, ResumeOutcome.REFUSED.value),
     )
     return cursor.rowcount == 1
 

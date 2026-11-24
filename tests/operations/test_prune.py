@@ -228,6 +228,7 @@ def test_a_pruned_resume_log_stays_named_in_the_answer_and_decisions_still_lists
             detail=None,
             log=str(log),
             at=NOW,
+            claim_id=None,
         )
 
     _prune(store, layout)

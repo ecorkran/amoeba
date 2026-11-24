@@ -163,6 +163,10 @@ class AnswerRecord:
     #: The door that carried a PM answer (226 D11); ``None`` for an answer written
     #: before migration 004 and for the answerer's automatic answers.
     via: Door | None
+    #: The attempt that holds the resume claim, or ``None`` when it is free (262 D6).
+    resume_claim_id: str | None
+    #: Resumes ``claim_work`` has handed out for this answer (262 D10).
+    resume_start_count: int
 
 
 @dataclass(frozen=True)

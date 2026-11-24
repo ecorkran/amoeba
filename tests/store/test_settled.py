@@ -74,7 +74,9 @@ def _answer_pm(
 ) -> int:
     seq = add_pm_answer(transaction, key, "yes", now=at, via=None)
     if outcome is not None:
-        record_resume(transaction, seq, outcome, detail=None, log=None, at=at)
+        record_resume(
+            transaction, seq, outcome, detail=None, log=None, at=at, claim_id=None
+        )
     return seq
 
 

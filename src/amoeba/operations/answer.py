@@ -27,6 +27,7 @@ from amoeba.operations.deps import Deps
 from amoeba.operations.names import PROGRAM_NAME, OperationName
 from amoeba.operations.pause_models import ResumeResult
 from amoeba.operations.resume import resume
+from amoeba.operations.steps.limits import resume_claim_seconds
 from amoeba.store.answers import add_pm_answer, record_resume
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import find_question, get_question
@@ -107,7 +108,12 @@ def answer(
         raise ValueError(f"question {found.key} vanished after its answer was added")
     try:
         resumed = resume(
-            store, recorded, seq, deps=deps, wait_seconds=config.resume_wait_seconds
+            store,
+            recorded,
+            seq,
+            deps=deps,
+            wait_seconds=config.resume_wait_seconds,
+            claim_seconds=resume_claim_seconds(config),
         )
     except SquadronError as error:
         # Expected: the answer is already recorded, so report the resume as refused
@@ -129,6 +135,7 @@ def _record_refused(
             detail=detail,
             log=None,
             at=deps.clock(),
+            claim_id=None,
         )
     return ResumeResult(ResumeOutcome.REFUSED, detail, None)
 

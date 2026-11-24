@@ -6,11 +6,12 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 
 from amoeba.store.models import Session, Wake
+from amoeba.store.row_values import decode_timestamp
 from amoeba.store.sessions import upsert_session
 from amoeba.store.store import Transaction
 from amoeba.store.wakes import WakeLimits, claim_wake
 from store.message_support import ADDRESSEE, NOW, PROGRAM
-from store.seed import insert_checkout, insert_member
+from store.seed import insert_checkout, insert_member, mark_wake_wanted
 
 COMMAND = "wake-agent --max-seconds 60"
 TIMEOUT_SECONDS = 600
@@ -86,13 +87,41 @@ def claim(
     now: datetime = NOW,
     max_wakes: int = MAX_WAKES,
 ) -> Wake | None:
-    return claim_wake(
+    """Claim a wake for the member as a ``send`` that wanted one would have: a mark
+    is written first, just after the member's newest wake so each claim answers its
+    own mark (262 D8)."""
+    if transaction.execute(
+        "SELECT 1 FROM members WHERE project_id = ?", (member_id,)
+    ).fetchone():
+        mark_wake_wanted(
+            transaction, member_id, _mark_time(transaction, member_id, now)
+        )
+    claimed = claim_wake(
         transaction,
         member_id,
         now,
         replace(LIMITS, max_per_day=max_wakes),
         wake_id,
         f"{LOG_DIRECTORY}/{wake_id}",
+    )
+    # The wake answers its mark; the seeded request is ended so it shows in no listing.
+    transaction.execute(
+        "UPDATE messages SET state = 'cancelled', reason = 'seeded mark' "
+        "WHERE message_id LIKE 'wake-mark-%' AND state = 'open'"
+    )
+    return claimed
+
+
+def _mark_time(transaction: Transaction, member_id: str, now: datetime) -> datetime:
+    """``now``, or just after the member's newest wake when that is later: a wake
+    claimed at or after a mark answers it, so a second claim needs a newer mark."""
+    row = transaction.execute(
+        "SELECT MAX(started_at) FROM wakes WHERE member_id = ?", (member_id,)
+    ).fetchone()
+    if row is None or row[0] is None:
+        return now
+    return max(
+        now, decode_timestamp(row[0], "wakes.started_at") + timedelta(microseconds=1)
     )
 
 

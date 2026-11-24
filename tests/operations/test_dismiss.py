@@ -24,12 +24,12 @@ from amoeba.operations.dismiss import (
     DismissResult,
     dismiss,
 )
+from amoeba.operations.steps.resume import ResumeClaimed, claim_resume
 from amoeba.store.answers import (
     Lost,
     add_pm_answer,
     answers_of,
     latest_answer,
-    mark_resume_started,
     record_resume,
     settle_answered,
 )
@@ -40,6 +40,9 @@ from amoeba.store.vocabulary import ClosedReason, QuestionState, ResumeOutcome
 
 LATER = NOW + timedelta(minutes=5)
 REASON = "not needed tonight"
+
+#: Any limit will do: the claim is never left to run out here.
+CLAIM_SECONDS = 600.0
 
 
 @pytest.fixture
@@ -66,7 +69,15 @@ def _answered(store: Store, outcome: ResumeOutcome | None) -> int:
         insert_question(transaction, waiting_question(), now=NOW)
         seq = add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
         if outcome is not None:
-            record_resume(transaction, seq, outcome, detail="why", log="/log", at=NOW)
+            record_resume(
+                transaction,
+                seq,
+                outcome,
+                detail="why",
+                log="/log",
+                at=NOW,
+                claim_id=None,
+            )
     return seq
 
 
@@ -125,7 +136,9 @@ def test_an_unresumed_answer_is_dismissed_and_not_delivered(
 def test_an_answer_whose_resume_is_in_flight_is_not_dismissed(store: Store) -> None:
     seq = _answered(store, None)
     with store.write() as transaction:
-        assert mark_resume_started(transaction, seq, now=NOW)
+        assert isinstance(
+            claim_resume(transaction, seq, NOW, CLAIM_SECONDS), ResumeClaimed
+        )
 
     result = _dismiss(store)
 

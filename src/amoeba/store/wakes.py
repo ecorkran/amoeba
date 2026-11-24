@@ -2,7 +2,7 @@
 
 A wake is one ``wakes`` row. ``claim_wake`` is the only writer of a new row and
 checks, in one transaction, everything that decides whether a wake may start;
-``can_wake`` is the same checks as a read, so the two never differ. Every function
+``wake_due`` is the same checks as a read, so the two never differ. Every function
 takes the caller's transaction and a ``now`` or a cutoff; nothing here reads the
 clock, the config or any layout.
 """
@@ -32,7 +32,7 @@ from amoeba.store.row_values import (
 )
 from amoeba.store.sessions import live_member_ids
 from amoeba.store.store import Transaction
-from amoeba.store.vocabulary import WakeOutcome
+from amoeba.store.vocabulary import RequestState, WakeOutcome
 
 #: The rolling window the daily limit counts in (D7).
 WAKE_WINDOW: Final = timedelta(hours=24)
@@ -156,15 +156,91 @@ def wake_command_of(transaction: Transaction, member_id: str) -> str | None:
     return None if checkout is None else checkout.wake_command
 
 
-def can_wake(
+def wake_conditions_hold(
     transaction: Transaction,
     member_id: str,
     now: datetime,
     limits: WakeLimits,
     scope: WakeScope = WakeScope.ACTING_MACHINE,
 ) -> bool:
-    """Whether a claim in ``scope`` would pass its checks now; reads only."""
+    """Whether today's conditions hold in ``scope``: a checkout with a wake command, no
+    live session, no live wake and room in the day's limit. Reads only, and says
+    nothing about whether a wake was wanted: that is the mark (``wake_due``)."""
     return _wakeable_checkout(transaction, member_id, now, limits, scope) is not None
+
+
+def _mark_is_due(transaction: Transaction, member_id: str, now: datetime) -> bool:
+    """Rules 1 and 2 of D8: an open request carries a mark, and no wake answers it."""
+    row = transaction.execute(
+        sql_wakes.SELECT_NEWEST_WAKE_MARK,
+        (member_id, RequestState.OPEN.value, encode_timestamp(now)),
+    ).fetchone()
+    if row is None or row[0] is None:
+        return False
+    answered = transaction.execute(
+        sql_wakes.SELECT_WAKE_FOR_MARK_EXISTS,
+        (member_id, text(row[0], "messages.wake_wanted_at"), encode_timestamp(now)),
+    ).fetchone()
+    if answered is None:
+        raise AssertionError("the wake-for-mark check returned no row")
+    return integer(answered[0], "wake for mark") == 0
+
+
+def _due_checkout(
+    transaction: Transaction,
+    member_id: str,
+    now: datetime,
+    limits: WakeLimits,
+    scope: WakeScope,
+) -> Checkout | None:
+    """The checkout a wake would run in, when one is due: the mark (rules 1, 2) and
+    the conditions (rule 3), the same read for a claim and for the flag."""
+    checkout = _wakeable_checkout(transaction, member_id, now, limits, scope)
+    if checkout is None or not _mark_is_due(transaction, member_id, now):
+        return None
+    return checkout
+
+
+def wake_due(
+    transaction: Transaction,
+    member_id: str,
+    now: datetime,
+    limits: WakeLimits,
+    scope: WakeScope = WakeScope.ACTING_MACHINE,
+) -> bool:
+    """Whether a wake is due for the member in ``scope`` now (262 D8); reads only.
+
+    1. An open, unexpired request to the member carries a mark: ``send`` wanted a wake.
+    2. No wake of the member was claimed at or after the mark, the mark's own time
+       included. A row with a pid is that wake whatever became of it; an unended row
+       with no pid past its deadline is a claim nobody picked up and does not count.
+    3. Today's conditions hold now (``wake_conditions_hold``).
+    """
+    return _due_checkout(transaction, member_id, now, limits, scope) is not None
+
+
+def set_wake_mark(
+    transaction: Transaction,
+    message_id: str,
+    member_id: str,
+    now: datetime,
+    limits: WakeLimits,
+) -> bool:
+    """Mark the open request ``message_id`` as wanting a wake when today's conditions
+    hold for its recipient on some machine (D8 rule 1). True if it set the mark.
+
+    A request sent while a session was live, or with no wake command anywhere, gets no
+    mark and is never woken later.
+    """
+    if not wake_conditions_hold(
+        transaction, member_id, now, limits, WakeScope.ALL_MACHINES
+    ):
+        return False
+    cursor = transaction.execute(
+        sql_wakes.SET_WAKE_MARK,
+        (encode_timestamp(now), message_id, RequestState.OPEN.value),
+    )
+    return cursor.rowcount == 1
 
 
 def claim_wake(  # noqa: PLR0913 - the claim's checks and what it writes
@@ -184,7 +260,7 @@ def claim_wake(  # noqa: PLR0913 - the claim's checks and what it writes
     no layout.
     """
     acting = transaction.acting("wakes")
-    checkout = _wakeable_checkout(
+    checkout = _due_checkout(
         transaction, member_id, now, limits, WakeScope.ACTING_MACHINE
     )
     if checkout is None or checkout.wake_command is None:

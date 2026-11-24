@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from cf_fixtures import DEFAULT_WORKTREE, fixture_document
 from store.message_support import seed_members
+from store.seed import mark_wake_wanted
 from store.wake_support import seed_waking_member
 from store_open import open_local_store
 from user_configs import user_config
@@ -209,6 +210,7 @@ def test_the_claim_after_an_add_uses_the_checkouts_path_and_command(
     with store.write() as transaction:
         member = find_member(transaction, RECORDED_NAME)
         assert member is not None
+        mark_wake_wanted(transaction, member.project_id, NOW)
         wake = claim_wake(
             transaction,
             member.project_id,

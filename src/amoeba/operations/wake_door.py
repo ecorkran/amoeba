@@ -14,11 +14,11 @@ from datetime import datetime
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.errors import NOT_SERVED, CallRefused
-from amoeba.operations.wake import wake_limits
+from amoeba.operations.steps.limits import wake_limits
 from amoeba.store.checkouts import checkout_listing
 from amoeba.store.programs import get_member
 from amoeba.store.store import Store
-from amoeba.store.wakes import WakeScope, can_wake
+from amoeba.store.wakes import WakeScope, wake_conditions_hold
 
 
 def refuse_a_wake_the_door_cannot_start(
@@ -31,7 +31,7 @@ def refuse_a_wake_the_door_cannot_start(
         CallRefused: A wake is due, and the door does not start wakes yet.
     """
     with store.read() as transaction:
-        if not can_wake(
+        if not wake_conditions_hold(
             transaction, member_id, now, wake_limits(config), WakeScope.ALL_MACHINES
         ):
             return

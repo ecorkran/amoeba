@@ -33,3 +33,16 @@ SET_QUESTIONS_MACHINE: Final = (
     "UPDATE questions SET machine_id = ? WHERE machine_id IS NULL"
 )
 SET_WAKES_MACHINE: Final = "UPDATE wakes SET machine_id = ? WHERE machine_id IS NULL"
+
+# --- the resume claim (D6) --------------------------------------------------
+
+#: The one statement that takes a resume claim: the outcome is not final (null or
+#: refused) and the claim is free or older than the limit. Parameters: now, the new
+#: claim id, seq, refused, the oldest ``resume_started_at`` that still holds a claim
+#: (inclusive: a claim as old as the limit is taken).
+CLAIM_RESUME: Final = """
+UPDATE answers SET resume_started_at = ?, resume_claim_id = ?
+WHERE seq = ?
+    AND (resume_outcome IS NULL OR resume_outcome = ?)
+    AND (resume_claim_id IS NULL OR resume_started_at <= ?)
+"""

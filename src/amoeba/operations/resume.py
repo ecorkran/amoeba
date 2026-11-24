@@ -11,6 +11,7 @@ polled.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
@@ -18,14 +19,15 @@ from typing import Final
 
 from amoeba.answering.gate import compose_instructions
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.deps import RUN_POLL_TIMEOUT_SECONDS, Deps
+from amoeba.operations.deps import Deps
 from amoeba.operations.pause_models import ResumeResult
-from amoeba.operations.processes import (
-    TERMINATE_GRACE_SECONDS,
-    WaitableChild,
-    terminate_group,
+from amoeba.operations.processes import WaitableChild, terminate_group
+from amoeba.operations.resume_timing import (
+    RESUME_POLL_INTERVAL_SECONDS,
+    resume_work_seconds,
 )
-from amoeba.store.answers import get_answer, mark_resume_started, record_resume
+from amoeba.operations.steps.resume import ResumeClaimed, claim_resume
+from amoeba.store.answers import get_answer, record_resume
 from amoeba.store.errors import StoreRowError
 from amoeba.store.models import QuestionKey, QuestionRecord
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
@@ -40,9 +42,6 @@ from amoeba.upstream.squadron.run_outcome import (
     RunOutcomeDocument,
 )
 
-#: How often the run is polled while the resume child is starting (D8).
-RESUME_POLL_INTERVAL_SECONDS: Final = 0.5
-
 RESUME_LOG_DIRECTORY: Final = "resume"
 LOG_STAMP_FORMAT: Final = "%Y%m%dT%H%M%S%fZ"
 
@@ -55,13 +54,7 @@ def resume_bound_seconds(config: UserConfig) -> float:
     spawn), and the store write. The sweep leaves an answer alone for this long after
     its newest sign of life.
     """
-    return (
-        config.resume_wait_seconds
-        + RESUME_POLL_INTERVAL_SECONDS
-        + 2 * RUN_POLL_TIMEOUT_SECONDS
-        + 2 * TERMINATE_GRACE_SECONDS
-        + BUSY_TIMEOUT_SECONDS
-    )
+    return resume_work_seconds(config) + BUSY_TIMEOUT_SECONDS
 
 
 class _Seen(StrEnum):
@@ -81,11 +74,14 @@ def resume(
     *,
     deps: Deps,
     wait_seconds: float,
+    claim_seconds: float,
 ) -> ResumeResult:
     """Resume the question's run with the answer ``answer_seq`` and record the outcome.
 
     The result is what the store holds: if the answer's outcome was already final, that
-    outcome, not this attempt's.
+    outcome, not this attempt's. ``claim_seconds`` is ``resume_claim_seconds``: the
+    resume takes the answer's claim just before it spawns, and a claim another attempt
+    holds inside that age stops it (262 D6).
 
     Raises:
         SquadronError: The first poll could not be read (the state is unknown, so
@@ -96,48 +92,68 @@ def resume(
         answer = get_answer(transaction, answer_seq)
     if answer is None or answer.key != question.key:
         raise ValueError(f"answer {answer_seq} is not an answer to {question.key}")
-    attempted = _attempt(store, question, answer.answer, answer_seq, deps, wait_seconds)
+    attempted = _attempt(
+        store, question, (answer.answer, answer_seq), deps, wait_seconds, claim_seconds
+    )
     with store.write() as transaction:
         if attempted is not None and record_resume(
             transaction,
             answer_seq,
-            attempted.outcome,
-            detail=attempted.detail,
-            log=attempted.resume_log,
+            attempted.result.outcome,
+            detail=attempted.result.detail,
+            log=attempted.result.resume_log,
             at=deps.clock(),
+            claim_id=attempted.claim_id,
         ):
-            return attempted
+            return attempted.result
         # Nothing was started, or the outcome was already final and stays: the
         # result is the stored outcome, not this attempt's.
         final = get_answer(transaction, answer_seq)
     if final is None or final.resume_outcome is None:
-        raise StoreRowError(f"answer {answer_seq} has no resume outcome to report")
+        raise StoreRowError(
+            f"answer {answer_seq} has no resume outcome to report: another attempt "
+            "holds its resume claim"
+        )
     return ResumeResult(final.resume_outcome, final.resume_detail, final.resume_log)
 
 
-def _attempt(  # noqa: PLR0913 - the pieces of one resume
+@dataclass(frozen=True)
+class _Attempted:
+    """What one attempt judged, and the claim it held when it did (``None`` when it
+    never claimed: the run was not at the pause)."""
+
+    result: ResumeResult
+    claim_id: str | None
+
+
+def _attempt(
     store: Store,
     question: QuestionRecord,
-    answer_text: str,
-    answer_seq: int,
+    answer: tuple[str, int],
     deps: Deps,
     wait_seconds: float,
-) -> ResumeResult | None:
-    """The attempt's result, or ``None`` when the outcome was already final and
-    nothing was started."""
+    claim_seconds: float,
+) -> _Attempted | None:
+    """The attempt's result, or ``None`` when no claim could be had (the outcome is
+    final, or another attempt holds the claim) and nothing was started."""
+    answer_text, answer_seq = answer
     first = deps.poll_run(question.key.run_id)
     if isinstance(first, PollFailure):
         raise SquadronError(first.reason)
     seen = _seen(first, question.key)
     if seen is not _Seen.AT_PAUSE:
-        return ResumeResult(
-            ResumeOutcome.NOT_DELIVERED, _not_delivered_detail(first, seen), None
+        return _Attempted(
+            ResumeResult(
+                ResumeOutcome.NOT_DELIVERED, _not_delivered_detail(first, seen), None
+            ),
+            None,
         )
-    # Own short transaction, never across the spawn. False means the outcome is
-    # already final (a sweep or a dismissal got there first): start nothing.
+    # Own short transaction, never across the spawn. No claim means the outcome is
+    # already final (a sweep or a dismissal got there first) or another attempt holds
+    # the claim: start nothing.
     with store.write() as transaction:
-        started = mark_resume_started(transaction, answer_seq, now=deps.clock())
-    if not started:
+        claim = claim_resume(transaction, answer_seq, deps.clock(), claim_seconds)
+    if not isinstance(claim, ResumeClaimed):
         return None
     logs = _resume_logs(deps, question.key.run_id, answer_seq)
     # The text is one argv element behind ``--instructions`` (no shell), and it always
@@ -148,8 +164,10 @@ def _attempt(  # noqa: PLR0913 - the pieces of one resume
     )
     child = deps.spawn(argv, Path(question.checkout), logs)
     if isinstance(child, LaunchError):
-        return ResumeResult(ResumeOutcome.REFUSED, cut_to_bound(child.detail), None)
-    return _follow(child, question.key, logs, deps, wait_seconds)
+        refused = ResumeResult(ResumeOutcome.REFUSED, cut_to_bound(child.detail), None)
+        return _Attempted(refused, claim.claim_id)
+    followed = _follow(child, question.key, logs, deps, wait_seconds)
+    return _Attempted(followed, claim.claim_id)
 
 
 def _resume_logs(deps: Deps, run_id: str, answer_seq: int) -> LaunchLogs:

@@ -18,6 +18,7 @@ from amoeba.answering.values import AnsweringEvidence, DeclineReason
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
 from amoeba.operations.status_runs import HANDLED_BY_HANDLE_PAUSE
+from amoeba.operations.steps.limits import pause_claim_seconds
 from amoeba.store.answers import Settled, answers_of, record_resume, settle_answered
 from amoeba.store.questions import (
     NewQuestion,
@@ -42,7 +43,8 @@ from operations.pause_support import START
 from operations.status_placed import status
 
 OLD_RUN = "amoeba-20261110T110000Z-oldoldoldold"
-WAIT = 600.0
+#: A claim this old is dead (262 D5): the answering wait and two call bounds.
+WAIT = pause_claim_seconds(user_config())
 
 
 def _claim(w: World, *, age_seconds: float) -> None:
@@ -122,7 +124,13 @@ def _settled(w: World) -> None:
     seq = _answered(w)
     with w.store.write() as transaction:
         record_resume(
-            transaction, seq, ResumeOutcome.RESUMED, detail=None, log=None, at=START
+            transaction,
+            seq,
+            ResumeOutcome.RESUMED,
+            detail=None,
+            log=None,
+            at=START,
+            claim_id=None,
         )
 
 

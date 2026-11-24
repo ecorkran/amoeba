@@ -152,6 +152,7 @@ def test_a_refused_earlier_resume_is_retried_with_the_recorded_answer(
                 detail="lock held",
                 log=None,
                 at=START,
+                claim_id=None,
             )
 
         result = w.handle()
@@ -219,7 +220,15 @@ def test_an_answer_that_was_handed_over_is_settled(
     with world(tmp_path) as w:
         seq = _answered_row(w)
         with w.store.write() as transaction:
-            record_resume(transaction, seq, outcome, detail=None, log=None, at=START)
+            record_resume(
+                transaction,
+                seq,
+                outcome,
+                detail=None,
+                log=None,
+                at=START,
+                claim_id=None,
+            )
 
         result = w.handle()
 

@@ -28,6 +28,7 @@ from amoeba.operations.message_results import (
 from amoeba.operations.names import OperationName
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
 from amoeba.operations.reject_codes import NotARequest, RejectCode, as_request
+from amoeba.operations.steps.limits import wake_limits
 from amoeba.store.deliveries import write_delivery
 from amoeba.store.message_sweep import sweep
 from amoeba.store.messages import (
@@ -40,6 +41,7 @@ from amoeba.store.messages import (
 from amoeba.store.models import Message
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import DeliveryEvent, MessageKind, RequestState
+from amoeba.store.wakes import set_wake_mark
 
 
 @dataclass(frozen=True)
@@ -68,7 +70,9 @@ def write_send(
         sweep(transaction, now, config.prune_after_days)
         existing = get_message(transaction, request.id)
         if existing is not None:
-            return _resend(transaction, existing, sender, recipient, request, now)
+            return _resend(
+                transaction, config, existing, (sender, recipient), request, now
+            )
         parent_depth: int | None = None
         if request.parent is not None:
             parent = _check_parent(transaction, request.parent, config)
@@ -92,6 +96,10 @@ def write_send(
         )
         write_delivery(
             transaction, recipient, stored.message_id, DeliveryEvent.SENT, now
+        )
+        # The mark is written here, before any wake claim reads it (262 D8).
+        set_wake_mark(
+            transaction, stored.message_id, recipient, now, wake_limits(config)
         )
         return sent_result(SendOutcome.SENT, stored, now)
 
@@ -132,15 +140,21 @@ def _check_parent(
     return parent
 
 
-def _resend(
+def _resend(  # noqa: PLR0913 - the transaction, the stored row and the send again
     transaction: Transaction,
+    config: UserConfig,
     existing: Message,
-    sender: str,
-    recipient: str,
+    parties: tuple[str, str],
     request: SendRequest,
     now: datetime,
 ) -> SendResult:
-    """D2: the same id again. Same content is a retry; anything else is refused."""
+    """D2: the same id again. Same content is a retry; anything else is refused.
+
+    A retry of a request that is still open wants a wake again when today's conditions
+    hold, which is how a request sent while a session was live is woken once the
+    session is stale (262 D8).
+    """
+    sender, recipient = parties
     if not same_content(
         existing,
         kind=MessageKind.REQUEST,
@@ -159,6 +173,7 @@ def _resend(
             "send it again under a new id",
         )
         return reject_send(transaction, sender, request, problem, now)
+    set_wake_mark(transaction, existing.message_id, recipient, now, wake_limits(config))
     return sent_result(SendOutcome.UNCHANGED, existing, now)
 
 

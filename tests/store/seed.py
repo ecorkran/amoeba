@@ -8,11 +8,12 @@ takes the open ``Store.write()`` transaction.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from amoeba.answering.values import AnsweredBy
 from amoeba.store import sql
 from amoeba.store.checkouts import insert_checkout as store_insert_checkout
+from amoeba.store.messages import insert_request
 from amoeba.store.row_values import encode_string_list, encode_timestamp
 from amoeba.store.store import Transaction
 from amoeba.store.vocabulary import (
@@ -179,3 +180,38 @@ def insert_answer(
             transaction.acting("answers").owner_id,
         ),
     )
+
+
+#: Long enough that a seeded request is never past its expiry in a test.
+SEEDED_REQUEST_TTL = timedelta(days=3650)
+
+
+def mark_wake_wanted(transaction: Transaction, member_id: str, at: datetime) -> str:
+    """An open request to ``member_id`` whose ``wake_wanted_at`` is ``at``: the
+    member has a wake due (262 D8, rule 1) as ``send`` would have marked it.
+
+    The request is from the member to itself, so no other member needs seeding. It is
+    never expired, and its id is numbered, so a test may seed several marks. Returns
+    the request's id.
+    """
+    taken = transaction.execute(
+        "SELECT COUNT(*) FROM messages WHERE message_id LIKE 'wake-mark-%'"
+    ).fetchone()
+    message_id = f"wake-mark-{taken[0] if taken else 0}-{member_id}"
+    insert_request(
+        transaction,
+        message_id=message_id,
+        from_member=member_id,
+        to_member=member_id,
+        parent_id=None,
+        parent_depth=None,
+        subject="seeded request",
+        body="seeded request",
+        ttl=SEEDED_REQUEST_TTL,
+        now=at,
+    )
+    transaction.execute(
+        "UPDATE messages SET wake_wanted_at = ? WHERE message_id = ?",
+        (encode_timestamp(at), message_id),
+    )
+    return message_id

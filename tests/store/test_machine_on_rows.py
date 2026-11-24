@@ -16,7 +16,7 @@ from amoeba.store.questions import NewQuestion, insert_question
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import QuestionState, ResumeOutcome
 from amoeba.store.wakes import WakeLimits, claim_wake
-from store.seed import insert_checkout, insert_member, insert_program
+from store.seed import insert_checkout, insert_member, insert_program, mark_wake_wanted
 
 NOW = datetime(2026, 11, 20, 12, 0, tzinfo=UTC)
 LIMITS = WakeLimits(timeout_seconds=600, max_per_day=3, session_stale_seconds=90)
@@ -74,6 +74,7 @@ def _write_each_kind(transaction: Transaction) -> None:
     assert insert_held(
         transaction, HeldQuestion(HELD, "m1", "q", "/work/m1"), "request-1", NOW
     )
+    mark_wake_wanted(transaction, "m1", NOW)
     assert claim_wake(transaction, "m1", NOW, LIMITS, "w1", "/log") is not None
 
 
