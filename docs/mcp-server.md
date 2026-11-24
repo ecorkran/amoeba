@@ -89,7 +89,7 @@ on the CLI; it is not an error.
 | `status` | Also takes `directory`. Its listing gives each run's `run_id` and `directory` for `handle_pause`, and the question key for `answer`. After its listing it starts `handle_pause` for each held question whose request has ended (slice 242); the result does not change, and a held run (`waiting_on_request`) needs no call from you. A member with a wake command also has a `wake` object (slice 244: `command`, `running`, `stopped`, `last_problem`; `cli-contract.md`), shown in plain text. |
 | `decisions` | `read_through` goes to `mark_read`. Each record shows `via`, the door that carried a PM answer (`cli` or `mcp`). |
 | `mark_read` | |
-| `answer` | `text` must be a decision the PM actually gave, passed on as given. It becomes precedent. Recorded with `via: mcp`. |
+| `answer` | `text` must be a decision the PM actually gave, passed on as given. It becomes precedent. Recorded with `via: mcp`. When the question's run is on another machine the result has `resume: null` and `waiting_on_machine` (`machine`, `last_called_at`): the answer is recorded and resumes at that machine's next call. |
 | `dismiss`, `retract` | |
 | `report_release` | Takes `directory` (the caller's checkout, an absolute path) and `commit` (the full hash), `changed`, `touched`, `version`, and `mode` (`report`, `correct` or `withdraw`; `report` when absent). |
 | `changes` | Takes `directory` (the caller's checkout, an absolute path) and `since` (ISO-8601 with a UTC offset). Writes nothing. |

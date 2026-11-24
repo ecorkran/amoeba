@@ -39,7 +39,8 @@ from amoeba.operations.names import Door, OperationName
 from amoeba.operations.processes import start_child
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
-from amoeba.operations.resume import LOG_STAMP_FORMAT, resume_bound_seconds
+from amoeba.operations.resume import LOG_STAMP_FORMAT
+from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.state_move import open_state_store, prepare_state_home
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs

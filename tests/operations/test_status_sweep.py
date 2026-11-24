@@ -18,7 +18,7 @@ from store.question_support import NOW, claimed_question, waiting_question
 from store_open import open_local_store
 from user_configs import user_config
 
-from amoeba.operations.resume import resume_bound_seconds
+from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.status import StatusResult
 from amoeba.store.answers import add_pm_answer, latest_answer
 from amoeba.store.models import QuestionKey, QuestionRecord

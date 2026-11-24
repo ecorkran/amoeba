@@ -338,6 +338,8 @@ So a resume that worked is recorded as `resumed` whether its attempt stopped bef
 
 A write of the file that fails is logged at error level and not retried, and the attempt goes on; `resume_record` is the record that counts. Without the file a later attempt behaves as today. So for an answer with no outcome, a wrong `not_delivered` now takes both a failed write to the machine's own state directory and the attempt stopping before its record lands. The one other way to a wrong `not_delivered` is the retry of a refused resume that D9 describes.
 
+The claim comes before the first poll, so a final outcome written during that poll (a dismissal, `rm-machine`) no longer stops the spawn that follows it; the outcome is never overwritten, and the resume reports the stored one (3.4's `test_an_answer_made_not_delivered_during_the_first_poll_reports_the_stored_outcome`).
+
 `resume_claim` that finds a claim in flight returns that, and `handle-pause` reports a new skip, `resume_in_progress`.
 
 - Rejected: judging "in flight" from `resume_started_at` and `resume_at` alone. After a refused outcome the two stamps cannot say whether a newer attempt has started.

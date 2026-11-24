@@ -17,6 +17,7 @@ from amoeba.store.checkouts import delete_checkouts_on_machine
 from amoeba.store.errors import StoreError
 from amoeba.store.row_values import (
     encode_timestamp,
+    optional_integer,
     optional_text,
     optional_timestamp,
     text,
@@ -86,6 +87,32 @@ def act_as_local(store: Store) -> ActingMachine:
     machine = ActingMachine(machine_id=found[0], owner_id=found[1])
     store.act_as(machine)
     return machine
+
+
+@dataclass(frozen=True)
+class QuestionMachine:
+    """The machine a question is on; every field is ``None`` for a question whose
+    machine was removed."""
+
+    machine_id: int | None
+    name: str | None
+    last_called_at: datetime | None
+
+
+def question_machine(
+    transaction: Transaction, run_id: str, paused_at: str
+) -> QuestionMachine | None:
+    """Where the question's run is, or ``None`` when there is no such question."""
+    row = transaction.execute(
+        sql_local_work.SELECT_QUESTION_MACHINE, (run_id, paused_at)
+    ).fetchone()
+    if row is None:
+        return None
+    return QuestionMachine(
+        machine_id=optional_integer(row[0], "questions.machine_id"),
+        name=optional_text(row[1], "machines.name"),
+        last_called_at=optional_timestamp(row[2], "machines.last_called_at"),
+    )
 
 
 def give_old_rows_the_machine(store: Store, machine: ActingMachine) -> bool:

@@ -23,6 +23,13 @@ SELECT_QUESTION_MACHINE_NAME: Final = (
     "JOIN machines ON machines.machine_id = questions.machine_id "
     "WHERE questions.run_id = ? AND questions.paused_at = ?"
 )
+#: A question's machine id, name and when it last called the hub. The id is null and
+#: the name and time null after ``rm-machine``. Parameters: run id, paused_at.
+SELECT_QUESTION_MACHINE: Final = (
+    "SELECT questions.machine_id, machines.name, machines.last_called_at "
+    "FROM questions LEFT JOIN machines ON machines.machine_id = questions.machine_id "
+    "WHERE questions.run_id = ? AND questions.paused_at = ?"
+)
 #: One row of either table with no machine, for the opener's check (D14).
 SELECT_ROW_WITHOUT_MACHINE: Final = (
     "SELECT EXISTS (SELECT 1 FROM questions WHERE machine_id IS NULL) "

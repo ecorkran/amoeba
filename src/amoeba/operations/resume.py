@@ -18,19 +18,26 @@ from pathlib import Path
 from typing import Final
 
 from amoeba.answering.gate import compose_instructions
-from amoeba.config.user_config import UserConfig
 from amoeba.operations.deps import Deps
 from amoeba.operations.pause_models import ResumeResult
 from amoeba.operations.processes import WaitableChild, terminate_group
+from amoeba.operations.resume_attempt import (
+    RESUME_LOG_DIRECTORY,
+    attempt_path,
+    read_attempt,
+    write_judged,
+    write_started,
+)
 from amoeba.operations.resume_timing import (
     RESUME_POLL_INTERVAL_SECONDS,
-    resume_work_seconds,
 )
-from amoeba.operations.steps.resume import ResumeClaimed, claim_resume
-from amoeba.store.answers import get_answer, record_resume
-from amoeba.store.errors import StoreRowError
-from amoeba.store.models import QuestionKey, QuestionRecord
-from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
+from amoeba.operations.steps.models import (
+    RESUME_RECORD,
+    ResumeClaimPayload,
+    ResumeRecordRequest,
+)
+from amoeba.operations.store_steps import Steps
+from amoeba.store.models import QuestionKey
 from amoeba.store.vocabulary import ResumeOutcome
 from amoeba.upstream.bounded_text import cut_to_bound
 from amoeba.upstream.squadron.errors import SquadronError
@@ -42,19 +49,12 @@ from amoeba.upstream.squadron.run_outcome import (
     RunOutcomeDocument,
 )
 
-RESUME_LOG_DIRECTORY: Final = "resume"
+#: The outcomes the store never overwrites (``resumed`` and ``not_delivered``).
+FINAL_OUTCOMES: Final = frozenset({ResumeOutcome.RESUMED, ResumeOutcome.NOT_DELIVERED})
+EARLIER_ATTEMPT_DETAIL: Final = (
+    "an earlier attempt started the resume and stopped before it recorded an outcome"
+)
 LOG_STAMP_FORMAT: Final = "%Y%m%dT%H%M%S%fZ"
-
-
-def resume_bound_seconds(config: UserConfig) -> float:
-    """The longest a resume can take before it records its outcome (228 D4).
-
-    The wait loop and its last poll, the SIGTERM grace and then the SIGKILL grace in
-    ``terminate_group``, the poll after the kill (and the first poll before the
-    spawn), and the store write. The sweep leaves an answer alone for this long after
-    its newest sign of life.
-    """
-    return resume_work_seconds(config) + BUSY_TIMEOUT_SECONDS
 
 
 class _Seen(StrEnum):
@@ -67,107 +67,112 @@ class _Seen(StrEnum):
     UNCLEAR = "unclear"
 
 
-def resume(
-    store: Store,
-    question: QuestionRecord,
-    answer_seq: int,
-    *,
-    deps: Deps,
-    wait_seconds: float,
-    claim_seconds: float,
-) -> ResumeResult:
-    """Resume the question's run with the answer ``answer_seq`` and record the outcome.
+class ResumeUnreadableError(SquadronError):
+    """The first poll could not be read and no earlier attempt had started the resume,
+    so the outcome ``refused`` was recorded and the claim freed (D6).
 
-    The result is what the store holds: if the answer's outcome was already final, that
-    outcome, not this attempt's. ``claim_seconds`` is ``resume_claim_seconds``: the
-    resume takes the answer's claim just before it spawns, and a claim another attempt
-    holds inside that age stops it (262 D6).
+    ``handle_pause`` lets it propagate (exit 3, as an unreadable poll always was);
+    ``answer`` returns ``result`` as the resume's outcome.
+    """
+
+    def __init__(self, reason: str, result: ResumeResult) -> None:
+        super().__init__(reason)
+        self.result = result
+
+
+def resume(steps: Steps, claimed: ResumeClaimPayload, deps: Deps) -> ResumeResult:
+    """Resume the claimed answer's run and record the outcome (D6).
+
+    The caller holds the claim; the attempt file on this machine says what an earlier
+    attempt for the answer did. The result is what the store holds: if the answer's
+    outcome was already final, that outcome, not this attempt's.
 
     Raises:
-        SquadronError: The first poll could not be read (the state is unknown, so
-            nothing is started and nothing is written).
-        ValueError: ``answer_seq`` is not an answer to this question.
+        ResumeUnreadableError: The first poll could not be read and ``refused`` was
+            recorded.
+        SquadronError: The first poll could not be read and an earlier attempt's file
+            holds ``started``: nothing is recorded, because that attempt may have
+            resumed the run.
+        HubUnreachableError, HubRefusedError: A step got no reply, or was refused.
     """
-    with store.read() as transaction:
-        answer = get_answer(transaction, answer_seq)
-    if answer is None or answer.key != question.key:
-        raise ValueError(f"answer {answer_seq} is not an answer to {question.key}")
-    attempted = _attempt(
-        store, question, (answer.answer, answer_seq), deps, wait_seconds, claim_seconds
+    key = QuestionKey(claimed.run_id, claimed.paused_at)
+    path = attempt_path(deps.logs_dir, key.run_id, claimed.answer_seq)
+    judged = _judge(claimed, key, path, deps)
+    if not judged.replayed:
+        write_judged(path, judged.outcome, judged.detail, judged.resume_log)
+    recorded = steps.run(
+        RESUME_RECORD,
+        ResumeRecordRequest(
+            answer_seq=claimed.answer_seq,
+            claim_id=claimed.claim_id,
+            outcome=judged.outcome,
+            detail=judged.detail,
+            log=judged.resume_log,
+        ),
     )
-    with store.write() as transaction:
-        if attempted is not None and record_resume(
-            transaction,
-            answer_seq,
-            attempted.result.outcome,
-            detail=attempted.result.detail,
-            log=attempted.result.resume_log,
-            at=deps.clock(),
-            claim_id=attempted.claim_id,
-        ):
-            return attempted.result
-        # Nothing was started, or the outcome was already final and stays: the
-        # result is the stored outcome, not this attempt's.
-        final = get_answer(transaction, answer_seq)
-    if final is None or final.resume_outcome is None:
-        raise StoreRowError(
-            f"answer {answer_seq} has no resume outcome to report: another attempt "
-            "holds its resume claim"
-        )
-    return ResumeResult(final.resume_outcome, final.resume_detail, final.resume_log)
+    result = ResumeResult(recorded.outcome, recorded.detail, recorded.log)
+    if judged.unreadable is not None:
+        raise ResumeUnreadableError(judged.unreadable, result)
+    return result
 
 
 @dataclass(frozen=True)
-class _Attempted:
-    """What one attempt judged, and the claim it held when it did (``None`` when it
-    never claimed: the run was not at the pause)."""
+class _Judged:
+    """What this attempt came to, before it is recorded."""
 
-    result: ResumeResult
-    claim_id: str | None
+    outcome: ResumeOutcome
+    detail: str | None
+    resume_log: str | None
+    #: The outcome came from the attempt file: it is in the file already.
+    replayed: bool = False
+    #: Set when the first poll could not be read, to the reason.
+    unreadable: str | None = None
 
 
-def _attempt(
-    store: Store,
-    question: QuestionRecord,
-    answer: tuple[str, int],
-    deps: Deps,
-    wait_seconds: float,
-    claim_seconds: float,
-) -> _Attempted | None:
-    """The attempt's result, or ``None`` when no claim could be had (the outcome is
-    final, or another attempt holds the claim) and nothing was started."""
-    answer_text, answer_seq = answer
-    first = deps.poll_run(question.key.run_id)
+def _judge(
+    claimed: ResumeClaimPayload, key: QuestionKey, path: Path, deps: Deps
+) -> _Judged:
+    """Judge the attempt by D6's table: the file first, then the run."""
+    earlier = read_attempt(path)
+    if (
+        earlier is not None
+        and earlier.outcome is not None
+        and earlier.outcome in FINAL_OUTCOMES
+    ):
+        # A lost record: the earlier attempt judged this and its record did not land.
+        return _Judged(earlier.outcome, earlier.detail, earlier.log, replayed=True)
+    first = deps.poll_run(key.run_id)
     if isinstance(first, PollFailure):
-        raise SquadronError(first.reason)
-    seen = _seen(first, question.key)
-    if seen is not _Seen.AT_PAUSE:
-        return _Attempted(
-            ResumeResult(
-                ResumeOutcome.NOT_DELIVERED, _not_delivered_detail(first, seen), None
-            ),
+        if earlier is not None and earlier.is_started:
+            # That attempt may have resumed the run, so a refused here would be
+            # false, and writing it would lose ``started``: record nothing.
+            raise SquadronError(first.reason)
+        return _Judged(
+            ResumeOutcome.REFUSED,
+            cut_to_bound(first.reason),
             None,
+            unreadable=first.reason,
         )
-    # Own short transaction, never across the spawn. No claim means the outcome is
-    # already final (a sweep or a dismissal got there first) or another attempt holds
-    # the claim: start nothing.
-    with store.write() as transaction:
-        claim = claim_resume(transaction, answer_seq, deps.clock(), claim_seconds)
-    if not isinstance(claim, ResumeClaimed):
-        return None
-    logs = _resume_logs(deps, question.key.run_id, answer_seq)
+    seen = _seen(first, key)
+    if seen is not _Seen.AT_PAUSE:
+        if earlier is not None and earlier.is_started:
+            return _Judged(ResumeOutcome.RESUMED, EARLIER_ATTEMPT_DETAIL, None)
+        return _Judged(
+            ResumeOutcome.NOT_DELIVERED, _not_delivered_detail(first, seen), None
+        )
+    write_started(path)
+    logs = _resume_logs(deps, key.run_id, claimed.answer_seq)
     # The text is one argv element behind ``--instructions`` (no shell), and it always
     # starts with the fixed "You asked: ", so neither the question nor the answer can
     # be read as an option or as a second argument, whatever they contain.
     argv = resume_argv(
-        question.key.run_id, compose_instructions(question.question, answer_text)
+        key.run_id, compose_instructions(claimed.question, claimed.answer_text)
     )
-    child = deps.spawn(argv, Path(question.checkout), logs)
+    child = deps.spawn(argv, Path(claimed.checkout), logs)
     if isinstance(child, LaunchError):
-        refused = ResumeResult(ResumeOutcome.REFUSED, cut_to_bound(child.detail), None)
-        return _Attempted(refused, claim.claim_id)
-    followed = _follow(child, question.key, logs, deps, wait_seconds)
-    return _Attempted(followed, claim.claim_id)
+        return _Judged(ResumeOutcome.REFUSED, cut_to_bound(child.detail), None)
+    followed = _follow(child, key, logs, deps, claimed.resume_wait_seconds)
+    return _Judged(followed.outcome, followed.detail, followed.resume_log)
 
 
 def _resume_logs(deps: Deps, run_id: str, answer_seq: int) -> LaunchLogs:

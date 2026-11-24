@@ -8,7 +8,7 @@ from user_configs import user_config
 
 from amoeba.config.user_config import UserConfig
 from amoeba.mcp.in_process import MCP_CALL_DEADLINE_SECONDS
-from amoeba.operations.resume import resume_bound_seconds
+from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS
 from amoeba.wiring import (
     ANSWER_STORE_WAITS,

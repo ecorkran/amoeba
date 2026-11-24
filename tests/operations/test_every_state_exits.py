@@ -24,7 +24,7 @@ from amoeba.operations.dismiss import (
     dismiss,
 )
 from amoeba.operations.question_sweep import SweepResult, sweep_run
-from amoeba.operations.resume import resume_bound_seconds
+from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.retract import RetractOutcome, retract
 from amoeba.operations.steps.limits import pause_claim_seconds
 from amoeba.store.answers import (

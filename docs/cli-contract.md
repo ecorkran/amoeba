@@ -496,7 +496,8 @@ used. Result (`AnswerResult`):
 | `rejection` | with `rejected`: `no_such_question` (run `amoeba handle-pause RUN_ID` from the run's checkout first) or `malformed` (blank text, unknown field, bad type) |
 | `key` | the question, when `recorded` |
 | `answer_seq` | the answer row, when `recorded` |
-| `resume` | `outcome` (`resumed`, `refused` or `not_delivered`), `detail`, `resume_log` |
+| `resume` | `outcome` (`resumed`, `refused` or `not_delivered`), `detail`, `resume_log`; null when the run is on another machine |
+| `waiting_on_machine` | when the question's run is on another machine (slice 262): `machine` (its name) and `last_called_at` (the hub's time that machine last called, or null). The answer is recorded and the run resumes at that machine's next call; plain text says so |
 | `problems` | one line per problem when `rejected` |
 
 Exit 1 when `rejected`, else 0. A refused or not-delivered resume, including one

@@ -134,35 +134,41 @@ revision_number: 3
 
 ## 3. Steps, `LocalSteps`, the resume and `answer` (D3, D6, D7; effort 4)
 
-- [ ] **3.1 The step machinery**
-  - [ ] `steps/models.py`: a frozen Pydantic request and reply model per step and `STEP_MODELS`, the one table from step name to its request model, reply model, whether it writes, and whether it needs the config (false for `resume_record`, `wake_set_pid`, `wake_finish`, D10). Rows are added as each step is written
-  - [ ] `steps/dispatch.run_step(name, store, document, edges)`: validates the document against the request model, runs the step function in its own transaction (`store.write()` for a writing step, `store.read()` otherwise), returns the reply model. `edges` carries config, clock and the acting machine
-  - [ ] `operations/store_steps.py`: the `Steps` protocol (`run(step, request) -> reply`) and `LocalSteps`, which calls `run_step` on the local store
-  - [ ] `tests/test_import_boundaries.py`: `operations.steps` imports no module that runs `cf`, `sq` or `git`, and nothing from `amoeba.answering` that reads a file. The rule that a client-run module (`handle_pause`, the `pause_*` modules, `claim_waiting`, `answering_settle`, `resume`, `resume_run`, `wake_run`, `prune`, `work_start`) imports no `amoeba.store.store` is added module by module in the task that moves it; `FORBIDDEN` is keyed by package, so 3.1 adds a per-module table beside it, checked by the same walk
-- [ ] **3.2 Machinery tests**
-  - [ ] A test walks every request model in `STEP_MODELS` and asserts no field is a date or time type (criterion: no step request model has a date or time field)
-  - [ ] `run_step` refuses a document that does not validate; a writing step commits, a read step writes nothing
-- [ ] **3.3 The resume on steps**
-  - [ ] Steps `resume_claim`, `resume_read`, `resume_record` (D4) in `steps/resume.py` with their models
-  - [ ] `operations/resume_attempt.py`: `logs/resume/<run id>/<answer seq>.attempt`, written to a temporary name and renamed; `started` before `sq run --resume`, then the judged outcome (outcome, detail, log path) before `resume_record`. A failed write is logged at error level and the attempt goes on
-  - [ ] `operations/resume.resume(steps, claimed, deps)` takes the claim payload (question, answer text, claim id, `resume_wait_seconds`) and follows D6's attempt-file table: a final outcome in the file is recorded with no poll; `started` with the run gone is recorded `resumed` with the earlier-attempt detail; `refused` or no file is a new attempt. First poll unreadable: `refused` with the reason, unless the file holds `started`, which records nothing and raises. Add the import-boundary rule for `resume` and `resume_attempt`
-- [ ] **3.4 Resume tests** (on `LocalSteps`)
-  - [ ] Existing resume tests pass with `LocalSteps`
-  - [ ] Each row of the attempt-file table: final outcome replayed with no second `sq run --resume`; `started` and run gone records `resumed`; `started` and run still paused starts `sq` again; `refused` in the file is never replayed (a refused resume retried starts `sq` again)
-  - [ ] Design-required edit: `tests/operations/test_resume.py::test_an_unreadable_first_poll_raises_and_writes_nothing` (D6 reverses it) now asserts that with no file an unreadable first poll records `refused` with the reason, frees the claim (a new `resume_claim` succeeds at once) and starts no `sq`
-  - [ ] `started` and an unreadable first poll: nothing recorded, file unchanged, the next attempt records `resumed`
-  - [ ] A failed attempt-file write logs at error level and the resume still records its outcome
-- [ ] **3.5 `answer` split into client and hub parts**
-  - [ ] The hub part records the answer in today's one transaction and then, in it, reads the question's machine (D7 table): the calling machine takes the resume claim and returns its payload; another machine returns its name and `last_called_at`; a null machine marks the answer `not_delivered` with the detail that the run's machine was removed
-  - [ ] The client part runs the resume on a returned claim, or returns `AnswerResult` with `resume` null and the new `waiting_on_machine` (name, `last_called_at`). The CLI text for that case is D7's sentence. Placement in `wiring._dispatch` runs the hub part in process for now
-  - [ ] Delete `answer`'s `except SquadronError` branch and `_record_refused`: the resume (3.3) records `refused` itself, and D6 forbids a `refused` over a `started` attempt
-  - [ ] `docs/cli-contract.md` and `docs/mcp-server.md`: `waiting_on_machine`
-- [ ] **3.6 `answer` tests**
-  - [ ] Existing `answer` tests pass on the local store (machine always `local`)
-  - [ ] A question with another machine's id returns `waiting_on_machine` and starts nothing; a question with a null machine is recorded and marked `not_delivered`
-  - [ ] An unreadable first poll returns the refused result
-  - [ ] With a `started` attempt file placed for the new answer's seq and an unreadable first poll, `answer` raises `SquadronError` and no `refused` is recorded
-  - [ ] Success: checks pass
+- [x] **3.1 The step machinery**
+  - [x] `steps/models.py`: a frozen Pydantic request and reply model per step and `STEP_MODELS`, the one table from step name to its request model, reply model, whether it writes, and whether it needs the config (false for `resume_record`, `wake_set_pid`, `wake_finish`, D10). Rows are added as each step is written
+  - [x] `steps/dispatch.run_step(name, store, document, edges)`: validates the document against the request model, runs the step function in its own transaction (`store.write()` for a writing step, `store.read()` otherwise), returns the reply model. `edges` carries config, clock and the acting machine
+  - [x] `operations/store_steps.py`: the `Steps` protocol (`run(step, request) -> reply`) and `LocalSteps`, which calls `run_step` on the local store
+  - [x] `tests/test_import_boundaries.py`: `operations.steps` imports no module that runs `cf`, `sq` or `git`, and nothing from `amoeba.answering` that reads a file. The rule that a client-run module (`handle_pause`, the `pause_*` modules, `claim_waiting`, `answering_settle`, `resume`, `resume_run`, `wake_run`, `prune`, `work_start`) imports no `amoeba.store.store` is added module by module in the task that moves it; `FORBIDDEN` is keyed by package, so 3.1 adds a per-module table beside it, checked by the same walk
+  - Note: `Step[Request, Reply]` is a typed handle (name, request, reply, writes, needs_config); `STEP_MODELS` is built from the handles (steps/models.py: RESUME_CLAIM, RESUME_READ, RESUME_RECORD so far). The functions are in `STEP_FUNCTIONS` (steps/dispatch.py) taking a `StepContext` (transaction, now, config); `edges` is `StepEdges(clock, load_config)`: the acting machine is not in it because a step reads it from the transaction (`transaction.acting`), as every store insert does. `LocalSteps(store, edges)` takes an open store for now; 4.6 gives it a layout form. Import rules: `MODULE_FORBIDDEN` per-module table in `tests/test_import_boundaries.py` (resume.py, resume_attempt.py so far); steps import nothing from upstream, operations.processes, operations.deps, or any answering module but values and settings (direct imports; config already reaches launch through answering.settings). `resume_bound_seconds` moved to `operations/resume_timing.py` so `resume.py` imports no `store.store`.
+- [x] **3.2 Machinery tests**
+  - [x] A test walks every request model in `STEP_MODELS` and asserts no field is a date or time type (criterion: no step request model has a date or time field)
+  - [x] `run_step` refuses a document that does not validate; a writing step commits, a read step writes nothing
+  - Note: tests in `tests/operations/test_step_machinery.py`.
+- [x] **3.3 The resume on steps**
+  - [x] Steps `resume_claim`, `resume_read`, `resume_record` (D4) in `steps/resume.py` with their models
+  - [x] `operations/resume_attempt.py`: `logs/resume/<run id>/<answer seq>.attempt`, written to a temporary name and renamed; `started` before `sq run --resume`, then the judged outcome (outcome, detail, log path) before `resume_record`. A failed write is logged at error level and the attempt goes on
+  - [x] `operations/resume.resume(steps, claimed, deps)` takes the claim payload (question, answer text, claim id, `resume_wait_seconds`) and follows D6's attempt-file table: a final outcome in the file is recorded with no poll; `started` with the run gone is recorded `resumed` with the earlier-attempt detail; `refused` or no file is a new attempt. First poll unreadable: `refused` with the reason, unless the file holds `started`, which records nothing and raises. Add the import-boundary rule for `resume` and `resume_attempt`
+  - Note: `resume(steps, claimed, deps)` raises `ResumeUnreadableError` (a `SquadronError` carrying the refused result) when the first poll is unreadable and the file does not hold `started`; plain `SquadronError` when it does. `claim_and_resume(steps, answer_seq, deps)` in pause_results.py is the interim caller for handle-pause (an in-flight claim still raises StoreRowError until 4.7's `resume_in_progress` skip).
+- [x] **3.4 Resume tests** (on `LocalSteps`)
+  - [x] Existing resume tests pass with `LocalSteps`
+  - [x] Each row of the attempt-file table: final outcome replayed with no second `sq run --resume`; `started` and run gone records `resumed`; `started` and run still paused starts `sq` again; `refused` in the file is never replayed (a refused resume retried starts `sq` again)
+  - [x] Design-required edit: `tests/operations/test_resume.py::test_an_unreadable_first_poll_raises_and_writes_nothing` (D6 reverses it) now asserts that with no file an unreadable first poll records `refused` with the reason, frees the claim (a new `resume_claim` succeeds at once) and starts no `sq`
+  - [x] `started` and an unreadable first poll: nothing recorded, file unchanged, the next attempt records `resumed`
+  - [x] A failed attempt-file write logs at error level and the resume still records its outcome
+  - Note: tests in `tests/operations/test_resume_attempt.py`; `test_resume.py` calls go through a `_resume` helper (claim, then resume); `test_an_unreadable_first_poll_raises_and_writes_nothing` became `..._records_refused_frees_the_claim_and_starts_nothing`. Small-conflict change (design D6 updated): the claim now comes before the first poll, so `test_an_answer_made_not_delivered_first_spawns_nothing_and_reports_it` is renamed `..._during_the_first_poll_reports_the_stored_outcome` and no longer asserts that nothing spawned (the stored outcome still stands). Deleted `test_an_answer_of_another_question_is_a_programming_error`: the payload now comes from the store, so a mismatched answer cannot be passed.
+- [x] **3.5 `answer` split into client and hub parts**
+  - [x] The hub part records the answer in today's one transaction and then, in it, reads the question's machine (D7 table): the calling machine takes the resume claim and returns its payload; another machine returns its name and `last_called_at`; a null machine marks the answer `not_delivered` with the detail that the run's machine was removed
+  - [x] The client part runs the resume on a returned claim, or returns `AnswerResult` with `resume` null and the new `waiting_on_machine` (name, `last_called_at`). The CLI text for that case is D7's sentence. Placement in `wiring._dispatch` runs the hub part in process for now
+  - [x] Delete `answer`'s `except SquadronError` branch and `_record_refused`: the resume (3.3) records `refused` itself, and D6 forbids a `refused` over a `started` attempt
+  - [x] `docs/cli-contract.md` and `docs/mcp-server.md`: `waiting_on_machine`
+  - Note: `answer.py` has `record_answer` (hub part), `run_recorded_answer` (client part) and `answer(...)`, the in-process composite `wiring._dispatch` still calls. New `store.machines.question_machine`. `AnswerResult.waiting_on_machine` is `WaitingOnMachine(machine, last_called_at text)`; text rendered in `cli/render/simple.py`; documented in cli-contract.md and mcp-server.md.
+- [x] **3.6 `answer` tests**
+  - [x] Existing `answer` tests pass on the local store (machine always `local`)
+  - [x] A question with another machine's id returns `waiting_on_machine` and starts nothing; a question with a null machine is recorded and marked `not_delivered`
+  - [x] An unreadable first poll returns the refused result
+  - [x] With a `started` attempt file placed for the new answer's seq and an unreadable first poll, `answer` raises `SquadronError` and no `refused` is recorded
+  - [x] Success: checks pass
+  - Note: new tests at the end of `tests/operations/test_answer.py`.
 
 **Commit**: `feat: run the resume and answer on steps with an attempt file`
 

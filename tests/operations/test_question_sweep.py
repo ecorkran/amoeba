@@ -28,7 +28,7 @@ from amoeba.operations.question_sweep import (
     fate_of_poll,
     sweep_run,
 )
-from amoeba.operations.resume import resume_bound_seconds
+from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.steps.limits import pause_claim_seconds, resume_claim_seconds
 from amoeba.operations.steps.resume import claim_resume
 from amoeba.store.answers import (

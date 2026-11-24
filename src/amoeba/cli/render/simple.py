@@ -43,6 +43,15 @@ def render_answer(result: AnswerResult) -> str:
     lines = ["recorded", indented(f"question: {_key_text(result.key)}")]
     if result.answer_seq is not None:
         lines.append(indented(f"answer: #{result.answer_seq}"))
+    if result.waiting_on_machine is not None:
+        waiting = result.waiting_on_machine
+        called = "never" if waiting.last_called_at is None else waiting.last_called_at
+        lines.append(
+            indented(
+                f"the run is on {waiting.machine}, which last called the hub at "
+                f"{called}; it resumes at that machine's next call"
+            )
+        )
     if result.resume is not None:
         lines.append(indented(f"resume: {result.resume.outcome.value}"))
         if result.resume.outcome is not ResumeOutcome.RESUMED and result.resume.detail:

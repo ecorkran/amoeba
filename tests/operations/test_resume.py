@@ -25,19 +25,22 @@ from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.answering.values import AnsweredBy
-from amoeba.operations.deps import RUN_POLL_TIMEOUT_SECONDS
+from amoeba.operations.deps import RUN_POLL_TIMEOUT_SECONDS, Deps
 from amoeba.operations.pause_models import ResumeResult
+from amoeba.operations.pause_results import claim_and_resume
 from amoeba.operations.processes import (
     TERMINATE_GRACE_SECONDS,
     WaitableChild,
     start_child,
 )
-from amoeba.operations.resume import (
+from amoeba.operations.resume import ResumeUnreadableError
+from amoeba.operations.resume_timing import (
     RESUME_POLL_INTERVAL_SECONDS,
-    resume,
     resume_bound_seconds,
 )
-from amoeba.operations.steps.limits import resume_claim_seconds
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.steps.resume import ResumeClaimed, claim_resume
+from amoeba.operations.store_steps import LocalSteps
 from amoeba.store.answers import (
     add_pm_answer,
     answers_of,
@@ -48,7 +51,6 @@ from amoeba.store.models import QuestionKey, QuestionRecord
 from amoeba.store.questions import NewQuestion, get_question, insert_question
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.store.vocabulary import ResumeOutcome
-from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.faults import LaunchFailure
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.upstream.squadron.run_outcome import PollFailure, RunPoll
@@ -56,7 +58,7 @@ from operations.pause_support import DepsRig, FakeChild, build_deps
 
 RUN = "demo-run"
 WAIT = 5.0
-CLAIM = resume_claim_seconds(user_config())
+CONFIG = user_config().model_copy(update={"resume_wait_seconds": WAIT})
 PAUSE = poll_result(PAUSED_AGENT_QUESTION, RUN)
 assert PAUSE.checkpoint is not None
 PAUSED_AT = PAUSE.checkpoint.paused_at_text or ""
@@ -96,6 +98,12 @@ def _question(store: Store) -> tuple[QuestionRecord, int]:
     return record, seq
 
 
+def _resume(store: Store, seq: int, deps: Deps) -> ResumeResult:
+    """Take the answer's claim and resume on it, as every caller does."""
+    steps = LocalSteps(store, StepEdges(deps.clock, lambda: CONFIG))
+    return claim_and_resume(steps, seq, deps)
+
+
 def _stored(store: Store, seq: int) -> tuple[ResumeOutcome | None, str | None]:
     with store.read() as transaction:
         row = next(r for r in answers_of(transaction, KEY) if r.seq == seq)
@@ -111,7 +119,7 @@ def _run(  # noqa: PLR0913 - the fixtures a resume test varies
     on_spawn: Callable[[], None] | None = None,
     on_poll: Callable[[], None] | None = None,
 ) -> tuple[ResumeResult, DepsRig, int]:
-    question, seq = _question(store)
+    _, seq = _question(store)
     rig = build_deps(
         tmp_path,
         polls={RUN: polls},
@@ -119,9 +127,7 @@ def _run(  # noqa: PLR0913 - the fixtures a resume test varies
         on_spawn=on_spawn,
         on_poll=on_poll,
     )
-    result = resume(
-        store, question, seq, deps=rig.deps, wait_seconds=WAIT, claim_seconds=CLAIM
-    )
+    result = _resume(store, seq, rig.deps)
     return result, rig, seq
 
 
@@ -201,14 +207,12 @@ def test_a_child_gone_with_the_run_still_at_the_pause_is_refused_with_its_messag
         logs.stderr.write_text("", encoding="utf-8")  # and the real empty stderr
         return FakeChild(exit_code=1)  # the real exit code
 
-    question, seq = _question(store)
+    _, seq = _question(store)
     rig = build_deps(
         tmp_path, polls={RUN: [PAUSE, PAUSE]}, spawns=[], spawner=refusing_spawner
     )
 
-    result = resume(
-        store, question, seq, deps=rig.deps, wait_seconds=WAIT, claim_seconds=CLAIM
-    )
+    result = _resume(store, seq, rig.deps)
 
     assert result.outcome is ResumeOutcome.REFUSED
     assert result.detail == message.strip()
@@ -243,13 +247,11 @@ def test_a_timeout_then_running_after_the_kill_is_resumed_with_a_note(
         del run_id
         return RUNNING_DOC if stopped["yes"] else PAUSE
 
-    question, seq = _question(store)
+    _, seq = _question(store)
     rig = build_deps(tmp_path, polls={RUN: [PAUSE]}, spawns=[_Child(exit_code=None)])
     deps = replace(rig.deps, poll_run=poll)
 
-    result = resume(
-        store, question, seq, deps=deps, wait_seconds=WAIT, claim_seconds=CLAIM
-    )
+    result = _resume(store, seq, deps)
 
     assert result.outcome is ResumeOutcome.RESUMED
     assert result.detail == "resume process terminated after taking the run"
@@ -266,55 +268,21 @@ def test_a_spawn_error_is_refused(tmp_path: Path, store: Store) -> None:
     assert _stored(store, seq)[0] is ResumeOutcome.REFUSED
 
 
-def test_an_unreadable_first_poll_raises_and_writes_nothing(
+def test_an_unreadable_first_poll_records_refused_frees_the_claim_and_starts_nothing(
     tmp_path: Path, store: Store
 ) -> None:
-    question, seq = _question(store)
+    _, seq = _question(store)
     rig = build_deps(tmp_path, polls={RUN: [PollFailure("sq broke")]}, spawns=[])
 
-    with pytest.raises(SquadronError, match="sq broke"):
-        resume(
-            store, question, seq, deps=rig.deps, wait_seconds=WAIT, claim_seconds=CLAIM
-        )
+    with pytest.raises(ResumeUnreadableError, match="sq broke") as raised:
+        _resume(store, seq, rig.deps)
 
-    assert _stored(store, seq) == (None, None)
+    assert raised.value.result.outcome is ResumeOutcome.REFUSED
+    assert _stored(store, seq) == (ResumeOutcome.REFUSED, "sq broke")
     assert rig.spawner.calls == []
-
-
-def test_an_answer_of_another_question_is_a_programming_error(
-    tmp_path: Path, store: Store
-) -> None:
-    question, _ = _question(store)
-    other = QuestionKey(RUN, "2026-11-10T13:00:00+00:00")
     with store.write() as transaction:
-        insert_question(
-            transaction,
-            NewQuestion(
-                key=other,
-                member_id=MEMBER_ID,
-                question="q",
-                checkout="/c",
-                slice_label=None,
-                source_commit=None,
-                passages=None,
-                answering_run_id="a-2",
-                waiting_reason=None,
-                waiting_detail=None,
-            ),
-            now=NOW,
-        )
-        foreign = add_pm_answer(transaction, other, "x", now=NOW, via=None)
-    rig = build_deps(tmp_path, polls={RUN: [PAUSE]}, spawns=[])
-
-    with pytest.raises(ValueError, match="not an answer"):
-        resume(
-            store,
-            question,
-            foreign,
-            deps=rig.deps,
-            wait_seconds=WAIT,
-            claim_seconds=CLAIM,
-        )
+        claim = claim_resume(transaction, seq, NOW, 216.5)
+    assert isinstance(claim, ResumeClaimed)  # the claim was freed at once
 
 
 def test_resumed_and_not_delivered_are_never_overwritten(
@@ -322,13 +290,11 @@ def test_resumed_and_not_delivered_are_never_overwritten(
 ) -> None:
     result, _, seq = _run(tmp_path, store, [PAUSE, RUNNING_DOC], [FakeChild(None)])
     assert result.outcome is ResumeOutcome.RESUMED
-    question, _ = _question_unchanged(store)
+    _question_unchanged(store)
 
     # A second resume of the same answer meets the run already running.
     again = build_deps(tmp_path / "again", polls={RUN: [RUNNING_DOC]}, spawns=[])
-    second = resume(
-        store, question, seq, deps=again.deps, wait_seconds=WAIT, claim_seconds=CLAIM
-    )
+    second = _resume(store, seq, again.deps)
 
     assert second.outcome is ResumeOutcome.RESUMED  # the stored outcome stands
     assert _stored(store, seq)[0] is ResumeOutcome.RESUMED
@@ -358,14 +324,12 @@ def test_a_refused_resume_can_be_retried_and_the_retry_overwrites_it(
 ) -> None:
     first, _, seq = _run(tmp_path, store, [PAUSE], [FakeChild(exit_code=None)])
     assert first.outcome is ResumeOutcome.REFUSED
-    question, _ = _question_unchanged(store)
+    _question_unchanged(store)
     retry = build_deps(
         tmp_path / "retry", polls={RUN: [PAUSE, RUNNING_DOC]}, spawns=[FakeChild(None)]
     )
 
-    second = resume(
-        store, question, seq, deps=retry.deps, wait_seconds=WAIT, claim_seconds=CLAIM
-    )
+    second = _resume(store, seq, retry.deps)
 
     assert second.outcome is ResumeOutcome.RESUMED
     assert _stored(store, seq)[0] is ResumeOutcome.RESUMED
@@ -441,9 +405,7 @@ def test_instructions_are_one_argv_element_holding_the_composed_text(
         spawner=real_spawner,
     )
 
-    result = resume(
-        store, question, seq, deps=rig.deps, wait_seconds=WAIT, claim_seconds=CLAIM
-    )
+    result = _resume(store, seq, rig.deps)
     children[0].wait(timeout=20)  # the fake has written its record once it exits
 
     assert result.outcome is ResumeOutcome.RESUMED
@@ -465,7 +427,7 @@ def test_resume_started_at_is_set_before_the_spawn(
     tmp_path: Path, store: Store
 ) -> None:
     seen_at_spawn: list[object] = []
-    question, seq = _question(store)
+    _, seq = _question(store)
 
     def record_what_the_store_says() -> None:
         seen_at_spawn.append(_started_at(store, seq))
@@ -477,9 +439,7 @@ def test_resume_started_at_is_set_before_the_spawn(
         on_spawn=record_what_the_store_says,
     )
 
-    result = resume(
-        store, question, seq, deps=rig.deps, wait_seconds=WAIT, claim_seconds=CLAIM
-    )
+    result = _resume(store, seq, rig.deps)
 
     assert result.outcome is ResumeOutcome.RESUMED
     assert seen_at_spawn == [NOW]
@@ -488,21 +448,11 @@ def test_resume_started_at_is_set_before_the_spawn(
 def test_resume_started_at_is_set_again_before_a_refused_retry(
     tmp_path: Path, store: Store
 ) -> None:
-    question, seq = _question(store)
+    _, seq = _question(store)
     first = build_deps(
         tmp_path, polls={RUN: [PAUSE, PAUSE]}, spawns=[FakeChild(exit_code=1)]
     )
-    assert (
-        resume(
-            store,
-            question,
-            seq,
-            deps=first.deps,
-            wait_seconds=WAIT,
-            claim_seconds=CLAIM,
-        ).outcome
-        is ResumeOutcome.REFUSED
-    )
+    assert _resume(store, seq, first.deps).outcome is ResumeOutcome.REFUSED
     with sqlite3.connect(store.path) as connection:  # throwaway store in tmp_path
         connection.execute("UPDATE answers SET resume_started_at = NULL")
     seen_at_spawn: list[object] = []
@@ -517,9 +467,7 @@ def test_resume_started_at_is_set_again_before_a_refused_retry(
         on_spawn=record,
     )
 
-    result = resume(
-        store, question, seq, deps=retry.deps, wait_seconds=WAIT, claim_seconds=CLAIM
-    )
+    result = _resume(store, seq, retry.deps)
 
     assert result.outcome is ResumeOutcome.RESUMED
     assert seen_at_spawn == [NOW]
@@ -538,10 +486,10 @@ def test_the_resume_bound_is_the_sum_of_its_named_parts() -> None:
     assert resume_bound_seconds(config) == 60 + 0.5 + 60.0 + 10.0 + 5.0
 
 
-def test_an_answer_made_not_delivered_first_spawns_nothing_and_reports_it(
+def test_an_answer_made_not_delivered_during_the_first_poll_reports_the_stored_outcome(
     tmp_path: Path, store: Store
 ) -> None:
-    question, seq = _question(store)
+    _, seq = _question(store)
     swept = {"done": False}
 
     def sweep_wins_the_race() -> None:
@@ -557,20 +505,19 @@ def test_an_answer_made_not_delivered_first_spawns_nothing_and_reports_it(
         on_poll=sweep_wins_the_race,
     )
 
-    result = resume(
-        store, question, seq, deps=rig.deps, wait_seconds=WAIT, claim_seconds=CLAIM
-    )
+    result = _resume(store, seq, rig.deps)
 
     assert result.outcome is ResumeOutcome.NOT_DELIVERED
     assert result.detail == "run moved on"
-    assert rig.spawner.calls == []
+    # The claim now comes before the first poll (262 D6), so a final outcome written
+    # during the poll no longer stops the spawn; it is never overwritten.
     assert _stored(store, seq) == (ResumeOutcome.NOT_DELIVERED, "run moved on")
 
 
 def test_a_sweep_that_wins_while_the_child_runs_decides_the_reported_outcome(
     tmp_path: Path, store: Store
 ) -> None:
-    question, seq = _question(store)
+    _, seq = _question(store)
     polls = {"count": 0}
 
     def sweep_wins_after_the_spawn() -> None:
@@ -586,9 +533,7 @@ def test_a_sweep_that_wins_while_the_child_runs_decides_the_reported_outcome(
         on_poll=sweep_wins_after_the_spawn,
     )
 
-    result = resume(
-        store, question, seq, deps=rig.deps, wait_seconds=WAIT, claim_seconds=CLAIM
-    )
+    result = _resume(store, seq, rig.deps)
 
     assert len(rig.spawner.calls) == 1
     assert result.outcome is ResumeOutcome.NOT_DELIVERED

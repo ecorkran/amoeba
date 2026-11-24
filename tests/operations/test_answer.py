@@ -10,12 +10,16 @@ from store.question_support import NOW
 
 from amoeba.answering.values import AnsweredBy, AnsweringEvidence, DeclineReason
 from amoeba.operations.answer import (
+    MACHINE_REMOVED_DETAIL,
     AnswerOutcome,
     AnswerRejection,
     AnswerResult,
+    WaitingOnMachine,
     answer,
 )
+from amoeba.operations.resume_attempt import attempt_path, write_started
 from amoeba.store.answers import answers_of, pm_precedent, settle_answered
+from amoeba.store.machines import invite_machine
 from amoeba.store.models import AnswerRecord, QuestionKey, QuestionRecord
 from amoeba.store.questions import (
     NewQuestion,
@@ -24,6 +28,7 @@ from amoeba.store.questions import (
     settle_waiting,
 )
 from amoeba.store.vocabulary import Door, QuestionState, ResumeOutcome
+from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.run_outcome import PollFailure
 from operations.handle_rig import (
     KEY,
@@ -323,3 +328,70 @@ def test_an_unreadable_sq_leaves_the_answer_recorded_and_the_resume_refused(
         assert (row.answer, row.resume_outcome) == (PM_TEXT, ResumeOutcome.REFUSED)
         assert "sq broke" in (row.resume_detail or "")
         assert _record(w).state is QuestionState.ANSWERED
+
+
+def _move_question_to_machine(w: World, machine_name: str | None) -> None:
+    """Put the waiting question on another machine, or on none (it was removed)."""
+    with w.store.write() as transaction:
+        machine_id: int | None = None
+        if machine_name is not None:
+            invite_machine(transaction, machine_name, "d" * 64, NOW)
+            row = transaction.execute(
+                "SELECT machine_id FROM machines WHERE name = ?", (machine_name,)
+            ).fetchone()
+            machine_id = int(row[0])
+        transaction.execute("UPDATE questions SET machine_id = ?", (machine_id,))
+
+
+def test_a_question_on_another_machine_is_recorded_and_nothing_starts(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path, paused_polls=RESUME_POLLS) as w:
+        _waiting_row(w)
+        _move_question_to_machine(w, "beta")
+
+        result = _ask(w, {"run_id": RUN, "text": PM_TEXT})
+
+        assert result.outcome is AnswerOutcome.RECORDED
+        assert result.resume is None
+        assert result.waiting_on_machine == WaitingOnMachine("beta", None)
+        (row,) = _answers(w)
+        assert (row.answer, row.resume_outcome) == (PM_TEXT, None)
+        assert row.resume_claim_id is None
+        assert w.spawned.argvs == []
+        assert _record(w).state is QuestionState.ANSWERED
+
+
+def test_a_question_whose_machine_was_removed_is_recorded_and_not_delivered(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path, paused_polls=RESUME_POLLS) as w:
+        _waiting_row(w)
+        _move_question_to_machine(w, None)
+
+        result = _ask(w, {"run_id": RUN, "text": PM_TEXT})
+
+        assert result.outcome is AnswerOutcome.RECORDED
+        assert result.waiting_on_machine is None
+        assert result.resume is not None
+        assert result.resume.outcome is ResumeOutcome.NOT_DELIVERED
+        assert result.resume.detail == MACHINE_REMOVED_DETAIL
+        (row,) = _answers(w)
+        assert row.resume_outcome is ResumeOutcome.NOT_DELIVERED
+        assert w.spawned.argvs == []
+
+
+def test_a_started_attempt_file_and_an_unreadable_poll_raise_and_record_no_refusal(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path, paused_polls=(PollFailure("sq broke"),)) as w:
+        _waiting_row(w)
+        # The answer about to be recorded gets the next seq, which is 1.
+        write_started(attempt_path(w.deps.logs_dir, RUN, 1))
+
+        with pytest.raises(SquadronError, match="sq broke"):
+            _ask(w, {"run_id": RUN, "text": PM_TEXT})
+
+        (row,) = _answers(w)
+        assert row.resume_outcome is None  # no refused over a started attempt
+        assert row.resume_claim_id is not None  # the claim stays until it runs out

@@ -9,7 +9,7 @@ from user_configs import user_config
 
 from amoeba.config.starter import starter_values
 from amoeba.operations.pause_class import ObservedPause, PauseClass, classify_pause
-from amoeba.operations.resume import resume_bound_seconds
+from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.runs_document import RunFileFacts
 from amoeba.operations.status_placement import PlacedRun
 from amoeba.operations.status_runs import classify_runs

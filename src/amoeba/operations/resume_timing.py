@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Final
 
 from amoeba.config.user_config import UserConfig
+from amoeba.store.store import BUSY_TIMEOUT_SECONDS
 
 #: One ``sq runs wait --timeout 0`` call reads a run file; a call this long is stuck.
 RUN_POLL_TIMEOUT_SECONDS: Final = 30.0
@@ -32,3 +33,14 @@ def resume_work_seconds(config: UserConfig) -> float:
         + 2 * RUN_POLL_TIMEOUT_SECONDS
         + 2 * TERMINATE_GRACE_SECONDS
     )
+
+
+def resume_bound_seconds(config: UserConfig) -> float:
+    """The longest a resume can take before it records its outcome (228 D4).
+
+    The wait loop and its last poll, the SIGTERM grace and then the SIGKILL grace in
+    ``terminate_group``, the poll after the kill (and the first poll before the
+    spawn), and the store write. The sweep leaves an answer alone for this long after
+    its newest sign of life.
+    """
+    return resume_work_seconds(config) + BUSY_TIMEOUT_SECONDS

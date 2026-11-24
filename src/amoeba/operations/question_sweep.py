@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.resume import resume_bound_seconds
+from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.steps.limits import pause_claim_seconds
 from amoeba.store.answers import latest_answer, mark_not_delivered
 from amoeba.store.errors import StoreBusyError

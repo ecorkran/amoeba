@@ -304,3 +304,63 @@ def test_the_walk_finds_an_import_it_should() -> None:
 
     assert "amoeba.operations.here" in reached
     assert "amoeba.operations.run_gather" in reached
+
+
+# --- slice 262: steps and the client-run modules --------------------------------
+
+#: A module that is not a package: the modules a client-run command is made of reach
+#: the store only through ``Steps`` (262 D3), so none imports ``amoeba.store.store``.
+#: The table grows module by module as each one moves onto steps. ``FORBIDDEN`` above
+#: is keyed by package; this one is keyed by file and checked by the same walk.
+MODULE_FORBIDDEN: dict[str, tuple[str, ...]] = {
+    "operations/resume.py": ("amoeba.store.store",),
+    "operations/resume_attempt.py": ("amoeba.store.store",),
+}
+#: What runs ``cf``, ``sq`` or ``git``: the whole ``upstream`` package and the module
+#: that starts children. A step runs on the hub, which has none of the three tools.
+RUNS_EXTERNAL_TOOLS = (
+    "amoeba.upstream",
+    "amoeba.operations.processes",
+    "amoeba.operations.deps",
+)
+#: The only ``answering`` modules a step may reach: they read no file. The rest of
+#: ``answering`` reads the checkout's sources, which only the client may do.
+ANSWERING_ALLOWED_TO_STEPS = frozenset(
+    {"amoeba.answering.values", "amoeba.answering.settings"}
+)
+
+
+@pytest.mark.parametrize("module", sorted(MODULE_FORBIDDEN))
+def test_a_client_run_module_does_not_import_what_its_row_forbids(module: str) -> None:
+    source = (SRC / module).read_text(encoding="utf-8")
+
+    assert forbidden_imports(source, MODULE_FORBIDDEN[module]) == []
+
+
+def _step_sources() -> list[Path]:
+    return sorted((SRC / "operations" / "steps").glob("*.py"))
+
+
+def _answering_modules_that_read_files() -> tuple[str, ...]:
+    """Every ``answering`` module a step may not import: all but the allowed ones."""
+    names = (
+        f"{ROOT}.answering.{path.stem}"
+        for path in sorted((SRC / "answering").glob("*.py"))
+        if path.stem != "__init__"
+    )
+    return tuple(name for name in names if name not in ANSWERING_ALLOWED_TO_STEPS)
+
+
+def test_steps_import_no_module_that_runs_cf_sq_or_git() -> None:
+    assert _step_sources()
+    for path in _step_sources():
+        found = forbidden_imports(path.read_text(encoding="utf-8"), RUNS_EXTERNAL_TOOLS)
+        assert not found, f"{path.relative_to(SRC)} imports {found}"
+
+
+def test_steps_import_nothing_from_answering_that_reads_a_file() -> None:
+    forbidden = _answering_modules_that_read_files()
+    assert forbidden
+    for path in _step_sources():
+        found = forbidden_imports(path.read_text(encoding="utf-8"), forbidden)
+        assert not found, f"{path.relative_to(SRC)} imports {found}"

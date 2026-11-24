@@ -22,10 +22,14 @@ from amoeba.operations.deps import Deps
 from amoeba.operations.pause_models import (
     HandlePauseOutcome,
     HandlePauseResult,
+    ResumeResult,
     SkipReason,
 )
 from amoeba.operations.resume import resume
-from amoeba.operations.steps.limits import resume_claim_seconds
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.steps.models import RESUME_CLAIM, ResumeClaimRequest
+from amoeba.operations.store_steps import LocalSteps, Steps
+from amoeba.store.errors import StoreRowError
 from amoeba.store.models import Member, QuestionKey
 from amoeba.store.questions import get_question
 from amoeba.store.store import Store
@@ -108,14 +112,8 @@ def resume_answer(  # noqa: PLR0913 - the pieces of one resume
         record = get_question(transaction, key)
     if record is None:
         raise ValueError(f"no question {key} to resume")
-    resumed = resume(
-        store,
-        record,
-        answer_seq,
-        deps=deps,
-        wait_seconds=config.resume_wait_seconds,
-        claim_seconds=resume_claim_seconds(config),
-    )
+    steps = LocalSteps(store, StepEdges(deps.clock, lambda: config))
+    resumed = claim_and_resume(steps, answer_seq, deps)
     return HandlePauseResult(
         _OUTCOME_OF_RESUME[resumed.outcome],
         detail=resumed.detail,
@@ -124,6 +122,25 @@ def resume_answer(  # noqa: PLR0913 - the pieces of one resume
         answering_run_id=answering_run_id,
         answer_seq=answer_seq,
     )
+
+
+def claim_and_resume(steps: Steps, answer_seq: int, deps: Deps) -> ResumeResult:
+    """Take the answer's resume claim, then resume on it; the stored final outcome
+    when the answer already has one.
+
+    Raises:
+        StoreRowError: Another attempt holds the claim (until 4.7 gives that a skip).
+        SquadronError: See ``resume``.
+    """
+    claim = steps.run(RESUME_CLAIM, ResumeClaimRequest(answer_seq=answer_seq))
+    if claim.claim is not None:
+        return resume(steps, claim.claim, deps)
+    if claim.final_outcome is None:
+        raise StoreRowError(
+            f"answer {answer_seq} has no resume outcome to report: another attempt "
+            "holds its resume claim"
+        )
+    return ResumeResult(claim.final_outcome, claim.final_detail, claim.final_log)
 
 
 _OUTCOME_OF_RESUME = {
