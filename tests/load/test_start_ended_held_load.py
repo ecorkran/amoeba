@@ -48,6 +48,12 @@ CALLERS = 4
 ROUNDS = ROWS
 #: How long the busy writer holds each of its short write transactions.
 BUSY_HOLD_SECONDS = 0.01
+#: The busy writer's pause between its write transactions. With none it re-takes the
+#: lock before a waiter's next poll, and SQLite's busy handler is not fair: a caller
+#: waited up to the whole 5 s timeout, and a slow CI machine pushed it over (#48).
+BUSY_REST_SECONDS = 0.01
+#: No single call may wait anywhere near the store's busy timeout for the lock.
+CALL_LOCK_WAIT_BOUND_SECONDS = 2.0
 NOW = datetime(2026, 11, 10, 12, 0, tzinfo=UTC)
 SCRIPT = Path("/installed/bin/amoeba")
 
@@ -106,6 +112,7 @@ def test_concurrent_callers_start_each_row_once_within_the_bound(
             while not stop.is_set():
                 with store.write():
                     time.sleep(BUSY_HOLD_SECONDS)
+                time.sleep(BUSY_REST_SECONDS)
 
     def call_rounds(_caller: int) -> list[tuple[float, int]]:
         calls: list[tuple[float, int]] = []
@@ -128,6 +135,7 @@ def test_concurrent_callers_start_each_row_once_within_the_bound(
 
     calls = [call for caller in per_caller for call in caller]
     assert max(seconds for seconds, _ in calls) < START_BOUND_SECONDS
+    assert max(seconds for seconds, _ in calls) < CALL_LOCK_WAIT_BOUND_SECONDS
     assert max(made for _, made in calls) <= MAX_STARTS_PER_CALL
     assert sum(made for _, made in calls) == ROWS
     assert max(started.values()) == 1, "a row was started twice"
