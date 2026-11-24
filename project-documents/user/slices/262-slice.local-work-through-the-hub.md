@@ -10,7 +10,7 @@ interfaces:
 - 263
 - 264
 dateCreated: 20261120
-dateUpdated: 20261120
+dateUpdated: 20261123
 status: not_started
 turns: 43
 promptTokens: 2643963
@@ -73,7 +73,7 @@ Excluded, because the slice plan puts them later:
 
 ### Prerequisites
 
-- Slices 260 and 261, built. As of 20261120 both are designed and not built. This design uses 260's decisions as written at commit `9ee28aa5` and 261's at `006c60ad`: the door, the call scope and kept results (260 D6, D8, D9), the network times (260 D7), the two store openers and the acting machine (260 D12), the hub home (260 D1, D2), `OPERATION_ERRORS` (260 D8), the two-machine fixture (260 D18), the client part and `here` (261 D5), `find_caller` and `find_member` (261 D6), checkouts and the wake command on them (261 D2, D9), and the `runs` document (261 D11). If either design changes one of these before this slice's task breakdown, this document is updated to match first.
+- Slices 260 and 261, built. Both are built and merged on `main` as of 20261123; the task breakdown checked each name below against the code, and the one change since the pinned commits that touches this design (`update_live.py` records a version, not a commit) is applied in D14. This design uses 260's decisions as written at commit `9ee28aa5` and 261's at `006c60ad`: the door, the call scope and kept results (260 D6, D8, D9), the network times (260 D7), the two store openers and the acting machine (260 D12), the hub home (260 D1, D2), `OPERATION_ERRORS` (260 D8), the two-machine fixture (260 D18), the client part and `here` (261 D5), `find_caller` and `find_member` (261 D6), checkouts and the wake command on them (261 D2, D9), and the `runs` document (261 D11). If either design changes one of these before this slice's task breakdown, this document is updated to match first.
 - No new package.
 
 ### Interfaces Required
@@ -537,7 +537,7 @@ The order inside the migration matters, because every row it copies has no machi
 
 **The new code and a store that is behind.** The new code never refuses an older store. Opening one migrates it, as every release does today, and the opener then gives its old rows the `local` machine. The refusal is the other way round: an older program refuses a store at a newer schema, with the store's schema error.
 
-**The backup, and what undo costs.** `update` first copies the store and the config to `<state home>/backups/<stamp>/` and records the commit that was installed. Its read-back gains one check, after the `amoeba list` it already runs: no question or wake has a null machine. If the read-back fails, the script restores by itself in the same run, and nothing is lost. `uv run python scripts/update_live.py restore` does the same by hand later: it puts that copy of the store and config back and reinstalls the commit from before. There is no down-migration. The copy is from before the update, so a restore discards everything written since: answers, decisions, standing answers, messages, sessions and wakes. It is the undo for an update found wrong soon after, and it costs more the longer the install has been used. The script keeps one backup, so after a later release's update the restore point is that release, not this one.
+**The backup, and what undo costs.** `update` first copies the store and the config to `<state home>/backups/<stamp>/` and records the version that was installed (a PyPI version since `ce248104`, not a commit). Its read-back gains one check, after the `amoeba list` it already runs: no question or wake has a null machine. If the read-back fails, the script restores by itself in the same run, and nothing is lost. `uv run python scripts/update_live.py restore` does the same by hand later: it puts that copy of the store and config back and reinstalls the version from before. There is no down-migration. The copy is from before the update, so a restore discards everything written since: answers, decisions, standing answers, messages, sessions and wakes. It is the undo for an update found wrong soon after, and it costs more the longer the install has been used. The script keeps one backup, so after a later release's update the restore point is that release, not this one.
 
 **Open sessions.** An `amoeba-mcp` started before the update is the old program, so its tools fail with the store's schema error until its session is restarted. The script prints each running `amoeba-mcp` with its directory when it ends. After a restore the same holds the other way round: a session started since the update is the newer program, which migrates any store it opens, so it is restarted before anything else is run.
 
