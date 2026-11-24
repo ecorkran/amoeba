@@ -269,8 +269,8 @@ SELECT_RELEASES_FROM_RELEASE: Final = (
 # Seeding statements: the slice 222 columns only, kept for tests that state a row.
 INSERT_QUESTION: Final = """
 INSERT INTO questions (run_id, paused_at, member_id, question, checkout, state,
-    answering_run_id, waiting_reason, claimed_at, updated_at, owner_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    answering_run_id, waiting_reason, claimed_at, updated_at, owner_id, machine_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 INSERT_ANSWER: Final = """
 INSERT INTO answers (run_id, paused_at, answered_by, answer, recorded_at,
@@ -299,8 +299,8 @@ SELECT_QUESTION_CLAIM: Final = (
 INSERT_NEW_QUESTION: Final = """
 INSERT INTO questions (run_id, paused_at, member_id, question, checkout, state,
     answering_run_id, waiting_reason, waiting_detail, slice_label, source_commit,
-    passages, claimed_at, updated_at, owner_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    passages, claimed_at, updated_at, owner_id, machine_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (run_id, paused_at) DO NOTHING
 """
 # Every move out of ``claimed`` names the claim it holds (D4). The state values are
@@ -335,7 +335,7 @@ WHERE run_id = ? AND paused_at = ? AND state = ? AND updated_at = ?
 # A question is open when it is claimed, waiting on the PM or held on a request, or
 # answered with its latest answer unresumed (resume outcome null or refused).
 # Parameters: claimed, waiting_on_pm, waiting_on_request, answered, refused.
-_OPEN_QUESTION_CLAUSE: Final = """(
+OPEN_QUESTION_CLAUSE: Final = """(
     questions.state IN (?, ?, ?)
     OR (questions.state = ?
         AND EXISTS (
@@ -350,20 +350,20 @@ _OPEN_QUESTION_CLAUSE: Final = """(
 _OPEN_ORDER: Final = " ORDER BY questions.claimed_at, questions.rowid"
 SELECT_OPEN_ROWS_OF_RUN: Final = (
     f"SELECT {QUESTION_COLUMNS} FROM questions WHERE questions.run_id = ? "
-    f"AND {_OPEN_QUESTION_CLAUSE}{_OPEN_ORDER}"
+    f"AND {OPEN_QUESTION_CLAUSE}{_OPEN_ORDER}"
 )
 SELECT_OPEN_ROWS_OF_MEMBER: Final = (
     f"SELECT {QUESTION_COLUMNS} FROM questions WHERE questions.member_id = ? "
-    f"AND {_OPEN_QUESTION_CLAUSE}{_OPEN_ORDER}"
+    f"AND {OPEN_QUESTION_CLAUSE}{_OPEN_ORDER}"
 )
 
 # What ``prune`` needs: the answering run ids and the run ids of open questions.
 SELECT_OPEN_ANSWERING_RUN_IDS: Final = (
     "SELECT DISTINCT questions.answering_run_id FROM questions "
-    f"WHERE questions.answering_run_id IS NOT NULL AND {_OPEN_QUESTION_CLAUSE}"
+    f"WHERE questions.answering_run_id IS NOT NULL AND {OPEN_QUESTION_CLAUSE}"
 )
 SELECT_RUN_IDS_WITH_OPEN_QUESTION: Final = (
-    f"SELECT DISTINCT questions.run_id FROM questions WHERE {_OPEN_QUESTION_CLAUSE}"
+    f"SELECT DISTINCT questions.run_id FROM questions WHERE {OPEN_QUESTION_CLAUSE}"
 )
 
 
@@ -371,7 +371,7 @@ def select_open_rows_of_members(member_count: int) -> str:
     """Every open row of the members, oldest first."""
     return (
         f"SELECT {QUESTION_COLUMNS} FROM questions WHERE questions.member_id "
-        f"IN ({placeholders(member_count)}) AND {_OPEN_QUESTION_CLAUSE}{_OPEN_ORDER}"
+        f"IN ({placeholders(member_count)}) AND {OPEN_QUESTION_CLAUSE}{_OPEN_ORDER}"
     )
 
 

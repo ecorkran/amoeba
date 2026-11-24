@@ -47,6 +47,8 @@ class ClosedReason(StrEnum):
     RUN_MOVED_ON = "run_moved_on"
     #: Squadron no longer knows the run.
     RUN_GONE = "run_gone"
+    #: The machine the run was on was removed (262 D13); nothing there can resume it.
+    MACHINE_REMOVED = "machine_removed"
 
 
 class Door(StrEnum):
@@ -114,6 +116,8 @@ class WakeOutcome(StrEnum):
     START_FAILED = "start_failed"
     #: The wrapper hit an unexpected error after the command started.
     WRAPPER_FAILED = "wrapper_failed"
+    #: The machine the wake was claimed for was removed (262 D13).
+    MACHINE_REMOVED = "machine_removed"
 
 
 class StandingReach(StrEnum):

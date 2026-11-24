@@ -9,7 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from amoeba.store.migrations import migrate, read_schema_version
+from amoeba.store.migrations import (
+    EXPECTED_SCHEMA_VERSION,
+    migrate,
+    read_schema_version,
+)
 from store.schema_11 import OWNER, OldMember, build_schema_11_store, row_counts
 
 MEMBERS = (
@@ -41,7 +45,7 @@ def schema_11(tmp_path: Path) -> Path:
 def connection(schema_11: Path) -> Iterator[sqlite3.Connection]:
     with closing(sqlite3.connect(schema_11, isolation_level=None)) as opened:
         opened.execute("PRAGMA foreign_keys=ON")
-        assert migrate(opened) == read_schema_version(opened) == 12
+        assert migrate(opened) == read_schema_version(opened) == EXPECTED_SCHEMA_VERSION
         yield opened
 
 

@@ -38,6 +38,7 @@ def insert_held(
     """Insert the held row unless one exists for the key; True if this call wrote
     it."""
     moment = encode_timestamp(now)
+    acting = transaction.acting("questions")
     cursor = transaction.execute(
         sql_held.INSERT_HELD,
         (
@@ -50,7 +51,8 @@ def insert_held(
             request_id,
             moment,
             moment,
-            transaction.acting("questions").owner_id,
+            acting.owner_id,
+            acting.machine_id,
         ),
     )
     return cursor.rowcount == 1

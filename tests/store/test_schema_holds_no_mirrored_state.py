@@ -62,11 +62,15 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "answers.retracted_at",
             "answers.retract_reason",
             "answers.resume_started_at",
+            "answers.resume_claim_id",
+            "answers.resume_start_count",
             "questions.closed_reason",
             "questions.closed_detail",
             "questions.closed_at",
             "questions.request_id",
             "questions.start_attempted_at",
+            "questions.machine_id",
+            "questions.start_count",
         }
     ),
     # Who is in a program: the PM's registration, the one thing only Amoeba knows.
@@ -135,6 +139,7 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "messages.created_at",
             "messages.state_changed_at",
             "messages.expires_at",
+            "messages.wake_wanted_at",
             "deliveries.seq",
             "deliveries.member_id",
             "deliveries.message_id",
@@ -166,6 +171,7 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "wakes.outcome",
             "wakes.exit_code",
             "wakes.detail",
+            "wakes.machine_id",
         }
     ),
     # How far the PM has read the decisions.

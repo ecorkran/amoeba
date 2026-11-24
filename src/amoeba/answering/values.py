@@ -54,6 +54,9 @@ class DeclineReason(StrEnum):
     REQUEST_CANCELLED = "request_cancelled"
     REQUEST_EXPIRED = "request_expired"
     REQUEST_UNKNOWN = "request_unknown"
+    # Slice 262, D10: a question that has had its automatic starts and still did not
+    # settle.
+    STARTS_EXHAUSTED = "starts_exhausted"
 
 
 #: The reasons a question waits on the PM because of its request (242 D4, D9).

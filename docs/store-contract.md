@@ -70,7 +70,7 @@ file, pid file or read-only mode, and a missing store is created.
 ## Migrations
 
 - Numbered files in `src/amoeba/store/schema/` (`001_baseline.sql`, `002_pause_handling.sql`,
-  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`, `009_wakes.sql`, `010_standing_answers.sql`, `011_hub_and_door.sql`, `012_members_by_name.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (12).
+  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`, `009_wakes.sql`, `010_standing_answers.sql`, `011_hub_and_door.sql`, `012_members_by_name.sql`, `013_local_work.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (12).
 - Opening applies the missing files in order inside one write transaction and stamps
   `schema_meta.version`. A store stamped higher than the code expects is refused
   (`StoreSchemaError`) and left untouched.
@@ -90,6 +90,11 @@ file, pid file or read-only mode, and a missing store is created.
   unchanged `state` would split one state across two columns. `008` rebuilds
   `questions` by the same procedure, copying every row and key, so `answers` keeps its
   references; no index exists on `questions`, so none is recreated.
+- **`013` is the third and fourth rebuild, with that justification (slice 262, D14).**
+  `machine_removed` widens `questions.closed_reason`'s and `wakes.outcome`'s `CHECK` lists, which
+  SQLite cannot change in place. `013` rebuilds `questions` and `wakes` by the same procedure,
+  carrying every column, index and trigger, and creates the two machine triggers last because a
+  trigger fires on `INSERT ... SELECT`.
 - Times are UTC ISO-8601 text. A member's id is an opaque key, never parsed (a member made before slice 261 keeps the Context Forge project id it was registered under; a later one gets `uuid4().hex`). Every closed
   vocabulary is a `StrEnum` (`store/vocabulary.py`, `answering/values.py`), and a test
   pins each `CHECK` list to its enum.
@@ -198,11 +203,13 @@ What a consumer sees follows its pair's `consumed`: `from_source` reads `reporte
 | `waiting_detail` | Migration `002`. Bounded detail for `waiting_reason`. Written with `waiting_reason`. |
 | `evidence` | Migration `002`. JSON object: `proposed_answer`, `cited`, `verdict`, `reason`, as far as the answering run got. Written when the claim settles, to `answered` or `waiting_on_pm`. |
 
-| `closed_reason` | Migration `003`. Null, or `dismissed`, `run_moved_on` or `run_gone` (`ClosedReason`, a `CHECK`). Written with the move to `closed` by `dismiss`, `handle_pause` and `status`; kept as history if `answer` later reopens the question. |
+| `closed_reason` | Migration `003`. Null, or `dismissed`, `run_moved_on`, `run_gone` or `machine_removed` (`ClosedReason`, a `CHECK`; `machine_removed` from migration `013`, written by `rm-machine`). Written with the move to `closed` by `dismiss`, `handle_pause` and `status`; kept as history if `answer` later reopens the question. |
 | `closed_detail` | Migration `003`. The dismissal reason, or the run's state when the sweep closed it. Written with `closed_reason`. |
 | `closed_at` | Migration `003`. UTC time the question was closed. Written with `closed_reason`. |
 | `request_id` | Migration `008`. The request a held question waits on; null for any other question. Written by `handle_pause` with the held insert and never changed, so the row keeps it through every later state. No foreign key to `messages`, because 240's sweep prunes terminal requests by age. |
 | `start_attempted_at` | Migration `008`. UTC time `start_ended_held` last started `handle_pause` for a held row; null before the first start. Written by `start_ended_held` as a compare-and-set on the value it read (and on the row still being held), so two concurrent callers never both start one row; it leaves `updated_at` alone, because `updated_at` is the close compare-and-set's guard. |
+| `machine_id` | Migration `013`. The machine the run paused on, references `machines`. Bound from the store's acting machine at insert and never changed; set to null by `rm-machine`, which closes the row. A `BEFORE INSERT` trigger (`questions_machine_required`) refuses a null. The local opener gives a row from before `013` the machine `local`. Index `(machine_id, state)`. |
+| `start_count` | Migration `013`. How many automatic starts `claim_work` has handed out for the row; at the cap the row moves to `waiting_on_pm` with the reason `starts_exhausted`. Never reset. |
 
 ### `answers` (written by slice 223; counted by slice 224)
 
@@ -223,6 +230,8 @@ Append-only, so an automatic answer and a later PM answer are both kept.
 | `retracted_at` | Migration `003`. UTC time a PM answer was retracted; null otherwise. Written once by `retract`. The answer stays delivered and stays in `decisions`. |
 | `retract_reason` | Migration `003`. Why it was retracted. Written with `retracted_at`. |
 | `resume_started_at` | Migration `003`. UTC time just before a resume was spawned, retries included, so the sweep never marks an answer `not_delivered` under a resume in flight. Written by the shared resume. |
+| `resume_claim_id` | Migration `013`. The id of the attempt that holds the resume claim; null when free. Set with `resume_started_at` by the one claim statement; cleared by `record_resume` only when it is the caller's. |
+| `resume_start_count` | Migration `013`. How many resumes `claim_work` has handed out for the answer; at the cap the outcome is recorded `refused`. |
 | `via` | Migration `004`. `cli` or `mcp` (`Door`, a `CHECK`): the door that carried a PM answer. Null for an answer from before `004` and for the answerer's automatic answers, which no door carries; read as "no door", never a guessed one. Written with the `pm` row by `answer`. |
 
 ### `messages` (migration `006`, slice 240)
@@ -247,6 +256,7 @@ Notes are written by `send` and, for a release report, by `report_release`.
 | `accepted_at` | UTC time of the accept. |
 | `created_at`, `state_changed_at` | UTC times; `state_changed_at` moves with every state change (an expiry records the sweep's own time); a note's equals `created_at`. |
 | `expires_at` | `created_at` plus `request_open_ttl_hours`, fixed at send, so a config change never moves it; null for a note. |
+| `wake_wanted_at` | Migration `013`. UTC time `send` wanted a wake for this open request, on the store's own clock; null when it did not. A mark gets one wake. |
 
 Table `CHECK`s: a request has `to_member`, a state and `expires_at` and no `to_program`;
 a note has exactly one of `to_member` and `to_program`, and no state or `expires_at`.
@@ -324,8 +334,9 @@ retention.
 | `log_stem` | The log files' path without the `.stdout.log` and `.stderr.log` suffix; null when nothing was started. |
 | `command_pid` | The command's pid, also its process group id; written by the wrapper right after the command starts, null until then. It is a compare-and-set: only the first run of a wake records one, and a second `wake-run` of the same id stops its own command. Shown by `list` for an overdue row; Amoeba never signals it. |
 | `ended_at` | UTC time the wake was recorded as ended; null while it has not. |
-| `outcome` | `WakeOutcome` (a `CHECK`): `exited` (the command ran and exited), `timed_out` (it ran past `deadline_at` and its group was stopped), `start_failed` (it could not be started), `wrapper_failed` (the wrapper hit an unexpected error after the start). Null until `ended_at` is set. |
+| `outcome` | `WakeOutcome` (a `CHECK`): `exited` (the command ran and exited), `timed_out` (it ran past `deadline_at` and its group was stopped), `start_failed` (it could not be started), `wrapper_failed` (the wrapper hit an unexpected error after the start), `machine_removed` (migration `013`: `rm-machine` ended a row of the removed machine). Null until `ended_at` is set. |
 | `exit_code` | The command's exit code; set only for `exited`. |
+| `machine_id` | Migration `013`. The machine the wake was claimed for, references `machines`; bound from the acting machine by `claim_wake`. Null after `rm-machine`, which also clears `log_stem`. A `BEFORE INSERT` trigger (`wakes_machine_required`) refuses a null. Index `(machine_id)`. |
 | `detail` | Why, for a failure, never the wake command's text: from the wrapper an exception class and its OS message (`wake_detail`, the one place it makes one); for a start failure `wake_after_send` sees, the launch error's or missing-script error's own text, which names a path. |
 
 `ended_at` and `outcome` are both null or both set, and `exit_code` is set only for
@@ -436,6 +447,11 @@ fails its first insert with `NoActingMachineError`.
 Migration `012` adds `checkouts` with the same trigger (`checkouts_owner_required`), so
 the owner is on thirteen tables.
 
+Migration `013` adds `machine_id` to `questions` and `wakes`, with the same kind of trigger
+(`questions_machine_required`, `wakes_machine_required`) and an index on each table
+(`questions(machine_id, state)`, `wakes(machine_id)`). Both inserts bind it from the acting
+machine. A row with no machine is never work, and an answer to such a question is not delivered.
+
 `sessions.machine_id` references `machines`, with the same kind of trigger
 (`sessions_machine_required`). Rows written before the migration keep a null machine;
 the heartbeat prune removes them.
@@ -458,15 +474,15 @@ A checkout's Context Forge id and path, and a member's `origin`, are the keys Am
 recognises a caller and a repo by. They are taken when `add` runs in that checkout and
 are never read as Context Forge's or git's current state.
 
-- **record**: what happened, written once when it did and never updated to follow anything else. A column here is never read as current state: `questions.checkout` is where a pause ran and `questions.slice_label` the slice its passages were gathered for, not where the member is or what slice it is on. Columns: `answers.answer`, `answers.answered_by`, `answers.cited`, `answers.paused_at`, `answers.recorded_at`, `answers.resume_at`, `answers.resume_detail`, `answers.resume_log`, `answers.resume_outcome`, `answers.resume_started_at`, `answers.retract_reason`, `answers.retracted_at`, `answers.run_id`, `answers.seq`, `answers.via`, `questions.answering_run_id`, `questions.checkout`, `questions.claimed_at`, `questions.closed_at`, `questions.closed_detail`, `questions.closed_reason`, `questions.evidence`, `questions.member_id`, `questions.passages`, `questions.paused_at`, `questions.question`, `questions.request_id`, `questions.run_id`, `questions.slice_label`, `questions.source_commit`, `questions.start_attempted_at`, `questions.state`, `questions.updated_at`, `questions.waiting_detail`, `questions.waiting_reason`, `releases.changed`, `releases.commit_sha`, `releases.member_id`, `releases.reported_at`, `releases.seq`, `releases.touched`, `releases.version`, `releases.versioned_at`.
+- **record**: what happened, written once when it did and never updated to follow anything else. A column here is never read as current state: `questions.checkout` is where a pause ran and `questions.slice_label` the slice its passages were gathered for, not where the member is or what slice it is on. Columns: `answers.answer`, `answers.answered_by`, `answers.cited`, `answers.paused_at`, `answers.recorded_at`, `answers.resume_at`, `answers.resume_detail`, `answers.resume_log`, `answers.resume_outcome`, `answers.resume_claim_id`, `answers.resume_start_count`, `answers.resume_started_at`, `answers.retract_reason`, `answers.retracted_at`, `answers.run_id`, `answers.seq`, `answers.via`, `questions.answering_run_id`, `questions.checkout`, `questions.claimed_at`, `questions.closed_at`, `questions.closed_detail`, `questions.closed_reason`, `questions.evidence`, `questions.member_id`, `questions.passages`, `questions.paused_at`, `questions.question`, `questions.request_id`, `questions.run_id`, `questions.slice_label`, `questions.source_commit`, `questions.machine_id`, `questions.start_attempted_at`, `questions.start_count`, `questions.state`, `questions.updated_at`, `questions.waiting_detail`, `questions.waiting_reason`, `releases.changed`, `releases.commit_sha`, `releases.member_id`, `releases.reported_at`, `releases.seq`, `releases.touched`, `releases.version`, `releases.versioned_at`.
 
 - **membership**: who is in a program, the PM's registration and the one thing only Amoeba knows; a checkout is the registration of one copy of a repo on one machine. Columns: `checkouts.added_at`, `checkouts.cf_project_id`, `checkouts.checkout_id`, `checkouts.machine_id`, `checkouts.member_id`, `checkouts.path`, `checkouts.updated_at`, `dependency_pairs.consumer_id`, `dependency_pairs.program_id`, `dependency_pairs.provider_id`, `dependency_pairs.registered_at`, `dependency_pairs.updated_at`, `members.name`, `members.origin`, `members.program_id`, `members.project_id`, `members.registered_at`, `members.removed_at`, `members.updated_at`, `programs.program_id`, `programs.registered_at`, `programs.updated_at`.
 
 - **settings**: what the PM chose for a program or member, and the store's own schema version. Columns: `checkouts.wake_command`, `dependency_pairs.consumed`, `members.authorize_allow`, `members.authorize_deny`, `members.rules_from`, `members.rules_paths`, `members.wake_command`, `programs.concept_member`, `programs.concept_path`, `schema_meta.id`, `schema_meta.version`.
 
-- **messages**: what agents said to each other and where each request stands. Amoeba is the only place this exists, and a request's state is Amoeba's own, never read from Context Forge or Squadron. Columns: `deliveries.created_at`, `deliveries.event`, `deliveries.member_id`, `deliveries.message_id`, `deliveries.seq`, `message_rejections.code`, `message_rejections.created_at`, `message_rejections.detail`, `message_rejections.id`, `message_rejections.member_id`, `message_rejections.message_id`, `message_rejections.operation`, `message_rejections.parent_id`, `message_rejections.to_ref`, `messages.accepted_at`, `messages.body`, `messages.created_at`, `messages.depth`, `messages.expires_at`, `messages.from_member`, `messages.kind`, `messages.message_id`, `messages.parent_id`, `messages.reason`, `messages.result`, `messages.result_commit`, `messages.result_version`, `messages.state`, `messages.state_changed_at`, `messages.subject`, `messages.to_member`, `messages.to_program`.
+- **messages**: what agents said to each other and where each request stands. Amoeba is the only place this exists, and a request's state is Amoeba's own, never read from Context Forge or Squadron. Columns: `deliveries.created_at`, `deliveries.event`, `deliveries.member_id`, `deliveries.message_id`, `deliveries.seq`, `message_rejections.code`, `message_rejections.created_at`, `message_rejections.detail`, `message_rejections.id`, `message_rejections.member_id`, `message_rejections.message_id`, `message_rejections.operation`, `message_rejections.parent_id`, `message_rejections.to_ref`, `messages.accepted_at`, `messages.body`, `messages.created_at`, `messages.depth`, `messages.expires_at`, `messages.from_member`, `messages.kind`, `messages.message_id`, `messages.parent_id`, `messages.reason`, `messages.result`, `messages.result_commit`, `messages.result_version`, `messages.state`, `messages.state_changed_at`, `messages.subject`, `messages.to_member`, `messages.to_program`, `messages.wake_wanted_at`.
 
-- **waking**: what Amoeba started with nobody present and how each start ended. Amoeba is the only place this exists, and a wake's end is what its own wrapper recorded. Columns: `wakes.command`, `wakes.command_pid`, `wakes.deadline_at`, `wakes.detail`, `wakes.directory`, `wakes.ended_at`, `wakes.exit_code`, `wakes.log_stem`, `wakes.member_id`, `wakes.outcome`, `wakes.started_at`, `wakes.wake_id`.
+- **waking**: what Amoeba started with nobody present and how each start ended. Amoeba is the only place this exists, and a wake's end is what its own wrapper recorded. Columns: `wakes.command`, `wakes.command_pid`, `wakes.deadline_at`, `wakes.detail`, `wakes.directory`, `wakes.ended_at`, `wakes.exit_code`, `wakes.log_stem`, `wakes.machine_id`, `wakes.member_id`, `wakes.outcome`, `wakes.started_at`, `wakes.wake_id`.
 
 - **rulings**: the rulings the PM gave ahead of time and whether each still holds. Amoeba is the only place they exist. Columns: `standing_answers.given_at`, `standing_answers.id`, `standing_answers.member_id`, `standing_answers.program_id`, `standing_answers.reach`, `standing_answers.text`, `standing_answers.withdraw_reason`, `standing_answers.withdrawn_at`.
 
@@ -538,7 +554,8 @@ constrain it. The values `handle_pause` writes: `answer_limit_reached`,
 `answering_cost_cap`, `answering_run_orphaned`, `artifact_missing`,
 `artifact_malformed`, `answerer_declined`, `uncited`, `unknown_citation`,
 `check_said_no`, and for a held question (slice 242) `request_declined`,
-`request_cancelled`, `request_expired` and `request_unknown`. The remaining members (`node_already_blocked`, `question_missing`,
+`request_cancelled`, `request_expired` and `request_unknown`, and `claim_work` (slice 262)
+writes `starts_exhausted` when a row has had its automatic starts. The remaining members (`node_already_blocked`, `question_missing`,
 `answerer_not_configured`, `no_answer_on_file`, `answer_discarded`) come from before the
 cut and are not written.
 

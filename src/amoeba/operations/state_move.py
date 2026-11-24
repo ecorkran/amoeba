@@ -29,7 +29,7 @@ from amoeba.store.errors import (
     StoreBusyError,
     StoreRelocateError,
 )
-from amoeba.store.machines import act_as_local
+from amoeba.store.machines import act_as_local, give_old_rows_the_machine
 from amoeba.store.set_aside import set_aside_stores
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 
@@ -188,7 +188,8 @@ def open_state_store(layout: StateLayout) -> Store:
     store = Store.open(layout.store_path)
     ready = False
     try:
-        act_as_local(store)
+        local = act_as_local(store)
+        give_old_rows_the_machine(store, local)
         # Name the members from before migration 012 before anything reads one (261 D4).
         name_members(store, subprocess.run, subprocess.run)
         ready = True

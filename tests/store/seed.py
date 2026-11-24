@@ -137,6 +137,7 @@ def insert_question(
     claimed_at: datetime,
     updated_at: datetime,
 ) -> None:
+    acting = transaction.acting("questions")
     transaction.execute(
         sql.INSERT_QUESTION,
         (
@@ -150,7 +151,8 @@ def insert_question(
             waiting_reason,
             encode_timestamp(claimed_at),
             encode_timestamp(updated_at),
-            transaction.acting("questions").owner_id,
+            acting.owner_id,
+            acting.machine_id,
         ),
     )
 

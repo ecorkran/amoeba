@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
-from amoeba.store import sql_machines
+from amoeba.store import sql_local_work, sql_machines
 from amoeba.store.checkouts import delete_checkouts_on_machine
 from amoeba.store.errors import StoreError
 from amoeba.store.row_values import (
@@ -86,6 +86,28 @@ def act_as_local(store: Store) -> ActingMachine:
     machine = ActingMachine(machine_id=found[0], owner_id=found[1])
     store.act_as(machine)
     return machine
+
+
+def give_old_rows_the_machine(store: Store, machine: ActingMachine) -> bool:
+    """Set the machine on every question and wake that has none; True if any did.
+
+    Rows from before migration 013 have no machine, and a migration cannot set it
+    because the local machine is made by the opener (262 D14). One read finds
+    nothing on every later open, so it waits for no write lock; one write fixes them
+    all. ``open_hub_store`` never calls this: on a hub a null machine means the
+    machine was removed.
+    """
+    with store.read() as transaction:
+        missing = bool(
+            transaction.execute(sql_local_work.SELECT_ROW_WITHOUT_MACHINE).fetchone()[0]
+        )
+    if not missing:
+        return False
+    with store.write() as transaction:
+        # Re-run the updates under the lock: they touch only rows still without one.
+        transaction.execute(sql_local_work.SET_QUESTIONS_MACHINE, (machine.machine_id,))
+        transaction.execute(sql_local_work.SET_WAKES_MACHINE, (machine.machine_id,))
+    return True
 
 
 def write_closed_mark(

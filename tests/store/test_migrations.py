@@ -162,10 +162,13 @@ def test_a_version_one_store_migrates_forward_with_its_rows_intact() -> None:
 
 
 DANGLING_MIGRATION = """
+INSERT INTO machines (name, owner_id, created_at)
+VALUES ('m', (SELECT owner_id FROM owners), 't');
+
 INSERT INTO questions (run_id, paused_at, member_id, question, checkout, state,
-                       claimed_at, updated_at, owner_id)
+                       claimed_at, updated_at, owner_id, machine_id)
 VALUES ('r9', 'p9', 'no-such-member', 'why?', '/c', 'claimed', 't', 't',
-        (SELECT owner_id FROM owners));
+        (SELECT owner_id FROM owners), (SELECT machine_id FROM machines));
 """
 FOREIGN_KEYS_PRAGMA = "PRAGMA foreign_keys"
 
@@ -373,10 +376,15 @@ def test_a_closed_question_needs_a_known_reason() -> None:
         "authorize_deny, registered_at, updated_at, removed_at, name, owner_id) "
         f"VALUES ('m1', 'demo', '[]', '[]', '[]', 't', 't', NULL, 'm1', {owner})"
     )
+    connection.execute(
+        f"INSERT INTO machines (name, owner_id, created_at) VALUES ('m', {owner}, 't')"
+    )
+    machine = "(SELECT machine_id FROM machines)"
     insert = (
         "INSERT INTO questions (run_id, paused_at, member_id, question, checkout, "
-        "state, claimed_at, updated_at, closed_reason, owner_id) "
-        f"VALUES (?, 'p', 'm1', 'why?', '/c', 'closed', 't', 't', ?, {owner})"
+        "state, claimed_at, updated_at, closed_reason, owner_id, machine_id) "
+        f"VALUES (?, 'p', 'm1', 'why?', '/c', 'closed', 't', 't', ?, {owner}, "
+        f"{machine})"
     )
 
     connection.execute(insert, ("good", "run_gone"))
@@ -385,7 +393,7 @@ def test_a_closed_question_needs_a_known_reason() -> None:
     with pytest.raises(sqlite3.IntegrityError):
         connection.execute(
             "INSERT INTO questions (run_id, paused_at, member_id, question, "
-            "checkout, state, claimed_at, updated_at, owner_id) "
+            "checkout, state, claimed_at, updated_at, owner_id, machine_id) "
             "VALUES ('odd', 'p', 'm1', 'why?', '/c', 'not_a_state', 't', 't', "
-            f"{owner})"
+            f"{owner}, {machine})"
         )

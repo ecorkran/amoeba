@@ -43,6 +43,8 @@ WAKE_EXIT_CODES: Final = {
     WakeOutcome.TIMED_OUT: EXIT_OK,
     WakeOutcome.START_FAILED: EXIT_REJECTED,
     WakeOutcome.WRAPPER_FAILED: EXIT_ERROR,
+    # Set by ``rm-machine``, never by a wrapper; mapped so the table is total.
+    WakeOutcome.MACHINE_REMOVED: EXIT_ERROR,
 }
 
 

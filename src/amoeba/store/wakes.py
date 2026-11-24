@@ -183,7 +183,7 @@ def claim_wake(  # noqa: PLR0913 - the claim's checks and what it writes
     no such checkout here. The caller makes ``wake_id`` and ``log_stem`` so this reads
     no layout.
     """
-    owner_id = transaction.acting("wakes").owner_id
+    acting = transaction.acting("wakes")
     checkout = _wakeable_checkout(
         transaction, member_id, now, limits, WakeScope.ACTING_MACHINE
     )
@@ -206,7 +206,8 @@ def claim_wake(  # noqa: PLR0913 - the claim's checks and what it writes
             None,
             None,
             None,
-            owner_id,
+            acting.owner_id,
+            acting.machine_id,
         ),
     )
     wake = get_wake(transaction, wake_id)

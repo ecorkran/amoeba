@@ -53,41 +53,45 @@ revision_number: 3
 
 ## 0. Setup (effort 1)
 
-- [ ] **0.1 Target and prerequisites**
-  - [ ] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty. `git checkout {target}`. The design and this task file are committed there, with no other uncommitted change
-  - [ ] Confirm 260 and 261 are merged: `store/schema/012_members_by_name.sql` exists, `EXPECTED_SCHEMA_VERSION` is 12, and each name in the Context Summary's precondition exists (`grep -rn`)
-  - [ ] Confirm the files this slice edits exist: the modules in Component Structure's "Change" rows, `scripts/update_live.py`, `tests/scripts/test_update_live.py`, `tests/store/test_vocabulary_pinning.py`, `tests/test_import_boundaries.py`, `tests/test_wiring_release.py`, `tests/operations/test_question_sweep.py`, `tests/operations/test_pause_eligibility.py`, `tests/operations/test_pause_claim_held.py`, `tests/live/hold/`, `tests/live/waking/`
-  - [ ] Run `sq --version` and `cf --version` and note both
-  - [ ] Success: the target is checked out and clean; a note gives the target and both versions
+- [x] **0.1 Target and prerequisites**
+  - [x] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty. `git checkout {target}`. The design and this task file are committed there, with no other uncommitted change
+  - [x] Confirm 260 and 261 are merged: `store/schema/012_members_by_name.sql` exists, `EXPECTED_SCHEMA_VERSION` is 12, and each name in the Context Summary's precondition exists (`grep -rn`)
+  - [x] Confirm the files this slice edits exist: the modules in Component Structure's "Change" rows, `scripts/update_live.py`, `tests/scripts/test_update_live.py`, `tests/store/test_vocabulary_pinning.py`, `tests/test_import_boundaries.py`, `tests/test_wiring_release.py`, `tests/operations/test_question_sweep.py`, `tests/operations/test_pause_eligibility.py`, `tests/operations/test_pause_claim_held.py`, `tests/live/hold/`, `tests/live/waking/`
+  - [x] Run `sq --version` and `cf --version` and note both
+  - [x] Success: the target is checked out and clean; a note gives the target and both versions
+  - Note: target is `main` (integration_branch empty); the slice branch was already checked out from a clean main. sq 0.24.38, cf 0.19.28. Precondition names all exist; `EXPECTED_SCHEMA_VERSION` was 12 and lives in `store/migrations.py`.
   - If a prerequisite is missing, write `BLOCKED: <what is missing>` under this task and stop.
-- [ ] **0.2 Branch and baseline**
-  - [ ] `git checkout -b 262-slice.local-work-through-the-hub {target}`; if it exists, `git checkout 262-slice.local-work-through-the-hub`
-  - [ ] Run the checks once; list any failure present before this slice by test name, unfixed
-  - [ ] Success: `git branch --show-current` prints the slice branch; the baseline is noted
+- [x] **0.2 Branch and baseline**
+  - [x] `git checkout -b 262-slice.local-work-through-the-hub {target}`; if it exists, `git checkout 262-slice.local-work-through-the-hub`
+  - [x] Run the checks once; list any failure present before this slice by test name, unfixed
+  - [x] Success: `git branch --show-current` prints the slice branch; the baseline is noted
+  - Note: baseline clean: ruff format, ruff check, pyright and pytest (5357 tests) all passed before any change.
 
 ## 1. Migration 013 and the machine on rows (D14; effort 4)
 
-- [ ] **1.1 `store/schema/013_local_work.sql` and the new values**
-  - [ ] `store/vocabulary.py`: `ClosedReason.MACHINE_REMOVED` and `WakeOutcome.MACHINE_REMOVED` (`machine_removed`). `answering/values.py`: `DeclineReason.STARTS_EXHAUSTED` (`starts_exhausted`). Each with its display text where the enum has one; `ENDED_TEXT` in `cli/render/waiting.py` gains `ClosedReason.MACHINE_REMOVED` ("closed: its machine was removed"), since the renderer indexes it with every closed reason. `docs/cli-contract.md` names `machine_removed` in the same commit (`tests/test_contract_docs.py` requires every `ClosedReason` value there)
-  - [ ] Rebuild `questions` and `wakes` (SQLite cannot widen a `CHECK`), carrying every column, index and trigger each has at schema 12, 260's owner column and trigger included. Order: create the new table, copy, drop, rename, then the machine triggers (a trigger fires on `INSERT ... SELECT`)
-  - [ ] `questions.machine_id` and `wakes.machine_id`, nullable, referencing `machines`; `closed_reason` and `outcome` `CHECK` lists gain `machine_removed`; an index on `questions(machine_id, state)` and on `wakes(machine_id)`
-  - [ ] `answers.resume_claim_id TEXT` (null) and `answers.resume_start_count INTEGER NOT NULL DEFAULT 0`; `questions.start_count INTEGER NOT NULL DEFAULT 0`; `messages.wake_wanted_at` timestamp, null
-  - [ ] A `BEFORE INSERT` trigger on `questions` and on `wakes` that aborts when `machine_id` is null, worded like 260's owner triggers
-  - [ ] `EXPECTED_SCHEMA_VERSION` becomes 13. Update the schema-version pins, `tests/store/test_migration_012.py`'s `== 12` among them
-  - [ ] `COLUMN_REASONS` in `tests/store/test_schema_holds_no_mirrored_state.py`, using its existing reasons: `questions.machine_id`, `questions.start_count`, `answers.resume_claim_id`, `answers.resume_start_count` under `record` (beside `questions.start_attempted_at` and `answers.resume_started_at`); `wakes.machine_id` under `waking`; `messages.wake_wanted_at` under `messages`. Add each to the same reason's bullet in `docs/store-contract.md`
-  - [ ] `docs/store-contract.md`: the six columns, two indexes, two triggers and the three new values
-- [ ] **1.2 Store inserts bind the acting machine**
-  - [ ] `insert_question`, `insert_held` (`store/questions.py`, `store/held_questions.py`) and `claim_wake` (`store/wakes.py`) bind `machine_id` from the store's acting machine (260 D12), with no new parameter. So do the production statement `sql.INSERT_NEW_QUESTION` (bound by `insert_question`) and the seeding statement `sql.INSERT_QUESTION` with its only binder, `tests/store/seed.py:insert_question`, which binds `transaction.acting("questions")`'s machine beside the `owner_id` it already binds
-  - [ ] Reads by machine: open questions on a machine and a question's machine name in the new `store/sql_local_work.py`; wakes on a machine in `sql_wakes.py`; held rows on a machine in `sql_held.py`. Statements only; callers come in later tasks
-- [ ] **1.3 The opener gives old rows `local`**
-  - [ ] `open_state_store`, after `act_as_local`, reads for one question or wake with a null machine and, when there is one, sets all of them to `local` in one write. `open_hub_store` does not (D14)
-- [ ] **1.4 Migration tests** (`tests/store/test_migration_013.py`, helper `tests/store/schema_12.py` modeled on `schema_11.py`)
-  - [ ] A schema-12 store holding question, answer and wake rows migrates: row counts unchanged; every column, index and trigger of both rebuilt tables present (compare `sqlite_master` before and after)
-  - [ ] An insert with a null machine is refused on both tables; `machine_removed` accepted in both `CHECK`s; `tests/store/test_vocabulary_pinning.py` passes with the new values
-  - [ ] Opening the migrated store with `open_state_store` gives old rows `local`; a second open writes nothing (the read finds no row)
-  - [ ] Tests that raw-insert into `questions` or `wakes` after migrating to the latest version (`tests/store/test_migrations.py`, and any other `grep -rn "INSERT INTO questions\|INSERT INTO wakes" tests` finds) insert a `machines` row first where none exists and bind its `machine_id`; inserts made before the store reaches 13 are unchanged
-  - [ ] Inserts through the store functions carry the acting machine; a stored question and wake carry `local`
-  - [ ] Success: checks pass
+- [x] **1.1 `store/schema/013_local_work.sql` and the new values**
+  - [x] `store/vocabulary.py`: `ClosedReason.MACHINE_REMOVED` and `WakeOutcome.MACHINE_REMOVED` (`machine_removed`). `answering/values.py`: `DeclineReason.STARTS_EXHAUSTED` (`starts_exhausted`). Each with its display text where the enum has one; `ENDED_TEXT` in `cli/render/waiting.py` gains `ClosedReason.MACHINE_REMOVED` ("closed: its machine was removed"), since the renderer indexes it with every closed reason. `docs/cli-contract.md` names `machine_removed` in the same commit (`tests/test_contract_docs.py` requires every `ClosedReason` value there)
+  - [x] Rebuild `questions` and `wakes` (SQLite cannot widen a `CHECK`), carrying every column, index and trigger each has at schema 12, 260's owner column and trigger included. Order: create the new table, copy, drop, rename, then the machine triggers (a trigger fires on `INSERT ... SELECT`)
+  - [x] `questions.machine_id` and `wakes.machine_id`, nullable, referencing `machines`; `closed_reason` and `outcome` `CHECK` lists gain `machine_removed`; an index on `questions(machine_id, state)` and on `wakes(machine_id)`
+  - [x] `answers.resume_claim_id TEXT` (null) and `answers.resume_start_count INTEGER NOT NULL DEFAULT 0`; `questions.start_count INTEGER NOT NULL DEFAULT 0`; `messages.wake_wanted_at` timestamp, null
+  - [x] A `BEFORE INSERT` trigger on `questions` and on `wakes` that aborts when `machine_id` is null, worded like 260's owner triggers
+  - [x] `EXPECTED_SCHEMA_VERSION` becomes 13. Update the schema-version pins, `tests/store/test_migration_012.py`'s `== 12` among them
+  - [x] `COLUMN_REASONS` in `tests/store/test_schema_holds_no_mirrored_state.py`, using its existing reasons: `questions.machine_id`, `questions.start_count`, `answers.resume_claim_id`, `answers.resume_start_count` under `record` (beside `questions.start_attempted_at` and `answers.resume_started_at`); `wakes.machine_id` under `waking`; `messages.wake_wanted_at` under `messages`. Add each to the same reason's bullet in `docs/store-contract.md`
+  - [x] `docs/store-contract.md`: the six columns, two indexes, two triggers and the three new values
+  - Note: `docs/store-contract.md` also gained the `machine_removed`, `starts_exhausted` and `013` rebuild text; `docs/cli-contract.md` names `machine_removed`. `WAKE_EXIT_CODES` in `cli/wake_command.py` maps `WakeOutcome.MACHINE_REMOVED` (EXIT_ERROR) so the table stays total. Raw-insert tests changed: `tests/store/test_migrations.py` (two tests insert a machines row first), `tests/store/test_migration_012.py` (`== EXPECTED_SCHEMA_VERSION`), `tests/store/test_schema_holds_no_mirrored_state.py`.
+- [x] **1.2 Store inserts bind the acting machine**
+  - [x] `insert_question`, `insert_held` (`store/questions.py`, `store/held_questions.py`) and `claim_wake` (`store/wakes.py`) bind `machine_id` from the store's acting machine (260 D12), with no new parameter. So do the production statement `sql.INSERT_NEW_QUESTION` (bound by `insert_question`) and the seeding statement `sql.INSERT_QUESTION` with its only binder, `tests/store/seed.py:insert_question`, which binds `transaction.acting("questions")`'s machine beside the `owner_id` it already binds
+  - [x] Reads by machine: open questions on a machine and a question's machine name in the new `store/sql_local_work.py`; wakes on a machine in `sql_wakes.py`; held rows on a machine in `sql_held.py`. Statements only; callers come in later tasks
+  - Note: `sql._OPEN_QUESTION_CLAUSE` renamed public `OPEN_QUESTION_CLAUSE` so `sql_local_work` can reuse it. Opener backfill is `store/machines.give_old_rows_the_machine`, statements in `sql_local_work`. Tests: `tests/store/test_machine_on_rows.py`.
+- [x] **1.3 The opener gives old rows `local`**
+  - [x] `open_state_store`, after `act_as_local`, reads for one question or wake with a null machine and, when there is one, sets all of them to `local` in one write. `open_hub_store` does not (D14)
+- [x] **1.4 Migration tests** (`tests/store/test_migration_013.py`, helper `tests/store/schema_12.py` modeled on `schema_11.py`)
+  - [x] A schema-12 store holding question, answer and wake rows migrates: row counts unchanged; every column, index and trigger of both rebuilt tables present (compare `sqlite_master` before and after)
+  - [x] An insert with a null machine is refused on both tables; `machine_removed` accepted in both `CHECK`s; `tests/store/test_vocabulary_pinning.py` passes with the new values
+  - [x] Opening the migrated store with `open_state_store` gives old rows `local`; a second open writes nothing (the read finds no row)
+  - [x] Tests that raw-insert into `questions` or `wakes` after migrating to the latest version (`tests/store/test_migrations.py`, and any other `grep -rn "INSERT INTO questions\|INSERT INTO wakes" tests` finds) insert a `machines` row first where none exists and bind its `machine_id`; inserts made before the store reaches 13 are unchanged
+  - [x] Inserts through the store functions carry the acting machine; a stored question and wake carry `local`
+  - [x] Success: checks pass
 
 **Commit**: `feat: add migration 013 with the machine on questions and wakes`
 

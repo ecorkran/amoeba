@@ -13,16 +13,21 @@ from typing import Final
 from amoeba.store.sql import QUESTION_COLUMNS
 
 #: A lost race inserts nothing. Parameters: run id, paused_at, member, question,
-#: checkout, held state, request id, claimed_at, updated_at, owner.
+#: checkout, held state, request id, claimed_at, updated_at, owner, machine.
 INSERT_HELD: Final = """
 INSERT INTO questions (run_id, paused_at, member_id, question, checkout, state,
-    request_id, claimed_at, updated_at, owner_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    request_id, claimed_at, updated_at, owner_id, machine_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (run_id, paused_at) DO NOTHING
 """
 #: Every held row, oldest first. Parameter: the held state.
 SELECT_HELD_ROWS: Final = (
     f"SELECT {QUESTION_COLUMNS} FROM questions WHERE state = ? "
+    "ORDER BY claimed_at, rowid"
+)
+#: The held rows on one machine, oldest first. Parameters: held state, machine id.
+SELECT_HELD_ROWS_OF_MACHINE: Final = (
+    f"SELECT {QUESTION_COLUMNS} FROM questions WHERE state = ? AND machine_id = ? "
     "ORDER BY claimed_at, rowid"
 )
 #: ``waiting_on_request -> claimed``; the claim's age starts now (D3). Parameters:

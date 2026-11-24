@@ -193,6 +193,7 @@ def insert_question(
     """Insert the row unless one exists for the key; True if this call wrote it, so
     the caller is the claimant."""
     moment = encode_timestamp(now)
+    acting = transaction.acting("questions")
     cursor = transaction.execute(
         sql.INSERT_NEW_QUESTION,
         (
@@ -210,7 +211,8 @@ def insert_question(
             None if new.passages is None else serialize_passages(new.passages),
             moment,
             moment,
-            transaction.acting("questions").owner_id,
+            acting.owner_id,
+            acting.machine_id,
         ),
     )
     return cursor.rowcount == 1

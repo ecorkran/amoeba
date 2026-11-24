@@ -85,6 +85,7 @@ ENDED_TEXT: Final = {
     ClosedReason.DISMISSED: "dismissed",
     ClosedReason.RUN_MOVED_ON: "closed: the run moved on",
     ClosedReason.RUN_GONE: "closed: Squadron no longer knows the run",
+    ClosedReason.MACHINE_REMOVED: "closed: its machine was removed",
 }
 WAITING_NOTES: Final = (
     "A fixed rules file or a raised size cap helps the next question, not these.",

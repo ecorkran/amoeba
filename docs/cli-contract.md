@@ -633,8 +633,9 @@ that pause, judged from the one `sq runs list --json --all` listing it already m
 (no further `sq` call), then prunes old scratch and logs. A run absent from the listing
 whose run file still exists keeps its question open: an incomplete listing closes
 nothing. `closed_reason` is `dismissed` (by `dismiss`), `run_moved_on` (the run is at a
-later pause, or finished; `closed_detail` is the run's state) or `run_gone` (Squadron no
-longer knows the run).
+later pause, or finished; `closed_detail` is the run's state) `run_gone` (Squadron no
+longer knows the run) or `machine_removed` (`amoeba hub rm-machine` removed the machine the
+run paused on; `closed_detail` names it).
 
 A member's `requests` are its open and accepted requests, sent and received, each
 `{id, direction, other_member, other_name, subject, state, created_at, state_changed_at,

@@ -19,10 +19,15 @@ _WAKE_COLUMNS: Final = (
 )
 
 INSERT_WAKE: Final = (
-    f"INSERT INTO wakes ({_WAKE_COLUMNS}, owner_id) "
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    f"INSERT INTO wakes ({_WAKE_COLUMNS}, owner_id, machine_id) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 SELECT_WAKE: Final = f"SELECT {_WAKE_COLUMNS} FROM wakes WHERE wake_id = ?"
+#: Every wake claimed for one machine, newest first. Parameter: machine id.
+SELECT_WAKES_OF_MACHINE: Final = (
+    f"SELECT {_WAKE_COLUMNS} FROM wakes WHERE machine_id = ? "
+    "ORDER BY started_at DESC, wake_id"
+)
 #: Parameters: member id, now.
 SELECT_LIVE_WAKE_EXISTS: Final = (
     f"SELECT EXISTS (SELECT 1 FROM wakes WHERE member_id = ? AND {LIVE_WAKE})"
