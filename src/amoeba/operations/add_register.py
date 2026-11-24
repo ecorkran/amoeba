@@ -21,14 +21,15 @@ from amoeba.store.vocabulary import Door
 
 
 def in_process_register(
-    store: Store, config: UserConfig, deps: Deps
+    store: Store, load_config: Callable[[], UserConfig], deps: Deps
 ) -> Callable[[Path], SetUpResult]:
-    """``register`` for the local way: the client part, then the hub part in process."""
+    """``register`` for the local way: the client part, then the hub part in process.
+    The config is loaded only when a project is registered."""
 
     def register(directory: Path) -> SetUpResult:
         gathered = gather_add({}, directory, deps.cf_run, deps.git_run, Door.CLI)
         if isinstance(gathered, SetUpResult):
             raise ValueError("an empty add document is never refused by the CLI door")
-        return add(store, config, {}, here=gathered)
+        return add(store, load_config(), {}, here=gathered)
 
     return register

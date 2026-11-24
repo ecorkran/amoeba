@@ -18,14 +18,9 @@ from typing import Final, cast
 
 from amoeba.config.user_config import UserConfig
 from amoeba.hub.call_refusals import CallReply, Refuser
+from amoeba.hub.call_work import call_result, flagged, needs_config
 from amoeba.operations.errors import OPERATION_ERRORS, CallRefused
-from amoeba.operations.served import (
-    SERVED,
-    ServedEdges,
-    client_values_from_body,
-    result_document,
-    run_served,
-)
+from amoeba.operations.served import SERVED, ServedEdges
 from amoeba.store.call_results import delete_expired, find_kept, keep
 from amoeba.store.machines import (
     ActingMachine,
@@ -48,7 +43,9 @@ from amoeba.wire.protocol import (
     HELLO_MACHINE_KEY,
     MAX_CALL_BYTES,
     SERVED_OPERATIONS,
+    STEP_CALLS,
     WRITING_CALLS,
+    WRITING_STEPS,
     RefusalCode,
     done_reply,
     is_header_value,
@@ -108,9 +105,14 @@ def _token_hash(request: CallRequest) -> str | None:
 
 
 def _needs_config(name: str) -> bool:
-    """Whether the served operation ``name`` reads ``config.yaml``."""
+    """Whether the step or served operation ``name`` reads ``config.yaml``."""
     operation = SERVED.get(name)
-    return operation is not None and operation.needs_config
+    return needs_config(name, operation is not None and operation.needs_config)
+
+
+def _writes(name: str) -> bool:
+    """Whether a call's result is kept for a repeat (D9; 262 D3)."""
+    return name in WRITING_CALLS or name in WRITING_STEPS
 
 
 def _is_acceptable(value: str | None) -> bool:
@@ -162,7 +164,10 @@ def _check_without_store(
         return _malformed(client_version, f"the body needs a {DOCUMENT_KEY!r} key")
     fields = cast("dict[str, object]", body)
     document: object = fields[DOCUMENT_KEY]
-    if request.name != HELLO_CALL and request.name not in SERVED_OPERATIONS:
+    if request.name != HELLO_CALL and request.name not in (
+        *SERVED_OPERATIONS,
+        *STEP_CALLS,
+    ):
         message = f"the door does not serve {request.name!r}"
         return _Checked((RefusalCode.NOT_SERVED, message), client_version)
     try:
@@ -217,15 +222,12 @@ def _operation_reply(  # noqa: PLR0913 - one call's parts
             load_config=lambda: _loaded(config),
             local=None,
         )
-        values = client_values_from_body(
-            request.name, checked.document, checked.body or {}
-        )
         reply = done_reply(
-            result_document(
-                run_served(request.name, store, checked.document, edges, values)
+            call_result(
+                request.name, store, checked.document, checked.body or {}, edges
             )
         )
-        if request.name in WRITING_CALLS:
+        if _writes(request.name):
             keep(
                 transaction,
                 machine.machine_id,
@@ -271,12 +273,14 @@ def _serve(
             code, message = checked.refusal
             return refuser.refuse(code, message, label), True
         delete_expired(scope, clock(), CALL_RESULT_LIFETIME_SECONDS)
-        if request.name in WRITING_CALLS:
+        if _writes(request.name):
             repeated = _kept_reply(
                 scope, machine, request, checked, request_hash, refuser, label
             )
             if repeated is not None:
-                return repeated, True
+                return flagged(
+                    repeated, store, machine.machine_id, load_config, clock()
+                ), True
         try:
             body = _operation_reply(
                 store, request, checked, machine, label, request_hash, clock
@@ -290,7 +294,8 @@ def _serve(
             )
         except Exception as error:  # noqa: BLE001 - the hub's boundary for a call
             return refuser.for_exception(error, label), True
-        return CallReply(DONE_STATUS, body), True
+        reply = CallReply(DONE_STATUS, body)
+        return flagged(reply, store, machine.machine_id, load_config, clock()), True
 
 
 _BAD_TOKEN: Final = (

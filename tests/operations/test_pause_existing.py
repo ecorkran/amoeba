@@ -57,6 +57,7 @@ from operations.held_support import (
     seed_request,
 )
 from operations.pause_support import START
+from operations.ways import WAYS
 
 OLD_RUN = "amoeba-20261110T110000Z-oldoldoldold"
 WAIT = 600.0
@@ -125,10 +126,11 @@ def _write_replies(w: World, run_id: str) -> None:
 # 7.9: settled-row paths
 
 
+@pytest.mark.parametrize("way", WAYS)
 def test_an_answer_not_yet_handed_over_is_resumed_with_no_answering_run(
-    tmp_path: Path,
+    tmp_path: Path, way: str
 ) -> None:
-    with world(tmp_path) as w:
+    with world(tmp_path, way=way) as w:
         seq = _answered_row(w)
 
         result = w.handle()
@@ -189,10 +191,11 @@ def test_a_pm_answer_on_a_waiting_question_is_delivered_by_the_next_call(
         assert _record(w).waiting_reason is DeclineReason.CHECK_SAID_NO
 
 
+@pytest.mark.parametrize("way", WAYS)
 def test_a_question_waiting_on_the_pm_is_skipped_with_its_reason(
-    tmp_path: Path,
+    tmp_path: Path, way: str
 ) -> None:
-    with world(tmp_path) as w:
+    with world(tmp_path, way=way) as w:
         _claim_row(w, age_seconds=0)
         with w.store.write() as transaction:
             settle_waiting(
@@ -242,11 +245,14 @@ def test_an_answer_that_was_handed_over_is_settled(
 # 7.11: the dead claim
 
 
+@pytest.mark.parametrize("way", WAYS)
 def test_a_running_answering_run_and_a_young_claim_is_already_claimed(
-    tmp_path: Path,
+    tmp_path: Path, way: str
 ) -> None:
     with world(
-        tmp_path, answering_poll=lambda run_id: _ended(RunOutcome.TIMED_OUT, run_id)
+        tmp_path,
+        way=way,
+        answering_poll=lambda run_id: _ended(RunOutcome.TIMED_OUT, run_id),
     ) as w:
         _claim_row(w, age_seconds=WAIT / 2)
 
@@ -289,10 +295,11 @@ def test_a_running_answering_run_and_an_old_claim_stalls_and_a_late_reply_is_ign
         assert _answers(w) == ()
 
 
+@pytest.mark.parametrize("way", WAYS)
 def test_a_completed_answering_run_whose_claimant_died_is_settled_then_resumed(
-    tmp_path: Path,
+    tmp_path: Path, way: str
 ) -> None:
-    with world(tmp_path) as w:
+    with world(tmp_path, way=way) as w:
         _claim_row(w, age_seconds=WAIT * 2)
         _write_replies(w, OLD_RUN)
 

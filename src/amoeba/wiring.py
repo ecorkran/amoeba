@@ -28,6 +28,7 @@ from amoeba.client.errors import (
 )
 from amoeba.config.home import (
     StateLayout,
+    client_file_path,
     config_path,
     squadron_runs_dir,
     state_layout,
@@ -58,7 +59,12 @@ from amoeba.wiring_door import (
 )
 from amoeba.wiring_gather import place_served
 from amoeba.wiring_results import OperationResult, is_rejected, result_document
-from amoeba.wiring_steps import LastReply, after_operation
+from amoeba.wiring_steps import (
+    DoorSteps,
+    LastReply,
+    StepReplyError,
+    after_operation,
+)
 
 __all__ = [
     "NotServedError",
@@ -100,6 +106,7 @@ OPERATIONAL_ERRORS: Final = (
     HubCertificateError,
     HubRefusedError,
     NotServedError,
+    StepReplyError,
 )
 
 
@@ -176,14 +183,13 @@ def invoke(
     last = LastReply()
     layout = state_layout()
     deps = partial(default_deps, layout)
-    # A joined machine has no steps until they are the door's (7.3): its after-step
-    # does nothing. The store, when opened, closes only after the after-step ran.
-    steps: Steps | None = None
+    # A joined machine's steps are the door's; the store, when opened, closes only
+    # after the after-step ran.
+    door_steps = DoorSteps(last)
+    steps: Steps | None = door_steps if client_file_path().exists() else None
     with ExitStack() as stack:
         try:
-            served = route(
-                name, document, directory, door, lambda: default_deps(layout), last
-            )
+            served = route(name, document, directory, door, deps, door_steps)
             if served is not None:
                 return served
             store = stack.enter_context(open_store(layout))

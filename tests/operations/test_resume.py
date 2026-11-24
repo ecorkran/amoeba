@@ -55,6 +55,7 @@ from amoeba.upstream.squadron.faults import LaunchFailure
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.upstream.squadron.run_outcome import PollFailure, RunPoll
 from operations.pause_support import DepsRig, FakeChild, build_deps
+from operations.ways import WAYS, steps_on, store_for
 
 RUN = "demo-run"
 WAIT = 5.0
@@ -541,3 +542,57 @@ def test_a_sweep_that_wins_while_the_child_runs_decides_the_reported_outcome(
     assert result.outcome is ResumeOutcome.NOT_DELIVERED
     assert result.detail == "run moved on"
     assert _stored(store, seq) == (ResumeOutcome.NOT_DELIVERED, "run moved on")
+
+
+# 262 D16: one body, two ways. The resume on the door's steps against a hub.
+
+
+@pytest.fixture(params=WAYS)
+def way_store(
+    request: pytest.FixtureRequest, tmp_path: Path
+) -> Iterator[tuple[str, Store]]:
+    way = str(request.param)
+    with store_for(way, tmp_path) as (opened, hub_rig):
+        if hub_rig is not None:
+            hub_rig.config = lambda: CONFIG
+        seed_members(opened)
+        yield way, opened
+
+
+def _run_either_way(
+    tmp_path: Path,
+    way_store: tuple[str, Store],
+    polls: Sequence[RunPoll],
+    children: Sequence[WaitableChild | LaunchError],
+) -> tuple[ResumeResult, DepsRig, int]:
+    way, store = way_store
+    _, seq = _question(store)
+    rig = build_deps(tmp_path, polls={RUN: polls}, spawns=list(children))
+    steps = steps_on(way, store, StepEdges(rig.deps.clock, lambda: CONFIG))
+    result = claim_and_resume(steps, seq, rig.deps)
+    assert result is not None, "another attempt holds the resume claim"
+    return result, rig, seq
+
+
+def test_a_run_seen_running_is_resumed_either_way(
+    tmp_path: Path, way_store: tuple[str, Store]
+) -> None:
+    result, rig, seq = _run_either_way(
+        tmp_path, way_store, [PAUSE, RUNNING_DOC], [FakeChild(exit_code=None)]
+    )
+
+    assert result.outcome is ResumeOutcome.RESUMED
+    (call,) = rig.spawner.calls
+    assert result.resume_log == str(call.logs.stdout)
+    assert _stored(way_store[1], seq) == (ResumeOutcome.RESUMED, None)
+
+
+def test_a_spawn_error_is_refused_either_way(
+    tmp_path: Path, way_store: tuple[str, Store]
+) -> None:
+    error = LaunchError(LaunchFailure.SPAWN_ERROR, "OSError: no sq")
+
+    result, _, seq = _run_either_way(tmp_path, way_store, [PAUSE], [error])
+
+    assert result.outcome is ResumeOutcome.REFUSED
+    assert _stored(way_store[1], seq)[0] is ResumeOutcome.REFUSED

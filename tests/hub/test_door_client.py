@@ -119,7 +119,8 @@ def test_status_and_the_default_list_go_through_the_door_with_here_and_runs(
     assert isinstance(status, StatusResult)
     assert [m.member.name for p in status.programs for m in p.members] == [NAMES[CORE]]
     assert isinstance(listed, ListResult)
-    assert counter.calls == 2
+    # Each asks ``open_runs`` first, for the runs document (262 D9).
+    assert counter.calls == 4
 
 
 def test_list_members_sends_no_here_and_makes_no_cf_call(

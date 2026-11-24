@@ -66,6 +66,7 @@ from amoeba.store.vocabulary import ConsumedMode
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.wire.join_line import JoinError
 from amoeba.wiring_door import NotServedError
+from amoeba.wiring_steps import StepReplyError
 
 #: For each in-process operation, a document it refuses and the result type it gives.
 REFUSED: dict[OperationName, tuple[object, type]] = {
@@ -121,6 +122,7 @@ def test_the_operational_errors_are_the_ones_the_cli_maps_to_exit_three() -> Non
         HubCertificateError,
         HubRefusedError,
         NotServedError,
+        StepReplyError,
     }
 
 

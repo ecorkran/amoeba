@@ -15,8 +15,10 @@ from process_containment import contained_popen
 from store.message_support import NOW
 from store_open import open_local_store
 
+from amoeba.config.user_config import UserConfig
 from amoeba.operations import processes
 from amoeba.operations.processes import WaitableChild
+from amoeba.operations.steps.dispatch import StepEdges
 from amoeba.operations.wake_environment import WAKE_ENV_NAMES
 from amoeba.operations.wake_run import WakeRunError, run_wake
 from amoeba.store.errors import StoreBusyError, StoreCorruptError
@@ -32,9 +34,12 @@ from operations.wake_run_support import (
     popen_failing_on_wait,
     probe_command,
     process_is_gone,
+    row_of,
+    seed_claimed_wake,
     stored_row,
     wait_until,
 )
+from operations.ways import WAYS, steps_on, store_for
 
 SECRET_MARKER = "SECRET-MARKER-IN-A-COMMAND"
 #: A name macOS adds to every process it starts, whatever the parent passed.
@@ -457,3 +462,27 @@ def test_a_run_that_loses_the_race_to_record_its_pid_stops_its_own_command(
     assert (row.command_pid, row.ended_at) == (4242, None)
     (pid,) = started
     assert wait_until(lambda: process_is_gone(pid))
+
+
+@pytest.mark.parametrize("way", WAYS)
+def test_a_command_that_exits_zero_ends_exited_either_way(
+    tmp_path: Path, way: str
+) -> None:
+    """262 D16: the wrapper's body on the door's steps against a hub as well."""
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    with store_for(way, tmp_path) as (store, hub_rig):
+        if hub_rig is not None:
+            hub_rig.follows = lambda: NOW
+        seed_claimed_wake(store, tmp_path, probe_command(tmp_path, code=0), checkout)
+        steps = steps_on(way, store, StepEdges(lambda: NOW, _no_config))
+        outcome = run_wake(steps, WAKE_ID, popen=contained_popen)
+        row = row_of(store)
+
+    assert outcome is WakeOutcome.EXITED
+    assert (row.outcome, row.exit_code) == (WakeOutcome.EXITED, 0)
+    assert row.command_pid is not None
+
+
+def _no_config() -> UserConfig:
+    raise AssertionError("a wake step loaded the config")

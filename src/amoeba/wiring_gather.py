@@ -16,6 +16,7 @@ from pathlib import Path
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.add_gather import gather_add
+from amoeba.operations.answer import AnswerRecorded, run_recorded_answer
 from amoeba.operations.deps import Deps
 from amoeba.operations.here import gather_caller
 from amoeba.operations.here_document import here_to_document
@@ -41,7 +42,13 @@ from amoeba.operations.store_steps import LocalSteps, Steps
 from amoeba.operations.wake_start import start_woken_wake
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import Door
-from amoeba.wire.protocol import HERE_BODY_KEY, RUNS_BODY_KEY
+from amoeba.wire.protocol import (
+    HERE_BODY_KEY,
+    LOGS_DIR_BODY_KEY,
+    RUNS_BODY_KEY,
+    VIA_BODY_KEY,
+)
+from amoeba.wiring_results import OperationResult
 
 
 def _required(name: OperationName, directory: Path | None) -> Path:
@@ -56,14 +63,13 @@ def gather_values(
     directory: Path | None,
     door: Door,
     deps: Deps,
-    steps: Steps | None,
+    steps: Steps,
 ) -> ClientValues | SetUpResult:
     """What the client part gathers for ``name`` on ``document``, or the door's refusal
     of ``add`` (a rejected result, returned before anything is gathered).
 
     ``steps`` asks the hub which runs this machine's open questions name
-    (``open_runs``), for the runs document's ``absent_runs`` (262 D9); ``None`` is a
-    call through the door, which cannot ask until 7.3 and so reports none absent.
+    (``open_runs``), for the runs document's ``absent_runs`` (262 D9).
 
     Raises:
         ContextForgeError: ``cf`` or ``git`` gave no usable answer.
@@ -86,9 +92,15 @@ def gather_values(
     runs = None
     open_runs = None
     if needed.runs:
-        open_runs = None if steps is None else steps.run(OPEN_RUNS, OpenRunsRequest())
-        runs = gather_machine_runs(deps, () if open_runs is None else open_runs.run_ids)
-    return ClientValues(here=here, runs=runs, open_runs=open_runs)
+        open_runs = steps.run(OPEN_RUNS, OpenRunsRequest())
+        runs = gather_machine_runs(deps, open_runs.run_ids)
+    return ClientValues(
+        here=here,
+        runs=runs,
+        open_runs=open_runs,
+        via=door if needed.via else None,
+        logs_dir=deps.logs_dir if needed.logs_dir else None,
+    )
 
 
 def place_served(  # noqa: PLR0913 - invoke's arguments and what the gather needs
@@ -99,7 +111,7 @@ def place_served(  # noqa: PLR0913 - invoke's arguments and what the gather need
     door: Door,
     deps: Deps,
     load_config: Callable[[], UserConfig],
-) -> ServedResult | SetUpResult:
+) -> OperationResult:
     """The gather, then the hub part in process with this machine's own edges."""
     steps = LocalSteps(store, StepEdges(deps.clock, load_config))
     values = gather_values(name, document, directory, door, deps, steps)
@@ -107,8 +119,19 @@ def place_served(  # noqa: PLR0913 - invoke's arguments and what the gather need
         return values
     edges = ServedEdges(clock=deps.clock, load_config=load_config, local=deps)
     result = run_served(name.value, store, document, edges, values)
+    return finish_client_part(result, steps, deps, values)
+
+
+def finish_client_part(
+    result: ServedResult, steps: Steps, deps: Deps, values: ClientValues
+) -> OperationResult:
+    """What this machine does after the hub part, on either way: run the resume an
+    ``answer`` claimed (262 D7), start the wake a ``send`` claimed (D8), and prune
+    after ``status`` and ``list`` with the ``open_runs`` reply the gather made (D12).
+    """
+    if isinstance(result, AnswerRecorded):
+        return run_recorded_answer(steps, result, deps)
     if isinstance(result, SendResult):
-        # The hub part claimed any wake; this machine's client part starts it (262 D8).
         return start_woken_wake(steps, deps, result)
     if values.open_runs is not None:
         if isinstance(result, StatusResult):
@@ -149,4 +172,8 @@ def body_keys(values: ClientValues) -> dict[str, object]:
         keys[HERE_BODY_KEY] = here_to_document(values.here)
     if values.runs is not None:
         keys[RUNS_BODY_KEY] = runs_to_document(values.runs)
+    if values.via is not None:
+        keys[VIA_BODY_KEY] = values.via.value
+    if values.logs_dir is not None:
+        keys[LOGS_DIR_BODY_KEY] = str(values.logs_dir)
     return keys

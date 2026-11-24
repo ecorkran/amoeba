@@ -36,6 +36,7 @@ from amoeba.wire.protocol import (
     HEADER_DOOR_VERSION,
     UNKNOWN_ADVICE,
     WRITING_CALLS,
+    WRITING_STEPS,
     DoneReply,
     RefusalCode,
     RefusedReply,
@@ -143,7 +144,7 @@ def _unreachable(
         f"no reply from the hub at {client_file.address} after "
         f"{tried_seconds:.0f} s; {_address_hint(client_file.address)}"
     )
-    if name in WRITING_CALLS:
+    if name in WRITING_CALLS or name in WRITING_STEPS:
         text += f". The outcome of this call is unknown. {UNKNOWN_ADVICE[name]}"
     return HubUnreachableError(text)
 

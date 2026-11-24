@@ -14,8 +14,7 @@ import pytest
 from store.relocate_support import seed_store
 from user_configs import example_config_text
 
-from amoeba import wiring
-from amoeba.cli import commands
+from amoeba import wiring, wiring_pause
 from amoeba.cli import main as cli
 from amoeba.config.home import HOME_VARIABLE
 from amoeba.operations import served_runners
@@ -26,7 +25,7 @@ STUBBED_OPERATIONS = (
     ("add", "place_served", ["add", "--file"]),
     ("rm", "place_served", ["rm", "some-member"]),
     ("list", "place_served", ["list"]),
-    ("handle-pause", "handle_pause_locally", ["handle-pause", "run-1"]),
+    ("handle-pause", "handle_pause", ["handle-pause", "run-1"]),
     ("answer", "answer", ["answer", "run-1", "--text", "yes"]),
     ("status", "place_served", ["status"]),
     ("decisions", "decisions", ["decisions"]),
@@ -63,10 +62,11 @@ def test_the_move_happens_before_the_commands_own_work(
         seen.append((state_store.exists(), legacy_store.exists()))
         raise SquadronError("stub")
 
-    # ``handle-pause`` is the CLI's own body; ``decisions`` and ``mark-read`` run
-    # through ``operations.served`` (260); the others are placed by ``wiring``.
+    # ``handle-pause`` runs its body on the steps ``wiring_pause`` opens (262);
+    # ``decisions`` and ``mark-read`` run through ``operations.served`` (260); the
+    # others are placed by ``wiring``.
     module = (
-        commands
+        wiring_pause
         if command == "handle-pause"
         else served_runners
         if command in SERVED_COMMANDS

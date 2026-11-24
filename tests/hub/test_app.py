@@ -77,7 +77,7 @@ def test_a_hello_over_pinned_tls_gets_done(hub: InProcessHub) -> None:
     assert status == 200
     reply = parse_reply(body)
     assert isinstance(reply, DoneReply)
-    assert reply.result == {"machine": "alpha"}
+    assert reply.result == {"machine": "alpha", "work": False}
     assert fingerprint(hub.cert_path.read_text(encoding="utf-8"))
 
 
@@ -118,7 +118,7 @@ def test_a_missing_length_is_malformed(hub: InProcessHub) -> None:
         (RefusalCode.BAD_TOKEN, {"headers": {HEADER_AUTHORIZATION: "Bearer nope"}}),
         (RefusalCode.DOOR_VERSION, {"headers": {HEADER_DOOR_VERSION: "99"}}),
         (RefusalCode.MALFORMED_CALL, {"body": b"not json"}),
-        (RefusalCode.NOT_SERVED, {"name": "answer"}),
+        (RefusalCode.NOT_SERVED, {"name": "handle_pause"}),
     ],
 )
 def test_each_refusal_travels_with_its_status(
@@ -141,7 +141,7 @@ def test_every_reply_has_the_door_version_header(hub: InProcessHub) -> None:
     replies = [
         _post(hub, "hello", _hello_body()),
         _post(hub, "hello", None, {"Content-Length": str(MAX_CALL_BYTES + 1)}),
-        _post(hub, "answer", _hello_body()),
+        _post(hub, "handle_pause", _hello_body()),
     ]
 
     for _status, headers, _body in replies:

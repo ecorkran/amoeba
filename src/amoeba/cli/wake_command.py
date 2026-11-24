@@ -20,11 +20,10 @@ from amoeba.cli.join_command import JOIN_COMMAND, LEAVE_COMMAND
 from amoeba.cli.stand_in_command import STAND_IN_COMMAND
 from amoeba.config.home import StateLayout
 from amoeba.operations.resume_run import RESUME_RUN_COMMAND
-from amoeba.operations.steps.dispatch import StepEdges
-from amoeba.operations.store_steps import LocalSteps
 from amoeba.operations.wake_run import WAKE_RUN_COMMAND, run_wake
 from amoeba.store.vocabulary import WakeOutcome
-from amoeba.wiring import default_deps, load_config, open_store
+from amoeba.wiring import load_config
+from amoeba.wiring_steps import LastReply, steps_for
 
 #: Commands that are not operations: no ``OperationName`` and no tool.
 CLI_ONLY_COMMANDS: Final = frozenset(
@@ -69,9 +68,8 @@ def run_wake_run(layout: StateLayout, wake_id: str) -> int:
         WakeRunError: The row is missing or already ended.
         StoreError: The store cannot be used.
     """
-    deps = default_deps(layout)
-    with open_store(layout) as store:
-        # No wake step loads a config, so none is read here (262 D10).
-        steps = LocalSteps(store, StepEdges(deps.clock, load_config))
+    # No wake step loads a config, so none is read here; it runs no after-step, so
+    # the work flag of its replies is not read (262 D10).
+    with steps_for(layout, LastReply(), load_config) as steps:
         outcome = run_wake(steps, wake_id)
     return WAKE_EXIT_CODES[outcome]

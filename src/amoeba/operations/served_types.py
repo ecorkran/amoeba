@@ -8,9 +8,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import Final
 
 from amoeba.config.user_config import UserConfig
+from amoeba.operations.answer import AnswerRecorded
 from amoeba.operations.changes_models import ChangesResult
 from amoeba.operations.decisions import DecisionsResult
 from amoeba.operations.deps import Deps
@@ -39,6 +41,7 @@ from amoeba.operations.set_up_models import SetUpResult
 from amoeba.operations.standing_models import StandingResult, WithdrawResult
 from amoeba.operations.status import StatusResult
 from amoeba.operations.steps.models_runs import OpenRunsReply
+from amoeba.store.vocabulary import Door
 
 type ServedResult = (
     DecisionsResult
@@ -60,6 +63,7 @@ type ServedResult = (
     | SendResult
     | ChangesResult
     | ReportReleaseResult
+    | AnswerRecorded
 )
 
 
@@ -86,6 +90,10 @@ class ClientValues:
     #: What ``open_runs`` said when the client asked for the runs document: the
     #: client part reuses it for the prune after the hub part (262 D9, D12).
     open_runs: OpenRunsReply | None = None
+    #: ``answer``'s door as the client states it (262 D7).
+    via: Door | None = None
+    #: The calling machine's logs directory, for a wake ``send`` claims (262 D8).
+    logs_dir: Path | None = None
 
 
 class HereKind(StrEnum):
@@ -101,7 +109,19 @@ class Gather:
 
     here: HereKind | None = None
     runs: bool = False
+    #: The door the call came through (``answer``).
+    via: bool = False
+    #: The calling machine's logs directory (``send``).
+    logs_dir: bool = False
 
 
 NOTHING_GATHERED: Final = Gather()
 CALLER_GATHER: Final = Gather(here=HereKind.CALLER)
+#: The body keys of ``via`` and ``logs_dir``; ``wire.protocol`` holds them again, and a
+#: test asserts they agree.
+VIA_KEY: Final = "via"
+LOGS_DIR_KEY: Final = "logs_dir"
+#: ``send``: the caller, and the logs directory a claimed wake's logs go under.
+SEND_GATHER: Final = Gather(here=HereKind.CALLER, logs_dir=True)
+#: ``answer``: the door it came through.
+ANSWER_GATHER: Final = Gather(via=True)

@@ -8,7 +8,6 @@ are the documents a client would send.
 from __future__ import annotations
 
 import ast
-import logging
 from pathlib import Path
 from typing import Any, cast
 
@@ -234,30 +233,15 @@ SEND = {"id": "ask", "to": NAMES[LINT], "subject": "s", "body": "b"}
 SEND_TO_CORE = {**SEND, "id": "ask-core", "to": NAMES[CORE]}
 
 
-def test_a_send_to_a_member_a_wake_is_due_for_is_not_served_and_writes_nothing(
-    rig: HubRig, caplog: pytest.LogCaptureFixture
-) -> None:
-    _give_lint_a_wake_command_on_beta(rig)
-
-    with caplog.at_level(logging.INFO):
-        reply = rig.call("send", SEND, extra={"here": CALLER})
-
-    refused = _refused(reply, RefusalCode.NOT_SERVED)
-    assert NAMES[LINT] in refused.message
-    assert "beta" in refused.message
-    assert "wakes" in refused.message
-    assert rig.rows("SELECT COUNT(*) FROM messages") == [(0,)]
-    assert _kept(rig) == 0
-    assert rig.rows("SELECT last_called_at FROM machines WHERE name = 'alpha'") == [
-        (rig.clock_now.isoformat(),)
-    ]
-    assert sum("refused" in r.getMessage() for r in caplog.records) == 1
-
-
 def test_a_send_to_a_member_with_no_wake_command_is_served(rig: HubRig) -> None:
     _give_lint_a_wake_command_on_beta(rig)
 
-    done = _done(rig, "send", SEND_TO_CORE, {"here": {"project_id": LINT}})
+    done = _done(
+        rig,
+        "send",
+        SEND_TO_CORE,
+        {"here": {"project_id": LINT}, "logs_dir": "/machine/logs"},
+    )
 
     assert done.result["outcome"] == "sent"
     assert rig.rows("SELECT COUNT(*) FROM messages") == [(1,)]
@@ -265,13 +249,14 @@ def test_a_send_to_a_member_with_no_wake_command_is_served(rig: HubRig) -> None:
 
 
 def test_a_hub_part_refusal_keeps_no_result_for_a_repeat(rig: HubRig) -> None:
-    _give_lint_a_wake_command_on_beta(rig)
+    bad: dict[str, object] = {"here": CALLER, "runs": {"open_runs": 1}}
 
-    first = rig.call("send", SEND, call_id="same", extra={"here": CALLER})
-    again = rig.call("send", SEND, call_id="same", extra={"here": CALLER})
+    first = rig.call("status", {}, call_id="same", extra=bad)
+    again = rig.call("status", {}, call_id="same", extra=bad)
 
-    assert _refused(first, RefusalCode.NOT_SERVED)
-    assert _refused(again, RefusalCode.NOT_SERVED)
+    assert _refused(first, RefusalCode.MALFORMED_CALL)
+    assert _refused(again, RefusalCode.MALFORMED_CALL)
+    assert _kept(rig) == 0
 
 
 def test_a_refusal_code_the_hub_part_raises_is_a_refusal_code() -> None:

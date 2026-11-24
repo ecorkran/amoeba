@@ -190,12 +190,15 @@ class FixtureHub:
 
     def env_for(self, home: Path) -> dict[str, str]:
         """The hub's environment for the hub home; a client's, with its own stub
-        ``cf`` and ``sq`` first on the ``PATH``, for any other."""
+        ``cf`` and ``sq`` first on the ``PATH``, for any other. A client's ``HOME`` is
+        its own home, so its ``sq`` stub state and Squadron runs directory are its
+        own, as on two real machines (262 D16)."""
         if home == self.home:
-            path = hub_path()
+            path, user_home = hub_path(), self.root
         else:
             path = os.pathsep.join([str(home / BIN_DIRECTORY), safe_path()])
-        base = {"AMOEBA_HOME": str(home), "PATH": path, "HOME": str(self.root)}
+            user_home = home
+        base = {"AMOEBA_HOME": str(home), "PATH": path, "HOME": str(user_home)}
         return {**base, **self.home_environment.get(home, {})}
 
     def run_in(

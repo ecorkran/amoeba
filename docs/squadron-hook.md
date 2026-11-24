@@ -72,12 +72,19 @@ and that request is still open) needs no further hook call. The hook's one call 
 it, and Amoeba starts `handle-pause` for it itself once the request ends. `status`
 shows it as `waiting_on_request`, with the newest calls-log line for it as `last_call`.
 
-## On a joined machine (slice 260)
+## On a joined machine (slices 260, 262)
 
 On a machine joined to a hub (`amoeba join`; a `client.yaml` is in the config home),
-`amoeba handle-pause` fails with `NotServedError` (exit 3): the door does not serve it
-yet, and the machine has no local store to handle the pause in. The check is the first
-thing `handle-pause` does, before the state layout is built and before the config is
-loaded, so it writes no calls-log line and no row, and a pause it would have handled
-shows as **Paused, not handled** once the machine leaves the hub (`amoeba leave`) or the
-door serves it. `amoeba wake-run` fails the same way.
+`amoeba handle-pause` runs here as it does on its own: it polls the run, gathers with
+`cf`, reads the run file and runs the answering run on this machine. Each store
+transaction it makes is one door call to the hub, and the hub's settings (answering
+models, limits, waits) come back with the first one, so no local `config.yaml` is read.
+The calls log, the scratch and every log stay on this machine.
+
+When the hub does not answer, `handle-pause` stops at the first step that gets no reply,
+after one call bound (43 seconds), with exit 3 and the error as its calls-log line, and
+starts nothing more. What it leaves is handled by this machine's next call once the hub
+is back: no row yet shows the run as **Paused, not handled** with the command to run; a
+`claimed` row goes stale and is started again; an answered row's resume claim runs out
+and is handed out again; a held row is started when its request ends. `amoeba wake-run`
+and `amoeba resume-run` run the same way.

@@ -10,27 +10,46 @@ changes the result of the call it follows.
 ``LastReply`` is the per-command holder of what the last reply said: a door reply's
 ``work`` flag, or the problem text that stands in for it. With the local steps no reply
 carries a flag, so the flag is one read of ``work_waiting``.
+
+``DoorSteps`` sends each step as one door call (D3); ``steps_for`` picks it or
+``LocalSteps`` once per command, by whether a client file exists.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+import sys
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Final
 
+from pydantic import ValidationError
+
+from amoeba.client.call import call
+from amoeba.client.client_file import load_client_file
 from amoeba.client.errors import HubRefusedError, HubUnreachableError
-from amoeba.config.home import AmoebaHomeError
-from amoeba.config.user_config import ConfigError
+from amoeba.config.home import (
+    AmoebaHomeError,
+    StateLayout,
+    client_file_path,
+    pinned_cert_path,
+)
+from amoeba.config.user_config import ConfigError, UserConfig
 from amoeba.operations.deps import Deps
 from amoeba.operations.names import Door, OperationName
-from amoeba.operations.steps.models import CLAIM_WORK, OPEN_RUNS
+from amoeba.operations.state_move import open_state_store
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.steps.models import CLAIM_WORK, OPEN_RUNS, Step, StepModel
 from amoeba.operations.steps.models_runs import OpenRunsReply, OpenRunsRequest
 from amoeba.operations.steps.models_work import ClaimWorkRequest
 from amoeba.operations.store_steps import LocalSteps, Steps
 from amoeba.operations.work_start import start_claimed
 from amoeba.store.errors import StoreError
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS
+from amoeba.wire.protocol import WORK_PROBLEM_REPLY_KEY, WORK_REPLY_KEY
+from amoeba.wire.times import DoorTimes
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +69,78 @@ class LastReply:
     problem: str | None = None
     #: A call got no reply: the hub is not answering, so the after-step makes none.
     unreachable: bool = False
+
+
+def take_work_keys(result: dict[str, object], last: LastReply) -> None:
+    """Move a done reply's ``work`` and ``work_problem`` out of its result document
+    into ``last``, so the result rebuilds as the local way's and the after-step reads
+    them."""
+    work = result.pop(WORK_REPLY_KEY, None)
+    problem = result.pop(WORK_PROBLEM_REPLY_KEY, None)
+    if isinstance(work, bool):
+        last.work = work
+    if isinstance(problem, str):
+        last.problem = problem
+
+
+class StepReplyError(Exception):
+    """A done reply that does not fit the step's reply model (D11): the two sides
+    disagree inside one door version, which is a bug. Raised on the client."""
+
+
+class DoorSteps:
+    """Each step as one door call: the request model as the ``document`` of
+    ``POST /call/<step>``, the reply validated against the step's reply model.
+
+    The client file is read on every call; gone, it raises ``ClientFileError``
+    naming it, and no local store is opened (D3). Each reply's work keys go into
+    ``last`` for the after-step.
+    """
+
+    def __init__(self, last: LastReply, times: DoorTimes = DoorTimes()) -> None:  # noqa: B008  frozen
+        #: What this command's last reply said about waiting work.
+        self.last = last
+        self._times = times
+
+    def run[Request: StepModel, Reply: StepModel](
+        self, step: Step[Request, Reply], request: Request
+    ) -> Reply:
+        cert_path = pinned_cert_path()
+        client_file = load_client_file(client_file_path(), cert_path)
+        document = request.model_dump(mode="json")
+        try:
+            result = call(client_file, cert_path, step.name, document, self._times)
+        except HubUnreachableError:
+            self.last.unreachable = True
+            raise
+        take_work_keys(result, self.last)
+        try:
+            return step.reply.model_validate(result)
+        except ValidationError as error:
+            fields = ", ".join(
+                ".".join(str(part) for part in problem["loc"]) or "(the reply)"
+                for problem in error.errors()
+            )
+            applied = " The hub applied the step." if step.writes else ""
+            raise StepReplyError(
+                f"the reply to step {step.name} does not fit its model at {fields}."
+                f"{applied}"
+            ) from error
+
+
+@contextmanager
+def steps_for(
+    layout: StateLayout, last: LastReply, load_config: Callable[[], UserConfig]
+) -> Generator[Steps]:
+    """The steps one command uses to its end: ``DoorSteps`` when a client file
+    exists, otherwise ``LocalSteps`` on the local store, opened here and closed when
+    the command is done. ``load_config`` is called only by a local step that needs
+    the config."""
+    if client_file_path().exists():
+        yield DoorSteps(last)
+        return
+    with open_state_store(layout) as store:
+        yield LocalSteps(store, StepEdges(lambda: datetime.now(UTC), load_config))
 
 
 def after_operation(  # noqa: PLR0913 - what the after-step is given
@@ -78,6 +169,11 @@ def after_call(  # noqa: PLR0913 - the pieces of one after-step
 ) -> None:
     """The after-step. ``steps`` is ``None`` when none can be made (a joined machine
     until its steps are the door's): nothing happens. Never raises."""
+    if last.problem is not None:
+        sys.stderr.write(
+            "the hub could not tell whether this machine has work waiting: "
+            f"{last.problem}\n"
+        )
     if steps is None or last.unreachable:
         return
     try:

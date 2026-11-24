@@ -9,10 +9,9 @@ from typing import Any
 from amoeba.cli.exit_codes import EXIT_OK, EXIT_REJECTED
 from amoeba.config.home import StateLayout
 from amoeba.operations.resume_run import RESUME_RUN_COMMAND, run_resume
-from amoeba.operations.steps.dispatch import StepEdges
-from amoeba.operations.store_steps import LocalSteps
 from amoeba.store.vocabulary import ResumeOutcome
-from amoeba.wiring import default_deps, load_config, open_store
+from amoeba.wiring import default_deps, load_config
+from amoeba.wiring_steps import LastReply, steps_for
 
 
 def register_resume_run(commands: Any) -> argparse.ArgumentParser:
@@ -35,10 +34,11 @@ def run_resume_run(layout: StateLayout, answer_seq: int, claim_id: str) -> int:
         SquadronError: The first poll could not be read and nothing was recorded, or
             ``sq`` could not be used.
         StoreError: The store cannot be used.
+        HubUnreachableError, HubRefusedError, StepReplyError: A door step failed.
     """
     deps = default_deps(layout)
-    with open_store(layout) as store:
-        steps = LocalSteps(store, StepEdges(deps.clock, load_config))
+    # It runs no after-step, so the work flag of its replies is not read (D10).
+    with steps_for(layout, LastReply(), load_config) as steps:
         result = run_resume(steps, deps, answer_seq, claim_id)
     if result is None or result.outcome is not ResumeOutcome.REFUSED:
         return EXIT_OK

@@ -111,12 +111,13 @@ def test_the_operations_that_read_the_config_are_these() -> None:
         "reply",
         "cancel",
         "report_release",
+        "answer",
     }
 
 
 def test_an_unserved_name_raises_value_error(store: Store) -> None:
-    with pytest.raises(ValueError, match="answer"):
-        run_served("answer", store, {}, _edges(store))
+    with pytest.raises(ValueError, match="handle_pause"):
+        run_served("handle_pause", store, {}, _edges(store))
 
 
 def test_each_of_the_six_runs_on_a_seeded_store(store: Store) -> None:
@@ -387,7 +388,14 @@ CHECKOUT_DOCUMENT = {
 def test_what_each_call_needs_gathered(
     name: str, document: object, here: HereKind | None, runs: bool
 ) -> None:
-    assert gather_needed(name, document) == Gather(here=here, runs=runs)
+    needed = gather_needed(name, document)
+    assert (needed.here, needed.runs) == (here, runs)
+
+
+def test_send_also_needs_the_logs_directory_and_answer_its_door() -> None:
+    """262 D7, D8: the client sends them beside the document."""
+    assert gather_needed("send", {}) == Gather(here=HereKind.CALLER, logs_dir=True)
+    assert gather_needed("answer", {}) == Gather(via=True)
 
 
 def test_a_document_that_does_not_parse_needs_nothing_gathered() -> None:

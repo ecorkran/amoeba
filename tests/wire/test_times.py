@@ -26,7 +26,7 @@ def test_the_version_and_the_times_equal_a_pinned_tuple() -> None:
         times.RETRY_PAUSE_SECONDS,
         times.CALL_BOUND_SECONDS,
         times.CALL_RESULT_LIFETIME_SECONDS,
-    ) == (1, 3, 10, 30, 0.5, 43, 600)
+    ) == (2, 3, 10, 30, 0.5, 43, 600)
 
 
 def test_door_times_default_to_the_constants() -> None:

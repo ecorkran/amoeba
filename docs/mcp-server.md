@@ -349,8 +349,9 @@ A machine joined to a hub (`amoeba join`) has no local store. `amoeba-mcp` does 
 start there (see "Start-up"). A server that was already running when the machine
 joined keeps serving its tools, and each tool call goes through `wiring.invoke` like
 the CLI's: the operations the door serves (`decisions`, `mark_read`, `dismiss`,
-`retract`, `standing`, `withdraw`, and since slice 261 `add`, `rm`, `list`, `status`,
-`send`, `inbox`, `reply`, `cancel`, `changes`, `report_release`) go to the hub, each
+`retract`, `standing`, `withdraw`, since slice 261 `add`, `rm`, `list`, `status`,
+`send`, `inbox`, `reply`, `cancel`, `changes`, `report_release`, and since slice 262
+`answer`) go to the hub, each
 after the client part has gathered the caller's project (and the runs, or the checkout)
 here, and any other tool returns an error
 result naming `NotServedError`. The `answer` deadline check, which reads the local

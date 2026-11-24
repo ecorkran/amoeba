@@ -48,6 +48,7 @@ from operations.held_support import (
     seed_request,
 )
 from operations.pause_support import START, FakeChild, SpawnRecorder
+from operations.ways import WAYS
 
 BARRIER_TIMEOUT_SECONDS = 30.0
 
@@ -83,10 +84,11 @@ def _waiting(result: HandlePauseResult, reason: DeclineReason) -> None:
 # Holding
 
 
+@pytest.mark.parametrize("way", WAYS)
 def test_an_accepted_request_holds_the_question_and_starts_nothing(
-    tmp_path: Path,
+    tmp_path: Path, way: str
 ) -> None:
-    with world(tmp_path, paused_polls=(HELD_PAUSE,)) as w:
+    with world(tmp_path, way=way, paused_polls=(HELD_PAUSE,)) as w:
         add_addressee(w.store)
         seed_request(w.store, RequestState.ACCEPTED)
 
@@ -114,10 +116,11 @@ def test_a_second_call_reads_the_request_again_and_stays_held(tmp_path: Path) ->
         assert w.spawned.argvs == []
 
 
+@pytest.mark.parametrize("way", WAYS)
 def test_a_request_already_done_resumes_the_run_in_the_first_call(
-    tmp_path: Path,
+    tmp_path: Path, way: str
 ) -> None:
-    with world(tmp_path, paused_polls=HELD_POLLS) as w:
+    with world(tmp_path, way=way, paused_polls=HELD_POLLS) as w:
         add_addressee(w.store)
         seed_request(w.store, RequestState.DONE)
 
@@ -156,10 +159,15 @@ def test_a_question_naming_a_request_only_in_words_takes_the_ordinary_path(
         (RequestState.DECLINED, None, DeclineReason.REQUEST_DECLINED),
     ],
 )
+@pytest.mark.parametrize("way", WAYS)
 def test_a_request_that_ended_sends_the_question_to_the_pm(
-    tmp_path: Path, state: RequestState, reason: str | None, expected: DeclineReason
+    tmp_path: Path,
+    state: RequestState,
+    reason: str | None,
+    expected: DeclineReason,
+    way: str,
 ) -> None:
-    with world(tmp_path, paused_polls=(HELD_PAUSE,)) as w:
+    with world(tmp_path, way=way, paused_polls=(HELD_PAUSE,)) as w:
         add_addressee(w.store)
         seed_request(w.store, state, reason=reason)
 

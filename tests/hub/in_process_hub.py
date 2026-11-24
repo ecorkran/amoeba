@@ -55,7 +55,8 @@ class InProcessHub:
             handle_call,
             open_store=self.rig.open_store,
             clock=self.rig.clock,
-            load_config=self.rig.config,
+            # Read on each call, so a test may change the rig's config while serving.
+            load_config=lambda: self.rig.config(),
             hooks=self.hooks,
         )
         server = make_server(

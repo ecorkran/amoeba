@@ -7,6 +7,8 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from store.decision_support import CORE
+from store.question_support import KEY, NOW, waiting_question
 
 from amoeba import wiring
 from amoeba.cli.main import EXIT_ERROR, EXIT_OK, main
@@ -16,7 +18,11 @@ from amoeba.client.errors import (
     HubRefusedError,
     HubUnreachableError,
 )
+from amoeba.operations.answer import AnswerOutcome, AnswerResult
 from amoeba.operations.names import Door, OperationName
+from amoeba.operations.prune import PRUNE_MARKER_NAME
+from amoeba.store.machines import hash_token, machine_for_token
+from amoeba.store.questions import insert_question
 from amoeba.wire.join_line import JoinError
 from amoeba.wire.protocol import RefusalCode
 from amoeba.wiring_door import NotServedError, join, join_address, leave
@@ -256,18 +262,42 @@ def test_the_cli_joins_and_leaves(
     assert '"removed"' in capsys.readouterr().out
 
 
+def _question_on_beta(hub: InProcessHub) -> None:
+    """A question whose run is on ``beta``, seeded in the hub store."""
+    with hub.rig.open_store() as store:
+        with store.read() as transaction:
+            beta = machine_for_token(transaction, hash_token(BETA_TOKEN))
+        assert beta is not None
+        store.act_as(beta)
+        with store.write() as transaction:
+            insert_question(transaction, waiting_question(member_id=CORE), now=NOW)
+
+
 def test_a_joined_machine_serves_the_served_operations_through_the_hub_and_no_other(
     hub: InProcessHub,
 ) -> None:
     layout = client_layout()
     join(line_for(hub), set_aside_local=False)
+    _question_on_beta(hub)
     before = files_of(layout.state_home)
 
     listed = wiring.invoke(OperationName.DECISIONS, {}, None, Door.CLI)
-    with pytest.raises(NotServedError, match="does not serve answer yet") as raised:
-        wiring.invoke(OperationName.ANSWER, {}, Path("/anywhere"), Door.CLI)
+    answered = wiring.invoke(
+        OperationName.ANSWER,
+        {"run_id": KEY.run_id, "text": "300 lines"},
+        Path("/anywhere"),
+        Door.CLI,
+    )
+    with pytest.raises(NotServedError, match="does not serve handle_pause"):
+        wiring.invoke(OperationName.HANDLE_PAUSE, {}, Path("/anywhere"), Door.CLI)
 
     assert getattr(listed, "outcome").value == "listed"  # noqa: B009
-    assert hub.address in str(raised.value)
-    assert files_of(layout.state_home) == before
+    assert isinstance(answered, AnswerResult)
+    assert answered.outcome is AnswerOutcome.RECORDED
+    assert answered.resume is None
+    assert answered.waiting_on_machine is not None
+    assert answered.waiting_on_machine.machine == "beta"
+    assert hub.rig.rows("SELECT via FROM answers") == [("cli",)]
+    # The after-step's file clean-up writes its marker; nothing else is local.
+    assert [f for f in files_of(layout.state_home) if f != PRUNE_MARKER_NAME] == before
     assert not layout.store_path.exists()

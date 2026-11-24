@@ -11,7 +11,7 @@ import pytest
 from store.decision_support import CORE, FIRST, automatic_answer
 
 from amoeba.config.user_config import ConfigError
-from amoeba.hub import calls
+from amoeba.hub import call_work, calls
 from amoeba.hub.calls import DoorHooks, handle_call
 from amoeba.hub.store_open import open_hub_store
 from amoeba.operations import served
@@ -68,7 +68,7 @@ def _standing_count(rig: HubRig) -> int:
 def test_hello_returns_the_machine_name_and_keeps_no_result(rig: HubRig) -> None:
     reply = rig.call("hello", {})
 
-    assert _done(result_of(reply)).result == {"machine": "alpha"}
+    assert _done(result_of(reply)).result == {"machine": "alpha", "work": False}
     assert reply.status == 200
     assert rig.rows("SELECT COUNT(*) FROM call_results") == [(0,)]
 
@@ -171,7 +171,7 @@ def test_a_bad_or_oversized_body_is_malformed(rig: HubRig, body: bytes) -> None:
 
 
 def test_an_unserved_name_is_not_served(rig: HubRig) -> None:
-    reply = rig.call("answer", {})
+    reply = rig.call("handle_pause", {})
 
     assert _refused(result_of(reply), RefusalCode.NOT_SERVED)
     assert reply.status == 404
@@ -251,7 +251,7 @@ def test_a_bug_on_the_hub_is_hub_fault_with_the_traceback_logged(
     def broken(*_args: object, **_kwargs: object) -> object:
         raise RuntimeError("a bug on the hub")
 
-    monkeypatch.setattr(calls, "run_served", broken)
+    monkeypatch.setattr(call_work, "run_served", broken)
     with caplog.at_level(logging.INFO):
         reply = rig.call("standing", {"text": "r"}, call_id="c1")
 
@@ -333,7 +333,7 @@ def test_no_log_line_holds_a_token(
 ) -> None:
     with caplog.at_level(logging.DEBUG):
         rig.call("hello", {}, token="a-bad-token-value")
-        rig.call("answer", {})
+        rig.call("handle_pause", {})
         rig.call("hello", {}, headers={HEADER_DOOR_VERSION: "99"})
 
     text = "\n".join(record.getMessage() for record in caplog.records)
@@ -362,13 +362,13 @@ def test_a_seventh_operation_is_served_by_adding_to_the_list_and_the_registry(
     assert _done(result_of(reply)).result["outcome"] == "unchanged"
 
 
-def test_hello_with_an_empty_document_keeps_no_result_and_answer_is_not_served(
+def test_hello_with_an_empty_document_keeps_no_result_and_handle_pause_is_not_served(
     rig: HubRig,
 ) -> None:
     hello = rig.call("hello", {})
-    unserved = rig.call("answer", {"x": 1})
+    unserved = rig.call("handle_pause", {"x": 1})
 
-    assert _done(result_of(hello)).result == {"machine": "alpha"}
+    assert _done(result_of(hello)).result == {"machine": "alpha", "work": False}
     assert _refused(result_of(unserved), RefusalCode.NOT_SERVED)
     assert rig.rows("SELECT COUNT(*) FROM call_results") == [(0,)]
 

@@ -7,14 +7,18 @@ import pytest
 from amoeba.operations.here_document import HERE_KEY
 from amoeba.operations.names import OperationName
 from amoeba.operations.runs_document import RUNS_KEY
+from amoeba.operations.steps.models import STEP_MODELS
 from amoeba.wire.protocol import (
     HELLO_CALL,
     HERE_BODY_KEY,
     REFUSAL_STATUS,
     RUNS_BODY_KEY,
     SERVED_OPERATIONS,
+    STEP_ADVICE,
+    STEP_CALLS,
     UNKNOWN_ADVICE,
     WRITING_CALLS,
+    WRITING_STEPS,
     DoneReply,
     RefusalCode,
     RefusedReply,
@@ -39,11 +43,11 @@ def test_hello_is_not_an_operation() -> None:
 def test_writing_calls_are_served_and_decisions_is_not_one() -> None:
     assert WRITING_CALLS <= set(SERVED_OPERATIONS)
     assert "decisions" not in WRITING_CALLS
-    assert len(WRITING_CALLS) == 11
+    assert len(WRITING_CALLS) == 12
 
 
 def test_every_writing_call_has_advice() -> None:
-    assert set(UNKNOWN_ADVICE) == WRITING_CALLS
+    assert set(UNKNOWN_ADVICE) == WRITING_CALLS | WRITING_STEPS
 
 
 def test_the_new_writing_calls_are_the_ones_that_write_and_the_reads_are_not() -> None:
@@ -110,3 +114,17 @@ def test_invalid_machine_names(name: str) -> None:
 
 def test_a_machine_name_of_64_characters_is_valid() -> None:
     assert is_machine_name("a" * 64)
+
+
+def test_the_step_calls_are_the_step_models_names_and_writing_rows() -> None:
+    assert set(STEP_CALLS) == set(STEP_MODELS)
+    assert len(STEP_CALLS) == len(set(STEP_CALLS)) == 16
+    assert {name for name, step in STEP_MODELS.items() if step.writes} == WRITING_STEPS
+
+
+def test_every_writing_step_has_the_step_advice() -> None:
+    assert all(UNKNOWN_ADVICE[name] == STEP_ADVICE for name in WRITING_STEPS)
+
+
+def test_no_step_is_a_served_operation_or_hello() -> None:
+    assert not set(STEP_CALLS) & {*SERVED_OPERATIONS, HELLO_CALL}

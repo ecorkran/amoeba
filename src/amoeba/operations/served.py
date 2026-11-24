@@ -15,16 +15,18 @@ This module imports nothing from ``operations.here``, ``naming``, ``run_gather``
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass, is_dataclass
+from dataclasses import dataclass, is_dataclass
+from pathlib import Path
 from typing import Final
 
 from pydantic import BaseModel, TypeAdapter
 
+from amoeba.operations.answer import AnswerRecorded
 from amoeba.operations.changes_models import ChangesResult
 from amoeba.operations.decisions import DecisionsResult
 from amoeba.operations.dismiss import DismissResult
+from amoeba.operations.errors import MALFORMED_CALL, CallRefused
 from amoeba.operations.here_document import (
     HERE_KEY,
     parse_here,
@@ -50,11 +52,14 @@ from amoeba.operations.runs_document import RUNS_KEY, parse_runs
 from amoeba.operations.served_runners import (
     Runner,
     gather_add,
+    gather_answer,
     gather_caller_always,
     gather_list,
     gather_rm,
+    gather_send,
     gather_status,
     run_add,
+    run_answer,
     run_cancel,
     run_changes,
     run_decisions,
@@ -72,7 +77,9 @@ from amoeba.operations.served_runners import (
     run_withdraw,
 )
 from amoeba.operations.served_types import (
+    LOGS_DIR_KEY,
     NOTHING_GATHERED,
+    VIA_KEY,
     ClientValues,
     Gather,
     HereKind,
@@ -83,6 +90,7 @@ from amoeba.operations.set_up_models import SetUpResult
 from amoeba.operations.standing_models import StandingResult, WithdrawResult
 from amoeba.operations.status import StatusResult
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import Door
 
 
 @dataclass(frozen=True)
@@ -131,7 +139,10 @@ SERVED: Final[dict[str, ServedOperation]] = {
         run_inbox, InboxResult, gathers=gather_caller_always
     ),
     OperationName.SEND: ServedOperation(
-        run_send, SendResult, needs_config=True, gathers=gather_caller_always
+        run_send, SendResult, needs_config=True, gathers=gather_send
+    ),
+    OperationName.ANSWER: ServedOperation(
+        run_answer, AnswerRecorded, needs_config=True, gathers=gather_answer
     ),
     OperationName.REPLY: ServedOperation(
         run_reply, ReplyResult, needs_config=True, gathers=gather_caller_always
@@ -183,7 +194,24 @@ def client_values_from_body(
         else parse_here(body.get(HERE_KEY), checkout=needed.here is HereKind.CHECKOUT)
     )
     runs = parse_runs(body.get(RUNS_KEY)) if needed.runs else None
-    return ClientValues(here, runs)
+    via = _parse_via(body.get(VIA_KEY)) if needed.via else None
+    logs_dir = _parse_logs_dir(body.get(LOGS_DIR_KEY)) if needed.logs_dir else None
+    return ClientValues(here, runs, via=via, logs_dir=logs_dir)
+
+
+def _parse_via(value: object) -> Door:
+    """``answer``'s door from the body, or ``malformed_call``."""
+    if isinstance(value, str) and value in {door.value for door in Door}:
+        return Door(value)
+    raise CallRefused(MALFORMED_CALL, f"{VIA_KEY!r} must be one of the doors")
+
+
+def _parse_logs_dir(value: object) -> Path:
+    """``send``'s logs directory from the body, or ``malformed_call``: an absolute
+    path, because the claimed wake's log stem is made from it."""
+    if isinstance(value, str) and Path(value).is_absolute():
+        return Path(value)
+    raise CallRefused(MALFORMED_CALL, f"{LOGS_DIR_KEY!r} must be an absolute path")
 
 
 def run_served(
@@ -197,8 +225,6 @@ def run_served(
 
     Raises:
         ValueError: ``name`` is not a served operation.
-        CallRefused: The operation is one the hub part refuses (``send`` with a wake
-            due and ``edges.local`` ``None``).
     """
     return _served(name).run(store, document, edges, values)
 
@@ -246,6 +272,9 @@ def result_document(result: object) -> dict[str, object]:
     if isinstance(result, BaseModel):
         return result.model_dump(mode="json")
     if is_dataclass(result) and not isinstance(result, type):
-        document: dict[str, object] = json.loads(json.dumps(asdict(result)))
+        # A pydantic dump, not ``asdict``: ``answer``'s hub part holds a step model.
+        document: dict[str, object] = TypeAdapter(type(result)).dump_python(
+            result, mode="json"
+        )
         return document
     raise TypeError(f"not a result: {type(result).__name__}")

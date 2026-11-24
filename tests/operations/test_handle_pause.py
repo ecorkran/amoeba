@@ -76,6 +76,7 @@ from operations.held_support import (
 from operations.pause_support import FakeChild, SpawnRecorder
 from operations.rm_placed import rm
 from operations.set_up_support import DIRECTORY, FakeCf
+from operations.ways import WAYS
 
 
 def _record(w: World) -> QuestionRecord:
@@ -152,8 +153,11 @@ def _resumed(w: World, answer_seq: int) -> None:
         )
 
 
-def test_an_answer_limit_already_met_waits_and_starts_nothing(tmp_path: Path) -> None:
-    with world(tmp_path) as w:
+@pytest.mark.parametrize("way", WAYS)
+def test_an_answer_limit_already_met_waits_and_starts_nothing(
+    tmp_path: Path, way: str
+) -> None:
+    with world(tmp_path, way=way) as w:
         _earlier_automatic_answers(w)
 
         result = w.handle()
@@ -246,8 +250,11 @@ def test_a_lost_insert_race_removes_the_scratch_and_skips(tmp_path: Path) -> Non
 # 7.7: the answer step
 
 
-def test_a_question_is_answered_and_the_run_resumed_end_to_end(tmp_path: Path) -> None:
-    with world(tmp_path) as w:
+@pytest.mark.parametrize("way", WAYS)
+def test_a_question_is_answered_and_the_run_resumed_end_to_end(
+    tmp_path: Path, way: str
+) -> None:
+    with world(tmp_path, way=way) as w:
         result = w.handle()
 
         assert result.outcome is HandlePauseOutcome.RESUMED, result
@@ -292,8 +299,11 @@ def test_the_answering_run_runs_in_a_scratch_holding_the_members_inputs(
         assert "deploy" not in barred  # not denied by default, and not denied here
 
 
-def test_an_answer_the_check_rejects_waits_and_is_not_resumed(tmp_path: Path) -> None:
-    with world(tmp_path, check=CHECK_NO) as w:
+@pytest.mark.parametrize("way", WAYS)
+def test_an_answer_the_check_rejects_waits_and_is_not_resumed(
+    tmp_path: Path, way: str
+) -> None:
+    with world(tmp_path, way=way, check=CHECK_NO) as w:
         result = w.handle()
 
         _waiting(result, DeclineReason.CHECK_SAID_NO)

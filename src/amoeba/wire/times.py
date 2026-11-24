@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Final
 
 #: The shape of the door. Raised when the call format or a time changes.
-DOOR_VERSION: Final = 1
+DOOR_VERSION: Final = 2
 #: Longest wait to connect, in seconds.
 CONNECT_SECONDS: Final = 3.0
 #: Longest wait for a reply to one attempt, in seconds.

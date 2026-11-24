@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 from hub_fixture import FIRST, SECOND, FixtureHub, two_machine_hub
@@ -26,10 +27,11 @@ from store.question_support import ANSWERING_RUN, claimed_question
 
 from amoeba.answering.standing_passages import STANDING_SOURCE_PREFIX
 from amoeba.answering.values import AnsweringEvidence, PassageRef
-from amoeba.store.answers import Settled, settle_answered
+from amoeba.store.answers import Settled, record_resume, settle_answered
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import ResumeOutcome
 
 RULING = "Fixture versions are never bumped."
 OTHER_RULING = "Releases are cut on Fridays."
@@ -127,6 +129,20 @@ def _decisions(hub: FixtureHub, who: str) -> dict[str, object]:
     return _json(done.out)
 
 
+def _mark_resumed(store: Store, seqs: list[int]) -> None:
+    with store.write() as transaction:
+        for seq in seqs:
+            record_resume(
+                transaction,
+                seq,
+                ResumeOutcome.RESUMED,
+                detail=None,
+                log=None,
+                at=datetime(2026, 11, 10, 12, 5, tzinfo=UTC),
+                claim_id=None,
+            )
+
+
 def test_decisions_are_identical_from_both_and_mark_read_moves_the_shared_marker(
     tmp_path: Path,
 ) -> None:
@@ -138,6 +154,9 @@ def test_decisions_are_identical_from_both_and_mark_read_moves_the_shared_marker
             seed_programs(store)
             seqs.append(automatic_answer(store, FIRST_KEY, CORE, 1))
             seqs.append(waiting_then_pm(store, SECOND_KEY, LINT, 2))
+            # Delivered, so neither answer is a resume waiting for the first call's
+            # after-step to start between the two reads (262 D10).
+            _mark_resumed(store, seqs)
 
         hub.seed(seed)
         hub.start()

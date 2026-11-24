@@ -69,27 +69,6 @@ def test_every_unserved_operation_raises_not_served_and_writes_nothing(
 @pytest.mark.parametrize(
     "argv",
     [
-        ["answer", "run-1", "--text", "yes"],
-        ["handle-pause", "run-1"],
-        ["wake-run", "wake-1"],
-    ],
-)
-def test_the_cli_commands_exit_3_naming_not_served_and_write_nothing(
-    joined_home: StateLayout, capsys: pytest.CaptureFixture[str], argv: list[str]
-) -> None:
-    before = _tree(joined_home.state_home)
-
-    code = main(argv)
-
-    assert code == EXIT_ERROR
-    assert "NotServedError" in capsys.readouterr().err
-    assert _tree(joined_home.state_home) == before
-    assert not (joined_home.logs_dir / "calls").exists()
-
-
-@pytest.mark.parametrize(
-    "argv",
-    [
         ["hub", "serve"],
         ["hub", "invite", "alpha"],
         ["hub", "machines"],

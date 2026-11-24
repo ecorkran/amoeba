@@ -41,11 +41,10 @@ from amoeba.wiring import (
     invoke,
     is_rejected,
     load_config,
-    open_store,
     result_document,
 )
 from amoeba.wiring_door import joined
-from amoeba.wiring_pause import handle_pause_locally
+from amoeba.wiring_pause import handle_pause_in
 
 STDIN_SOURCE: Final = "-"
 STDIN_NAME: Final = "<stdin>"
@@ -212,13 +211,13 @@ def _text_of(result: OperationResult, *, removing: bool) -> str:
 
 
 def run_handle_pause(layout: StateLayout, run_id: str, *, as_json: bool) -> int:
-    config = load_config()
     deps = default_deps(layout)
     directory = Path.cwd()
-    with open_store(layout) as store:
-        result = handle_pause_locally(
-            store, config, run_id, directory=directory, deps=deps
-        )
+    # No config is read here: through the door the hub's settings come with
+    # ``pause_begin``, and locally a step loads it only when it needs it (262 D5).
+    result = handle_pause_in(
+        layout, load_config, run_id, directory=directory, deps=deps
+    )
     if as_json:
         _print_json(asdict(result))
     else:

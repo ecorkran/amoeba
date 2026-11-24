@@ -42,7 +42,7 @@ from amoeba.hub.errors import HubStartError
 from amoeba.operations.names import OperationName
 from amoeba.operations.resume_run import RESUME_RUN_COMMAND
 from amoeba.operations.wake_run import WAKE_RUN_COMMAND, WakeRunError
-from amoeba.wiring import OPERATIONAL_ERRORS, refuse_if_joined
+from amoeba.wiring import OPERATIONAL_ERRORS
 
 __all__ = [
     "EXIT_ERROR",
@@ -72,14 +72,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             # Sets the machine up: must run before any config load, which would fail.
             return run_init()
         if getattr(arguments, "cli_only", None) == WAKE_RUN_COMMAND:
-            # A joined machine's door does not serve it: before anything local is
-            # read, and before the operation lookup and any config load (244 D6).
-            refuse_if_joined(WAKE_RUN_COMMAND)
             return run_wake_run(state_layout(), arguments.wake_id)
         if getattr(arguments, "cli_only", None) == RESUME_RUN_COMMAND:
-            # Started by the after-step with a claim; runs no after-step of its own. A
-            # joined machine's door does not serve it until 7.4, as for ``wake-run``.
-            refuse_if_joined(RESUME_RUN_COMMAND)
+            # Started by the after-step with a claim; runs no after-step of its own.
             return run_resume_run(
                 state_layout(), arguments.answer_seq, arguments.claim_id
             )
@@ -92,8 +87,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         if name is None:
             raise AssertionError("a parsed command is an operation or CLI-only")
         if name is OperationName.HANDLE_PAUSE:
-            # Before the layout is built, so a refusal writes no calls-log line.
-            refuse_if_joined(name.cli_name)
             layout = state_layout()
             return run_handle_pause(layout, arguments.run_id, as_json=arguments.json)
         return run_invoked(name, arguments)

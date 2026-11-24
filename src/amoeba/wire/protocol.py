@@ -33,6 +33,7 @@ SERVED_OPERATIONS: Final[tuple[str, ...]] = (
     "changes",
     "report_release",
     "send",
+    "answer",
 )
 #: Served operations that write, so their results are kept for a repeated call (D9).
 #: ``inbox`` and ``changes`` read. ``list`` and ``status`` write only the message
@@ -50,6 +51,46 @@ WRITING_CALLS: Final[frozenset[str]] = frozenset(
         "cancel",
         "report_release",
         "send",
+        "answer",
+    }
+)
+#: The steps (262 D3, D4): the hub side of each store transaction a client-run
+#: command makes. Not operations a person calls, so apart from the served list. A test
+#: asserts they equal the names in ``operations.steps.models.STEP_MODELS``.
+STEP_CALLS: Final[tuple[str, ...]] = (
+    "pause_begin",
+    "pause_sources",
+    "question_insert",
+    "question_hold",
+    "question_claim_held",
+    "question_replace_claim",
+    "question_wait",
+    "question_settle",
+    "resume_claim",
+    "resume_read",
+    "resume_record",
+    "claim_work",
+    "open_runs",
+    "wake_read",
+    "wake_set_pid",
+    "wake_finish",
+)
+#: The steps whose result is kept for a repeated call: the writing rows of
+#: ``STEP_MODELS``.
+WRITING_STEPS: Final[frozenset[str]] = frozenset(
+    {
+        "pause_begin",
+        "question_insert",
+        "question_hold",
+        "question_claim_held",
+        "question_replace_claim",
+        "question_wait",
+        "question_settle",
+        "resume_claim",
+        "resume_record",
+        "claim_work",
+        "wake_set_pid",
+        "wake_finish",
     }
 )
 #: The door's own call: a token check that returns the machine's name. Not an operation.
@@ -64,6 +105,10 @@ DOCUMENT_KEY: Final = "document"
 #: need one sends none and the hub ignores one it is sent.
 HERE_BODY_KEY: Final = "here"
 RUNS_BODY_KEY: Final = "runs"
+#: ``answer``'s door as the client states it (262 D7), and ``send``'s calling machine's
+#: logs directory, under which a claimed wake's logs go (262 D8).
+VIA_BODY_KEY: Final = "via"
+LOGS_DIR_BODY_KEY: Final = "logs_dir"
 #: A body over this, or with no valid length, is refused before it is read.
 MAX_CALL_BYTES: Final = 1024 * 1024
 
@@ -167,7 +212,7 @@ def parse_reply(body: bytes) -> Reply | None:
 #: What to tell the caller when a writing call's outcome is unknown, per operation
 #: (D10). Running the call again is itself the read: each answers ``unchanged`` when
 #: the store is already in the state it asks for.
-UNKNOWN_ADVICE: Final[dict[str, str]] = {
+_OPERATION_ADVICE: Final[dict[str, str]] = {
     "mark_read": "Run it again; `unchanged` means the marker is already there.",
     "retract": "Run it again; `unchanged` means the answer is already retracted.",
     "dismiss": (
@@ -199,6 +244,17 @@ UNKNOWN_ADVICE: Final[dict[str, str]] = {
         "neither writes. A correction that was applied is applied again with the "
         "same text."
     ),
+    "answer": ("Run `amoeba list` and look at the question before answering again."),
+}
+#: The one advice for every writing step (262 D11): the command stopped there, and the
+#: store says what happens next.
+STEP_ADVICE: Final = (
+    "The command stopped at this step; the next call from this machine starts the "
+    "work again from what the store holds."
+)
+UNKNOWN_ADVICE: Final[dict[str, str]] = {
+    **_OPERATION_ADVICE,
+    **dict.fromkeys(WRITING_STEPS, STEP_ADVICE),
 }
 
 #: A machine's name (D3): lower-case letters and digits, with ``.``, ``_`` and ``-``.

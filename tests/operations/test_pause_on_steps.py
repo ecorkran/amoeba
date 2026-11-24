@@ -40,6 +40,7 @@ from operations.handle_rig import (
 )
 from operations.held_support import begin_for, steps_for, target_of
 from operations.pause_support import START
+from operations.ways import WAYS
 
 OLD_RUN = "amoeba-20261110T110000Z-oldoldoldold"
 
@@ -68,9 +69,12 @@ def _record(w: World) -> QuestionRecord:
     return record
 
 
-def test_a_run_that_is_not_paused_makes_no_context_forge_call(tmp_path: Path) -> None:
+@pytest.mark.parametrize("way", WAYS)
+def test_a_run_that_is_not_paused_makes_no_context_forge_call(
+    tmp_path: Path, way: str
+) -> None:
     done = poll_result(COMPLETED, RUN)
-    with world(tmp_path, paused_polls=(done,)) as w:
+    with world(tmp_path, way=way, paused_polls=(done,)) as w:
         calls: list[Sequence[str]] = []
         real = w.deps.cf_run
 

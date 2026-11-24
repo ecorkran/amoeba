@@ -94,8 +94,12 @@ def _timed(
     return took, result
 
 
-#: What the client sends beside the document: the caller is ``CORE`` on ``alpha``.
-CALLER_HERE: dict[str, object] = {"here": {"project_id": CORE}}
+#: What the client sends beside the document: the caller is ``CORE`` on ``alpha``, and
+#: ``send`` names the machine's logs directory for a wake it claims (262 D8).
+CALLER_HERE: dict[str, object] = {
+    "here": {"project_id": CORE},
+    "logs_dir": "/machine/logs",
+}
 
 
 def _timed_with_here(

@@ -105,6 +105,30 @@ def claimed_store(
     store = open_local_store(
         tmp_path / "amoeba.sqlite3" if database is None else database
     )
+    claimed = seed_claimed_wake(
+        store,
+        tmp_path,
+        command,
+        checkout,
+        wake_id=wake_id,
+        claimed_at=claimed_at,
+        timeout_seconds=timeout_seconds,
+    )
+    return store, claimed
+
+
+def seed_claimed_wake(  # noqa: PLR0913 - what a claimed row is made of
+    store: Store,
+    tmp_path: Path,
+    command: str,
+    checkout: Path,
+    *,
+    wake_id: str = WAKE_ID,
+    claimed_at: datetime = NOW,
+    timeout_seconds: float = TEST_WAKE_TIMEOUT_SECONDS,
+) -> Wake:
+    """A claimed, unended row for ``command`` in ``checkout``, on ``store``'s acting
+    machine."""
     with store.write() as transaction:
         seed_members(transaction)
         seed_waking_member(transaction, ADDRESSEE, command, str(checkout))
@@ -121,8 +145,8 @@ def claimed_store(
             wake_id,
             str(tmp_path / "logs" / wake_id),
         )
-        assert claimed is not None
-    return store, claimed
+    assert claimed is not None
+    return claimed
 
 
 def row_of(store: Store, wake_id: str = WAKE_ID) -> Wake:

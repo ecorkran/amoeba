@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -93,3 +94,33 @@ def test_outside_every_project_is_not_a_project_and_a_worktree_shares_the_id(
     assert json.loads(in_tree.stdout)["projectPath"] == str(tree)
     assert in_nothing.returncode != 0
     assert "PROJECT_NOT_FOUND" in in_nothing.stderr
+
+
+def _runs_dir_of(env: dict[str, str]) -> Path:
+    """Where amoeba on that machine looks for Squadron's run files."""
+    printed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from amoeba.config.home import squadron_runs_dir; "
+            "print(squadron_runs_dir())",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return Path(printed.stdout.strip())
+
+
+def test_a_run_created_on_alpha_is_not_visible_on_beta(tmp_path: Path) -> None:
+    with two_machine_hub(tmp_path) as hub:
+        alpha = hub.env_for(hub.clients[FIRST].home)
+        beta = hub.env_for(hub.clients[SECOND].home)
+        alpha_runs, beta_runs = _runs_dir_of(alpha), _runs_dir_of(beta)
+        alpha_runs.mkdir(parents=True)
+        (alpha_runs / "run-alpha.json").write_text("{}", encoding="utf-8")
+
+        assert alpha["HOME"] != beta["HOME"]
+        assert alpha_runs != beta_runs
+        assert not (beta_runs / "run-alpha.json").exists()

@@ -1105,10 +1105,23 @@ check is made on every call, before anything local is read or written.
 
 | On a joined machine | Result |
 |---|---|
-| `decisions`, `mark-read`, `dismiss`, `retract`, `standing`, `withdraw`, and (slice 261) `add`, `rm`, `list`, `status`, `send`, `inbox`, `reply`, `cancel`, `changes`, `report-release` | Run on the hub's store. The text, `-j` JSON and exit codes are the ones the local way gives. Members show by name |
-| any other command, `handle-pause`, `wake-run`, `amoeba-mcp` start | `NotServedError`: this machine is joined to the hub at `<address>`, and the door does not serve `<operation>` yet. Exit 3, nothing local is read or written |
+| `decisions`, `mark-read`, `dismiss`, `retract`, `standing`, `withdraw`, (slice 261) `add`, `rm`, `list`, `status`, `send`, `inbox`, `reply`, `cancel`, `changes`, `report-release`, and (slice 262) `answer` | Run on the hub's store. The text, `-j` JSON and exit codes are the ones the local way gives. Members show by name |
+| `handle-pause`, `wake-run`, `resume-run` (slice 262) | Run on this machine, each store step a door call (below). No local `config.yaml` is read: the hub's settings come with the first step |
+| `amoeba-mcp` start | `NotServedError`: this machine is joined to the hub at `<address>`, and the door does not serve `amoeba-mcp` yet. Exit 3, nothing local is read or written |
 | `amoeba hub ...` | `LocalStoreClosedError` naming the hub, before `hub.yaml` is read or any file is written |
 | `amoeba join`, `amoeba leave` | Run (below) |
+
+**Commands that run here (slice 262).** `handle-pause`, `wake-run` and `resume-run` read
+this machine's run files, repos and scratch, so they run here; each store transaction
+they make is one door call (a step). A command decides once, when it starts, whether it
+uses the door (a client file exists) or the local store, and keeps that to its end. If
+the client file goes partway, the next step fails with `ClientFileError` and no local
+store is opened. A step that gets no reply stops the command with
+`HubUnreachableError` (exit 3); a reply that does not fit what the client expects is
+`StepReplyError` (exit 3, naming the step and the field, and for a step that writes,
+that the hub applied it). What a down hub leaves behind is picked up by this machine's
+next call: a stale claim, a resume claim that ran out and an unended wake are each
+handed out again once their limit has passed.
 
 **What the client does first (slice 261).** The operations that need something only this
 machine can read gather it before any hub call, and a failure raises `ContextForgeError`
@@ -1171,6 +1184,7 @@ nothing. Where nothing is joined and nothing is set aside it does nothing and ex
 | `HubCertificateError` | 3 | The hub did not present the saved certificate; never retried |
 | `HubRefusedError` | 3 | The hub refused the call; the message holds the hub's address, the code and its text. `door_version` adds the upgrade command and `bad_token` adds `hub invite` and `join` |
 | `NotServedError` | 3 | A joined machine ran a command the door does not serve |
+| `StepReplyError` | 3 | A step's reply did not fit its model (slice 262): names the step and the field, and for a writing step says the hub applied it |
 | `LocalStoreClosedError` | 3 | A command found the machine joined, or a local store set aside for a hub |
 
 ### `amoeba hub ...`

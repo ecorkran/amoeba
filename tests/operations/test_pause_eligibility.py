@@ -95,7 +95,7 @@ def _check(store: Store, rig_or_deps: DepsRig | Deps) -> Eligible | Skip:
         DIRECTORY,
         deps,
         polled,
-        in_process_register(store, config, deps),
+        in_process_register(store, lambda: config, deps),
     )
 
 

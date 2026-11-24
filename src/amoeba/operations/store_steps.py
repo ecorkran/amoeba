@@ -40,6 +40,12 @@ class LocalSteps:
             raise AssertionError(f"step {step.name} gave a {type(reply).__name__}")
         return reply
 
+    @property
+    def store(self) -> Store:
+        """The open store, for the local placements that run beside the steps (a
+        repo's first ``add``)."""
+        return self._store
+
     def work_waiting(self) -> bool:
         """The work flag for the calling machine: one read of ``work_waiting``. A door
         reply carries it instead, so this is the local way's one extra read (D10)."""

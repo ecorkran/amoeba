@@ -32,7 +32,6 @@ from fake_sq import (
     SQUADRON_FIXTURES,
     poll_result,
 )
-from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.answering.settings import AnswererSettings
@@ -41,12 +40,15 @@ from amoeba.operations.deps import Deps
 from amoeba.operations.handle_pause import HandlePauseResult
 from amoeba.operations.member_answering import answering_for
 from amoeba.operations.processes import WaitableChild
+from amoeba.operations.set_up_models import SetUpResult
 from amoeba.store.models import Member, QuestionKey
 from amoeba.store.store import Store
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.upstream.squadron.run_outcome import RunPoll
-from amoeba.wiring_pause import handle_pause_locally
+from amoeba.wiring_pause import handle_pause_locally, handle_pause_with
+from amoeba.wiring_steps import DoorSteps, LastReply
 from operations.pause_support import FakeChild, build_deps, register_member
+from operations.ways import LOCAL, store_for
 
 RUN = "demo-run"
 PROJECT_ID: str = fixture_document(DEFAULT_WORKTREE)["id"]
@@ -101,10 +103,28 @@ class World:
         """The answering settings ``handle_pause`` derives for this world's member."""
         return answering_for(self.member.settings, self.config).settings
 
+    #: How ``handle`` reaches the store: in process, or through a joined client's
+    #: door to an in-process hub whose store ``store`` is (262 D16).
+    way: str = LOCAL
+
     def handle(self) -> HandlePauseResult:
-        return handle_pause_locally(
-            self.store, self.config, RUN, directory=self.directory, deps=self.deps
+        if self.way == LOCAL:
+            return handle_pause_locally(
+                self.store, self.config, RUN, directory=self.directory, deps=self.deps
+            )
+        last = LastReply()
+        return handle_pause_with(
+            DoorSteps(last),
+            last,
+            RUN,
+            self.directory,
+            self.deps,
+            _registered_already,
         )
+
+
+def _registered_already(directory: Path) -> SetUpResult:
+    raise AssertionError(f"the world's member is registered; asked for {directory}")
 
 
 _TEMPLATE: list[Path] = []
@@ -145,6 +165,7 @@ def world(  # noqa: PLR0913 - the knobs a handle_pause test turns
     answering_poll: Callable[[str], RunPoll] = _completed_for,
     config: UserConfig | None = None,
     on_poll: Callable[[str], None] | None = None,
+    way: str = LOCAL,
 ) -> Generator[World]:
     """A store with one member and a checkout, ready for ``handle_pause``."""
     directory = _fresh_checkout(tmp_path / "checkout")
@@ -178,7 +199,7 @@ def world(  # noqa: PLR0913 - the knobs a handle_pause test turns
         return FakeChild(exit_code=0)
 
     cf = plan_cf_run(integration_branch="", broken=False)
-    with open_local_store(tmp_path / "amoeba.sqlite3") as store:
+    with store_for(way, tmp_path) as (store, hub_rig):
         member = register_member(store, PROJECT_ID)
         rig = build_deps(tmp_path, polls={}, spawns=[], spawner=spawner)
         deps = replace(
@@ -198,7 +219,11 @@ def world(  # noqa: PLR0913 - the knobs a handle_pause test turns
             cf=cf,
             runs_dir=runs_dir,
             answering_poll=answering_poll,
+            way=way,
         )
+        if hub_rig is not None:
+            hub_rig.config = lambda: worldview.config
+            hub_rig.follows = deps.clock
         yield worldview
 
 

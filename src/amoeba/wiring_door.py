@@ -26,7 +26,7 @@ from amoeba.config.home import (
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.deps import Deps
 from amoeba.operations.names import OperationName
-from amoeba.operations.served import ServedEdges, ServedResult
+from amoeba.operations.served import ServedEdges
 from amoeba.operations.set_up_models import SetUpResult
 from amoeba.operations.state_move import open_state_store, prepare_state_home
 from amoeba.store.set_aside import (
@@ -40,14 +40,10 @@ from amoeba.store.set_aside import (
 )
 from amoeba.store.vocabulary import Door
 from amoeba.wire.join_line import JoinError, parse_join_line
-from amoeba.wire.protocol import (
-    SERVED_OPERATIONS,
-    WORK_PROBLEM_REPLY_KEY,
-    WORK_REPLY_KEY,
-)
-from amoeba.wiring_gather import body_keys, gather_values
-from amoeba.wiring_results import result_from_document
-from amoeba.wiring_steps import LastReply
+from amoeba.wire.protocol import SERVED_OPERATIONS
+from amoeba.wiring_gather import body_keys, finish_client_part, gather_values
+from amoeba.wiring_results import OperationResult, result_from_document
+from amoeba.wiring_steps import DoorSteps, take_work_keys
 
 #: How the two commands are named in a message.
 JOIN_COMMAND: Final = "join"
@@ -96,30 +92,33 @@ def _not_served(client_file: ClientFile, operation: str) -> str:
     )
 
 
-def route(  # noqa: PLR0913 - invoke's arguments and the deps the gather needs
+def route(  # noqa: PLR0913 - invoke's arguments, the deps and the door's steps
     name: OperationName,
     document: object,
     directory: Path | None,
     door: Door,
     make_deps: Callable[[], Deps],
-    last: LastReply,
-) -> ServedResult | SetUpResult | None:
+    steps: DoorSteps,
+) -> OperationResult | None:
     """The hub's result when this machine is joined, ``None`` when it is not.
 
     A served operation gathers what it needs here (the client part, so a
     ``ContextForgeError`` is raised before any hub call), goes through
     ``client.call`` with the gathered values beside the document, and comes back as
-    the typed result the local way returns; any other raises ``NotServedError``.
-    ``add``'s door refusal is returned as the result it is, with no call. With a
-    client file nothing local is read or written first. The reply's work keys go into
-    ``last``; a call that got no reply marks it unreachable.
+    the typed result the local way returns, after the client part that follows the
+    hub part (a resume, a wake, the file clean-up) ran on ``steps``; any other
+    raises ``NotServedError``. ``add``'s door refusal is returned as the result it
+    is, with no call. With a client file nothing local is read or written first. The
+    reply's work keys go into ``steps.last``; a call that got no reply marks it
+    unreachable.
     """
     client_file = joined()
     if client_file is None:
         return None
     if name.value not in SERVED_OPERATIONS:
         raise NotServedError(_not_served(client_file, name.value))
-    values = gather_values(name, document, directory, door, make_deps(), None)
+    deps = make_deps()
+    values = gather_values(name, document, directory, door, deps, steps)
     if isinstance(values, SetUpResult):
         return values
     try:
@@ -131,22 +130,11 @@ def route(  # noqa: PLR0913 - invoke's arguments and the deps the gather needs
             extra=body_keys(values),
         )
     except HubUnreachableError:
-        last.unreachable = True
+        steps.last.unreachable = True
         raise
-    take_work_keys(result, last)
-    return result_from_document(name.value, result, document)
-
-
-def take_work_keys(result: dict[str, object], last: LastReply) -> None:
-    """Move a done reply's ``work`` and ``work_problem`` out of its result document
-    into ``last``, so the result rebuilds as the local way's and the after-step reads
-    them."""
-    work = result.pop(WORK_REPLY_KEY, None)
-    problem = result.pop(WORK_PROBLEM_REPLY_KEY, None)
-    if isinstance(work, bool):
-        last.work = work
-    if isinstance(problem, str):
-        last.problem = problem
+    take_work_keys(result, steps.last)
+    served = result_from_document(name.value, result, document)
+    return finish_client_part(served, steps, deps, values)
 
 
 # --- join and leave ----------------------------------------------------------

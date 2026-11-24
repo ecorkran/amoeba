@@ -8,12 +8,14 @@ to keep it under its size."""
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 from pydantic import ValidationError
 
 from amoeba.operations import list_view as list_view_module
 from amoeba.operations import rm as rm_module
 from amoeba.operations.add import AddRequest, add, names_no_member
+from amoeba.operations.answer import record_answer
 from amoeba.operations.cancel import cancel
 from amoeba.operations.changes import changes
 from amoeba.operations.decisions import decisions
@@ -33,8 +35,10 @@ from amoeba.operations.rm import rm
 from amoeba.operations.runs_document import RunsDocument
 from amoeba.operations.send import send
 from amoeba.operations.served_types import (
+    ANSWER_GATHER,
     CALLER_GATHER,
     NOTHING_GATHERED,
+    SEND_GATHER,
     ClientValues,
     Gather,
     HereKind,
@@ -193,7 +197,36 @@ def run_send(
         document,
         here=_caller(values),
         clock=edges.clock,
-        logs_dir=None if edges.local is None else edges.local.logs_dir,
+        logs_dir=_logs_dir(edges, values),
+    )
+
+
+def _logs_dir(edges: ServedEdges, values: ClientValues) -> Path:
+    """The calling machine's logs directory: its own with no client file, the one the
+    client sent through the door (262 D8)."""
+    if edges.local is not None:
+        return edges.local.logs_dir
+    if values.logs_dir is None:
+        raise AssertionError("send needs the gathered logs directory; none was parsed")
+    return values.logs_dir
+
+
+def gather_send(document: object) -> Gather:
+    return SEND_GATHER
+
+
+def gather_answer(document: object) -> Gather:
+    return ANSWER_GATHER
+
+
+def run_answer(
+    store: Store, document: object, edges: ServedEdges, values: ClientValues
+) -> ServedResult:
+    """The hub part of ``answer`` (262 D7); the client part runs the resume."""
+    if values.via is None:
+        raise AssertionError("answer needs the door it came through; none was parsed")
+    return record_answer(
+        store, edges.load_config(), document, now=edges.clock(), via=values.via
     )
 
 

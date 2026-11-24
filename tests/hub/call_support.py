@@ -52,9 +52,12 @@ class HubRig:
     layout: StateLayout
     clock_now: datetime = NOW
     config: Callable[[], UserConfig] = user_config
+    #: Another clock to follow in place of ``clock_now``: a client test's own, so the
+    #: hub and the client agree on every time (262 D16).
+    follows: Callable[[], datetime] | None = None
 
     def clock(self) -> datetime:
-        return self.clock_now
+        return self.clock_now if self.follows is None else self.follows()
 
     def advance(self, **delta: float) -> None:
         self.clock_now += timedelta(**delta)
