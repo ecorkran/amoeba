@@ -339,7 +339,7 @@ def test_a_store_error_on_the_request_read_raises_and_leaves_the_row(
             w.handle()
 
         after = _record(w)
-        assert replace(after, start_attempted_at=None) == before
+        assert replace(after, start_attempted_at=None, start_count=0) == before
         # The failed call still hands the ended request on (242 D7): one start of
         # ``handle-pause`` for this run, and no answering run.
         assert [call.argv[-1] for call in recorder.calls] == [RUN]

@@ -14,7 +14,8 @@ and ``state_home()``; the store is opened only through ``open_state_store``.
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
+from contextlib import ExitStack
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from typing import Final, assert_never
@@ -43,7 +44,9 @@ from amoeba.operations.prune_models import Prune, PruneReport
 from amoeba.operations.resume import LOG_STAMP_FORMAT
 from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.state_move import open_state_store, prepare_state_home
+from amoeba.operations.steps.dispatch import StepEdges
 from amoeba.operations.steps.models_runs import OpenRunsReply
+from amoeba.operations.store_steps import LocalSteps, Steps
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.wire.join_line import JoinError
@@ -54,8 +57,8 @@ from amoeba.wiring_door import (
     route,
 )
 from amoeba.wiring_gather import place_served
-from amoeba.wiring_release import start_after
 from amoeba.wiring_results import OperationResult, is_rejected, result_document
+from amoeba.wiring_steps import LastReply, after_operation
 
 __all__ = [
     "NotServedError",
@@ -170,19 +173,32 @@ def invoke(
             directory-taking operation got none.
         OPERATIONAL_ERRORS: As the operation raises them.
     """
-    served = route(
-        name, document, directory, door, lambda: default_deps(state_layout())
-    )
-    if served is not None:
-        return served
+    last = LastReply()
     layout = state_layout()
-    with open_store(layout) as store:
+    deps = partial(default_deps, layout)
+    # A joined machine has no steps until they are the door's (7.3): its after-step
+    # does nothing. The store, when opened, closes only after the after-step ran.
+    steps: Steps | None = None
+    with ExitStack() as stack:
         try:
+            served = route(
+                name, document, directory, door, lambda: default_deps(layout), last
+            )
+            if served is not None:
+                return served
+            store = stack.enter_context(open_store(layout))
+            steps = LocalSteps(store, local_edges())
             return _dispatch(name, document, directory, door, store, layout)
         finally:
-            # After the operation's own transactions closed, on every path, a raise
-            # included, as in ``handle_pause`` (242 D7); never raises.
-            start_after(name, store, load_config, partial(default_deps, layout))
+            # After the operation's own transactions closed, on both paths and every
+            # path, a raise included, as in ``handle_pause``; never raises (262 D10).
+            after_operation(name, door, steps, last, deps)
+
+
+def local_edges() -> StepEdges:
+    """The local steps' edges: the system clock and the user's config, loaded only by a
+    step that needs it."""
+    return StepEdges(lambda: datetime.now(UTC), load_config)
 
 
 def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened

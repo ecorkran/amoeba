@@ -128,17 +128,20 @@ def mark_start_attempted(
     key: QuestionKey,
     now: datetime,
     previous: datetime | None,
+    expected_state: QuestionState,
 ) -> bool:
-    """Record that ``handle_pause`` is being started for the held row, if its last
-    start is still ``previous`` (as the caller read it); ``updated_at`` is left alone.
-    True if this call recorded it, so the caller starts the child."""
+    """Record that ``handle_pause`` is being started for the row, if it is still in
+    ``expected_state`` (``waiting_on_request`` for a held row, ``claimed`` for a stale
+    claim) and its last start is still ``previous`` (as the caller read it);
+    ``updated_at`` is left alone and ``start_count`` goes up by one. True if this call
+    recorded it, so the caller starts the child."""
     cursor = transaction.execute(
         sql_held.MARK_START_ATTEMPTED,
         (
             encode_timestamp(now),
             key.run_id,
             key.paused_at,
-            QuestionState.WAITING_ON_REQUEST.value,
+            expected_state.value,
             None if previous is None else encode_timestamp(previous),
         ),
     )

@@ -11,15 +11,16 @@ from amoeba.operations.steps.dispatch import StepEdges
 from amoeba.operations.steps.models import PAUSE_BEGIN
 from amoeba.operations.steps.models_pause import PauseBeginReply, PauseBeginRequest
 from amoeba.operations.store_steps import LocalSteps
-from amoeba.store.answers import settle_answered
+from amoeba.store.answers import Settled, record_resume, settle_answered
 from amoeba.store.held_questions import HeldQuestion, insert_held
 from amoeba.store.message_transitions import StateFields, change_state
 from amoeba.store.messages import get_message, insert_request
 from amoeba.store.models import Message, QuestionKey
 from amoeba.store.questions import NewQuestion, insert_question
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import DeliveryEvent, RequestState
+from amoeba.store.vocabulary import DeliveryEvent, RequestState, ResumeOutcome
 from amoeba.upstream.squadron.run_file import RunFacts, read_run_facts
+from amoeba.wiring_steps import LastReply, after_call
 from operations.handle_rig import KEY, PROJECT_ID, QUESTION, RUN, World
 from operations.pause_support import START, register_member
 
@@ -122,6 +123,11 @@ def steps_for(w: World) -> LocalSteps:
     return LocalSteps(w.store, StepEdges(w.deps.clock, lambda: w.config))
 
 
+def run_after_step(w: World) -> None:
+    """The after-step with the flag read locally, as the CLI makes it after any call."""
+    after_call(steps_for(w), lambda: w.deps, LastReply(), prunes=False)
+
+
 def begin_for(w: World) -> PauseBeginReply:
     """What ``pause_begin`` tells ``handle_pause`` about the paused question now."""
     return steps_for(w).run(
@@ -150,7 +156,14 @@ def automatic_answers_to_the_limit(w: World) -> None:
         )  # fmt: skip
         with w.store.write() as transaction:
             insert_question(transaction, new, now=START)
-        settle_answered(
+        settled = settle_answered(
             w.store, earlier, f"earlier-{number}", answer="x", cited=(),
             evidence=AnsweringEvidence(), gate=lambda _prior: None, now=START,
         )  # fmt: skip
+        assert isinstance(settled, Settled)
+        # Settled and handed over long ago: nothing of it is left for the after-step.
+        with w.store.write() as transaction:
+            record_resume(
+                transaction, settled.answer_seq, ResumeOutcome.RESUMED,
+                detail=None, log=None, at=START, claim_id=None,
+            )  # fmt: skip

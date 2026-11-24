@@ -1,9 +1,9 @@
-"""``start_ended_held`` under concurrent callers and a busy store (slice 242, D7).
+"""The after-step under concurrent callers and a busy store (slices 242 D7, 262 D10).
 
 Several callers, each with its own connection as separate processes would have, run
 the start trigger together over more ended held rows than one call may start, while
 one more connection keeps the store busy with short writes. Each call stays inside
-``START_BOUND_SECONDS``, none starts more than ``MAX_STARTS_PER_CALL``, no row is
+``AFTER_STEP_BOUND_SECONDS``, none starts more than ``MAX_WORK_PER_CLAIM``, no row is
 started twice within ``answering_wait_seconds`` (the clock does not move, so twice
 would mean twice at once), and after enough rounds every row has been started.
 """
@@ -30,19 +30,18 @@ from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.operations.processes import WaitableChild
-from amoeba.operations.request_release import (
-    MAX_STARTS_PER_CALL,
-    START_BOUND_SECONDS,
-    start_ended_held,
-)
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.steps.limits import MAX_WORK_PER_CLAIM
+from amoeba.operations.store_steps import LocalSteps
 from amoeba.store.message_transitions import StateFields, change_state
 from amoeba.store.messages import get_message
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import get_question
 from amoeba.store.vocabulary import DeliveryEvent, RequestState
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
+from amoeba.wiring_steps import AFTER_STEP_BOUND_SECONDS, LastReply, after_call
 
-ROWS = 3 * MAX_STARTS_PER_CALL
+ROWS = 3 * MAX_WORK_PER_CLAIM
 CALLERS = 4
 #: Rounds of all callers together; enough for every row whatever the interleaving.
 ROUNDS = ROWS
@@ -120,7 +119,8 @@ def test_concurrent_callers_start_each_row_once_within_the_bound(
             for _ in range(ROUNDS):
                 this_call.starts = 0
                 began = time.monotonic()
-                start_ended_held(store, config, deps)
+                steps = LocalSteps(store, StepEdges(deps.clock, lambda: config))
+                after_call(steps, lambda: deps, LastReply(), prunes=False)
                 calls.append((time.monotonic() - began, this_call.starts))
         return calls
 
@@ -134,9 +134,9 @@ def test_concurrent_callers_start_each_row_once_within_the_bound(
         busy.join()
 
     calls = [call for caller in per_caller for call in caller]
-    assert max(seconds for seconds, _ in calls) < START_BOUND_SECONDS
+    assert max(seconds for seconds, _ in calls) < AFTER_STEP_BOUND_SECONDS
     assert max(seconds for seconds, _ in calls) < CALL_LOCK_WAIT_BOUND_SECONDS
-    assert max(made for _, made in calls) <= MAX_STARTS_PER_CALL
+    assert max(made for _, made in calls) <= MAX_WORK_PER_CLAIM
     assert sum(made for _, made in calls) == ROWS
     assert max(started.values()) == 1, "a row was started twice"
     assert set(started) == {key.run_id for key in keys}

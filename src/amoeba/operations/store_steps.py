@@ -10,6 +10,8 @@ from typing import Protocol
 
 from amoeba.operations.steps.dispatch import StepEdges, run_step
 from amoeba.operations.steps.models import Step, StepModel
+from amoeba.operations.steps.work import work_waiting
+from amoeba.store.machines import acting_machine_id
 from amoeba.store.store import Store
 
 
@@ -37,3 +39,15 @@ class LocalSteps:
         if not isinstance(reply, step.reply):
             raise AssertionError(f"step {step.name} gave a {type(reply).__name__}")
         return reply
+
+    def work_waiting(self) -> bool:
+        """The work flag for the calling machine: one read of ``work_waiting``. A door
+        reply carries it instead, so this is the local way's one extra read (D10)."""
+        config = self._edges.load_config()
+        with self._store.read() as transaction:
+            return work_waiting(
+                transaction,
+                acting_machine_id(transaction),
+                config,
+                self._edges.clock(),
+            )

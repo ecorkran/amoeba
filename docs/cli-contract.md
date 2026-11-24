@@ -349,6 +349,22 @@ command could not be started (recorded `start_failed`), 3 for an operational fai
 wrapper's own unexpected error, recorded `wrapper_failed`) with one `error:` line on
 stderr.
 
+## `amoeba resume-run ANSWER_SEQ CLAIM_ID`
+
+Internal (slice 262): the after-step starts it, detached, for a resume that another call's
+`claim_work` handed out, so that call never waits on a run. It is not meant for people. It
+reads the claim's payload (nothing is started when `CLAIM_ID` is no longer the answer's:
+the claim ran out and was taken again, or an outcome cleared it), reads the answer's
+attempt file (`logs/resume/<run id>/<answer seq>.attempt`) and resumes the run with
+`sq run --resume`, or records the outcome an earlier attempt judged, then records the
+outcome. It runs no after-step of its own. Its stdout and stderr are
+`<state home>/logs/resume-run/<answer seq>-<UTC stamp>.{stdout,stderr}.log`; the logs of
+the `sq run --resume` it starts stay under `logs/resume/<run id>/`. A CLI command only:
+no MCP tool, and it takes no `-j`. Exit codes: 0 when the outcome was `resumed` or
+`not_delivered`, or the claim was no longer the answer's; 1 when it was `refused`; 3 for
+an operational failure (the first poll could not be read, `sq` or the store could not be
+used) with one `error:` line on stderr.
+
 ## The wake command
 
 A checkout can carry a **wake command** (slice 244, moved from the member by slice 261):
@@ -463,14 +479,17 @@ so when the recorded directory no longer exists (then use Squadron's own command
 `sq run --resume`). `held` (slice 242): the question ends with an `amoeba-request: <id>`
 marker naming a request this project sent, and that request is still `open` or
 `accepted`; `detail` gives its state. The run stays paused, and Amoeba starts
-`handle-pause` for it again once the request ends: `send`, `reply`, `cancel`, `add`,
-`rm`, `status`, `list` and `handle-pause` itself each start, after their own work, a
-detached `amoeba handle-pause --json -- <run id>` in the run's checkout for every held
-question whose request is `done`, `declined`, `cancelled`, `expired` or no longer
-stored (at most five per call, and one question at most once per
-`answering_wait_seconds`). Its output goes to
-`<state home>/logs/request-release/<run id>-<UTC stamp>.{stdout,stderr}.log`, and a
-start that fails is a `start_failed` line in the calls log. That call settles the
+`handle-pause` for it again once the request ends: after any call but an MCP `answer`
+(slice 262: the CLI after every command, and `amoeba handle-pause` itself), a machine with
+work waiting makes one `claim_work` call and starts, detached, an
+`amoeba handle-pause --json -- <run id>` in the run's checkout for every held question
+whose request is `done`, `declined`, `cancelled`, `expired` or no longer stored (at most
+five items per claim, and one question at most once per `answering_wait_seconds`). The
+same claim hands out a dead claim's `handle-pause`, a resume, and a wake (below). Its
+output goes to `<state home>/logs/handle-pause/<run id>-<UTC stamp>.{stdout,stderr}.log`,
+and a start that fails is a `start_failed` line in the calls log. A question is started
+at most three times this way (`MAX_AUTOMATIC_STARTS`); then it waits on the PM as
+`starts_exhausted`. That call settles the
 question by the request: a `done` result is given to the answering run as a passage, and
 any other end waits on the PM. Nothing else needs to run `handle-pause` for a held
 question. Exit 0 for every outcome.

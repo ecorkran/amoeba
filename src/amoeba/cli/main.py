@@ -33,12 +33,14 @@ from amoeba.cli.init_command import INIT_COMMAND, run_init
 from amoeba.cli.join_command import JOIN_COMMAND, LEAVE_COMMAND, run_join, run_leave
 from amoeba.cli.parser import build_parser
 from amoeba.cli.registration_arguments import check_usage
+from amoeba.cli.resume_command import run_resume_run
 from amoeba.cli.stand_in_command import STAND_IN_COMMAND, run_stand_in
 from amoeba.cli.wake_command import run_wake_run
 from amoeba.config.home import StateLayout, state_layout
 from amoeba.hub.backups import BackupError
 from amoeba.hub.errors import HubStartError
 from amoeba.operations.names import OperationName
+from amoeba.operations.resume_run import RESUME_RUN_COMMAND
 from amoeba.operations.wake_run import WAKE_RUN_COMMAND, WakeRunError
 from amoeba.wiring import OPERATIONAL_ERRORS, refuse_if_joined
 
@@ -74,6 +76,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             # read, and before the operation lookup and any config load (244 D6).
             refuse_if_joined(WAKE_RUN_COMMAND)
             return run_wake_run(state_layout(), arguments.wake_id)
+        if getattr(arguments, "cli_only", None) == RESUME_RUN_COMMAND:
+            # Started by the after-step with a claim; runs no after-step of its own. A
+            # joined machine's door does not serve it until 7.4, as for ``wake-run``.
+            refuse_if_joined(RESUME_RUN_COMMAND)
+            return run_resume_run(
+                state_layout(), arguments.answer_seq, arguments.claim_id
+            )
         if getattr(arguments, "cli_only", None) == HUB_COMMAND:
             return run_hub(arguments)
         if getattr(arguments, "cli_only", None) == JOIN_COMMAND:

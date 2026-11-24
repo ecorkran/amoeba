@@ -1,9 +1,8 @@
 """``handle_pause`` on the local way: the steps, the register callable, the file
 clean-up and the start of waiting work, bound to one open store (slice 262).
 
-Until the after-step replaces ``start_ended_held`` and the prune moves onto steps
-(262 tasks 5.5 and 6.5), the clean-up and the start still need the store and config:
-they are bound here, beside the steps, and never inside the pause modules.
+The file clean-up and the start of waiting work (the after-step) are bound here,
+beside the steps, and never inside the pause modules.
 """
 
 from __future__ import annotations
@@ -17,13 +16,13 @@ from amoeba.config.user_config import UserConfig
 from amoeba.operations.add_register import in_process_register
 from amoeba.operations.deps import Deps
 from amoeba.operations.handle_pause import HandlePauseResult, handle_pause
-from amoeba.operations.request_release import start_ended_held
 from amoeba.operations.steps.dispatch import StepEdges
 from amoeba.operations.steps.models import OPEN_RUNS
 from amoeba.operations.steps.models_runs import OpenRunsReply, OpenRunsRequest
 from amoeba.operations.store_steps import LocalSteps, Steps
 from amoeba.store.errors import StoreError
 from amoeba.store.store import Store
+from amoeba.wiring_steps import LastReply, after_call
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,7 @@ def handle_pause_locally(
         deps=deps,
         register=in_process_register(store, config, deps),
         prune_note=partial(_prune_note, steps, deps),
-        after=partial(start_ended_held, store, config, deps),
+        after=partial(after_call, steps, lambda: deps, LastReply(), prunes=False),
     )
 
 

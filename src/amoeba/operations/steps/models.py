@@ -36,8 +36,10 @@ from amoeba.operations.steps.models_resume import (
 )
 from amoeba.operations.steps.models_runs import OPEN_RUNS
 from amoeba.operations.steps.models_wake import WAKE_FINISH, WAKE_READ, WAKE_SET_PID
+from amoeba.operations.steps.models_work import CLAIM_WORK
 
 __all__ = [
+    "CLAIM_WORK",
     "OPEN_RUNS",
     "WAKE_FINISH",
     "WAKE_READ",
@@ -85,5 +87,6 @@ STEP_MODELS: Final[dict[str, Step[Any, Any]]] = {
         WAKE_SET_PID,
         WAKE_FINISH,
         OPEN_RUNS,
+        CLAIM_WORK,
     )
 }

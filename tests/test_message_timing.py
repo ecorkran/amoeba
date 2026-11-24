@@ -3,15 +3,14 @@
 Each operation's worst case is its ``cf`` lookup at its timeout (the one ``cf get`` of
 the caller's directory, 261 D10) plus its store waits at theirs. The lookup counts are
 checked against what the stub ``cf`` actually saw, so a lookup added to an operation
-without raising its constant fails here. Slice 242 adds the run-start term: ``send``,
-``reply`` and ``cancel`` are followed by ``start_ended_held``, whose worst case is
-``START_BOUND_SECONDS``. ``add``, ``rm``, ``status`` and ``list`` are followed by it
-too. Their worst cases are in ``OTHER_START_WORST_CASE_SECONDS`` (261 D10, D11): ``rm``
+without raising its constant fails here. Slice 262 adds the after-step term: every
+operation (``inbox`` included) is followed by the after-step, whose worst case is
+``AFTER_STEP_BOUND_SECONDS``. The operations that are not message operations have
+their worst cases in ``OTHER_START_WORST_CASE_SECONDS`` (261 D10, D11): ``rm``
 makes at most one gather, ``add`` at most one ``cf`` call and one ``git`` call, and
 ``status`` and ``list`` make one ``cf get`` per distinct run directory, bounded by time
 and not by count (the listing, the shared gather time, and one call that starts just
-before it ends). ``MCP_CALL_DEADLINE_SECONDS`` is still their cap (242 D6). The message
-operations in ``RUNS`` and that table's keys together are ``START_AFTER_OPERATIONS``.
+before it ends). ``MCP_CALL_DEADLINE_SECONDS`` is still their cap (242 D6).
 """
 
 from __future__ import annotations
@@ -36,7 +35,6 @@ from amoeba.mcp.in_process import MCP_CALL_DEADLINE_SECONDS
 from amoeba.operations.deps import RUN_POLL_TIMEOUT_SECONDS, Deps
 from amoeba.operations.here import ORIGIN_READ_TIMEOUT_SECONDS
 from amoeba.operations.names import OperationName
-from amoeba.operations.request_release import MAX_STARTS_PER_CALL, START_BOUND_SECONDS
 from amoeba.operations.run_gather import RUNS_GATHER_SECONDS
 from amoeba.operations.wake import WAKE_BOUND_SECONDS
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
@@ -49,7 +47,7 @@ from amoeba.wiring_messages import (
     MessageOperation,
     worst_case_seconds,
 )
-from amoeba.wiring_release import START_AFTER_OPERATIONS
+from amoeba.wiring_steps import AFTER_STEP_BOUND_SECONDS
 
 #: The worst case of each start operation that is not a message operation, from the
 #: constants that bound its client part, plus the start trigger (see the docstring).
@@ -60,12 +58,12 @@ _RUNS_VIEW_SECONDS = (
     + CF_GET_TIMEOUT_SECONDS  # one lookup that starts just before it ends
 )
 OTHER_START_WORST_CASE_SECONDS: dict[OperationName, float] = {
-    OperationName.RM: CF_GET_TIMEOUT_SECONDS + START_BOUND_SECONDS,
+    OperationName.RM: CF_GET_TIMEOUT_SECONDS + AFTER_STEP_BOUND_SECONDS,
     OperationName.ADD: (
-        CF_GET_TIMEOUT_SECONDS + ORIGIN_READ_TIMEOUT_SECONDS + START_BOUND_SECONDS
+        CF_GET_TIMEOUT_SECONDS + ORIGIN_READ_TIMEOUT_SECONDS + AFTER_STEP_BOUND_SECONDS
     ),
-    OperationName.STATUS: _RUNS_VIEW_SECONDS + START_BOUND_SECONDS,
-    OperationName.LIST: _RUNS_VIEW_SECONDS + START_BOUND_SECONDS,
+    OperationName.STATUS: _RUNS_VIEW_SECONDS + AFTER_STEP_BOUND_SECONDS,
+    OperationName.LIST: _RUNS_VIEW_SECONDS + AFTER_STEP_BOUND_SECONDS,
 }
 
 #: Each operation run with an explicit ``member`` through its placement, which runs
@@ -164,11 +162,10 @@ WAKE_AFTER_OPERATIONS = frozenset({OperationName.SEND})
 
 
 def _with_start(name: MessageOperation) -> float:
-    """The operation's worst case, plus the start trigger's and, for ``send``, the
-    wake step's when they run after it."""
-    start = START_BOUND_SECONDS if name in START_AFTER_OPERATIONS else 0.0
+    """The operation's worst case, plus the after-step's (which follows every message
+    operation) and, for ``send``, the wake step's."""
     wake = WAKE_BOUND_SECONDS if name in WAKE_AFTER_OPERATIONS else 0.0
-    return worst_case_seconds(name) + start + wake
+    return worst_case_seconds(name) + AFTER_STEP_BOUND_SECONDS + wake
 
 
 def test_the_wake_bound_is_five_store_waits() -> None:
@@ -179,23 +176,28 @@ def test_the_wake_bound_is_five_store_waits() -> None:
 def test_sends_worst_case_with_the_start_and_the_wake_is_the_design_figure() -> None:
     assert _with_start(OperationName.SEND) == (
         worst_case_seconds(OperationName.SEND)
-        + START_BOUND_SECONDS
+        + AFTER_STEP_BOUND_SECONDS
         + WAKE_BOUND_SECONDS
     )
     check_below_deadline(_with_start(OperationName.SEND), MCP_CALL_DEADLINE_SECONDS)
 
 
-def test_the_start_bound_is_one_read_and_one_write_per_start() -> None:
-    assert START_BOUND_SECONDS == BUSY_TIMEOUT_SECONDS * (1 + MAX_STARTS_PER_CALL)
+def test_the_after_step_bound_is_one_busy_timeout_per_transaction() -> None:
+    """The flag read, ``open_runs`` when a prune is due, and ``claim_work``."""
+    assert AFTER_STEP_BOUND_SECONDS == 3 * BUSY_TIMEOUT_SECONDS
 
 
-def test_send_reply_and_cancel_are_followed_by_the_start_and_inbox_is_not() -> None:
-    message_operations = set(RUNS)
-    assert message_operations & START_AFTER_OPERATIONS == {
+def test_every_message_operation_inbox_included_is_followed_by_the_after_step() -> None:
+    assert set(RUNS) == {
         OperationName.SEND,
+        OperationName.INBOX,
         OperationName.REPLY,
         OperationName.CANCEL,
     }
+    for name in RUNS:
+        extra = _with_start(name) - worst_case_seconds(name)
+        wake = WAKE_BOUND_SECONDS if name in WAKE_AFTER_OPERATIONS else 0.0
+        assert extra == AFTER_STEP_BOUND_SECONDS + wake
 
 
 @pytest.mark.parametrize("name", RUNS, ids=lambda name: name.value)
@@ -205,12 +207,8 @@ def test_each_worst_case_with_the_start_is_below_the_mcp_call_deadline(
     check_below_deadline(_with_start(name), MCP_CALL_DEADLINE_SECONDS)
 
 
-def test_every_start_operation_has_a_worst_case_here() -> None:
-    message_operations = START_AFTER_OPERATIONS & set(RUNS)
-    tabled = set(OTHER_START_WORST_CASE_SECONDS)
-
-    assert message_operations | tabled == START_AFTER_OPERATIONS
-    assert not message_operations & tabled
+def test_the_other_operations_with_a_worst_case_here_are_no_message_operation() -> None:
+    assert not set(RUNS) & set(OTHER_START_WORST_CASE_SECONDS)
 
 
 def test_the_runs_views_are_bounded_by_time_not_by_directory_count() -> None:
@@ -220,7 +218,7 @@ def test_the_runs_views_are_bounded_by_time_not_by_directory_count() -> None:
         + RUN_POLL_TIMEOUT_SECONDS
         + RUNS_GATHER_SECONDS
         + CF_GET_TIMEOUT_SECONDS
-        + START_BOUND_SECONDS
+        + AFTER_STEP_BOUND_SECONDS
     )
     assert (
         OTHER_START_WORST_CASE_SECONDS[OperationName.LIST]

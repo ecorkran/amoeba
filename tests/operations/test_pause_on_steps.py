@@ -173,3 +173,18 @@ def test_an_answered_question_whose_first_resume_poll_is_unreadable_raises(
             w.handle()
 
         assert w.spawned.argvs == []
+
+
+def test_a_hook_or_hand_run_handle_pause_is_not_counted_as_an_automatic_start(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path) as w:
+        _claim_row(w, age=timedelta(seconds=pause_claim_seconds(w.config)))
+
+        w.handle()
+
+        with w.store.read() as transaction:
+            rows = transaction.execute(
+                "SELECT start_count, start_attempted_at FROM questions"
+            ).fetchall()
+        assert [tuple(row) for row in rows] == [(0, None)]

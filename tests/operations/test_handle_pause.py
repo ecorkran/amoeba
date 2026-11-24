@@ -16,17 +16,22 @@ from user_configs import user_config
 from amoeba.answering.values import AnsweredBy, AnsweringEvidence, DeclineReason
 from amoeba.operations.answering_run import PAUSE_COMMAND_OPT_OUT_FLAG
 from amoeba.operations.deps import Deps
-from amoeba.operations.names import OperationName
 from amoeba.operations.pause_models import (
     HandlePauseOutcome,
     HandlePauseResult,
     SkipReason,
 )
 from amoeba.operations.processes import Spawner, WaitableChild
-from amoeba.operations.request_release import MAX_STARTS_PER_CALL
 from amoeba.operations.set_up_models import SetUpOutcome
 from amoeba.operations.steps import sources
-from amoeba.store.answers import add_pm_answer, answers_of, settle_answered
+from amoeba.operations.steps.limits import MAX_WORK_PER_CLAIM
+from amoeba.store.answers import (
+    Settled,
+    add_pm_answer,
+    answers_of,
+    record_resume,
+    settle_answered,
+)
 from amoeba.store.errors import StoreBusyError
 from amoeba.store.held_questions import HeldQuestion, insert_held
 from amoeba.store.models import (
@@ -47,7 +52,6 @@ from amoeba.store.vocabulary import (
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.upstream.squadron.run_outcome import PollFailure
-from amoeba.wiring_release import start_after
 from operations.handle_rig import (
     ANSWER_TEXT,
     CHECK_NO,
@@ -62,7 +66,13 @@ from operations.handle_rig import (
     World,
     world,
 )
-from operations.held_support import ADDRESSEE, REQUEST_ID, add_addressee, seed_request
+from operations.held_support import (
+    ADDRESSEE,
+    REQUEST_ID,
+    add_addressee,
+    run_after_step,
+    seed_request,
+)
 from operations.pause_support import FakeChild, SpawnRecorder
 from operations.rm_placed import rm
 from operations.set_up_support import DIRECTORY, FakeCf
@@ -112,7 +122,7 @@ def _earlier_automatic_answers(w: World) -> list[QuestionKey]:
             insert_question(
                 transaction, _claimed(earlier, f"earlier-{number}"), now=NOW
             )
-        settle_answered(
+        settled = settle_answered(
             w.store,
             earlier,
             f"earlier-{number}",
@@ -122,8 +132,24 @@ def _earlier_automatic_answers(w: World) -> list[QuestionKey]:
             gate=lambda _prior: None,
             now=NOW,
         )
+        assert isinstance(settled, Settled)
+        # Settled and handed over long ago: nothing of it is left for the after-step.
+        _resumed(w, settled.answer_seq)
         keys.append(earlier)
     return keys
+
+
+def _resumed(w: World, answer_seq: int) -> None:
+    with w.store.write() as transaction:
+        record_resume(
+            transaction,
+            answer_seq,
+            ResumeOutcome.RESUMED,
+            detail=None,
+            log=None,
+            at=NOW,
+            claim_id=None,
+        )
 
 
 def test_an_answer_limit_already_met_waits_and_starts_nothing(tmp_path: Path) -> None:
@@ -145,9 +171,10 @@ def test_a_pm_answer_gives_a_run_at_its_limit_another_automatic_answer(
     with world(tmp_path) as w:
         earlier = _earlier_automatic_answers(w)
         with w.store.write() as transaction:
-            add_pm_answer(
+            stepped_in = add_pm_answer(
                 transaction, earlier[-1], "the PM stepped in", now=NOW, via=None
             )
+        _resumed(w, stepped_in)
 
         result = w.handle()
 
@@ -399,7 +426,7 @@ def test_rm_of_the_addressee_releases_the_held_question_to_the_pm(
         )
         assert removed.outcome is SetUpOutcome.APPLIED
 
-        start_after(OperationName.RM, w.store, lambda: w.config, lambda: w.deps)
+        run_after_step(w)
 
         assert len(recorder.calls) == 1
         record = _record(w)
@@ -413,7 +440,7 @@ def test_handle_pause_starts_ended_held_questions_and_a_large_batch_drains(
 ) -> None:
     with world(tmp_path) as w:
         add_addressee(w.store)
-        count = MAX_STARTS_PER_CALL + 2
+        count = MAX_WORK_PER_CLAIM + 2
         for number in range(count):
             request_id = f"ended-{number}"
             seed_request(w.store, RequestState.DECLINED, request_id=request_id)
@@ -433,7 +460,7 @@ def test_handle_pause_starts_ended_held_questions_and_a_large_batch_drains(
         first_round = len(recorder.calls)
         w.handle()
 
-        assert first_round == MAX_STARTS_PER_CALL
+        assert first_round == MAX_WORK_PER_CLAIM
         started = {call.argv[-1] for call in recorder.calls}
         assert started == {f"other-run-{number}" for number in range(count)}
 

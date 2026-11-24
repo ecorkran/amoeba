@@ -161,7 +161,9 @@ def test_mark_start_attempted_leaves_updated_at(store: Store) -> None:
     before = _row(store)
 
     with store.write() as transaction:
-        assert mark_start_attempted(transaction, KEY, LATER, None)
+        assert mark_start_attempted(
+            transaction, KEY, LATER, None, QuestionState.WAITING_ON_REQUEST
+        )
 
     after = _row(store)
     assert after.start_attempted_at == LATER
@@ -173,9 +175,15 @@ def test_mark_start_attempted_loses_to_a_start_recorded_since_the_read(
 ) -> None:
     _held(store)
     with store.write() as transaction:
-        assert mark_start_attempted(transaction, KEY, NOW, None)
-        assert not mark_start_attempted(transaction, KEY, LATER, None)
-        assert mark_start_attempted(transaction, KEY, LATER, NOW)
+        assert mark_start_attempted(
+            transaction, KEY, NOW, None, QuestionState.WAITING_ON_REQUEST
+        )
+        assert not mark_start_attempted(
+            transaction, KEY, LATER, None, QuestionState.WAITING_ON_REQUEST
+        )
+        assert mark_start_attempted(
+            transaction, KEY, LATER, NOW, QuestionState.WAITING_ON_REQUEST
+        )
 
     assert _row(store).start_attempted_at == LATER
 
@@ -185,7 +193,9 @@ def test_mark_start_attempted_refuses_a_row_no_longer_held(store: Store) -> None
     assert _claim(store)
 
     with store.write() as transaction:
-        assert not mark_start_attempted(transaction, KEY, LATER, None)
+        assert not mark_start_attempted(
+            transaction, KEY, LATER, None, QuestionState.WAITING_ON_REQUEST
+        )
 
 
 def test_held_rows_lists_only_held_rows_oldest_first(store: Store) -> None:

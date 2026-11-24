@@ -251,8 +251,8 @@ def _closed_text(row: QuestionRecord | None) -> str:
 
 
 def _held_text(row: QuestionRecord | None, requests: RequestStates) -> str:
-    """``waiting on request <id> (<state>)``, and when ``start_ended_held`` last
-    started ``handle_pause`` for it (242 D9)."""
+    """``waiting on request <id> (<state>)``, and when ``claim_work`` last started
+    ``handle_pause`` for it (242 D9, 262 D10)."""
     if row is None or row.request_id is None:
         raise StoreRowError("a held question has no request_id")
     if row.request_id not in requests:

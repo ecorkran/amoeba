@@ -4,7 +4,7 @@
 Three checkouts in one program and a routing ``cf``, as 240's scenario tests. The
 held question is written straight into the store (no real pipeline pauses here); what
 is checked is that the operation after the request's end records a start for it and
-starts a detached ``handle-pause`` whose logs land in ``logs/request-release/``.
+starts a detached ``handle-pause`` whose logs land in ``logs/handle-pause/``.
 """
 
 from __future__ import annotations

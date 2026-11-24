@@ -1,4 +1,4 @@
-"""``start_ended_held``: the start trigger for held questions (slice 242, D7, 6.3)."""
+"""The after-step starts held questions whose request ended (slices 242 D7, 262 D10)."""
 
 from __future__ import annotations
 
@@ -20,12 +20,13 @@ from store_open import open_local_store
 from user_configs import user_config
 
 from amoeba.amoeba_script import AmoebaScriptMissing
-from amoeba.operations import request_release
-from amoeba.operations.request_release import (
-    MAX_STARTS_PER_CALL,
-    REQUEST_RELEASE_LOG_DIRECTORY,
+from amoeba.operations.steps import work as work_steps
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.steps.limits import MAX_WORK_PER_CLAIM
+from amoeba.operations.store_steps import LocalSteps
+from amoeba.operations.work_start import (
+    HANDLE_PAUSE_LOG_DIRECTORY,
     START_FAILED_OUTCOME,
-    start_ended_held,
 )
 from amoeba.store.errors import StoreBusyError
 from amoeba.store.held_questions import mark_start_attempted
@@ -36,6 +37,7 @@ from amoeba.store.store import Store
 from amoeba.store.vocabulary import QuestionState, RequestState
 from amoeba.upstream.squadron.faults import LaunchFailure
 from amoeba.upstream.squadron.launch import LaunchError
+from amoeba.wiring_steps import LastReply, after_call
 from operations.held_support import seed_request
 from operations.pause_support import START, DepsRig, FakeChild, build_deps
 
@@ -50,6 +52,12 @@ def store(tmp_path: Path) -> Iterator[Store]:
     with open_local_store(tmp_path / "amoeba.sqlite3") as opened:
         seed_members(opened)
         yield opened
+
+
+def _after_step(store: Store, rig: DepsRig) -> None:
+    """The after-step with the flag read locally, as the CLI makes it after any call."""
+    steps_ = LocalSteps(store, StepEdges(rig.deps.clock, lambda: CONFIG))
+    after_call(steps_, lambda: rig.deps, LastReply(), prunes=False)
 
 
 def _found_script() -> Path:
@@ -132,12 +140,12 @@ def test_a_row_whose_request_ended_or_is_gone_is_started(
     key = _held(store, 1, state)
     rig = _rig(tmp_path, store)
 
-    start_ended_held(store, CONFIG, rig.deps)
+    _after_step(store, rig)
 
     (call,) = rig.spawner.calls
     assert call.argv == (str(SCRIPT), "handle-pause", "--json", "--", key.run_id)
     assert call.cwd == CHECKOUT
-    assert call.logs.stdout.parent == rig.deps.logs_dir / REQUEST_RELEASE_LOG_DIRECTORY
+    assert call.logs.stdout.parent == rig.deps.logs_dir / HANDLE_PAUSE_LOG_DIRECTORY
     assert call.logs.stdout.name.startswith(f"{key.run_id}-")
     assert call.logs.stdout.name.endswith(".stdout.log")
     assert call.logs.stderr.name.endswith(".stderr.log")
@@ -152,7 +160,7 @@ def test_an_open_request_past_its_ttl_is_started_with_no_sweep(
     )
     rig = _rig(tmp_path, store)
 
-    start_ended_held(store, CONFIG, rig.deps)
+    _after_step(store, rig)
 
     assert _started_run_ids(rig) == ["run-1"]
 
@@ -164,7 +172,7 @@ def test_a_row_whose_request_is_live_is_not_started(
     key = _held(store, 1, state)
     rig = _rig(tmp_path, store)
 
-    start_ended_held(store, CONFIG, rig.deps)
+    _after_step(store, rig)
 
     assert rig.spawner.calls == []
     assert _row(store, key).start_attempted_at is None
@@ -177,12 +185,18 @@ def test_a_recent_attempt_waits_and_an_old_one_is_retried(
     old = _held(store, 2, RequestState.DONE)
     with store.write() as transaction:
         assert mark_start_attempted(
-            transaction, recent, START - WAIT + timedelta(seconds=1), None
+            transaction,
+            recent,
+            START - WAIT + timedelta(seconds=1),
+            None,
+            QuestionState.WAITING_ON_REQUEST,
         )
-        assert mark_start_attempted(transaction, old, START - WAIT, None)
+        assert mark_start_attempted(
+            transaction, old, START - WAIT, None, QuestionState.WAITING_ON_REQUEST
+        )
     rig = _rig(tmp_path, store)
 
-    start_ended_held(store, CONFIG, rig.deps)
+    _after_step(store, rig)
 
     assert _started_run_ids(rig) == [old.run_id]
 
@@ -192,13 +206,19 @@ def test_never_attempted_rows_start_before_attempted_ones(
 ) -> None:
     attempted = _held(store, 0, RequestState.DONE, held_at=-timedelta(days=1))
     with store.write() as transaction:
-        assert mark_start_attempted(transaction, attempted, START - 2 * WAIT, None)
+        assert mark_start_attempted(
+            transaction,
+            attempted,
+            START - 2 * WAIT,
+            None,
+            QuestionState.WAITING_ON_REQUEST,
+        )
     fresh = [
-        _held(store, n, RequestState.DONE) for n in range(1, 1 + MAX_STARTS_PER_CALL)
+        _held(store, n, RequestState.DONE) for n in range(1, 1 + MAX_WORK_PER_CLAIM)
     ]
     rig = _rig(tmp_path, store)
 
-    start_ended_held(store, CONFIG, rig.deps)
+    _after_step(store, rig)
 
     assert _started_run_ids(rig) == [key.run_id for key in fresh]
     assert _row(store, attempted).start_attempted_at == START - 2 * WAIT
@@ -209,14 +229,14 @@ def test_at_most_the_cap_starts_and_the_rest_are_untouched(
 ) -> None:
     keys = [
         _held(store, n, RequestState.DONE, held_at=timedelta(seconds=n))
-        for n in range(MAX_STARTS_PER_CALL + 2)
+        for n in range(MAX_WORK_PER_CLAIM + 2)
     ]
     rig = _rig(tmp_path, store)
 
-    start_ended_held(store, CONFIG, rig.deps)
+    _after_step(store, rig)
 
-    assert _started_run_ids(rig) == [k.run_id for k in keys[:MAX_STARTS_PER_CALL]]
-    for key in keys[MAX_STARTS_PER_CALL:]:
+    assert _started_run_ids(rig) == [k.run_id for k in keys[:MAX_WORK_PER_CLAIM]]
+    for key in keys[MAX_WORK_PER_CLAIM:]:
         assert _row(store, key).start_attempted_at is None
 
 
@@ -227,7 +247,7 @@ def test_a_launch_error_is_logged_as_start_failed_and_the_row_stays_held(
     rig = _rig(tmp_path, store)
     rig.spawner.results = [LaunchError(LaunchFailure.SPAWN_ERROR, "no such directory")]
 
-    start_ended_held(store, CONFIG, rig.deps)
+    _after_step(store, rig)
 
     (line,) = _call_lines(rig)
     assert line["outcome"] == START_FAILED_OUTCOME
@@ -239,7 +259,7 @@ def test_a_launch_error_is_logged_as_start_failed_and_the_row_stays_held(
     assert row.start_attempted_at == START
 
 
-def test_a_missing_script_writes_an_error_line_per_row_and_raises_nothing(
+def test_a_missing_script_writes_a_start_failed_line_per_row_and_raises_nothing(
     tmp_path: Path, store: Store
 ) -> None:
     keys = [_held(store, n, RequestState.DONE) for n in range(2)]
@@ -249,11 +269,12 @@ def test_a_missing_script_writes_an_error_line_per_row_and_raises_nothing(
 
     rig = _rig(tmp_path, store, amoeba_script=missing)
 
-    start_ended_held(store, CONFIG, rig.deps)
+    _after_step(store, rig)
 
     lines = _call_lines(rig)
     assert [line["run_id"] for line in lines] == [k.run_id for k in keys]
-    assert {line["error"] for line in lines} == {"AmoebaScriptMissing"}
+    assert {line["outcome"] for line in lines} == {START_FAILED_OUTCOME}
+    assert all("the amoeba script is not at" in str(line["detail"]) for line in lines)
     assert rig.spawner.calls == []
 
 
@@ -265,32 +286,30 @@ def test_a_store_error_on_the_read_is_logged_and_not_raised(
 ) -> None:
     _held(store, 1, RequestState.DONE)
 
-    def busy(*_arguments: object) -> list[QuestionRecord]:
+    def busy(*_arguments: object) -> tuple[QuestionRecord, ...]:
         raise StoreBusyError("the store is busy")
 
-    monkeypatch.setattr(request_release, "held_rows", busy)
+    monkeypatch.setattr(work_steps, "held_work", busy)
     rig = _rig(tmp_path, store)
 
     with caplog.at_level(logging.ERROR):
-        start_ended_held(store, CONFIG, rig.deps)
+        _after_step(store, rig)
 
     assert rig.spawner.calls == []
-    assert "could not read the held questions" in caplog.text
+    assert "the after-step stopped" in caplog.text
 
 
-def test_a_held_row_naming_a_note_is_a_logged_row_error_not_a_silent_skip(
-    tmp_path: Path, store: Store, caplog: pytest.LogCaptureFixture
+def test_a_held_row_naming_a_note_is_started_so_handle_pause_reports_it(
+    tmp_path: Path, store: Store
 ) -> None:
-    """A note has no state and ``link_for`` never holds a question on one, so the real
-    ``effective_state`` refuses the row."""
+    """A note has no state and ``link_for`` never holds a question on one, so the row
+    is corrupt: it is started, ``handle-pause`` reports it, and the cap ends it."""
     note = NewNote("request-1", MEMBER_ID, OTHER_MEMBER_ID, None, "a subject", "a body")
     with store.write() as transaction:
         insert_note(transaction, note, [OTHER_MEMBER_ID], START)
         insert_held_row(transaction, _key(1), request_id="request-1", now=START)
     rig = _rig(tmp_path, store)
 
-    with caplog.at_level(logging.ERROR):
-        start_ended_held(store, CONFIG, rig.deps)
+    _after_step(store, rig)
 
-    assert rig.spawner.calls == []
-    assert "is a note" in caplog.text
+    assert _started_run_ids(rig) == ["run-1"]

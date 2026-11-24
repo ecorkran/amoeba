@@ -137,7 +137,7 @@ class QuestionRecord:
     closed_at: datetime | None
     #: The request a held question waits on (242 D2); kept through later states.
     request_id: str | None
-    #: When ``start_ended_held`` last started ``handle_pause`` for the held row.
+    #: When ``claim_work`` last started ``handle_pause`` for the row (242 D7, 262 D10).
     start_attempted_at: datetime | None
     #: The machine the run paused on (262 D14); ``None`` after ``rm-machine``.
     machine_id: int | None

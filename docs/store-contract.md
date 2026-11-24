@@ -207,7 +207,7 @@ What a consumer sees follows its pair's `consumed`: `from_source` reads `reporte
 | `closed_detail` | Migration `003`. The dismissal reason, or the run's state when the sweep closed it. Written with `closed_reason`. |
 | `closed_at` | Migration `003`. UTC time the question was closed. Written with `closed_reason`. |
 | `request_id` | Migration `008`. The request a held question waits on; null for any other question. Written by `handle_pause` with the held insert and never changed, so the row keeps it through every later state. No foreign key to `messages`, because 240's sweep prunes terminal requests by age. |
-| `start_attempted_at` | Migration `008`. UTC time `start_ended_held` last started `handle_pause` for a held row; null before the first start. Written by `start_ended_held` as a compare-and-set on the value it read (and on the row still being held), so two concurrent callers never both start one row; it leaves `updated_at` alone, because `updated_at` is the close compare-and-set's guard. |
+| `start_attempted_at` | Migration `008`. UTC time `claim_work` last started `handle_pause` for a held row or a stale claim; null before the first start. Written by `claim_work` as a compare-and-set on the state and the value it read, so two concurrent callers never both start one row; it leaves `updated_at` alone, because `updated_at` is the close compare-and-set's guard. It also adds one to `start_count`. |
 | `machine_id` | Migration `013`. The machine the run paused on, references `machines`. Bound from the store's acting machine at insert and never changed; set to null by `rm-machine`, which closes the row. A `BEFORE INSERT` trigger (`questions_machine_required`) refuses a null. The local opener gives a row from before `013` the machine `local`. Index `(machine_id, state)`. |
 | `start_count` | Migration `013`. How many automatic starts `claim_work` has handed out for the row; at the cap the row moves to `waiting_on_pm` with the reason `starts_exhausted`. Never reset. |
 
@@ -508,7 +508,7 @@ one short write transaction, so a PM answer made meanwhile wins.
 | `handle_pause`, a new question | one `questions` row, inserted in one transaction: `claimed` with `answering_run_id`, `slice_label`, `source_commit` and `passages`, or `waiting_on_pm` with `waiting_reason` and `waiting_detail` (and the context columns when the failure came after the context was gathered) |
 | `handle_pause`, a new question marked with a request (slice 242) | `waiting_on_request` with `request_id`, through the held insert; a marker that names no request this member sent gives `waiting_on_pm` with `request_unknown` instead |
 | `handle_pause`, a held question | the request `done`: `claimed` through the held claim (`answering_run_id`, `passages` with the request's `request_result` passage, `slice_label`, `source_commit`, and `claimed_at` and `updated_at` reset to now), then settled as any claim. `declined`, `cancelled`, `expired` or no longer stored: `waiting_on_pm` with `request_declined`, `request_cancelled`, `request_expired` or `request_unknown` and the request's reason as `waiting_detail`. `open` or `accepted`: nothing |
-| `start_ended_held`, after `send`, `reply`, `cancel`, `add`, `rm`, `status`, `list` and `handle_pause` (slice 242) | `start_attempted_at` on each held row whose request has ended, at most `MAX_STARTS_PER_CALL` per call, then starts `handle_pause` for it; the move itself is that `handle_pause`'s |
+| `claim_work`, in the after-step of any call but an MCP `answer` (slices 242, 262) | `start_attempted_at` and `start_count` on each held row whose request has ended and each stale claim, `resume_claim_id`, `resume_started_at` and `resume_start_count` on each answer to resume, and a `wakes` row for each wake due; at most `MAX_WORK_PER_CLAIM` items per claim; the move itself is the started command's. At `MAX_AUTOMATIC_STARTS` a question moves to `waiting_on_pm` as `starts_exhausted` and an answer is recorded `refused` |
 | `handle_pause`, settling an answering run | `answered`: `questions.evidence` and an `answerer` `answers` row with `cited`, in one transaction through the answer gate. Otherwise `waiting_on_pm`: `waiting_reason`, `waiting_detail`, `evidence` |
 | `handle_pause`, a dead claim | `replace_claim` (`answering_run_id` and `passages`, for a claimant that died before it started), or `waiting_on_pm` with `answering_run_stalled` |
 | `answer` | a `pm` `answers` row with `via` (the door that carried the call) and `answered`, in one transaction; `waiting_reason`, `waiting_detail` and any `closed_*` columns are not cleared |
@@ -522,7 +522,7 @@ How each state ends with nobody editing a file: `claimed` settles, or is replace
 swept; `waiting_on_pm` is answered, dismissed or swept; `waiting_on_request` is
 resumed (its request `done` and the answer passes), moves to `waiting_on_pm` (its
 request ended without a result, or the answer did not pass), or is answered by the PM,
-dismissed or swept, and `start_ended_held` starts its `handle_pause` once the request
+dismissed or swept, and `claim_work` starts its `handle_pause` once the request
 ends; `answered` unresumed is resumed,
 dismissed or swept; `closed` is terminal and `answer` reopens it; a retracted answer is
 terminal and a new PM answer replaces it as precedent. A PM answer resets the answer

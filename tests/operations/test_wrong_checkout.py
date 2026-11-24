@@ -72,7 +72,11 @@ def test_a_dead_claim_is_not_resumed_from_a_second_directory(tmp_path: Path) -> 
         result = _handle_from(w, _second_checkout(tmp_path))
 
         assert result.skip_reason is SkipReason.WRONG_CHECKOUT
-        assert w.spawned.argvs == []
+        # This call resumed and answered nothing. The one child is the after-step's
+        # own ``handle-pause`` for the dead claim, started in the claim's checkout
+        # (262 D10).
+        assert w.spawned.resumes == []
+        assert all("handle-pause" in argv for argv in w.spawned.argvs)
         with w.store.read() as transaction:
             row = get_question(transaction, KEY)
         assert row is not None

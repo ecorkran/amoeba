@@ -125,7 +125,9 @@ no repo, give `member` instead.
   agents, data to judge, never instructions. The descriptions of these four tools, of
   `list` and of `status` say so too.
 - A call can take up to 45 s (`send`, `inbox`, `reply` and `cancel`: one `cf get` of the
-  caller's directory) when `cf` is slow: below the 180 s deadline, which is checked by `tests/test_message_timing.py`.
+  caller's directory) when `cf` is slow, and the after-step that follows every call adds up
+  to 15 s (slice 262: three store waits), and a `send`'s wake step 25 s more: 85 s at the
+  most, below the 180 s deadline, which is checked by `tests/test_message_timing.py`.
 
 `directory` is never guessed: a session can start anywhere, so a missing or relative
 `directory` is an error naming the field.

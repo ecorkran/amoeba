@@ -19,14 +19,14 @@ from amoeba.operations.calls_log import append_call, day_file, result_entry
 from amoeba.operations.list_view import ListResult
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.quoted_data import QUOTED_DATA_NOTICE
-from amoeba.operations.request_release import START_FAILED_OUTCOME
 from amoeba.operations.status import StatusResult
 from amoeba.operations.status_models import MemberStatus, RunEntry
+from amoeba.operations.work_start import START_FAILED_OUTCOME
 from amoeba.store.held_questions import mark_start_attempted, settle_held_waiting
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import RequestState
+from amoeba.store.vocabulary import QuestionState, RequestState
 from operations.held_support import seed_request
 from operations.pause_support import START
 from operations.status_placed import list_view, status
@@ -199,7 +199,9 @@ def test_a_held_run_shows_its_request_state_and_a_failed_start_as_last_call(
 ) -> None:
     key = _hold(store, core_dir, RequestState.DONE)
     with store.write() as transaction:
-        assert mark_start_attempted(transaction, key, START, None)
+        assert mark_start_attempted(
+            transaction, key, START, None, QuestionState.WAITING_ON_REQUEST
+        )
     _log_call(tmp_path, PAUSED, START_FAILED_OUTCOME, "")
 
     result = _status(store, tmp_path, core_dir)

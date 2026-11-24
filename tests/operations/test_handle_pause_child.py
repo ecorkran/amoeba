@@ -24,7 +24,7 @@ from amoeba import wiring
 from amoeba.config.home import config_path, logs_dir, state_layout
 from amoeba.operations.caller import find_member
 from amoeba.operations.names import Door, OperationName
-from amoeba.operations.request_release import REQUEST_RELEASE_LOG_DIRECTORY
+from amoeba.operations.work_start import HANDLE_PAUSE_LOG_DIRECTORY
 from amoeba.store.held_questions import HeldQuestion, insert_held
 from amoeba.store.models import QuestionKey, QuestionRecord
 from amoeba.store.questions import get_question
@@ -92,7 +92,7 @@ def test_reply_done_starts_a_real_child_that_moves_the_held_question(
         )
 
     def last_state() -> str:
-        child_logs = (logs_dir() / REQUEST_RELEASE_LOG_DIRECTORY).glob("*.log")
+        child_logs = (logs_dir() / HANDLE_PAUSE_LOG_DIRECTORY).glob("*.log")
         texts = {path.name: path.read_text() for path in child_logs}
         return f"row {_row().state}, child logs {texts}"
 

@@ -45,11 +45,12 @@ SETTLE_HELD_WAITING: Final = """
 UPDATE questions SET state = ?, waiting_reason = ?, waiting_detail = ?, updated_at = ?
 WHERE run_id = ? AND paused_at = ? AND state = ?
 """
-#: Leaves ``updated_at``, the close compare-and-set's guard. A compare-and-set on the
-#: last start the caller read (``IS`` also matches null), so two callers that read the
-#: row at once start it once. Parameters: now, run id, paused_at, held state, the
+#: Leaves ``updated_at``, the close compare-and-set's guard, and counts the start
+#: (``start_count``, 262 D10). A compare-and-set on the state the caller read and on the
+#: last start it read (``IS`` also matches null), so two callers that read the row at
+#: once start it once. Parameters: now, run id, paused_at, the state read, the
 #: start_attempted_at read.
 MARK_START_ATTEMPTED: Final = """
-UPDATE questions SET start_attempted_at = ?
+UPDATE questions SET start_attempted_at = ?, start_count = start_count + 1
 WHERE run_id = ? AND paused_at = ? AND state = ? AND start_attempted_at IS ?
 """

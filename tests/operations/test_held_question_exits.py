@@ -23,7 +23,6 @@ from amoeba.operations.dismiss import DismissOutcome, dismiss
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseOutcome
 from amoeba.operations.question_sweep import sweep_run
-from amoeba.operations.request_release import start_ended_held
 from amoeba.operations.status import StatusResult
 from amoeba.operations.status_models import NextOperation, RunEntry
 from amoeba.store.answers import answers_of
@@ -53,6 +52,7 @@ from operations.held_support import (
     add_addressee,
     end_request,
     hold,
+    run_after_step,
     seed_request,
 )
 from operations.pause_support import START
@@ -86,7 +86,7 @@ def _starts_nothing_after_the_request_ends(w: World) -> None:
     spawned = len(w.spawned.argvs)
     end_request(w.store, RequestState.DONE, now=LATER)
 
-    start_ended_held(w.store, w.config, w.deps)
+    run_after_step(w)
 
     assert len(w.spawned.argvs) == spawned
 

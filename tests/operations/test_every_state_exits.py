@@ -24,8 +24,13 @@ from amoeba.operations.dismiss import (
     dismiss,
 )
 from amoeba.operations.question_sweep import SweepResult, sweep_run
+from amoeba.operations.resume_run import run_resume
 from amoeba.operations.retract import RetractOutcome, retract
+from amoeba.operations.steps.dispatch import StepEdges
 from amoeba.operations.steps.limits import pause_claim_seconds, resume_claim_seconds
+from amoeba.operations.steps.models import CLAIM_WORK
+from amoeba.operations.steps.models_work import ClaimWorkRequest, ResumeItem
+from amoeba.operations.store_steps import LocalSteps
 from amoeba.store.answers import (
     Settled,
     add_pm_answer,
@@ -301,3 +306,25 @@ def test_answered_unresumed_exits_by_dismiss(tmp_path: Path) -> None:
         with w.store.read() as transaction:
             (record,) = answers_of(transaction, KEY)
         assert record.resume_outcome is ResumeOutcome.NOT_DELIVERED
+
+
+def test_answered_with_no_resume_outcome_exits_by_the_resume_claim_work_hands_out(
+    tmp_path: Path,
+) -> None:
+    """An answer nothing has resumed is work for its machine: ``claim_work`` hands out
+    the resume, the attempt it starts records the outcome (262 D6, D10)."""
+    with world(tmp_path, paused_polls=RESUME_POLLS) as w:
+        _wait(w)
+        with w.store.write() as transaction:
+            seq = add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
+        steps = LocalSteps(w.store, StepEdges(w.deps.clock, lambda: w.config))
+
+        handed_out = steps.run(CLAIM_WORK, ClaimWorkRequest(logs_dir="/state/logs"))
+
+        (item,) = handed_out.items
+        assert isinstance(item, ResumeItem) and item.answer_seq == seq
+        resumed = run_resume(steps, w.deps, item.answer_seq, item.claim_id)
+        assert resumed is not None
+        with w.store.read() as transaction:
+            (record,) = answers_of(transaction, KEY)
+        assert record.resume_outcome is ResumeOutcome.RESUMED

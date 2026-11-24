@@ -25,6 +25,7 @@ from amoeba.operations.steps.resume import resume_claim, resume_read, resume_rec
 from amoeba.operations.steps.settle import question_settle
 from amoeba.operations.steps.sources import pause_sources
 from amoeba.operations.steps.wake import wake_finish, wake_read, wake_set_pid
+from amoeba.operations.steps.work import claim_work
 from amoeba.store.store import Store
 
 type StepFunction = Callable[[StepContext, Any], StepModel]
@@ -46,6 +47,7 @@ STEP_FUNCTIONS: Final[dict[str, StepFunction]] = {
     "wake_set_pid": wake_set_pid,
     "wake_finish": wake_finish,
     "open_runs": open_runs,
+    "claim_work": claim_work,
 }
 
 

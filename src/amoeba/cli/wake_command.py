@@ -19,6 +19,7 @@ from amoeba.cli.init_command import INIT_COMMAND
 from amoeba.cli.join_command import JOIN_COMMAND, LEAVE_COMMAND
 from amoeba.cli.stand_in_command import STAND_IN_COMMAND
 from amoeba.config.home import StateLayout
+from amoeba.operations.resume_run import RESUME_RUN_COMMAND
 from amoeba.operations.steps.dispatch import StepEdges
 from amoeba.operations.store_steps import LocalSteps
 from amoeba.operations.wake_run import WAKE_RUN_COMMAND, run_wake
@@ -29,6 +30,7 @@ from amoeba.wiring import default_deps, load_config, open_store
 CLI_ONLY_COMMANDS: Final = frozenset(
     {
         WAKE_RUN_COMMAND,
+        RESUME_RUN_COMMAND,
         STAND_IN_COMMAND,
         ANSWER_FIRST_COMMAND,
         INIT_COMMAND,

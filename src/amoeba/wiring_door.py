@@ -15,6 +15,7 @@ from typing import Final
 from amoeba.client import join as client_join
 from amoeba.client.call import call
 from amoeba.client.client_file import ClientFile, load_client_file
+from amoeba.client.errors import HubUnreachableError
 from amoeba.config.home import (
     STORE_FILE_NAME,
     StateLayout,
@@ -39,9 +40,14 @@ from amoeba.store.set_aside import (
 )
 from amoeba.store.vocabulary import Door
 from amoeba.wire.join_line import JoinError, parse_join_line
-from amoeba.wire.protocol import SERVED_OPERATIONS
+from amoeba.wire.protocol import (
+    SERVED_OPERATIONS,
+    WORK_PROBLEM_REPLY_KEY,
+    WORK_REPLY_KEY,
+)
 from amoeba.wiring_gather import body_keys, gather_values
 from amoeba.wiring_results import result_from_document
+from amoeba.wiring_steps import LastReply
 
 #: How the two commands are named in a message.
 JOIN_COMMAND: Final = "join"
@@ -96,6 +102,7 @@ def route(  # noqa: PLR0913 - invoke's arguments and the deps the gather needs
     directory: Path | None,
     door: Door,
     make_deps: Callable[[], Deps],
+    last: LastReply,
 ) -> ServedResult | SetUpResult | None:
     """The hub's result when this machine is joined, ``None`` when it is not.
 
@@ -104,7 +111,8 @@ def route(  # noqa: PLR0913 - invoke's arguments and the deps the gather needs
     ``client.call`` with the gathered values beside the document, and comes back as
     the typed result the local way returns; any other raises ``NotServedError``.
     ``add``'s door refusal is returned as the result it is, with no call. With a
-    client file nothing local is read or written first.
+    client file nothing local is read or written first. The reply's work keys go into
+    ``last``; a call that got no reply marks it unreachable.
     """
     client_file = joined()
     if client_file is None:
@@ -114,14 +122,31 @@ def route(  # noqa: PLR0913 - invoke's arguments and the deps the gather needs
     values = gather_values(name, document, directory, door, make_deps(), None)
     if isinstance(values, SetUpResult):
         return values
-    result = call(
-        client_file,
-        pinned_cert_path(),
-        name.value,
-        document,
-        extra=body_keys(values),
-    )
+    try:
+        result = call(
+            client_file,
+            pinned_cert_path(),
+            name.value,
+            document,
+            extra=body_keys(values),
+        )
+    except HubUnreachableError:
+        last.unreachable = True
+        raise
+    take_work_keys(result, last)
     return result_from_document(name.value, result, document)
+
+
+def take_work_keys(result: dict[str, object], last: LastReply) -> None:
+    """Move a done reply's ``work`` and ``work_problem`` out of its result document
+    into ``last``, so the result rebuilds as the local way's and the after-step reads
+    them."""
+    work = result.pop(WORK_REPLY_KEY, None)
+    problem = result.pop(WORK_PROBLEM_REPLY_KEY, None)
+    if isinstance(work, bool):
+        last.work = work
+    if isinstance(problem, str):
+        last.problem = problem
 
 
 # --- join and leave ----------------------------------------------------------

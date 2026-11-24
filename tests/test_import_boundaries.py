@@ -57,8 +57,8 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
         "amoeba.wiring_messages",
         "amoeba.wiring_presence",
         "amoeba.wiring_registry",
-        "amoeba.wiring_release",
-        "amoeba.wiring_releases",
+        "amoeba.wiring_steps",
+        "amoeba.operations.work_start",
         "amoeba.wiring_results",
     ),
 }

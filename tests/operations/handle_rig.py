@@ -182,7 +182,11 @@ def world(  # noqa: PLR0913 - the knobs a handle_pause test turns
         member = register_member(store, PROJECT_ID)
         rig = build_deps(tmp_path, polls={}, spawns=[], spawner=spawner)
         deps = replace(
-            rig.deps, poll_run=poll, cf_run=_as_run(cf), squadron_runs_dir=runs_dir
+            rig.deps,
+            poll_run=poll,
+            cf_run=_as_run(cf),
+            squadron_runs_dir=runs_dir,
+            amoeba_script=lambda: Path("/installed/bin/amoeba"),
         )
         worldview = World(
             store=store,

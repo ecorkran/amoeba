@@ -47,6 +47,21 @@ def start_woken_wake(steps: Steps, deps: Deps, result: SendResult) -> SendResult
     return result
 
 
+def start_woken_wake_item(
+    steps: Steps, deps: Deps, wake: WokenWake, *, failed_with: str | None = None
+) -> None:
+    """Start the wrapper for a wake ``claim_work`` handed out, or, with
+    ``failed_with``, end it as ``start_failed`` because the start could not be made.
+    Never raises: a failure to record is logged, and the wake's claim runs out."""
+    try:
+        if failed_with is None:
+            _start_wrapper(steps, deps, wake)
+        else:
+            _record_start_failure(steps, wake, failed_with)
+    except (StoreError, HubUnreachableError, HubRefusedError):
+        logger.exception("could not record a failed wake start")
+
+
 def _start_wrapper(steps: Steps, deps: Deps, wake: WokenWake) -> None:
     """Start ``amoeba wake-run`` for the claimed wake, detached. A start that fails is
     recorded on the row and logged, and the request stays ``open`` (D5)."""

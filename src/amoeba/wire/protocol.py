@@ -104,6 +104,12 @@ DONE_STATUS: Final = 200
 OUTCOME_DONE: Final = "done"
 OUTCOME_REFUSED: Final = "refused"
 
+#: Keys a done reply's result document carries beside the result (262 D10): whether
+#: the calling machine has work waiting, or why the hub could not tell. The client takes
+#: them out before it rebuilds the result.
+WORK_REPLY_KEY: Final = "work"
+WORK_PROBLEM_REPLY_KEY: Final = "work_problem"
+
 
 class DoneReply(BaseModel):
     """The hub ran the operation; ``result`` is its result document."""
