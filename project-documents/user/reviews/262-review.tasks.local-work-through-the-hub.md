@@ -6,7 +6,7 @@ slice: local-work-through-the-hub
 conventionsSource: AGENTS.md
 projectRules: [general.md]
 project: amoeba
-verdict: FAIL
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/262-tasks.local-work-through-the-hub.md
 aiModel: claude-haiku-5-5
@@ -231,6 +231,8 @@ findings:
 # Review: tasks — slice 262
 
 **Verdict:** FAIL
+
+> Verdict note: the frontmatter verdict is CONCERNS. The reviewer stated FAIL; both fail findings were fixed; all eighteen findings were checked against the source 20261124; thirteen changed the task file, five needed no change, see Resolution.
 **Model:** claude-haiku-5-5
 
 ## Findings
@@ -306,6 +308,26 @@ With the starter config (`resume_wait_seconds: 60`, `starter_config.yaml:11`), `
 ### [PASS] The hub `PATH` requirement and the load gate are enforced
 
 `hub_path()` asserts that `cf`, `sq` and `git` are absent from the hub `PATH`, so the Technical Requirement (design line 732) holds with no new task. 8.4's CI gating is explicit: the bare `Tests` step is what `tests/test_ci_gates_load.py` checks (lines 58-62).
+
+## Resolution
+
+Checked against the source 20261124; fixes are in the task file.
+
+- Joined `answer` test (FAIL) fixed: 7.1 names `tests/hub/test_join.py`'s test and what it now asserts.
+- Wake entries' `machine` (FAIL) fixed: 5.4 adds `machine` to `WakeStatus`, its rendering, and a `local` test.
+- Door `send` before 7.2 fixed: the door branch keeps `wake_door`'s refusal until 7.2, which adds `logs_dir` and deletes it, with the door-operations test edit.
+- Local wake mark fixed: 2.5 writes it in `write_send`'s transaction, before `wake_for_sent_request`.
+- Import rule in 3.1 fixed: 3.1 adds only the steps rule and a per-module table; each client-run rule comes with its module.
+- Holder in 6.6 fixed: 6.6 builds `wiring_steps.LastReply` and restructures `invoke` into one `try`/`finally`; the door path only prunes until 7.2.
+- `can_wake` agreement test fixed: 2.5's seed-helper list covers `test_wakes.py` and every test that expects a due wake.
+- Size check fixed: 10.2 adds `pause_context.py` and `answers.py`, and notes `sql.py`.
+- Load test fixed: 8.4 times all sixteen steps, with the seed rows each needs.
+- Kept reply fixed: 7.2 adds the flag after `keep` and after `_kept_reply`, so a stored reply never holds one.
+- Commit granularity fixed: markers after 4.3, 4.6 and 6.5.
+- `INSERT_NEW_QUESTION` fixed: 1.2 names it.
+- `record_resume` callers fixed: 2.3 names the two source callers; `mark_not_delivered` is unchanged, since its outcome is final.
+- Versions dropped: 0.1 re-reads them.
+- Proportionality and the two pass findings: nothing to do.
 
 ### Run Digest
 
