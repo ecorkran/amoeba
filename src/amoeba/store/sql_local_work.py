@@ -126,3 +126,20 @@ ORDER BY messages.to_member
 COUNT_RESUME_START: Final = (
     "UPDATE answers SET resume_start_count = resume_start_count + 1 WHERE seq = ?"
 )
+
+# --- rm-machine (D13) ---------------------------------------------------------
+
+#: Parameter: answer seq.
+CLEAR_RESUME_CLAIM: Final = "UPDATE answers SET resume_claim_id = NULL WHERE seq = ?"
+#: Parameters: ended_at, outcome, detail, machine id.
+END_WAKES_OF_MACHINE: Final = (
+    "UPDATE wakes SET ended_at = ?, outcome = ?, detail = ? "
+    "WHERE machine_id = ? AND ended_at IS NULL"
+)
+#: Parameter: machine id. The rows stay as history with no machine.
+RELEASE_QUESTIONS_OF_MACHINE: Final = (
+    "UPDATE questions SET machine_id = NULL WHERE machine_id = ?"
+)
+RELEASE_WAKES_OF_MACHINE: Final = (
+    "UPDATE wakes SET machine_id = NULL, log_stem = NULL WHERE machine_id = ?"
+)

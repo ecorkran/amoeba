@@ -389,15 +389,18 @@ Note: folded into the next marker's commit: 6.5 to 6.9 move the same modules and
 
 ## 9. `rm-machine`, documents and the live update (D13, D14, D15; effort 3)
 
-- [ ] **9.1 `rm-machine` closes what waits on the machine**
-  - [ ] `store/machines.remove_machine`, which `hub/admin.rm_machine` calls inside its one transaction, before the machine row is deleted: close every open question on the machine as `machine_removed` with the machine's name; mark each such answered question's latest answer `not_delivered` with the same detail and clear its claim; end every unended wake as `machine_removed` naming the machine; null `machine_id` on its question and wake rows and `log_stem` on its wake rows
-  - [ ] Tests: no open question, no answer without a final outcome and no unended wake left on the machine; the wakes it ended name the machine in their detail; no `log_stem`; a later `answer` to one of those questions is recorded and marked `not_delivered`; a wake wrapper whose machine was removed stops its command's process group at its next step
-- [ ] **9.2 Documents** (D15)
-  - [ ] `docs/store-contract.md` (every store time is the store's own clock), `docs/cli-contract.md` (work starts after any call but an MCP `answer`), `docs/config-contract.md`, `docs/squadron-hook.md`, `docs/mcp-server.md`: complete the prose for every item D15 lists; `tests/test_contract_docs.py` passes
-- [ ] **9.3 `scripts/update_live.py`**
-  - [ ] The read-back gains one check after `amoeba list`: no question or wake has a null machine; a failure restores by itself, as the other checks do
-  - [ ] `tests/scripts/test_update_live.py`: `update` and `restore` against a copy of a schema-12 store with question and wake rows; the opener gives old rows `local`; a row written between the two is gone after the restore
-  - [ ] Success: checks pass
+- [x] **9.1 `rm-machine` closes what waits on the machine**
+  - [x] `store/machines.remove_machine`, which `hub/admin.rm_machine` calls inside its one transaction, before the machine row is deleted: close every open question on the machine as `machine_removed` with the machine's name; mark each such answered question's latest answer `not_delivered` with the same detail and clear its claim; end every unended wake as `machine_removed` naming the machine; null `machine_id` on its question and wake rows and `log_stem` on its wake rows
+  - [x] Tests: no open question, no answer without a final outcome and no unended wake left on the machine; the wakes it ended name the machine in their detail; no `log_stem`; a later `answer` to one of those questions is recorded and marked `not_delivered`; a wake wrapper whose machine was removed stops its command's process group at its next step
+  - Note: small-conflict change: the closing is `store/machine_removal.close_machine_work`, which `hub/admin.rm_machine` calls in its one transaction before `machines.remove_machine` (a call from inside `store/machines.py` would make an import ring through `question_closing` and `store.store`); new `machines.machine_id_by_name`; `rm_machine` takes `now` (the CLI passes the hub's clock); statements in `sql_local_work.py`. Tests in `tests/hub/test_rm_machine_work.py` (what is closed and nulled, a later `answer` not delivered, a wake wrapper whose machine was removed stopping its command at `wake_set_pid`).
+- [x] **9.2 Documents** (D15)
+  - [x] `docs/store-contract.md` (every store time is the store's own clock), `docs/cli-contract.md` (work starts after any call but an MCP `answer`), `docs/config-contract.md`, `docs/squadron-hook.md`, `docs/mcp-server.md`: complete the prose for every item D15 lists; `tests/test_contract_docs.py` passes
+  - Note: `docs/store-contract.md` (every time is the store's own clock; the rm-machine writer row), `docs/cli-contract.md` (new section "Work a machine has waiting", the rm-machine row); the other D15 items were written in their tasks (config limits 2.1, `waiting_on_machine` 3.5, `wake_waiting_on` and machine entries 5.1/5.4, skips 4.7, `resume-run` 6.4, joined machines 7.4 in cli-contract, squadron-hook and mcp-server). Bug found and fixed while writing it: the after-step skipped the clean-up after every `list`, though only the default view prunes in its placement; `wiring_steps.after_operation` now takes the document (test in `tests/test_after_step.py`).
+- [x] **9.3 `scripts/update_live.py`**
+  - [x] The read-back gains one check after `amoeba list`: no question or wake has a null machine; a failure restores by itself, as the other checks do
+  - [x] `tests/scripts/test_update_live.py`: `update` and `restore` against a copy of a schema-12 store with question and wake rows; the opener gives old rows `local`; a row written between the two is gone after the restore
+  - [x] Success: checks pass
+  - Note: the read-back reads `sql_local_work.SELECT_ROW_WITHOUT_MACHINE` after `amoeba list`; tests in `tests/scripts/test_update_live.py` (update and restore on a copy of a schema-12 store with question and wake rows, every row `local` after, a row written between gone after the restore; a question left with no machine fails the read-back and restores).
 
 **Commit**: `feat: close a removed machine's work and update the contracts`
 

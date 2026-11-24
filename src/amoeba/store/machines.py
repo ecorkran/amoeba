@@ -273,13 +273,19 @@ def list_machines(transaction: Transaction) -> list[MachineRow]:
     ]
 
 
+def machine_id_by_name(transaction: Transaction, name: str) -> int | None:
+    """The id of the machine named ``name``, or ``None`` when there is none."""
+    found = transaction.execute(sql_machines.SELECT_MACHINE_BY_NAME, (name,)).fetchone()
+    return None if found is None else int(found[0])
+
+
 def remove_machine(transaction: Transaction, name: str) -> bool:
     """Delete the machine, its session rows, its checkouts and its kept results, in the
     caller's one transaction. Returns ``False`` when there is no such machine.
 
-    Members stay; one left with no checkout is shown that way (261 D14). Slice 262 adds
-    what else a machine owns (its open questions, waiting answers and wakes) to this
-    function (D13).
+    Members stay; one left with no checkout is shown that way (261 D14). What else
+    the machine owns is closed first by ``machine_removal.close_machine_work``
+    (262 D13).
     """
     found = transaction.execute(sql_machines.SELECT_MACHINE_BY_NAME, (name,)).fetchone()
     if found is None:

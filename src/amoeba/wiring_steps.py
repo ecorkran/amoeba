@@ -37,6 +37,7 @@ from amoeba.config.home import (
     pinned_cert_path,
 )
 from amoeba.config.user_config import ConfigError, UserConfig
+from amoeba.operations import list_view
 from amoeba.operations.deps import Deps
 from amoeba.operations.names import Door, OperationName
 from amoeba.operations.state_move import open_state_store
@@ -145,6 +146,7 @@ def steps_for(
 
 def after_operation(  # noqa: PLR0913 - what the after-step is given
     name: OperationName,
+    document: object,
     door: Door,
     steps: Steps | None,
     last: LastReply,
@@ -152,12 +154,14 @@ def after_operation(  # noqa: PLR0913 - what the after-step is given
 ) -> None:
     """The after-step of ``wiring.invoke``: after every operation on the CLI door, and
     on the MCP door after every operation but ``answer``, whose call a deadline bounds
-    by its resume alone (``check_deadline``). ``status`` and ``list`` prune in their
-    own placement."""
+    by its resume alone (``check_deadline``). ``status`` and the default ``list`` view
+    prune in their own placement, so the after-step does not prune after them."""
     if door is Door.MCP and name is OperationName.ANSWER:
         return
-    prunes = name not in (OperationName.STATUS, OperationName.LIST)
-    after_call(steps, deps, last, prunes=prunes)
+    pruned_already = name is OperationName.STATUS or (
+        name is OperationName.LIST and list_view.needs_here(document)
+    )
+    after_call(steps, deps, last, prunes=not pruned_already)
 
 
 def after_call(  # noqa: PLR0913 - the pieces of one after-step

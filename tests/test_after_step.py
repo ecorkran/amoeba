@@ -28,7 +28,7 @@ from store.question_support import (
 )
 from user_configs import example_config_text
 
-from amoeba import wiring
+from amoeba import wiring, wiring_steps
 from amoeba.config.home import StateLayout, config_path, state_layout
 from amoeba.config.user_config import ConfigError, UserConfig
 from amoeba.mcp import server
@@ -300,3 +300,33 @@ def test_a_reply_with_no_work_keys_leaves_the_holder_empty() -> None:
 
     assert result == {"read": 2}
     assert last == LastReply()
+
+
+@pytest.mark.parametrize(
+    ("name", "document", "prunes"),
+    [
+        (OperationName.STATUS, {}, False),
+        (OperationName.LIST, {}, False),
+        (OperationName.LIST, {"subject": "members"}, True),
+        (OperationName.DECISIONS, {}, True),
+    ],
+)
+def test_the_after_step_prunes_unless_the_operation_pruned_in_its_placement(
+    monkeypatch: pytest.MonkeyPatch, name: OperationName, document: object, prunes: bool
+) -> None:
+    seen: list[bool] = []
+
+    def record(*_args: object, prunes: bool) -> None:
+        seen.append(prunes)
+
+    monkeypatch.setattr(wiring_steps, "after_call", record)
+
+    wiring_steps.after_operation(
+        name, document, Door.CLI, None, LastReply(), lambda: _unused_deps()
+    )
+
+    assert seen == [prunes]
+
+
+def _unused_deps() -> Deps:
+    raise AssertionError("the recorder reads no deps")

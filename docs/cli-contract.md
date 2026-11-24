@@ -1097,6 +1097,35 @@ template composes from a report with every field at its limit (4000 characters o
 64-character hash), so it follows those limits and the template. It is composed, not
 caller text, so `send`'s `body` limit does not bind it.
 
+## Work a machine has waiting (slice 262)
+
+After every operation on the CLI, after every MCP tool call but `answer`, and at the end
+of `handle-pause` on every path, a raise included, Amoeba runs one **after-step**. It
+never changes the call's result or exit code, and a failure in it is one log line.
+
+1. The file clean-up, when one is due (at most one walk an hour), except after
+   `handle-pause`, `status` and `list`, which run their own and report its problems.
+2. If this machine has work waiting, one claim of up to five items, started detached:
+   an answer to resume (`amoeba resume-run <answer seq> <claim id>`), a held question
+   whose request ended or a claim that went stale (`amoeba handle-pause <run id>` in the
+   question's checkout, logs under `logs/handle-pause/`), and a due wake
+   (`amoeba wake-run <wake id>`). The rest waits for the next call. A `handle-pause` it
+   starts runs the after-step too, so a batch over five drains.
+
+Through the door every done reply says whether the calling machine has work waiting;
+with no client file the after-step reads it from the local store. When the hub cannot
+tell (its `config.yaml` does not load) the client prints one line on stderr, `the hub
+could not tell whether this machine has work waiting: <error>`. When the call got no
+reply, the after-step makes no call.
+
+Work is the machine's own: a question's resume and its `handle-pause` run on the
+machine whose run it is, a wake on the machine with the wakeable checkout. Each item is
+claimed before it is started, so two machines or two calls never start one item twice;
+a claim nobody finishes is handed out again once its limit has passed. A question
+started automatically three times with no outcome waits for the PM as
+`starts_exhausted` (its detail points at that machine's calls log), and an answer
+handed out three times with no recorded outcome is recorded `refused` with the count.
+
 ## The hub and joined machines (slice 260)
 
 A machine with a client file (`client.yaml` in the config home, written by
@@ -1205,7 +1234,7 @@ with one stderr line.
 | `amoeba hub serve [--from-backup DIR]` (`DIR` may be relative) | Starts the hub (D14): loads `hub.yaml`, binds the socket, decides the start from what the state directory and `backup_dir` hold, migrates after a pre-migration backup, takes a timed backup if due, serves | — | no |
 | `amoeba hub invite MACHINE` | Makes the machine, or gives an existing one a new token (ending the old one), and prints the join line `<address>,<fingerprint>,<token>`; needs `hub.yaml` for the address and the certificate for the fingerprint | the name is not `[a-z0-9][a-z0-9._-]*`, at most 64 characters | `{"machine", "join_line", "new"}` |
 | `amoeba hub machines` | Lists each machine: name, whether it has a token, last call time and client version | — | a list of `{"name", "has_token", "last_called_at", "client_version"}` |
-| `amoeba hub rm-machine MACHINE` | Deletes the machine, its sessions and its kept results in one transaction; its next call is `bad_token` | no such machine | `{"removed"}` |
+| `amoeba hub rm-machine MACHINE` | In one transaction: closes what waits on the machine (its open questions as `machine_removed`, their undelivered answers as `not_delivered`, its unended wakes as `machine_removed`), then deletes the machine, its sessions and its kept results; its next call is `bad_token`, and a wake wrapper still running there stops its command at its next step. A later `answer` to one of its questions is recorded and `not_delivered` | no such machine | `{"removed"}` |
 | `amoeba hub backup` | Takes a timed backup now and prints its path; safe while the hub serves | — | `{"path"}` |
 
 `--from-backup DIR` restores a backup's store, certificate and key into the state

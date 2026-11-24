@@ -198,7 +198,7 @@ def invoke(
         finally:
             # After the operation's own transactions closed, on both paths and every
             # path, a raise included, as in ``handle_pause``; never raises (262 D10).
-            after_operation(name, door, steps, last, deps)
+            after_operation(name, document, door, steps, last, deps)
 
 
 def local_edges() -> StepEdges:

@@ -55,7 +55,7 @@ from amoeba.config.home import config_path, state_home, store_path
 from amoeba.config.starter import fill_missing_keys, starter_values
 from amoeba.config.user_config import ConfigError
 from amoeba.operations.names import OperationName
-from amoeba.store import sql
+from amoeba.store import sql, sql_local_work
 from amoeba.store.machines import LOCAL_MACHINE_NAME
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS
@@ -200,6 +200,10 @@ def check_store(expected_members: int, cf_projects: set[str]) -> list[str]:
         dangling = connection.execute("PRAGMA foreign_key_check").fetchall()
         owners = connection.execute(SELECT_OWNER_COUNT).fetchone()[0]
         machines = [row[0] for row in connection.execute(SELECT_MACHINE_NAMES)]
+        # Read after `amoeba list`, whose opener gives old rows `local` (262 D14).
+        machineless = connection.execute(
+            sql_local_work.SELECT_ROW_WITHOUT_MACHINE
+        ).fetchone()[0]
         unnamed = connection.execute(sql.SELECT_UNNAMED_MEMBERS).fetchall()
         no_checkout = {
             row[0]
@@ -217,6 +221,8 @@ def check_store(expected_members: int, cf_projects: set[str]) -> list[str]:
         failures.append(f"owners holds {owners} rows, not 1")
     if machines != [LOCAL_MACHINE_NAME]:
         failures.append(f"machines holds {machines}, not just {LOCAL_MACHINE_NAME!r}")
+    if machineless:
+        failures.append("a question or wake has no machine after the migration")
     members = member_count(store_path())
     if members != expected_members:
         failures.append(f"members {members} != {expected_members} before")

@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: The Amoeba store contract: the home, every table and column of the schema with its vocabulary and the operation that writes it, and the migration rule.
 dateCreated: 20261109
-dateUpdated: 20261117
+dateUpdated: 20261124
 status: complete
 ---
 
@@ -66,6 +66,13 @@ and a 5-second busy timeout. `Store.write()` takes the write lock when the trans
 begins, so a read-then-write cannot fail halfway; `Store.read()` is one consistent
 read. A writer that waits past the timeout gets `StoreBusyError`. There is no lock
 file, pid file or read-only mode, and a missing store is created.
+
+**Every time is the store's own clock (slice 262).** Every timestamp in the store is
+taken by the process that owns the store: on a laptop the command that opened it, on a
+hub the hub, never a joined machine. A step a joined machine sends carries no date or
+time field; the hub stamps the rows it writes, and judges every age, claim and expiry,
+with its own clock. A client's clock only names its own log files and times its own
+waits.
 
 ## Migrations
 
@@ -657,7 +664,7 @@ machine, and `handle_call` sets the calling machine for the one call.
 | `amoeba hub invite` | a `machines` row, or a new `token_hash` on an existing one |
 | every hub call | `machines.last_called_at` and `client_version` (the touch, committed even when the call is refused); for a writing call, a `call_results` row in the same transaction as the operation |
 | the next call scope | deletes `call_results` rows older than `CALL_RESULT_LIFETIME_SECONDS` |
-| `amoeba hub rm-machine` | deletes the machine's `sessions` and `call_results` rows and the machine |
+| `amoeba hub rm-machine` | in one transaction: closes the machine's open questions as `machine_removed` (detail naming the machine), marks each such answered question's latest answer `not_delivered` and clears its resume claim, ends its unended wakes as `machine_removed`, sets `machine_id` to null on its question and wake rows and `log_stem` to null on its wakes, then deletes its `sessions` and `call_results` rows and the machine (slice 262) |
 | `amoeba join --set-aside-local` | the `closed_mark` row, on a plain connection, then the store is copied aside and the original deleted |
 | `amoeba leave` | deletes the `closed_mark` row of the set-aside store, which is renamed back |
 

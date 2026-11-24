@@ -17,6 +17,12 @@ from types import ModuleType
 import pytest
 import yaml
 from store.schema_11 import SCHEMA_ELEVEN, OldMember, build_schema_11_store
+from store.schema_12 import (
+    QUESTION_COUNT,
+    SCHEMA_TWELVE,
+    WAKE_COUNT,
+    build_schema_12_store,
+)
 from store.seed import insert_member, insert_program
 from store_open import open_local_store
 from user_configs import example_config_text
@@ -749,3 +755,66 @@ def test_tool_command_is_the_uv_tool_bin_not_the_path(
     assert update_live.tool_command("amoeba") == str(tmp_path / "amoeba")
     with pytest.raises(update_live.UpdateError, match="does not exist"):
         update_live.tool_command("amoeba-mcp")
+
+
+# --- the live store at schema 12: the machine on questions and wakes (262 D14) ---
+
+
+def _machines_of(table: str) -> list[object]:
+    with closing(sqlite3.connect(store_path())) as connection:
+        return [
+            row[0]
+            for row in connection.execute(
+                f"SELECT machines.name FROM {table} "  # noqa: S608 - fixed names
+                "LEFT JOIN machines USING (machine_id)"
+            )
+        ]
+
+
+def test_update_and_restore_against_a_copy_of_a_schema_twelve_store(
+    amoeba_home: Path,
+) -> None:
+    build_schema_12_store(store_path())
+    config_path().write_text(example_config_text(), encoding="utf-8")
+    fake = FakeSteps()
+
+    update_live.update(VERSION, PREVIOUS, fake.steps(), NOW)
+
+    assert _version(store_path()) == EXPECTED_SCHEMA_VERSION
+    assert _machines_of("questions") == ["local"] * QUESTION_COUNT
+    assert _machines_of("wakes") == ["local"] * WAKE_COUNT
+    with closing(sqlite3.connect(store_path())) as connection:
+        connection.execute("UPDATE questions SET question = 'written since'")
+        connection.commit()
+
+    restored = update_live.restore(update_live.newest_backup(), fake.steps())
+
+    assert restored == PREVIOUS
+    assert _version(store_path()) == SCHEMA_TWELVE
+    with closing(sqlite3.connect(store_path())) as connection:
+        questions = connection.execute("SELECT question FROM questions").fetchall()
+    assert ("written since",) not in questions
+
+
+class _LosesAMachine(FakeSteps):
+    """``amoeba list`` that leaves one question with no machine."""
+
+    def _migrate(self) -> None:
+        super()._migrate()
+        with closing(sqlite3.connect(store_path())) as connection:
+            connection.execute(
+                "UPDATE questions SET machine_id = NULL WHERE run_id = 'run-0'"
+            )
+            connection.commit()
+
+
+def test_a_question_left_with_no_machine_fails_the_read_back_and_restores(
+    amoeba_home: Path,
+) -> None:
+    build_schema_12_store(store_path())
+    config_path().write_text(example_config_text(), encoding="utf-8")
+
+    with pytest.raises(update_live.UpdateError, match="no machine"):
+        update_live.update(VERSION, PREVIOUS, _LosesAMachine().steps(), NOW)
+
+    assert _version(store_path()) == SCHEMA_TWELVE

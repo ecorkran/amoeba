@@ -18,11 +18,13 @@ from amoeba.hub.backups import BackupKind, BackupSource, take_backup
 from amoeba.hub.errors import HubStartError
 from amoeba.hub.hub_config import load_hub_config
 from amoeba.hub.store_open import open_hub_store
+from amoeba.store.machine_removal import close_machine_work
 from amoeba.store.machines import (
     MachineRow,
     hash_token,
     invite_machine,
     list_machines,
+    machine_id_by_name,
     remove_machine,
 )
 from amoeba.wire.fingerprint import fingerprint
@@ -87,13 +89,19 @@ def machines(layout: StateLayout) -> list[MachineRow]:
         return list_machines(transaction)
 
 
-def rm_machine(layout: StateLayout, name: str) -> None:
-    """Delete the machine, its sessions, checkouts and kept results in one transaction.
+def rm_machine(layout: StateLayout, name: str, now: datetime) -> None:
+    """Close what waits on the machine (its open questions, undelivered answers and
+    unended wakes, 262 D13), then delete it, its sessions, checkouts and kept results,
+    all in one transaction.
 
     Raises:
         AdminRejection: There is no such machine.
     """
     with open_hub_store(layout) as store, store.write() as transaction:
+        machine_id = machine_id_by_name(transaction, name)
+        if machine_id is None:
+            raise AdminRejection(f"no machine named {name!r}")
+        close_machine_work(transaction, machine_id, name, now)
         if not remove_machine(transaction, name):
             raise AdminRejection(f"no machine named {name!r}")
 

@@ -191,7 +191,7 @@ def run_hub(arguments: argparse.Namespace) -> int:
         if action == MACHINES:
             return _run_machines(layout, arguments)
         if action == RM_MACHINE:
-            admin.rm_machine(layout, arguments.machine)
+            admin.rm_machine(layout, arguments.machine, datetime.now(UTC))
             print_text_or_json(
                 f"removed {arguments.machine}",
                 {"removed": arguments.machine},
