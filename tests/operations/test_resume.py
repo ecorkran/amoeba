@@ -101,7 +101,9 @@ def _question(store: Store) -> tuple[QuestionRecord, int]:
 def _resume(store: Store, seq: int, deps: Deps) -> ResumeResult:
     """Take the answer's claim and resume on it, as every caller does."""
     steps = LocalSteps(store, StepEdges(deps.clock, lambda: CONFIG))
-    return claim_and_resume(steps, seq, deps)
+    result = claim_and_resume(steps, seq, deps)
+    assert result is not None, "another attempt holds the resume claim"
+    return result
 
 
 def _stored(store: Store, seq: int) -> tuple[ResumeOutcome | None, str | None]:

@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Final
+from typing import Final, Protocol
 
 from amoeba.answering.passages import (
     PassageKind,
@@ -31,7 +31,6 @@ from amoeba.answering.source_reads import (
     in_context,
     read_file,
 )
-from amoeba.store.checkouts import Checkout
 from amoeba.store.models import Member, Program
 from amoeba.upstream.context_forge.cli_call import CfRun
 from amoeba.upstream.context_forge.target_read import ReadFailure, read_target
@@ -85,6 +84,18 @@ def member_list_date(program: Program, members: Sequence[Member]) -> datetime:
     return max([program.updated_at, *(member.updated_at for member in members)])
 
 
+class CheckoutPaths(Protocol):
+    """A checkout as the program read needs it: where it is and the Context Forge id
+    that machine knows it by. A store ``Checkout`` and a step's ``CheckoutRef`` both
+    fit."""
+
+    @property
+    def path(self) -> str: ...
+
+    @property
+    def cf_project_id(self) -> str: ...
+
+
 @dataclass(frozen=True)
 class AskerReads:
     """The asking project's own checkout and pinned commit, used when it holds the
@@ -103,7 +114,7 @@ class ProgramRead:
     asker_reads: AskerReads
     #: The concept member's first-added checkout on this machine (261 D6); ``None``
     #: when it has none, which is a ``missing`` problem when the concept is read.
-    concept_checkout: Checkout | None
+    concept_checkout: CheckoutPaths | None
     #: Characters still allowed for the concept text after the project's own text.
     #: An early stop on raw text (182, D5); assembly decides on rendered size.
     max_chars: int

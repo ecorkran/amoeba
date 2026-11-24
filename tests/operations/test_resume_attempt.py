@@ -80,7 +80,9 @@ def _answered(store: Store) -> int:
 
 def _resume(store: Store, seq: int, rig: DepsRig) -> ResumeResult:
     steps = LocalSteps(store, StepEdges(rig.deps.clock, lambda: CONFIG))
-    return claim_and_resume(steps, seq, rig.deps)
+    result = claim_and_resume(steps, seq, rig.deps)
+    assert result is not None, "another attempt holds the resume claim"
+    return result
 
 
 def _stored(store: Store, seq: int) -> tuple[ResumeOutcome | None, str | None]:

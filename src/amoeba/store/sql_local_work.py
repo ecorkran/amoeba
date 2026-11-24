@@ -16,6 +16,14 @@ SELECT_OPEN_QUESTIONS_OF_MACHINE: Final = (
     f"SELECT {QUESTION_COLUMNS} FROM questions WHERE questions.machine_id = ? "
     f"AND {OPEN_QUESTION_CLAUSE} ORDER BY questions.claimed_at, questions.rowid"
 )
+#: The open questions of one run on one machine, oldest first (the pause sweep judges
+#: only the calling machine's rows). Parameters: run id, machine id, then the open
+#: clause's five.
+SELECT_OPEN_ROWS_OF_RUN_ON_MACHINE: Final = (
+    f"SELECT {QUESTION_COLUMNS} FROM questions WHERE questions.run_id = ? "
+    f"AND questions.machine_id = ? AND {OPEN_QUESTION_CLAUSE} "
+    "ORDER BY questions.claimed_at, questions.rowid"
+)
 #: The name of a question's machine, or no row when it has none. Parameters: run id,
 #: paused_at.
 SELECT_QUESTION_MACHINE_NAME: Final = (

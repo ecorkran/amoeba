@@ -21,6 +21,7 @@ from amoeba.operations.pause_class import (
     classify_pause,
     run_facts_needed,
 )
+from amoeba.operations.pause_observed import claim_is_stale
 from amoeba.operations.runs_document import OpenRun, RunCheckpoint
 from amoeba.operations.status_models import (
     CheckpointEntry,
@@ -35,8 +36,8 @@ from amoeba.store.messages import effective_state, get_message
 from amoeba.store.models import AnswerRecord, QuestionRecord
 from amoeba.store.store import Transaction
 from amoeba.store.vocabulary import QuestionState, RequestState
+from amoeba.upstream.squadron.checkpoint_kind import UnknownKind, parse_checkpoint_kind
 from amoeba.upstream.squadron.run_file import ExecutionMode, RunFacts
-from amoeba.upstream.squadron.run_outcome import UnknownKind, parse_checkpoint_kind
 
 #: The classes ``handle_pause`` acts on: a missed hook, a dead claim, an answer left
 #: undelivered.
@@ -175,7 +176,8 @@ def _pause_of(
         if isinstance(read, str):
             return RunFileUnreadable.RUN_FILE_UNREADABLE, read
         facts = read
-    pause_class = classify_pause(observed, row, answer, facts, claim_age_limit, now)
+    stale = row is not None and claim_is_stale(row, now, claim_age_limit)
+    pause_class = classify_pause(observed, row, answer, facts, stale)
     return pause_class, _detail(pause_class, observed, answer, row, requests)
 
 

@@ -13,10 +13,18 @@ from cf_plan_run import plan_cf_run
 from git_repo import head_of
 from store.seed import insert_checkout
 from store_open import open_local_store
+from user_configs import user_config
 
 from amoeba.answering.passages import SourcesProblem
 from amoeba.answering.settings import AnswererSettings, RulesChoice
 from amoeba.operations.pause_context import PauseContext, gather
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.steps.models import PAUSE_SOURCES
+from amoeba.operations.steps.models_pause import (
+    PauseSourcesReply,
+    PauseSourcesRequest,
+)
+from amoeba.operations.store_steps import LocalSteps
 from amoeba.store.models import Member, MemberSettings
 from amoeba.store.programs import get_member, upsert_member, upsert_program
 from amoeba.store.store import Store
@@ -69,11 +77,18 @@ class GatherRig:
     run: RoutedRun
     member: Member
 
+    def sources(self) -> PauseSourcesReply:
+        """What ``pause_sources`` reads from the store for the asker (one step)."""
+        steps = LocalSteps(self.store, StepEdges(lambda: NOW, user_config))
+        return steps.run(
+            PAUSE_SOURCES, PauseSourcesRequest(member_id=self.member.project_id)
+        )
+
     def gather(
         self, params: dict[str, str], *, max_chars: int = 1_000_000
     ) -> PauseContext | SourcesProblem:
         return gather(
-            self.store,
+            self.sources(),
             self.asker_repo,
             self.member,
             facts(params),

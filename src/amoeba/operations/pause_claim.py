@@ -8,7 +8,8 @@ more passage, and the claim updates the held row instead of inserting one.
 ``restart_dead_claim`` is the D7 path for a claimant that died before it spawned.
 ``finish`` turns a settle into a result, resuming the run only for an ``answered``
 question. Claiming comes after context and scratch, so no claim exists without its
-run id or a failure reason; no store transaction is open across a subprocess.
+run id or a failure reason; each store move is one step, so no transaction is open
+across a subprocess (262 D5).
 """
 
 from __future__ import annotations
@@ -23,16 +24,13 @@ from amoeba.answering.launch import discard_scratch
 from amoeba.answering.passages import SourcesProblem
 from amoeba.answering.request_passage import request_passage
 from amoeba.answering.values import DeclineReason
-from amoeba.config.user_config import UserConfig
 from amoeba.operations.answering_run import (
     Claim,
     ScratchFailure,
     make_scratch,
     scratch_path,
 )
-from amoeba.operations.answering_settle import (
-    answer_claim,
-)
+from amoeba.operations.answering_settle import answer_claim
 from amoeba.operations.claim_waiting import (
     ClaimFailed,
     record_waiting,
@@ -41,7 +39,7 @@ from amoeba.operations.claim_waiting import (
     with_request,
 )
 from amoeba.operations.deps import Deps
-from amoeba.operations.member_answering import MemberAnswering, answering_for
+from amoeba.operations.member_answering import MemberAnswering
 from amoeba.operations.pause_context import PauseContext, gather
 from amoeba.operations.pause_models import (
     HandlePauseResult,
@@ -53,17 +51,25 @@ from amoeba.operations.pause_results import (
     skipped,
     superseded_result,
 )
-from amoeba.store.answers import automatic_answer_count
-from amoeba.store.held_questions import claim_held
-from amoeba.store.messages import get_message
-from amoeba.store.models import Message
-from amoeba.store.questions import (
-    NewQuestion,
-    get_question,
-    insert_question,
-    replace_claim,
+from amoeba.operations.steps.models import (
+    PAUSE_SOURCES,
+    QUESTION_CLAIM_HELD,
+    QUESTION_INSERT,
+    QUESTION_REPLACE_CLAIM,
 )
-from amoeba.store.store import Store
+from amoeba.operations.steps.models_pause import (
+    HeldRequestModel,
+    LossKind,
+    PauseBeginReply,
+    PauseSourcesReply,
+    PauseSourcesRequest,
+    QuestionClaimHeldRequest,
+    QuestionInsertRequest,
+    QuestionReplaceClaimRequest,
+    passages_to_models,
+)
+from amoeba.operations.store_steps import Steps
+from amoeba.store.errors import StoreRowError
 from amoeba.upstream.bounded_text import cut_to_bound
 from amoeba.upstream.squadron.launch import mint_run_id
 
@@ -87,163 +93,180 @@ class HeldRequest:
     version: str | None
 
 
-def held_request_of(message: Message) -> HeldRequest:
-    """A ``done`` request's fields. Raises ``ValueError`` for a row with no
-    addressee or result, which a ``done`` request always has."""
-    if message.to_member is None or message.result is None:
-        raise ValueError(f"request {message.message_id} has no addressee or result")
+def held_request_of(model: HeldRequestModel) -> HeldRequest:
+    """A ``done`` request's fields, as the hub's step returned them."""
     return HeldRequest(
-        request_id=message.message_id,
-        replied_by=message.to_member,
-        done_at=message.state_changed_at,
-        result=message.result,
-        commit=message.result_commit,
-        version=message.result_version,
+        request_id=model.request_id,
+        replied_by=model.replied_by,
+        done_at=model.done_at,
+        result=model.result,
+        commit=model.commit,
+        version=model.version,
     )
+
+
+def _answering(begun: PauseBeginReply) -> MemberAnswering:
+    if begun.answering is None:
+        raise AssertionError("pause_begin returns the answering settings for a member")
+    return begun.answering
 
 
 def start_new_claim(
-    store: Store, config: UserConfig, deps: Deps, target: PauseTarget
+    steps: Steps, deps: Deps, target: PauseTarget, begun: PauseBeginReply
 ) -> HandlePauseResult:
     """Claim a question no row exists for, answer it, and resume the run if answered."""
-    answering = answering_for(target.member.settings, config)
-    limited = _limit_reached(store, target, answering)
+    answering = _answering(begun)
+    limited = _limit_reached(begun)
     if limited is not None:
-        return record_waiting(store, deps, target, limited)
-    prepared = _prepare(store, deps, target, answering)
+        return record_waiting(steps, target, limited)
+    prepared = _prepare(deps, target, answering, _sources(steps, target))
     if isinstance(prepared, ClaimFailed):
-        return record_waiting(store, deps, target, prepared)
-    new = NewQuestion(
-        key=target.key,
-        member_id=target.member.project_id,
-        question=target.question,
-        checkout=str(target.checkout),
-        slice_label=prepared.context.slice_label,
-        source_commit=prepared.context.source_commit,
-        passages=prepared.context.refs,
-        answering_run_id=prepared.answering_run_id,
-        waiting_reason=None,
-        waiting_detail=None,
+        return record_waiting(steps, target, prepared)
+    inserted = steps.run(
+        QUESTION_INSERT,
+        QuestionInsertRequest(
+            run_id=target.key.run_id,
+            paused_at=target.key.paused_at,
+            member_id=target.member.project_id,
+            question=target.question,
+            checkout=str(target.checkout),
+            slice_label=prepared.context.slice_label,
+            source_commit=prepared.context.source_commit,
+            passages=passages_to_models(prepared.context.refs),
+            answering_run_id=prepared.answering_run_id,
+            waiting_reason=None,
+            waiting_detail=None,
+        ),
     )
-    with store.write() as transaction:
-        inserted = insert_question(transaction, new, now=deps.clock())
-    if not inserted:
+    if not inserted.inserted:
         discard_scratch(prepared.scratch)
         return skipped(SkipReason.ALREADY_CLAIMED, target.key, str(target.checkout))
-    return _run(store, config, deps, target, answering, prepared)
+    return _run(steps, deps, target, begun, prepared)
 
 
-def start_held_claim(
-    store: Store,
-    config: UserConfig,
+def start_held_claim(  # noqa: PLR0913 - the held claim and its request, D6
+    steps: Steps,
     deps: Deps,
     target: PauseTarget,
+    begun: PauseBeginReply,
     request: HeldRequest,
 ) -> HandlePauseResult:
     """D6: claim a held question whose request is done, answer it from the request's
     result and the ordinary passages, and resume the run if answered."""
-    answering = answering_for(target.member.settings, config)
+    answering = _answering(begun)
     request_id = request.request_id
-    limited = _limit_reached(store, target, answering)
+    limited = _limit_reached(begun)
     if limited is not None:
-        return settle_held(store, deps, target, request_id, limited)
-    prepared = _prepare(store, deps, target, answering, request)
+        return settle_held(steps, target, request_id, limited)
+    prepared = _prepare(deps, target, answering, _sources(steps, target), request)
     if isinstance(prepared, ClaimFailed):
-        return settle_held(store, deps, target, request_id, prepared)
-    with store.write() as transaction:
-        claimed = claim_held(
-            transaction,
-            target.key,
+        return settle_held(steps, target, request_id, prepared)
+    claimed = steps.run(
+        QUESTION_CLAIM_HELD,
+        QuestionClaimHeldRequest(
+            run_id=target.key.run_id,
+            paused_at=target.key.paused_at,
             answering_run_id=prepared.answering_run_id,
-            passages=prepared.context.refs,
+            passages=passages_to_models(prepared.context.refs) or (),
             slice_label=prepared.context.slice_label,
             source_commit=prepared.context.source_commit,
-            now=deps.clock(),
-        )
-        current = None if claimed else get_question(transaction, target.key)
-    if not claimed:
+        ),
+    )
+    if not claimed.claimed:
         discard_scratch(prepared.scratch)
-        # Only a claim sets the answering run: another caller claimed it first.
-        # Otherwise a PM answer or a dismissal ended the hold.
-        if current is not None and current.answering_run_id is not None:
+        if claimed.lost_to is LossKind.CLAIM:
             lost = skipped(SkipReason.ALREADY_CLAIMED, target.key, str(target.checkout))
         else:
             lost = superseded_result(target, None)
         return with_request(lost, request_id)
-    result = _run(store, config, deps, target, answering, prepared)
+    result = _run(steps, deps, target, begun, prepared)
     return with_request(result, request_id)
 
 
 def restart_dead_claim(  # noqa: PLR0913 - the dead claim and its request, D7
-    store: Store,
-    config: UserConfig,
+    steps: Steps,
     deps: Deps,
     target: PauseTarget,
+    begun: PauseBeginReply,
     old_answering_run_id: str,
     request_id: str | None = None,
 ) -> HandlePauseResult:
     """D7, a claimant that died before it spawned: gather again, swap the claim to a
     new run id and scratch, and run it. A claim that came from a held question
     (``request_id``) gets its request's passage again (242 D6)."""
-    answering = answering_for(target.member.settings, config)
-    request_or_failure = _read_request(store, request_id)
+    answering = _answering(begun)
+    sources = _sources(steps, target, request_id)
+    request_or_failure = _request_of(sources, request_id)
     prepared = (
         request_or_failure
         if isinstance(request_or_failure, ClaimFailed)
-        else _prepare(store, deps, target, answering, request_or_failure)
+        else _prepare(deps, target, answering, sources, request_or_failure)
     )
     if isinstance(prepared, ClaimFailed):
         result = settle_dead_claim_waiting(
-            store, deps, target, old_answering_run_id, prepared
+            steps, target, old_answering_run_id, prepared
         )
         return result if request_id is None else with_request(result, request_id)
-    with store.write() as transaction:
-        swapped = replace_claim(
-            transaction,
-            target.key,
+    swapped = steps.run(
+        QUESTION_REPLACE_CLAIM,
+        QuestionReplaceClaimRequest(
+            run_id=target.key.run_id,
+            paused_at=target.key.paused_at,
             old_answering_run_id=old_answering_run_id,
             new_answering_run_id=prepared.answering_run_id,
-            passages=prepared.context.refs,
-            now=deps.clock(),
-        )
-    if not swapped:
+            passages=passages_to_models(prepared.context.refs) or (),
+        ),
+    )
+    if not swapped.applied:
         discard_scratch(prepared.scratch)
         return skipped(SkipReason.ALREADY_CLAIMED, target.key, str(target.checkout))
-    result = _run(store, config, deps, target, answering, prepared)
+    result = _run(steps, deps, target, begun, prepared)
     return result if request_id is None else with_request(result, request_id)
 
 
-def _limit_reached(
-    store: Store, target: PauseTarget, answering: MemberAnswering
-) -> ClaimFailed | None:
-    """The answer-limit check both claim paths make first; ``None`` under the limit."""
-    with store.read() as transaction:
-        given = automatic_answer_count(transaction, target.key.run_id)
-    if given < answering.settings.answer_limit:
+def _limit_reached(begun: PauseBeginReply) -> ClaimFailed | None:
+    """The answer-limit check both claim paths make first, from the result
+    ``pause_begin`` computed on the hub; ``None`` under the limit."""
+    if begun.limit is None:
+        raise AssertionError("pause_begin returns the limit for a claim path")
+    if not begun.limit.reached:
         return None
-    detail = f"{given} automatic answers were already given for this run"
+    detail = f"{begun.limit.given} automatic answers were already given for this run"
     return ClaimFailed(DeclineReason.ANSWER_LIMIT_REACHED, detail, None)
 
 
-def _read_request(
-    store: Store, request_id: str | None
+def _sources(
+    steps: Steps, target: PauseTarget, request_id: str | None = None
+) -> PauseSourcesReply:
+    """What the gather reads from the store: one read step."""
+    return steps.run(
+        PAUSE_SOURCES,
+        PauseSourcesRequest(member_id=target.member.project_id, request_id=request_id),
+    )
+
+
+def _request_of(
+    sources: PauseSourcesReply, request_id: str | None
 ) -> HeldRequest | ClaimFailed | None:
     """The request a dead held claim came from; ``request_unknown`` once pruned."""
     if request_id is None:
         return None
-    with store.read() as transaction:
-        message = get_message(transaction, request_id)
-    if message is None:
+    facts = sources.request
+    if facts is None:
+        raise AssertionError("pause_sources returns the request it was asked for")
+    if facts.state is None:
         detail = f"request {request_id} is no longer stored"
         return ClaimFailed(DeclineReason.REQUEST_UNKNOWN, detail, None)
-    return held_request_of(message)
+    if facts.held is None:
+        raise StoreRowError(f"request {request_id} has no result to answer from")
+    return held_request_of(facts.held)
 
 
-def _prepare(
-    store: Store,
+def _prepare(  # noqa: PLR0913 - the pieces of one gather
     deps: Deps,
     target: PauseTarget,
     answering: MemberAnswering,
+    sources: PauseSourcesReply,
     request: HeldRequest | None = None,
 ) -> _Prepared | ClaimFailed:
     """Gather the context (with the request's passage, when one is given), mint the
@@ -260,7 +283,7 @@ def _prepare(
             request.version,
         )
     context = gather(
-        store,
+        sources,
         target.checkout,
         target.member,
         target.run_facts,
@@ -289,20 +312,21 @@ def _prepare(
 
 
 def _run(  # noqa: PLR0913 - the pieces a claimed question needs to run
-    store: Store,
-    config: UserConfig,
+    steps: Steps,
     deps: Deps,
     target: PauseTarget,
-    answering: MemberAnswering,
+    begun: PauseBeginReply,
     prepared: _Prepared,
 ) -> HandlePauseResult:
+    if begun.answering_wait_seconds is None:
+        raise AssertionError("pause_begin returns the answering wait for a member")
     claim = Claim(
         key=target.key,
         answering_run_id=prepared.answering_run_id,
         question=target.question,
         passage_ids=prepared.context.passages.ids,
-        settings=answering.settings,
-        wait_seconds=config.answering_wait_seconds,
+        settings=_answering(begun).settings,
+        wait_seconds=begun.answering_wait_seconds,
     )
-    settled = answer_claim(store, deps, claim)
-    return finish(store, config, deps, target, prepared.answering_run_id, settled)
+    settled = answer_claim(steps, deps, claim)
+    return finish(steps, deps, target, prepared.answering_run_id, settled)

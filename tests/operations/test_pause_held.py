@@ -15,12 +15,12 @@ from store_open import open_local_store
 
 from amoeba.answering.values import DeclineReason
 from amoeba.operations import pause_held
-from amoeba.operations.handle_pause import handle_pause
 from amoeba.operations.pause_models import (
     HandlePauseOutcome,
     HandlePauseResult,
     SkipReason,
 )
+from amoeba.operations.steps import pause as pause_steps
 from amoeba.store.errors import StoreBusyError
 from amoeba.store.models import QuestionRecord
 from amoeba.store.notes import NewNote, insert_note
@@ -28,6 +28,7 @@ from amoeba.store.questions import get_question
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import QuestionState, RequestState
 from amoeba.upstream.squadron.run_outcome import RunOutcomeDocument, RunPoll
+from amoeba.wiring_pause import handle_pause_locally
 from operations.handle_rig import (
     KEY,
     PAUSE,
@@ -42,6 +43,7 @@ from operations.held_support import (
     ADDRESSEE,
     REQUEST_ID,
     add_addressee,
+    automatic_answers_to_the_limit,
     hold,
     seed_request,
 )
@@ -296,7 +298,7 @@ def test_two_calls_racing_on_a_done_request_claim_once(tmp_path: Path) -> None:
             try:
                 with open_local_store(tmp_path / "amoeba.sqlite3") as own:
                     results.append(
-                        handle_pause(
+                        handle_pause_locally(
                             own, w.config, RUN, directory=w.directory, deps=deps
                         )
                     )
@@ -327,7 +329,7 @@ def test_a_store_error_on_the_request_read_raises_and_leaves_the_row(
         def busy(*_arguments: object) -> None:
             raise StoreBusyError("the store is busy")
 
-        monkeypatch.setattr(pause_held, "get_message", busy)
+        monkeypatch.setattr(pause_steps, "get_message", busy)
         recorder = SpawnRecorder([FakeChild(0)])
         w.deps = replace(
             w.deps, amoeba_script=lambda: Path("/bin/amoeba"), spawn=recorder
@@ -341,3 +343,22 @@ def test_a_store_error_on_the_request_read_raises_and_leaves_the_row(
         # The failed call still hands the ended request on (242 D7): one start of
         # ``handle-pause`` for this run, and no answering run.
         assert [call.argv[-1] for call in recorder.calls] == [RUN]
+
+
+def test_a_question_held_and_released_in_one_call_at_the_answer_limit_waits(
+    tmp_path: Path,
+) -> None:
+    """The limit ``pause_begin`` computed stops the claim before anything is gathered:
+    no answering run starts, whether the question was held first or already was."""
+    with world(tmp_path, paused_polls=(HELD_PAUSE,)) as w:
+        add_addressee(w.store)
+        seed_request(w.store, RequestState.DONE)
+        automatic_answers_to_the_limit(w)
+
+        result = w.handle()
+
+        assert result.outcome is HandlePauseOutcome.WAITING_ON_PM, result
+        assert result.waiting_reason is DeclineReason.ANSWER_LIMIT_REACHED
+        assert result.request_id == REQUEST_ID
+        assert w.spawned.argvs == []
+        assert _record(w).state is QuestionState.WAITING_ON_PM

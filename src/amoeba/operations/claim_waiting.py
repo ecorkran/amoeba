@@ -2,8 +2,8 @@
 
 Three moves, one per kind of row: a new question is inserted ``waiting_on_pm``; a dead
 claim is settled from ``claimed``; a held question is settled from
-``waiting_on_request`` (242 D6). Each is a compare-and-set, so a lost race returns
-``skipped`` or ``superseded`` and writes nothing.
+``waiting_on_request`` (242 D6). Each is one step, itself a compare-and-set, so a lost
+race returns ``skipped`` or ``superseded`` and writes nothing.
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from amoeba.answering.values import DeclineReason
-from amoeba.operations.deps import Deps
 from amoeba.operations.pause_context import PauseContext
 from amoeba.operations.pause_models import HandlePauseResult, SkipReason
 from amoeba.operations.pause_results import (
@@ -20,9 +19,13 @@ from amoeba.operations.pause_results import (
     superseded_result,
     waiting_result,
 )
-from amoeba.store.held_questions import settle_held_waiting
-from amoeba.store.questions import NewQuestion, insert_question, settle_waiting
-from amoeba.store.store import Store
+from amoeba.operations.steps.models import QUESTION_INSERT, QUESTION_WAIT
+from amoeba.operations.steps.models_pause import (
+    QuestionInsertRequest,
+    QuestionWaitRequest,
+    passages_to_models,
+)
+from amoeba.operations.store_steps import Steps
 
 
 @dataclass(frozen=True)
@@ -36,70 +39,71 @@ class ClaimFailed:
 
 
 def record_waiting(
-    store: Store, deps: Deps, target: PauseTarget, failed: ClaimFailed
+    steps: Steps, target: PauseTarget, failed: ClaimFailed
 ) -> HandlePauseResult:
     """Insert the question as ``waiting_on_pm`` with the failure that stopped it."""
     context = failed.context
-    new = NewQuestion(
-        key=target.key,
-        member_id=target.member.project_id,
-        question=target.question,
-        checkout=str(target.checkout),
-        slice_label=None if context is None else context.slice_label,
-        source_commit=None if context is None else context.source_commit,
-        passages=None if context is None else context.refs,
-        answering_run_id=None,
-        waiting_reason=failed.reason,
-        waiting_detail=failed.detail,
+    inserted = steps.run(
+        QUESTION_INSERT,
+        QuestionInsertRequest(
+            run_id=target.key.run_id,
+            paused_at=target.key.paused_at,
+            member_id=target.member.project_id,
+            question=target.question,
+            checkout=str(target.checkout),
+            slice_label=None if context is None else context.slice_label,
+            source_commit=None if context is None else context.source_commit,
+            passages=None if context is None else passages_to_models(context.refs),
+            answering_run_id=None,
+            waiting_reason=failed.reason,
+            waiting_detail=failed.detail,
+        ),
     )
-    with store.write() as transaction:
-        inserted = insert_question(transaction, new, now=deps.clock())
-    if not inserted:
+    if not inserted.inserted:
         return skipped(SkipReason.ALREADY_CLAIMED, target.key, str(target.checkout))
     return waiting_result(target, failed.reason, failed.detail, None)
 
 
+def _wait(
+    steps: Steps, target: PauseTarget, answering_run_id: str | None, failed: ClaimFailed
+) -> bool:
+    """Move the named claim (or, with no run id, the held row) to ``waiting_on_pm``;
+    False when it was no longer that."""
+    moved = steps.run(
+        QUESTION_WAIT,
+        QuestionWaitRequest(
+            run_id=target.key.run_id,
+            paused_at=target.key.paused_at,
+            answering_run_id=answering_run_id,
+            reason=failed.reason,
+            detail=failed.detail,
+            evidence=None,
+        ),
+    )
+    return moved.applied
+
+
 def settle_dead_claim_waiting(
-    store: Store,
-    deps: Deps,
+    steps: Steps,
     target: PauseTarget,
     old_answering_run_id: str,
     failed: ClaimFailed,
 ) -> HandlePauseResult:
     """A dead claim whose context cannot be gathered again waits on the PM."""
-    with store.write() as transaction:
-        moved = settle_waiting(
-            transaction,
-            target.key,
-            old_answering_run_id,
-            reason=failed.reason,
-            detail=failed.detail,
-            evidence=None,
-            now=deps.clock(),
-        )
-    if not moved:
+    if not _wait(steps, target, old_answering_run_id, failed):
         return superseded_result(target, old_answering_run_id)
     return waiting_result(target, failed.reason, failed.detail, old_answering_run_id)
 
 
 def settle_held(
-    store: Store,
-    deps: Deps,
+    steps: Steps,
     target: PauseTarget,
     request_id: str,
     failed: ClaimFailed,
 ) -> HandlePauseResult:
     """A held question waits on the PM (242 D4, D6); ``superseded`` when it was no
     longer held."""
-    with store.write() as transaction:
-        moved = settle_held_waiting(
-            transaction,
-            target.key,
-            reason=failed.reason,
-            detail=failed.detail,
-            now=deps.clock(),
-        )
-    if not moved:
+    if not _wait(steps, target, None, failed):
         return with_request(superseded_result(target, None), request_id)
     result = waiting_result(target, failed.reason, failed.detail, None)
     return with_request(result, request_id)

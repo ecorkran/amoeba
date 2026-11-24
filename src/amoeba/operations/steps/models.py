@@ -12,6 +12,7 @@ from typing import Any, Final
 
 from amoeba.operations.steps.model_base import Step, StepModel
 from amoeba.operations.steps.models_pause import (
+    PAUSE_BEGIN,
     PAUSE_SOURCES,
     QUESTION_CLAIM_HELD,
     QUESTION_HOLD,
@@ -35,6 +36,7 @@ from amoeba.operations.steps.models_resume import (
 )
 
 __all__ = [
+    "PAUSE_BEGIN",
     "PAUSE_SOURCES",
     "QUESTION_CLAIM_HELD",
     "QUESTION_HOLD",
@@ -72,5 +74,6 @@ STEP_MODELS: Final[dict[str, Step[Any, Any]]] = {
         QUESTION_WAIT,
         QUESTION_SETTLE,
         PAUSE_SOURCES,
+        PAUSE_BEGIN,
     )
 }

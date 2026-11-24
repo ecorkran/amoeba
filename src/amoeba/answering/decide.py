@@ -33,8 +33,12 @@ from amoeba.answering.passages import (
 )
 from amoeba.answering.values import AnsweringEvidence, DeclineReason
 from amoeba.upstream.bounded_text import cut_to_bound
-from amoeba.upstream.squadron.run_outcome import (
+from amoeba.upstream.squadron.checkpoint_kind import (
     CheckpointKind,
+    UnknownKind,
+    parse_checkpoint_kind,
+)
+from amoeba.upstream.squadron.run_outcome import (
     FailureKind,
     Finished,
     LaunchFailed,
@@ -42,8 +46,6 @@ from amoeba.upstream.squadron.run_outcome import (
     RunEnded,
     RunOutcome,
     RunVanished,
-    UnknownKind,
-    parse_checkpoint_kind,
     parse_failure_kind,
 )
 

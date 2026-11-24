@@ -37,6 +37,10 @@ class SkipReason(StrEnum):
     SETTLED = "settled"
     CLOSED = "closed"
     WRONG_CHECKOUT = "wrong_checkout"
+    #: The question's row is on another machine (262 D5): its machine handles it.
+    OTHER_MACHINE = "other_machine"
+    #: Another attempt holds the answer's resume claim (262 D6).
+    RESUME_IN_PROGRESS = "resume_in_progress"
 
 
 class HandlePauseOutcome(StrEnum):

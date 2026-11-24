@@ -18,9 +18,9 @@ from store.question_support import NOW, claimed_question, waiting_question
 from store_open import open_local_store
 from user_configs import user_config
 
-from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.status import StatusResult
-from amoeba.store.answers import add_pm_answer, latest_answer
+from amoeba.operations.steps.limits import resume_claim_seconds
+from amoeba.store.answers import add_pm_answer, latest_answer, record_resume
 from amoeba.store.models import QuestionKey, QuestionRecord
 from amoeba.store.questions import get_question, insert_question
 from amoeba.store.store import Store
@@ -37,7 +37,7 @@ from operations.status_support import FakeCf, status_deps
 
 NAMES = {CORE: "core-name", LINT: "lint-name"}
 CONFIG = user_config()
-BOUND = timedelta(seconds=resume_bound_seconds(CONFIG))
+BOUND = timedelta(seconds=resume_claim_seconds(CONFIG))
 PAUSED_AT = "2026-11-09T08:00:00+00:00"
 WAITING = QuestionKey("moved-run", PAUSED_AT)
 GONE = QuestionKey("gone-run", PAUSED_AT)
@@ -167,13 +167,23 @@ def test_a_young_claim_and_an_answer_whose_resume_may_be_in_flight_stay_open(
     assert _row(store, GONE).state is QuestionState.ANSWERED
 
 
-def test_an_old_unresumed_answer_is_marked_not_delivered_and_reported(
+def test_an_old_refused_answer_is_marked_not_delivered_and_reported(
     store: Store, tmp_path: Path, core_dir: Path
 ) -> None:
     _waiting(store, WAITING)
     with store.write() as transaction:
         seq = add_pm_answer(
             transaction, WAITING, "answer", now=NOW - 2 * BOUND, via=None
+        )
+        # Only a refused answer is judged; one with no outcome is left (262 D9).
+        record_resume(
+            transaction,
+            seq,
+            ResumeOutcome.REFUSED,
+            detail="lock",
+            log=None,
+            at=NOW - 2 * BOUND,
+            claim_id=None,
         )
     runs = [_listed(WAITING.run_id, "completed", core_dir)]
 
@@ -260,3 +270,20 @@ def test_status_makes_one_listing_call_and_asks_for_all(
     status(store, CONFIG, {}, directory=core_dir, deps=deps)
 
     assert fake.list_calls() == [["runs", "list", "--json", "--all"]]
+
+
+def test_an_old_answer_with_no_outcome_is_left_by_the_status_sweep(
+    store: Store, tmp_path: Path, core_dir: Path
+) -> None:
+    _waiting(store, WAITING)
+    with store.write() as transaction:
+        add_pm_answer(transaction, WAITING, "answer", now=NOW - 2 * BOUND, via=None)
+    runs = [_listed(WAITING.run_id, "completed", core_dir)]
+
+    result = _status(store, tmp_path, core_dir, runs)
+
+    assert result.closed_now == ()
+    with store.read() as transaction:
+        answer = latest_answer(transaction, WAITING)
+    assert answer is not None
+    assert answer.resume_outcome is None

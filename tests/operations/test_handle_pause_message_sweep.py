@@ -1,4 +1,4 @@
-"""``handle_pause`` sweeps messages last, beside the prune (slice 240, D6).
+"""``handle_pause`` sweeps messages inside ``pause_begin`` (slice 240, D6; 262 D4).
 
 The question sweep's own tests are in ``test_handle_pause_sweep.py``.
 """
@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 from store.message_support import TTL, delivery_rows, send_request
 
-from amoeba.operations import handle_pause
 from amoeba.operations.pause_models import HandlePauseOutcome
+from amoeba.operations.steps import begin
 from amoeba.store.errors import StoreRowError
 from amoeba.store.messages import get_message
 from amoeba.store.store import Store
@@ -59,36 +59,20 @@ def test_an_expired_request_is_recorded_by_a_pause(tmp_path: Path) -> None:
             ]
 
 
-def test_a_failing_message_sweep_is_a_note_and_the_result_is_unchanged(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+def test_a_failing_message_sweep_fails_pause_begin_and_changes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def failing(*_arguments: object) -> str | None:
+    # The sweep is a part of ``pause_begin``'s one transaction (262 D4, step 2), so a
+    # failure of it is the step's failure and nothing the step did is kept; it is no
+    # longer a note on a result that was already decided.
+    def failing(*_arguments: object) -> None:
         raise StoreRowError("a row the sweep could not read")
 
     with world(tmp_path) as w:
         _overdue_request(w)
-        monkeypatch.setattr(handle_pause, "sweep_messages", failing)
+        monkeypatch.setattr(begin, "sweep", failing)
 
-        result = w.handle()
+        with pytest.raises(StoreRowError, match="a row the sweep could not read"):
+            w.handle()
 
-        assert result.outcome is HandlePauseOutcome.RESUMED, result
-        assert result.detail is not None
-        assert "message sweep: a row the sweep could not read" in result.detail
-        assert "the message sweep failed after handling the pause" in caplog.text
         assert _state(w.store) is RequestState.OPEN
-
-
-def test_a_busy_message_sweep_is_a_note_too(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def busy(*_arguments: object) -> str | None:
-        return "message sweep did not run"
-
-    with world(tmp_path) as w:
-        monkeypatch.setattr(handle_pause, "sweep_messages", busy)
-
-        result = w.handle()
-
-        assert result.outcome is HandlePauseOutcome.RESUMED, result
-        assert result.detail is not None
-        assert "message sweep did not run" in result.detail

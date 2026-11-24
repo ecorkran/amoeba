@@ -26,7 +26,7 @@ STUBBED_OPERATIONS = (
     ("add", "place_served", ["add", "--file"]),
     ("rm", "place_served", ["rm", "some-member"]),
     ("list", "place_served", ["list"]),
-    ("handle-pause", "handle_pause", ["handle-pause", "run-1"]),
+    ("handle-pause", "handle_pause_locally", ["handle-pause", "run-1"]),
     ("answer", "answer", ["answer", "run-1", "--text", "yes"]),
     ("status", "place_served", ["status"]),
     ("decisions", "decisions", ["decisions"]),

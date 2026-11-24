@@ -9,6 +9,7 @@ from user_configs import user_config
 
 from amoeba.config.starter import starter_values
 from amoeba.operations.pause_class import ObservedPause, PauseClass, classify_pause
+from amoeba.operations.pause_observed import claim_is_stale
 from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.runs_document import RunFileFacts
 from amoeba.operations.status_placement import PlacedRun
@@ -67,7 +68,8 @@ def test_classify_pause_turns_stale_at_the_pause_claim_limit(
     limit = pause_claim_seconds(CONFIG)
     row = question_row(KEY, QuestionState.CLAIMED, age_seconds=limit + age_offset)
 
-    assert classify_pause(ASKING, row, None, SDK, limit, RUN_NOW) is expected
+    stale = claim_is_stale(row, RUN_NOW, limit)
+    assert classify_pause(ASKING, row, None, SDK, stale) is expected
 
 
 MEMBER = Member(

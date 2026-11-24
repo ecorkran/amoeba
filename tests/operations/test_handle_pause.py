@@ -14,7 +14,6 @@ from store.question_support import NOW
 from user_configs import user_config
 
 from amoeba.answering.values import AnsweredBy, AnsweringEvidence, DeclineReason
-from amoeba.operations import pause_context
 from amoeba.operations.answering_run import PAUSE_COMMAND_OPT_OUT_FLAG
 from amoeba.operations.deps import Deps
 from amoeba.operations.names import OperationName
@@ -26,6 +25,7 @@ from amoeba.operations.pause_models import (
 from amoeba.operations.processes import Spawner, WaitableChild
 from amoeba.operations.request_release import MAX_STARTS_PER_CALL
 from amoeba.operations.set_up_models import SetUpOutcome
+from amoeba.operations.steps import sources
 from amoeba.store.answers import add_pm_answer, answers_of, settle_answered
 from amoeba.store.errors import StoreBusyError
 from amoeba.store.held_questions import HeldQuestion, insert_held
@@ -495,7 +495,7 @@ def test_a_store_error_reading_standing_answers_propagates_with_no_question(
     def busy(*_args: object) -> tuple[StandingAnswerRow, ...]:
         raise StoreBusyError("store busy")
 
-    monkeypatch.setattr(pause_context, "standing_reaching", busy)
+    monkeypatch.setattr(sources, "standing_reaching", busy)
     with world(tmp_path) as w:
         with pytest.raises(StoreBusyError):
             w.handle()

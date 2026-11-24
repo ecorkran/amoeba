@@ -28,7 +28,6 @@ from amoeba.operations.question_sweep import (
     fate_of_poll,
     sweep_run,
 )
-from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.steps.limits import pause_claim_seconds, resume_claim_seconds
 from amoeba.operations.steps.resume import claim_resume
 from amoeba.store.answers import (
@@ -55,7 +54,7 @@ OTHER_PAUSE = poll_result(LOCK_BEFORE, RUN)
 GONE = RunOutcomeDocument(run_id=RUN, outcome=RunOutcome.NOT_FOUND)
 UNREADABLE = RunOutcomeDocument(run_id=RUN, outcome=RunOutcome.UNREADABLE)
 CLAIM_SECONDS = resume_claim_seconds(CONFIG)
-BOUND = timedelta(seconds=resume_bound_seconds(CONFIG))
+BOUND = timedelta(seconds=CLAIM_SECONDS)
 
 
 @pytest.fixture
@@ -161,11 +160,35 @@ def test_an_old_claim_closes_and_a_young_one_stays(store: Store) -> None:
     assert _row(store, OLD).state is QuestionState.CLOSED
 
 
-def test_an_unresumed_answer_past_the_bound_becomes_not_delivered(
-    store: Store,
-) -> None:
-    seq = _answered(store, OLD)
+def _refuse(store: Store, seq: int, at: timedelta = timedelta(0)) -> None:
+    with store.write() as transaction:
+        record_resume(
+            transaction,
+            seq,
+            ResumeOutcome.REFUSED,
+            detail="lock",
+            log=None,
+            at=NOW + at,
+            claim_id=None,
+        )
 
+
+def test_an_answer_with_no_outcome_is_left_however_old(store: Store) -> None:
+    _answered(store, OLD)
+
+    result = _sweep(store, COMPLETED_DOC, after=BOUND * 100)
+
+    assert not result.changed_anything
+    assert _latest(store, OLD).resume_outcome is None
+
+
+def test_a_refused_answer_past_the_bound_becomes_not_delivered(store: Store) -> None:
+    seq = _answered(store, OLD)
+    _refuse(store, seq)
+
+    assert not _sweep(
+        store, COMPLETED_DOC, after=BOUND - timedelta(seconds=1)
+    ).changed_anything
     result = _sweep(store, COMPLETED_DOC, after=BOUND)
 
     (undelivered,) = result.undelivered
@@ -177,10 +200,11 @@ def test_an_unresumed_answer_past_the_bound_becomes_not_delivered(
     assert _row(store, OLD).state is QuestionState.ANSWERED  # no new question state
 
 
-def test_an_answer_inside_the_bound_stays_including_one_with_a_fresh_resume_start(
+def test_a_refused_answer_inside_the_bound_stays_including_one_with_a_fresh_retry(
     store: Store,
 ) -> None:
     seq = _answered(store, OLD)
+    _refuse(store, seq)
     just_inside = BOUND - timedelta(seconds=1)
     assert not _sweep(store, COMPLETED_DOC, after=just_inside).changed_anything
 
@@ -191,7 +215,7 @@ def test_an_answer_inside_the_bound_stays_including_one_with_a_fresh_resume_star
     result = _sweep(store, COMPLETED_DOC, after=BOUND + just_inside)
 
     assert not result.changed_anything
-    assert _latest(store, OLD).resume_outcome is None
+    assert _latest(store, OLD).resume_outcome is ResumeOutcome.REFUSED
 
 
 def test_a_refused_answer_is_judged_from_its_newest_sign_of_life(store: Store) -> None:

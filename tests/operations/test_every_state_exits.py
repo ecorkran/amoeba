@@ -24,14 +24,14 @@ from amoeba.operations.dismiss import (
     dismiss,
 )
 from amoeba.operations.question_sweep import SweepResult, sweep_run
-from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.retract import RetractOutcome, retract
-from amoeba.operations.steps.limits import pause_claim_seconds
+from amoeba.operations.steps.limits import pause_claim_seconds, resume_claim_seconds
 from amoeba.store.answers import (
     Settled,
     add_pm_answer,
     answers_of,
     pm_precedent,
+    record_resume,
     settle_answered,
 )
 from amoeba.store.models import QuestionRecord
@@ -249,12 +249,23 @@ def test_waiting_on_pm_exits_by_the_sweep(tmp_path: Path) -> None:
         assert _state(w.store).state is QuestionState.CLOSED
 
 
-def test_answered_unresumed_exits_by_the_sweep(tmp_path: Path) -> None:
+def test_a_refused_answer_exits_by_the_sweep_at_the_resume_claim_bound(
+    tmp_path: Path,
+) -> None:
     with world(tmp_path) as w:
         _wait(w)
         with w.store.write() as transaction:
-            add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
-        bound = timedelta(seconds=resume_bound_seconds(w.config))
+            seq = add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
+            record_resume(
+                transaction,
+                seq,
+                ResumeOutcome.REFUSED,
+                detail="lock",
+                log=None,
+                at=NOW,
+                claim_id=None,
+            )
+        bound = timedelta(seconds=resume_claim_seconds(w.config))
 
         assert not _sweep(w, bound - timedelta(seconds=1)).changed_anything
         assert _sweep(w, bound).undelivered

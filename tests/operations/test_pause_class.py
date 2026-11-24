@@ -13,10 +13,8 @@ from amoeba.operations.pause_class import (
 from amoeba.store.models import AnswerRecord, QuestionKey, QuestionRecord
 from amoeba.store.vocabulary import QuestionState, ResumeOutcome
 from amoeba.upstream.squadron.run_file import ExecutionMode, RunFacts
-from operations.status_support import RUN_NOW, answer_row, question_row
+from operations.status_support import answer_row, question_row
 
-NOW = RUN_NOW
-LIMIT = 600.0
 KEY = QuestionKey("run-1", "2026-11-11T11:00:00+00:00")
 SDK = RunFacts(params={}, execution_mode=ExecutionMode.SDK, working_directory=None)
 PROMPT_ONLY = RunFacts(
@@ -40,8 +38,10 @@ def _classify(
     row: QuestionRecord | None = None,
     latest: AnswerRecord | None = None,
     facts: RunFacts | None = None,
+    *,
+    claim_stale: bool = False,
 ) -> PauseClass:
-    return classify_pause(observed, row, latest, facts, LIMIT, NOW)
+    return classify_pause(observed, row, latest, facts, claim_stale)
 
 
 def test_a_run_that_is_not_paused_is_not_paused() -> None:
@@ -88,22 +88,22 @@ def test_no_row_without_run_facts_is_a_caller_bug() -> None:
         _classify()
 
 
-def test_a_young_claim_is_live() -> None:
-    assert _classify(row=_row(QuestionState.CLAIMED, age_seconds=1)) is (
-        PauseClass.CLAIM_LIVE
-    )
+def test_a_claim_the_hub_calls_young_is_live() -> None:
+    row = _row(QuestionState.CLAIMED)
+
+    assert _classify(row=row, claim_stale=False) is PauseClass.CLAIM_LIVE
 
 
-def test_a_claim_exactly_at_the_limit_is_stale() -> None:
-    row = _row(QuestionState.CLAIMED, age_seconds=LIMIT)
+def test_a_claim_the_hub_calls_stale_is_stale() -> None:
+    row = _row(QuestionState.CLAIMED)
 
-    assert _classify(row=row) is PauseClass.CLAIM_STALE
+    assert _classify(row=row, claim_stale=True) is PauseClass.CLAIM_STALE
 
 
-def test_a_claim_just_under_the_limit_is_live() -> None:
-    row = _row(QuestionState.CLAIMED, age_seconds=LIMIT - 0.001)
+def test_the_stale_flag_means_nothing_for_a_row_that_is_not_claimed() -> None:
+    row = _row(QuestionState.WAITING_ON_PM)
 
-    assert _classify(row=row) is PauseClass.CLAIM_LIVE
+    assert _classify(row=row, claim_stale=True) is PauseClass.WAITING_ON_PM
 
 
 def test_a_waiting_row_is_waiting_on_the_pm() -> None:

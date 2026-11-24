@@ -313,8 +313,21 @@ def test_the_walk_finds_an_import_it_should() -> None:
 #: The table grows module by module as each one moves onto steps. ``FORBIDDEN`` above
 #: is keyed by package; this one is keyed by file and checked by the same walk.
 MODULE_FORBIDDEN: dict[str, tuple[str, ...]] = {
-    "operations/resume.py": ("amoeba.store.store",),
-    "operations/resume_attempt.py": ("amoeba.store.store",),
+    f"operations/{name}.py": ("amoeba.store.store",)
+    for name in (
+        "resume",
+        "resume_attempt",
+        "handle_pause",
+        "pause_eligibility",
+        "pause_class",
+        "pause_claim",
+        "pause_held",
+        "pause_existing",
+        "pause_results",
+        "pause_context",
+        "claim_waiting",
+        "answering_settle",
+    )
 }
 #: What runs ``cf``, ``sq`` or ``git``: the whole ``upstream`` package and the module
 #: that starts children. A step runs on the hub, which has none of the three tools.

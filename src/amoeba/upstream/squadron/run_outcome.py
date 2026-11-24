@@ -26,6 +26,7 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
 
+from amoeba.upstream.squadron.checkpoint_kind import UnknownKind, parse_kind
 from amoeba.upstream.squadron.faults import LaunchFailure, ResumeFailure
 
 #: The Squadron executable, defined once.
@@ -76,21 +77,6 @@ _OUTCOME_BY_EXIT_CODE: Final[Mapping[int, RunOutcome]] = MappingProxyType(
 )
 
 
-class CheckpointKind(StrEnum):
-    """Why a run paused, as Squadron names it (observed squadron-ai 0.23.5)."""
-
-    LOOP_EXHAUSTED = "loop_exhausted"
-    INTERACTIVE_CHECKPOINT = "interactive_checkpoint"
-    AWAITS_HUMAN = "awaits_human"
-    #: squadron#248: a pause for a usage limit. Its round never ran, so accept is
-    #: refused and the answer is retry after ``resets_at`` (slice 127, D2).
-    USAGE_LIMIT = "usage_limit"
-    #: squadron#249: the agent ended on a question instead of an artifact. The
-    #: answer is a resume carrying instructions (slice 132, D10).
-    AGENT_QUESTION = "agent_question"
-    OTHER = "other"
-
-
 class FailureKind(StrEnum):
     """Why a run failed, as Squadron names it (observed squadron-ai 0.23.5)."""
 
@@ -100,38 +86,9 @@ class FailureKind(StrEnum):
     COST_CAP = "cost_cap"
 
 
-@dataclass(frozen=True)
-class UnknownKind:
-    """A kind Squadron reported that this code has no member for, text unchanged.
-
-    An unrecognized kind never fails a poll and is never mapped to a near match;
-    the caller sees the raw text and decides.
-    """
-
-    raw: str
-
-
-def parse_checkpoint_kind(raw: str | None) -> CheckpointKind | UnknownKind | None:
-    """A checkpoint's kind: a member, ``UnknownKind(raw)``, or ``None`` if unset."""
-    return _parse_kind(CheckpointKind, raw)
-
-
 def parse_failure_kind(raw: str | None) -> FailureKind | UnknownKind | None:
     """A failure's kind: a member, ``UnknownKind(raw)``, or ``None`` if unset."""
-    return _parse_kind(FailureKind, raw)
-
-
-def _parse_kind[KindT: StrEnum](
-    members: type[KindT], raw: str | None
-) -> KindT | UnknownKind | None:
-    if raw is None:
-        return None
-    try:
-        return members(raw)
-    except ValueError:
-        # Specific: Squadron named a kind newer than this code. An answer, kept
-        # verbatim, not a failure.
-        return UnknownKind(raw)
+    return parse_kind(FailureKind, raw)
 
 
 #: Squadron's tail limit on ``RunCheckpoint.question``: the last this-many

@@ -6,19 +6,17 @@ A Squadron or Context Forge failure is never a skip: "cannot tell" must not read
 
 A Context Forge project in no program is registered here with the defaults, as a bare
 ``amoeba add`` in its checkout would, and then handled: the hook is set once for the
-whole machine, so the first pause in a repo is what makes it a member.
+whole machine, so the first pause in a repo is what makes it a member. The store reads
+(the sweep of older rows, the caller, the row) are one step, ``pause_begin`` (262 D4).
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from pathlib import Path
 
-from amoeba.config.user_config import UserConfig
-from amoeba.operations.add import add
-from amoeba.operations.add_gather import gather_add
-from amoeba.operations.caller import NotAProject, NotInProgram, find_caller
 from amoeba.operations.deps import Deps
 from amoeba.operations.here import gather_caller, git_root
 from amoeba.operations.here_document import HereCaller, HereNotAProject
@@ -30,26 +28,31 @@ from amoeba.operations.pause_class import (
     observed_from_document,
 )
 from amoeba.operations.pause_models import SkipReason
+from amoeba.operations.question_judge import SweepResult
+from amoeba.operations.question_sweep import fate_of_poll
 from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
-from amoeba.store.machines import acting_machine_id
+from amoeba.operations.steps.models import PAUSE_BEGIN
+from amoeba.operations.steps.models_pause import (
+    FateFields,
+    PauseBeginReply,
+    PauseBeginRequest,
+)
+from amoeba.operations.store_steps import Steps
 from amoeba.store.models import Member, QuestionKey, QuestionRecord
-from amoeba.store.questions import any_answering_run_id, get_question
-from amoeba.store.store import Store
-from amoeba.store.vocabulary import Door
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.run_file import (
     RunFacts,
     RunFileProblem,
     read_run_facts,
 )
-from amoeba.upstream.squadron.run_outcome import (
-    CheckpointKind,
-    RunOutcomeDocument,
-    UnknownKind,
-    parse_checkpoint_kind,
-)
+from amoeba.upstream.squadron.run_outcome import RunOutcomeDocument
 
 logger = logging.getLogger(__name__)
+
+#: Registers the project the call came from with ``add``'s defaults: gathers its
+#: checkout, runs ``add`` with an empty document (in process or through the door) and
+#: returns its result. The pause modules import neither ``add`` nor the store (D5).
+type Register = Callable[[Path], SetUpResult]
 
 
 @dataclass(frozen=True)
@@ -58,6 +61,8 @@ class Skip:
 
     reason: SkipReason
     detail: str | None
+    #: What ``pause_begin`` closed on the way; empty when the call never reached it.
+    swept: SweepResult = SweepResult()
 
 
 @dataclass(frozen=True)
@@ -76,53 +81,128 @@ class Eligible:
     run_facts: RunFacts
     #: The row for this question, when an earlier call made one.
     existing: QuestionRecord | None
+    #: The hub's whole answer: settings, limits, link, request, ``claim_stale``.
+    begun: PauseBeginReply
 
 
 def check_eligibility(  # noqa: PLR0913 - the pieces of one call
-    store: Store,
-    config: UserConfig,
+    steps: Steps,
     run_id: str,
     directory: Path,
     deps: Deps,
     polled: RunOutcomeDocument,
+    register: Register,
 ) -> Eligible | Skip:
     """Run the D3 checks for ``run_id``'s pause, from the run's ``directory``.
 
     ``polled`` is the poll the caller already made (``handle_pause`` polls once, for
-    the close sweep and for these checks).
+    the close sweep and for these checks). A pause the run alone decides
+    (``classify_run_only``) makes no ``cf`` call.
 
     Raises:
         SquadronError: The run file gave no usable answer.
         ContextForgeError: ``cf`` gave no usable answer.
     """
     observed = observed_from_document(polled)
-    early = classify_run_only(observed)
-    if early is not None:
-        return _run_only_skip(early, polled)
-    paused_at, question = observed.paused_at, observed.question
-    if paused_at is None or question is None:
-        raise AssertionError("classify_run_only passed a pause without its text")
-    with store.read() as transaction:
-        if any_answering_run_id(transaction, run_id):
-            return Skip(SkipReason.ANSWERING_RUN, None)
-    key = QuestionKey(run_id, paused_at)
-    return _member_checks(store, config, key, question, observed, directory, deps)
+    request = _request_for(run_id, polled, observed)
+    if classify_run_only(observed) is not None:
+        return _skip_of(steps.run(PAUSE_BEGIN, request))
+    here = gather_caller(directory, deps.cf_run)
+    begun = steps.run(PAUSE_BEGIN, request.model_copy(update={"here": here}))
+    if begun.not_in_program is not None:
+        problem = _register(register, directory, begun.not_in_program)
+        if problem is not None:
+            return Skip(SkipReason.NOT_IN_PROGRAM, problem, begun.swept)
+        begun = steps.run(PAUSE_BEGIN, request.model_copy(update={"here": here}))
+        if begun.not_in_program is not None:
+            detail = f"project {begun.not_in_program}; still no member after add"
+            return Skip(SkipReason.NOT_IN_PROGRAM, detail, begun.swept)
+    if begun.skip is not None:
+        return _skip_of(begun)
+    return _member_checks(begun, here, run_id, directory, deps, observed)
 
 
-def _run_only_skip(pause_class: PauseClass, polled: RunOutcomeDocument) -> Skip:
-    """The skip for a class decided from the run alone, with its detail."""
-    match pause_class:
-        case PauseClass.NOT_PAUSED:
-            return Skip(SkipReason.NOT_PAUSED, f"the run's outcome is {polled.outcome}")
-        case PauseClass.OTHER_CHECKPOINT:
-            kind = parse_checkpoint_kind(
-                None if polled.checkpoint is None else polled.checkpoint.kind
-            )
-            return Skip(SkipReason.NOT_AGENT_QUESTION, f"checkpoint kind {_raw(kind)}")
-        case PauseClass.NO_QUESTION_TEXT:
-            return Skip(SkipReason.NO_QUESTION_TEXT, None)
-        case _:
-            raise ValueError(f"{pause_class} is not decided from the run alone")
+def _skip_of(begun: PauseBeginReply) -> Skip:
+    if begun.skip is None:
+        raise AssertionError("pause_begin skipped a pause without saying why")
+    return Skip(begun.skip, begun.skip_detail, begun.swept)
+
+
+def _register(register: Register, directory: Path, cf_id: str) -> str | None:
+    """Register the project with ``add``'s defaults; the text saying why it did not
+    take, or ``None`` when it did."""
+    result = register(directory)
+    if result.outcome is not SetUpOutcome.REJECTED:
+        logger.info("registered %s", cf_id)
+        return None
+    problems = "; ".join(problem.detail for problem in result.problems)
+    return f"project {cf_id}; registering it was rejected: {problems}"
+
+
+def _request_for(
+    run_id: str, polled: RunOutcomeDocument, observed: ObservedPause
+) -> PauseBeginRequest:
+    fate = fate_of_poll(polled)
+    return PauseBeginRequest(
+        run_id=run_id,
+        here=None,
+        outcome=str(polled.outcome),
+        paused=observed.paused,
+        checkpoint_kind=observed.kind,
+        paused_at=observed.paused_at,
+        question=observed.question,
+        fate=None
+        if fate is None
+        else FateFields(
+            reason=fate.reason,
+            detail=fate.detail,
+            current_paused_at=fate.current_paused_at,
+        ),
+    )
+
+
+def _member_checks(  # noqa: PLR0913 - the pieces of one call
+    begun: PauseBeginReply,
+    here: HereCaller | HereNotAProject,
+    run_id: str,
+    directory: Path,
+    deps: Deps,
+    observed: ObservedPause,
+) -> Eligible | Skip:
+    member = begun.member
+    if member is None or observed.paused_at is None or observed.question is None:
+        raise AssertionError("pause_begin returned no member past its skips")
+    if not isinstance(here, HereCaller):
+        raise ValueError("a member's checkout has a gathered project id")
+    key = QuestionKey(run_id, observed.paused_at)
+    # Read only after membership: a run-file problem in a non-member repo is no error.
+    facts = read_run_facts(deps.squadron_runs_dir, key.run_id)
+    if isinstance(facts, RunFileProblem):
+        raise SquadronError(facts.reason)
+    existing = begun.row
+    swept = begun.swept
+    if existing is None and classify_no_row(facts) is PauseClass.PROMPT_ONLY:
+        return Skip(SkipReason.PROMPT_ONLY, None, swept)
+    # Whatever the row state: a dead claim or an unresumed answer is never resumed
+    # from a second worktree either.
+    wrong = _wrong_checkout(directory, facts.working_directory)
+    if wrong is not None:
+        return replace(wrong, swept=swept)
+    if existing is not None and existing.member_id != member.project_id:
+        return Skip(SkipReason.OTHER_MEMBER, f"member {existing.member_id}", swept)
+    if begun.other_machine is not None:
+        detail = f"the question is on {begun.other_machine}"
+        return Skip(SkipReason.OTHER_MACHINE, detail, swept)
+    return Eligible(
+        key,
+        observed.question,
+        member,
+        here.project_id,
+        observed,
+        facts,
+        existing,
+        begun,
+    )
 
 
 def _checkout_of(directory: Path) -> Path:
@@ -147,83 +227,3 @@ def _wrong_checkout(directory: Path, started_in: Path | None) -> Skip | None:
             "`sq run --resume`, to continue or leave the run)"
         )
     return Skip(SkipReason.WRONG_CHECKOUT, detail)
-
-
-def _raw(kind: CheckpointKind | UnknownKind | None) -> str:
-    if kind is None:
-        return "not reported"
-    return kind.raw if isinstance(kind, UnknownKind) else kind.value
-
-
-def _caller_at(
-    store: Store, directory: Path, deps: Deps
-) -> tuple[Member | NotInProgram | NotAProject, HereCaller | HereNotAProject]:
-    """The member whose checkout holds ``directory``, and what the client gathered.
-
-    Raises:
-        ContextForgeError: ``cf`` failed to give a usable answer.
-    """
-    here = gather_caller(directory, deps.cf_run)
-    with store.read() as transaction:
-        found = find_caller(transaction, acting_machine_id(transaction), here)
-    return found, here
-
-
-def _registered(
-    store: Store, config: UserConfig, directory: Path, deps: Deps, cf_id: str
-) -> Member | Skip:
-    """Register the project in no program with ``add``'s defaults and resolve it again.
-    A registration that does not take is a skip that says why, never a member."""
-    gathered = gather_add({}, directory, deps.cf_run, deps.git_run, Door.CLI)
-    if isinstance(gathered, SetUpResult):
-        raise ValueError("an empty add document is never refused by the CLI door")
-    result = add(store, config, {}, here=gathered)
-    if result.outcome is SetUpOutcome.REJECTED:
-        problems = "; ".join(problem.detail for problem in result.problems)
-        return Skip(
-            SkipReason.NOT_IN_PROGRAM,
-            f"project {cf_id}; registering it was rejected: {problems}",
-        )
-    resolved, _here = _caller_at(store, directory, deps)
-    if not isinstance(resolved, Member):
-        return Skip(
-            SkipReason.NOT_IN_PROGRAM, f"project {cf_id}; still no member after add"
-        )
-    logger.info("registered %s in program %s", cf_id, resolved.program_id)
-    return resolved
-
-
-def _member_checks(  # noqa: PLR0913 - the pieces of one call
-    store: Store,
-    config: UserConfig,
-    key: QuestionKey,
-    question: str,
-    observed: ObservedPause,
-    directory: Path,
-    deps: Deps,
-) -> Eligible | Skip:
-    resolved, here = _caller_at(store, directory, deps)
-    if isinstance(resolved, NotAProject):
-        return Skip(SkipReason.NOT_A_PROJECT, resolved.message or None)
-    if isinstance(resolved, NotInProgram):
-        resolved = _registered(store, config, directory, deps, resolved.cf_id)
-        if isinstance(resolved, Skip):
-            return resolved
-    # Read only after membership: a run-file problem in a non-member repo is no error.
-    facts = read_run_facts(deps.squadron_runs_dir, key.run_id)
-    if isinstance(facts, RunFileProblem):
-        raise SquadronError(facts.reason)
-    with store.read() as transaction:
-        existing = get_question(transaction, key)
-    if existing is None and classify_no_row(facts) is PauseClass.PROMPT_ONLY:
-        return Skip(SkipReason.PROMPT_ONLY, None)
-    # Whatever the row state: a dead claim or an unresumed answer is never resumed
-    # from a second worktree either.
-    wrong = _wrong_checkout(directory, facts.working_directory)
-    if wrong is not None:
-        return wrong
-    if existing is not None and existing.member_id != resolved.project_id:
-        return Skip(SkipReason.OTHER_MEMBER, f"member {existing.member_id}")
-    if not isinstance(here, HereCaller):
-        raise ValueError("a member's checkout has a gathered project id")
-    return Eligible(key, question, resolved, here.project_id, observed, facts, existing)

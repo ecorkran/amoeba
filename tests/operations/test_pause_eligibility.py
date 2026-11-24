@@ -35,10 +35,13 @@ from store.question_support import NOW
 from store_open import open_local_store
 from user_configs import user_config
 
+from amoeba.operations.add_register import in_process_register
 from amoeba.operations.deps import Deps
 from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.pause_eligibility import Eligible, Skip, check_eligibility
 from amoeba.operations.pause_models import SkipReason
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.store_steps import LocalSteps
 from amoeba.store.models import QuestionKey
 from amoeba.store.programs import get_member
 from amoeba.store.questions import NewQuestion, insert_question
@@ -84,7 +87,16 @@ def _check(store: Store, rig_or_deps: DepsRig | Deps) -> Eligible | Skip:
     deps = rig_or_deps.deps if isinstance(rig_or_deps, DepsRig) else rig_or_deps
     polled = deps.poll_run(RUN)
     assert not isinstance(polled, PollFailure), polled
-    return check_eligibility(store, user_config(), RUN, DIRECTORY, deps, polled)
+    config = user_config()
+    steps = LocalSteps(store, StepEdges(deps.clock, lambda: config))
+    return check_eligibility(
+        steps,
+        RUN,
+        DIRECTORY,
+        deps,
+        polled,
+        in_process_register(store, config, deps),
+    )
 
 
 def _skip(result: Eligible | Skip) -> Skip:
@@ -139,9 +151,7 @@ def test_a_pause_with_no_question_or_no_paused_at_has_no_question_text(
     assert result.reason is SkipReason.NO_QUESTION_TEXT
 
 
-def test_an_answering_run_is_skipped_before_context_forge_is_asked(
-    tmp_path: Path, store: Store
-) -> None:
+def _store_an_answering_run(store: Store) -> None:
     member = register_member(store, PROJECT_ID)
     with store.write() as transaction:
         insert_question(
@@ -160,21 +170,35 @@ def test_an_answering_run_is_skipped_before_context_forge_is_asked(
             ),
             now=NOW,
         )
-    calls: list[Sequence[str]] = []
 
-    def tracking_cf(
-        argv: Sequence[str], **_kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        calls.append(argv)
-        raise AssertionError("cf must not be asked for an answering run")
 
-    rig = _rig(tmp_path, PAUSE)
-    deps = replace(rig.deps, cf_run=tracking_cf)
+def test_an_answering_runs_pause_is_skipped_when_context_forge_answers(
+    tmp_path: Path, store: Store
+) -> None:
+    # Design-allowed edit (262 D4): the store read that finds an answering run is
+    # inside ``pause_begin``, so ``cf`` is asked first and the skip is the same.
+    _store_an_answering_run(store)
 
-    result = _skip(_check(store, deps))
+    result = _skip(_check(store, _rig(tmp_path, PAUSE)))
 
     assert result.reason is SkipReason.ANSWERING_RUN
-    assert calls == []
+
+
+def test_an_answering_runs_pause_fails_when_context_forge_fails(
+    tmp_path: Path, store: Store
+) -> None:
+    _store_an_answering_run(store)
+    rig = _rig(tmp_path, PAUSE)
+
+    def failing_cf(
+        argv: Sequence[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        raise OSError("no cf")
+
+    deps = replace(rig.deps, cf_run=failing_cf)
+
+    with pytest.raises(ContextForgeError):
+        _check(store, deps)
 
 
 def test_a_directory_outside_every_project_is_not_a_project(

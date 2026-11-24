@@ -252,7 +252,7 @@ Status: decided
 **`pause_begin`.** The request holds the caller (`here`, 261 D5), or none when the run alone decides the skip (D5, step 1), the run id, what the poll said about the pause (paused or not, the checkpoint kind, the paused time, the question), and the run's fate for the sweep, or none when the poll could not say. In one transaction the hub:
 
 1. Closes the run's older open questions on the calling machine, by today's table with the one change in D9: an answer with no outcome is left to its resume claim.
-2. Runs the message sweep, when it is due.
+2. Runs the message sweep, when it is due. It is part of this transaction, so a failure of it is the step's failure and a busy lock cannot be one: today's note on the result for a failed or busy message sweep is gone.
 3. Stops there if the run alone decides the skip (not paused, another checkpoint kind, no question text), or if the run is an answering run. A request with no caller that gets past this step is refused as `malformed_call`; the client and the hub decide "the run alone" with the same function, `classify_run_only`, so it does not happen.
 4. Finds the caller with `find_caller`. Not a project and not in a program are returned as such.
 5. Reads the question's row and its latest answer. A row on another machine is returned as that, with the machine's name.

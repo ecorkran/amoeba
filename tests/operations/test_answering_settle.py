@@ -36,14 +36,15 @@ from amoeba.operations.answering_settle import (
     answer_claim,
     settle,
 )
-from amoeba.operations.member_answering import answering_for
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.store_steps import LocalSteps
 from amoeba.store.answers import add_pm_answer, answers_of, settle_answered
-from amoeba.store.models import MemberSettings, QuestionKey
+from amoeba.store.models import QuestionKey
 from amoeba.store.questions import get_question, insert_question
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import QuestionState, RulesFrom
+from amoeba.store.vocabulary import QuestionState
 from amoeba.upstream.squadron.run_outcome import RunEnded
-from operations.pause_support import FakeChild, build_deps
+from operations.pause_support import DepsRig, FakeChild, build_deps
 
 QUESTION_TEXT = "What is the maximum length of a source file?"
 SETTINGS = AnswererSettings(
@@ -65,6 +66,11 @@ def store(tmp_path: Path) -> Iterator[Store]:
         with opened.write() as transaction:
             insert_question(transaction, claimed_question(), now=NOW)
         yield opened
+
+
+def _steps(store: Store, rig: DepsRig) -> LocalSteps:
+    """The local steps: the gate runs on the config and the member's stored settings."""
+    return LocalSteps(store, StepEdges(rig.deps.clock, user_config))
 
 
 def _claim(settings: AnswererSettings = SETTINGS) -> Claim:
@@ -116,7 +122,7 @@ def test_a_confirmed_answer_through_the_gate_is_answered_with_its_citations(
     _write_replies(tmp_path, answer=_proposed(), check=YES)
     rig = build_deps(tmp_path, polls={}, spawns=[])
 
-    result = settle(store, rig.deps, _claim(), _completed())
+    result = settle(_steps(store, rig), rig.deps, _claim(), _completed())
 
     assert isinstance(result, Answered)
     assert result.answer == "Keep files near 300 lines."
@@ -141,7 +147,7 @@ def test_a_check_that_said_no_waits_on_the_pm_with_its_evidence(
     _write_replies(tmp_path, answer=_proposed(), check=NO)
     rig = build_deps(tmp_path, polls={}, spawns=[])
 
-    result = settle(store, rig.deps, _claim(), _completed())
+    result = settle(_steps(store, rig), rig.deps, _claim(), _completed())
 
     assert result == Waiting(DeclineReason.CHECK_SAID_NO, "the rule is older")
     assert _state(store) == (QuestionState.WAITING_ON_PM, DeclineReason.CHECK_SAID_NO)
@@ -159,9 +165,8 @@ def test_a_screen_refusal_waits_with_reserved_term(
 ) -> None:
     _write_replies(tmp_path, answer=_proposed("Then git push to origin."), check=YES)
     rig = build_deps(tmp_path, polls={}, spawns=[])
-    screened = SETTINGS.model_copy(update={"reserved_terms": ("git push",)})
 
-    result = settle(store, rig.deps, _claim(screened), _completed())
+    result = settle(_steps(store, rig), rig.deps, _claim(), _completed())
 
     assert isinstance(result, Waiting)
     assert result.reason is DeclineReason.RESERVED_TERM
@@ -171,33 +176,23 @@ def test_a_screen_refusal_waits_with_reserved_term(
         assert answers_of(transaction, KEY) == ()
 
 
-def _settings_of(allow: tuple[str, ...]) -> AnswererSettings:
-    member = MemberSettings(
-        project_id="m",
-        rules_paths=("CLAUDE.md",),
-        authorize_allow=allow,
-        authorize_deny=(),
-        rules_from=RulesFrom.NAMED,
-    )
-    return answering_for(member, user_config()).settings
-
-
 def test_an_item_barred_for_one_member_and_allowed_for_another_differs(
     tmp_path: Path,
 ) -> None:
     outcomes: list[object] = []
-    for index, allow in enumerate([(), ("push",)]):
+    for index, allow in enumerate(["[]", '["push"]']):
         directory = tmp_path / f"case-{index}"
         with open_local_store(directory / "amoeba.sqlite3") as store:
             seed_members(store)
             with store.write() as transaction:
                 insert_question(transaction, claimed_question(), now=NOW)
+                transaction.execute("UPDATE members SET authorize_allow = ?", (allow,))
             _write_replies(
                 directory, answer=_proposed("Fine: run git push origin."), check=YES
             )
             rig = build_deps(directory, polls={}, spawns=[])
             outcomes.append(
-                settle(store, rig.deps, _claim(_settings_of(allow)), _completed())
+                settle(_steps(store, rig), rig.deps, _claim(), _completed())
             )
 
     barred, allowed = outcomes
@@ -214,7 +209,7 @@ def test_a_pm_answer_during_settling_makes_it_superseded(
     with store.write() as transaction:
         add_pm_answer(transaction, KEY, "PM says 250.", now=NOW, via=None)
 
-    result = settle(store, rig.deps, _claim(), _completed())
+    result = settle(_steps(store, rig), rig.deps, _claim(), _completed())
 
     assert result == Superseded()
     with store.read() as transaction:
@@ -231,8 +226,8 @@ def test_a_declined_start_or_wait_settles_waiting_and_a_pm_answer_still_wins(
         AnsweringEvidence(),
     )
 
-    first = settle(store, rig.deps, _claim(), stalled)
-    second = settle(store, rig.deps, _claim(), stalled)
+    first = settle(_steps(store, rig), rig.deps, _claim(), stalled)
+    second = settle(_steps(store, rig), rig.deps, _claim(), stalled)
 
     assert first == Waiting(
         DeclineReason.ANSWERING_RUN_STALLED, "no result after 30 seconds"
@@ -246,7 +241,7 @@ def test_a_run_that_failed_waits_with_answering_run_failed(
     rig = build_deps(tmp_path, polls={}, spawns=[])
     failed = RunEnded(poll_result(PAUSED_AGENT_QUESTION, ANSWERING_RUN))
 
-    result = settle(store, rig.deps, _claim(), failed)
+    result = settle(_steps(store, rig), rig.deps, _claim(), failed)
 
     assert isinstance(result, Waiting)
     assert result.reason is DeclineReason.ANSWERING_RUN_FAILED
@@ -259,7 +254,7 @@ def test_a_completed_run_with_no_answer_file_is_artifact_missing(
     _write_replies(tmp_path, answer=None, check=None)
     rig = build_deps(tmp_path, polls={}, spawns=[])
 
-    result = settle(store, rig.deps, _claim(), _completed())
+    result = settle(_steps(store, rig), rig.deps, _claim(), _completed())
 
     assert isinstance(result, Waiting)
     assert result.reason is DeclineReason.ARTIFACT_MISSING
@@ -304,7 +299,7 @@ def test_the_answer_limit_counts_automatic_answers_only(
     _write_replies(tmp_path, answer=_proposed(), check=YES)
     rig = build_deps(tmp_path, polls={}, spawns=[])
 
-    result = settle(store, rig.deps, _claim(), _completed())
+    result = settle(_steps(store, rig), rig.deps, _claim(), _completed())
 
     assert isinstance(result, Answered)
 
@@ -318,7 +313,7 @@ def test_at_the_answer_limit_the_gate_declines_and_nothing_is_written_for_the_an
     with store.read() as transaction:
         before = answers_of(transaction, KEY)
 
-    result = settle(store, rig.deps, _claim(), _completed())
+    result = settle(_steps(store, rig), rig.deps, _claim(), _completed())
 
     assert isinstance(result, Waiting)
     assert result.reason is DeclineReason.ANSWER_LIMIT_REACHED
@@ -349,7 +344,7 @@ def test_answer_claim_starts_waits_and_settles_with_no_transaction_open(
         on_poll=assert_store_is_free,
     )
 
-    result = answer_claim(store, rig.deps, _claim())
+    result = answer_claim(_steps(store, rig), rig.deps, _claim())
 
     assert isinstance(result, Answered)
     (call,) = rig.spawner.calls
@@ -373,7 +368,7 @@ def test_an_answer_citing_a_standing_answer_that_authorizes_a_barred_item_declin
     )
     rig = build_deps(tmp_path, polls={}, spawns=[])
 
-    result = settle(store, rig.deps, _claim(_settings_of(())), _completed())
+    result = settle(_steps(store, rig), rig.deps, _claim(), _completed())
 
     assert isinstance(result, Waiting)
     assert result.reason is DeclineReason.RESERVED_TERM

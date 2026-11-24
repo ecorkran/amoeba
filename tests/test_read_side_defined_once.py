@@ -17,7 +17,7 @@ WIRE_PROTOCOL_MODULE: Final = SOURCE_ROOT / "wire" / "protocol.py"
 
 #: Each vocabulary and the one module that defines it.
 VOCABULARIES: Final = {
-    "PauseClass": SOURCE_ROOT / "operations" / "pause_class.py",
+    "PauseClass": SOURCE_ROOT / "operations" / "pause_observed.py",
     "UnplacedReason": SOURCE_ROOT / "operations" / "status_models.py",
     "WaitingRunState": SOURCE_ROOT / "operations" / "status_models.py",
     "RejectCode": SOURCE_ROOT / "operations" / "reject_codes.py",

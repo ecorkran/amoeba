@@ -4,11 +4,19 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from amoeba.answering.values import AnsweringEvidence
+from amoeba.operations.here_document import HereCaller
 from amoeba.operations.pause_results import PauseTarget
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.steps.models import PAUSE_BEGIN
+from amoeba.operations.steps.models_pause import PauseBeginReply, PauseBeginRequest
+from amoeba.operations.store_steps import LocalSteps
+from amoeba.store.answers import settle_answered
 from amoeba.store.held_questions import HeldQuestion, insert_held
 from amoeba.store.message_transitions import StateFields, change_state
 from amoeba.store.messages import get_message, insert_request
-from amoeba.store.models import Message
+from amoeba.store.models import Message, QuestionKey
+from amoeba.store.questions import NewQuestion, insert_question
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, RequestState
 from amoeba.upstream.squadron.run_file import RunFacts, read_run_facts
@@ -107,3 +115,42 @@ def target_of(w: World) -> PauseTarget:
     facts = read_run_facts(w.runs_dir, RUN)
     assert isinstance(facts, RunFacts)
     return PauseTarget(KEY, QUESTION, w.directory, w.member, PROJECT_ID, facts)
+
+
+def steps_for(w: World) -> LocalSteps:
+    """The world's local steps, on its store, config and clock."""
+    return LocalSteps(w.store, StepEdges(w.deps.clock, lambda: w.config))
+
+
+def begin_for(w: World) -> PauseBeginReply:
+    """What ``pause_begin`` tells ``handle_pause`` about the paused question now."""
+    return steps_for(w).run(
+        PAUSE_BEGIN,
+        PauseBeginRequest(
+            run_id=KEY.run_id,
+            here=HereCaller(project_id=PROJECT_ID),
+            outcome="paused",
+            paused=True,
+            checkpoint_kind="agent_question",
+            paused_at=KEY.paused_at,
+            question=QUESTION,
+            fate=None,
+        ),
+    )
+
+
+def automatic_answers_to_the_limit(w: World) -> None:
+    for number in range(w.config.answer_limit):
+        earlier = QuestionKey(KEY.run_id, f"2026-11-09T0{number}:00:00+00:00")
+        new = NewQuestion(
+            key=earlier, member_id=PROJECT_ID, question="q", checkout="/c",
+            slice_label=None, source_commit=None, passages=None,
+            answering_run_id=f"earlier-{number}", waiting_reason=None,
+            waiting_detail=None,
+        )  # fmt: skip
+        with w.store.write() as transaction:
+            insert_question(transaction, new, now=START)
+        settle_answered(
+            w.store, earlier, f"earlier-{number}", answer="x", cited=(),
+            evidence=AnsweringEvidence(), gate=lambda _prior: None, now=START,
+        )  # fmt: skip

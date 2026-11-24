@@ -32,7 +32,6 @@ from amoeba.cli.render.simple import render_handle_pause
 from amoeba.cli.render.style import painter_for
 from amoeba.config.home import StateLayout
 from amoeba.operations.calls_log import append_call, error_entry, result_entry
-from amoeba.operations.handle_pause import handle_pause
 from amoeba.operations.names import Door, OperationName
 from amoeba.operations.report_release_models import ReportMode
 from amoeba.operations.set_up_models import SetUpResult
@@ -46,6 +45,7 @@ from amoeba.wiring import (
     result_document,
 )
 from amoeba.wiring_door import joined
+from amoeba.wiring_pause import handle_pause_locally
 
 STDIN_SOURCE: Final = "-"
 STDIN_NAME: Final = "<stdin>"
@@ -216,7 +216,9 @@ def run_handle_pause(layout: StateLayout, run_id: str, *, as_json: bool) -> int:
     deps = default_deps(layout)
     directory = Path.cwd()
     with open_store(layout) as store:
-        result = handle_pause(store, config, run_id, directory=directory, deps=deps)
+        result = handle_pause_locally(
+            store, config, run_id, directory=directory, deps=deps
+        )
     if as_json:
         _print_json(asdict(result))
     else:

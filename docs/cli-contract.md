@@ -443,7 +443,7 @@ or could not do, is appended to `detail`. Every call adds one line to the calls 
 | Field | Meaning |
 |---|---|
 | `outcome` | `skipped`, `waiting_on_pm`, `superseded`, `resumed`, `refused`, `not_delivered` or `held` |
-| `skip_reason` | with `skipped`: `not_paused`, `not_agent_question`, `no_question_text`, `answering_run`, `not_a_project`, `not_in_program`, `prompt_only`, `other_member`, `already_claimed`, `waiting_on_pm`, `settled`, `closed` or `wrong_checkout` |
+| `skip_reason` | with `skipped`: `not_paused`, `not_agent_question`, `no_question_text`, `answering_run`, `not_a_project`, `not_in_program`, `prompt_only`, `other_member`, `other_machine`, `already_claimed`, `resume_in_progress`, `waiting_on_pm`, `settled`, `closed` or `wrong_checkout` |
 | `waiting_reason` | with `waiting_on_pm`: the `DeclineReason` (see `store-contract.md`). For a held question (slice 242): `request_declined`, `request_cancelled` or `request_expired` when its request ended that way, and `request_unknown` when its request was pruned or its marker names no request this project sent |
 | `detail` | why it was skipped (some reasons), declined, refused or not delivered, then any sweep or prune notes |
 | `key` | the question: `run_id` and `paused_at` exactly as `sq runs wait --json` prints it |
@@ -453,7 +453,10 @@ or could not do, is appended to `detail`. Every call adds one line to the calls 
 | `request_id` | the request a held question waits on or came from (slice 242); null for any other question |
 
 `skip_reason` `closed`: the pause's question was closed (dismissed, or its run moved
-on or is gone) and is not handled again; `answer` reopens it. `wrong_checkout`: the
+on or is gone) and is not handled again; `answer` reopens it. `other_machine` (slice
+262): the question's row is on another machine, which handles it; `detail` names that
+machine. `resume_in_progress`: another attempt holds the answer's resume claim, so
+nothing is started; the claim runs out and the answer is handed out again. `wrong_checkout`: the
 call was not from the checkout of the run's recorded directory (a subdirectory of it
 is the same checkout; another worktree is not); `detail` names both directories, and says
 so when the recorded directory no longer exists (then use Squadron's own commands, such as

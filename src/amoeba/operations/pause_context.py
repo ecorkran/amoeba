@@ -37,13 +37,8 @@ from amoeba.operations.program_sources import (
     without_path,
 )
 from amoeba.operations.standing_sources import standing_answers_of
-from amoeba.store.answers import pm_precedent
-from amoeba.store.checkouts import Checkout, first_checkout_on
-from amoeba.store.machines import acting_machine_id
-from amoeba.store.models import Member, PmPrecedent, Program, StandingAnswerRow
-from amoeba.store.programs import get_program, members_of
-from amoeba.store.standing import standing_reaching
-from amoeba.store.store import Store
+from amoeba.operations.steps.models_pause import PauseSourcesReply
+from amoeba.store.models import Member, PmPrecedent
 from amoeba.upstream.context_forge.cli_call import CfRun
 from amoeba.upstream.context_forge.plan import (
     CFErrorDocument,
@@ -160,23 +155,8 @@ class PauseContext:
     refs: tuple[PassageRef, ...]
 
 
-@dataclass(frozen=True)
-class _StoredFacts:
-    """What gather reads from the store, before any subprocess runs."""
-
-    program: Program
-    members: tuple[Member, ...]
-    precedent: tuple[PmPrecedent, ...]
-    #: The active standing answers reaching the member (230 D5).
-    standing: tuple[StandingAnswerRow, ...]
-    #: The concept member's first-added checkout on the acting machine, whose path and
-    #: Context Forge id the concept read uses (261 D6); ``None`` when there is none or
-    #: the program has no concept.
-    concept_checkout: Checkout | None
-
-
-def gather(
-    store: Store,
+def gather(  # noqa: PLR0913 - the pieces of one gather
+    sources: PauseSourcesReply,
     checkout: Path,
     member: Member,
     run_facts: RunFacts,
@@ -194,12 +174,12 @@ def gather(
     ``request`` is a held question's ``request_result`` passage (242 D5), handed to
     ``assemble`` as it is.
 
-    Reads the store once up front, then resolves the slice, reads rules and plan at
-    the checkout's target, the program passages and the PM precedent, and assembles.
+    ``sources`` is what ``pause_sources`` read from the store (262 D4): the gather
+    reads no store. It resolves the slice, reads rules and plan at the checkout's
+    target, the program passages and the PM precedent, and assembles.
     The first failing step's problem is returned and nothing partial. The caller maps
     a problem to its decline reason with ``sources_reason``.
     """
-    stored = _read_store(store, member)
     slice_context = resolve_slice(checkout, cf_project_id, run_facts.params, run)
     if isinstance(slice_context, SourcesProblem):
         return slice_context
@@ -207,31 +187,8 @@ def gather(
     if not isinstance(committed, CommittedSources):
         return committed
     return _assemble(
-        stored, member, checkout, slice_context, committed, settings, run, request
+        sources, member, checkout, slice_context, committed, settings, run, request
     )
-
-
-def _read_store(store: Store, member: Member) -> _StoredFacts:
-    with store.read() as transaction:
-        program = get_program(transaction, member.program_id)
-        if program is None:
-            raise ValueError(f"member {member.project_id} has no program record")
-        concept_checkout = (
-            None
-            if program.concept_member is None
-            else first_checkout_on(
-                transaction, program.concept_member, acting_machine_id(transaction)
-            )
-        )
-        return _StoredFacts(
-            program=program,
-            members=members_of(transaction, member.program_id),
-            precedent=pm_precedent(transaction, member.project_id),
-            standing=standing_reaching(
-                transaction, member.project_id, member.program_id
-            ),
-            concept_checkout=concept_checkout,
-        )
 
 
 def _read_committed(
@@ -256,7 +213,7 @@ def _read_committed(
 
 
 def _assemble(  # noqa: PLR0913 - the pieces gather has already read
-    stored: _StoredFacts,
+    stored: PauseSourcesReply,
     member: Member,
     checkout: Path,
     slice_context: SliceContext,

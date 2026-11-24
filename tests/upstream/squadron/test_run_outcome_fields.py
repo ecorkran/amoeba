@@ -15,15 +15,17 @@ from typing import Any
 
 import pytest
 
+from amoeba.upstream.squadron.checkpoint_kind import (
+    CheckpointKind,
+    UnknownKind,
+    parse_checkpoint_kind,
+)
 from amoeba.upstream.squadron.run_outcome import (
     OUTCOME_EXIT_CODES,
-    CheckpointKind,
     FailureKind,
     PollFailure,
     RunOutcome,
     RunOutcomeDocument,
-    UnknownKind,
-    parse_checkpoint_kind,
     parse_failure_kind,
     poll_run,
 )

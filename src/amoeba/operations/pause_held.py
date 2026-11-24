@@ -1,12 +1,12 @@
 """A question held on a request its repo sent (slice 242, D1, D3, D4).
 
-``link_for`` reads the question's ``amoeba-request`` marker against the store.
-``hold_new`` records a new question that has one: held for a resolved id (then
-``handle_held`` at once, so a request done before the pause and one done after it take
-the same code), or waiting on the PM as ``request_unknown`` for a marker that resolves
-to nothing. ``handle_held`` is the one evaluation path, by the request's effective
-state. A ``done`` request goes to ``pause_claim.start_held_claim``; no claim, scratch
-or dead-claim logic lives here.
+``link_of`` reads the question's ``amoeba-request`` marker from what ``pause_begin``
+resolved on the hub. ``hold_new`` records a new question that has one: held for a
+resolved id (then evaluated at once, so a request done before the pause and one done
+after it take the same code), or waiting on the PM as ``request_unknown`` for a marker
+that resolves to nothing. Both evaluate the request by its effective state. A ``done``
+request goes to ``pause_claim.start_held_claim``; no claim, scratch or dead-claim logic
+lives here.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ from __future__ import annotations
 from typing import Final
 
 from amoeba.answering.values import DeclineReason
-from amoeba.config.user_config import UserConfig
 from amoeba.operations.claim_waiting import (
     ClaimFailed,
     record_waiting,
@@ -29,13 +28,17 @@ from amoeba.operations.pause_models import (
     SkipReason,
 )
 from amoeba.operations.pause_results import PauseTarget, skipped
-from amoeba.operations.request_link import BadLink, Link, LinkResult, find_request_link
+from amoeba.operations.request_link import BadLink, Link, LinkResult, NoLink
+from amoeba.operations.steps.models import QUESTION_HOLD
+from amoeba.operations.steps.models_pause import (
+    PauseBeginReply,
+    QuestionHoldRequest,
+    RequestFacts,
+)
+from amoeba.operations.store_steps import Steps
 from amoeba.store.errors import StoreRowError
-from amoeba.store.held_questions import HeldQuestion, insert_held
-from amoeba.store.messages import effective_state, get_message
 from amoeba.store.models import QuestionRecord
-from amoeba.store.store import Store
-from amoeba.store.vocabulary import MessageKind, RequestState
+from amoeba.store.vocabulary import RequestState
 from amoeba.upstream.bounded_text import cut_to_bound
 
 #: The request states a held question keeps waiting through.
@@ -49,28 +52,21 @@ ENDED_WITHOUT_RESULT: Final = {
 NO_REASON_DETAIL: Final = "the request ended with no reason"
 
 
-def link_for(store: Store, target: PauseTarget) -> LinkResult:
-    """The question's link: an id counts only if it is a request the question's
-    member sent (D1). One read transaction."""
-    member_id = target.member.project_id
-    with store.read() as transaction:
-
-        def resolve(candidate: str) -> bool:
-            message = get_message(transaction, candidate)
-            return (
-                message is not None
-                and message.kind is MessageKind.REQUEST
-                and message.from_member == member_id
-            )
-
-        return find_request_link(target.question, resolve)
+def link_of(begun: PauseBeginReply) -> LinkResult:
+    """The question's link as ``pause_begin`` resolved it on the hub: an id counts
+    only if it is a request the question's member sent (D1)."""
+    if begun.link_request_id is not None:
+        return Link(begun.link_request_id)
+    if begun.link_problem is not None:
+        return BadLink(begun.link_problem)
+    return NoLink()
 
 
 def hold_new(
-    store: Store,
-    config: UserConfig,
+    steps: Steps,
     deps: Deps,
     target: PauseTarget,
+    begun: PauseBeginReply,
     link: Link | BadLink,
 ) -> HandlePauseResult:
     """Record a new question that carries a marker, then evaluate a held one."""
@@ -78,48 +74,56 @@ def hold_new(
         failed = ClaimFailed(
             DeclineReason.REQUEST_UNKNOWN, cut_to_bound(link.detail), None
         )
-        return record_waiting(store, deps, target, failed)
-    held = HeldQuestion(
-        target.key, target.member.project_id, target.question, str(target.checkout)
+        return record_waiting(steps, target, failed)
+    held = steps.run(
+        QUESTION_HOLD,
+        QuestionHoldRequest(
+            run_id=target.key.run_id,
+            paused_at=target.key.paused_at,
+            member_id=target.member.project_id,
+            question=target.question,
+            checkout=str(target.checkout),
+            request_id=link.request_id,
+        ),
     )
-    with store.write() as transaction:
-        inserted = insert_held(transaction, held, link.request_id, deps.clock())
-    if not inserted:
+    if not held.inserted or held.request is None:
         lost = skipped(SkipReason.ALREADY_CLAIMED, target.key, str(target.checkout))
         return with_request(lost, link.request_id)
-    return _evaluate(store, config, deps, target, link.request_id)
+    return _evaluate(steps, deps, target, begun, held.request)
 
 
 def handle_held(
-    store: Store,
-    config: UserConfig,
+    steps: Steps,
     deps: Deps,
     target: PauseTarget,
+    begun: PauseBeginReply,
     row: QuestionRecord,
 ) -> HandlePauseResult:
-    """The D4 table for a ``waiting_on_request`` row."""
+    """The D4 table for a ``waiting_on_request`` row, from the request state
+    ``pause_begin`` returned."""
     if row.request_id is None:
         raise StoreRowError(f"held question {row.key} has no request_id")
-    return _evaluate(store, config, deps, target, row.request_id)
+    if begun.request is None:
+        raise AssertionError("pause_begin returns the request of a held row")
+    return _evaluate(steps, deps, target, begun, begun.request)
 
 
 def _evaluate(
-    store: Store,
-    config: UserConfig,
+    steps: Steps,
     deps: Deps,
     target: PauseTarget,
-    request_id: str,
+    begun: PauseBeginReply,
+    request: RequestFacts,
 ) -> HandlePauseResult:
-    with store.read() as transaction:
-        message = get_message(transaction, request_id)
-    if message is None:
+    request_id = request.request_id
+    state = request.state
+    if state is None:
         detail = (
             f"the request was pruned after prune_after_days "
-            f"({config.prune_after_days} days); its result is no longer stored"
+            f"({begun.prune_after_days} days); its result is no longer stored"
         )
         failed = ClaimFailed(DeclineReason.REQUEST_UNKNOWN, detail, None)
-        return settle_held(store, deps, target, request_id, failed)
-    state = effective_state(message, deps.clock())
+        return settle_held(steps, target, request_id, failed)
     if state in STILL_WAITING:
         return HandlePauseResult(
             HandlePauseOutcome.HELD,
@@ -129,8 +133,11 @@ def _evaluate(
             request_id=request_id,
         )
     if state is RequestState.DONE:
-        request = held_request_of(message)
-        return start_held_claim(store, config, deps, target, request)
-    detail = NO_REASON_DETAIL if not message.reason else cut_to_bound(message.reason)
+        if request.held is None:
+            raise StoreRowError(f"request {request_id} is done with no result")
+        return start_held_claim(
+            steps, deps, target, begun, held_request_of(request.held)
+        )
+    detail = NO_REASON_DETAIL if not request.reason else cut_to_bound(request.reason)
     failed = ClaimFailed(ENDED_WITHOUT_RESULT[state], detail, None)
-    return settle_held(store, deps, target, request_id, failed)
+    return settle_held(steps, target, request_id, failed)

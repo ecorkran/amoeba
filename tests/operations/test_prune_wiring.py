@@ -16,7 +16,6 @@ from user_configs import user_config
 
 from amoeba.config.home import layout_under
 from amoeba.operations.dismiss import dismiss
-from amoeba.operations.handle_pause import handle_pause
 from amoeba.operations.pause_models import HandlePauseOutcome
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
@@ -25,6 +24,7 @@ from amoeba.store.errors import StoreBusyError
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
+from amoeba.wiring_pause import handle_pause_locally
 from operations.handle_rig import RUN, world
 from operations.status_placed import status
 from operations.status_support import FakeCf, status_deps
@@ -168,7 +168,7 @@ def test_handle_pause_puts_prune_problems_in_the_detail(tmp_path: Path) -> None:
 
         w.deps = replace(w.deps, prune=failing)
 
-        result = handle_pause(
+        result = handle_pause_locally(
             w.store, w.config, RUN, directory=w.directory, deps=w.deps
         )
 

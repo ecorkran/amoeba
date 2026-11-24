@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from amoeba.answering.values import DeclineReason
-from amoeba.config.user_config import UserConfig
 from amoeba.operations.answering_settle import (
     SettleResult,
     Superseded,
@@ -26,13 +25,9 @@ from amoeba.operations.pause_models import (
     SkipReason,
 )
 from amoeba.operations.resume import resume
-from amoeba.operations.steps.dispatch import StepEdges
 from amoeba.operations.steps.models import RESUME_CLAIM, ResumeClaimRequest
-from amoeba.operations.store_steps import LocalSteps, Steps
-from amoeba.store.errors import StoreRowError
+from amoeba.operations.store_steps import Steps
 from amoeba.store.models import Member, QuestionKey
-from amoeba.store.questions import get_question
-from amoeba.store.store import Store
 from amoeba.store.vocabulary import ResumeOutcome
 from amoeba.upstream.squadron.run_file import RunFacts
 
@@ -81,65 +76,70 @@ def superseded_result(
     )
 
 
-def finish(  # noqa: PLR0913 - what a settled claim needs to become a result
-    store: Store,
-    config: UserConfig,
+def finish(
+    steps: Steps,
     deps: Deps,
     target: PauseTarget,
     answering_run_id: str,
     settled: SettleResult,
 ) -> HandlePauseResult:
-    """A settle as a result: resume the run only when the question was answered."""
+    """A settle as a result: resume the run only when the question was answered, on
+    the claim the settle took (262 D6)."""
     if isinstance(settled, Superseded):
         return superseded_result(target, answering_run_id)
     if isinstance(settled, Waiting):
         return waiting_result(target, settled.reason, settled.detail, answering_run_id)
-    return resume_answer(
-        store, config, deps, target.key, settled.answer_seq, answering_run_id
+    resumed = resume(steps, settled.claim, deps)
+    return resumed_result(
+        resumed, target.key, str(target.checkout), answering_run_id, settled.answer_seq
     )
 
 
 def resume_answer(  # noqa: PLR0913 - the pieces of one resume
-    store: Store,
-    config: UserConfig,
+    steps: Steps,
     deps: Deps,
     key: QuestionKey,
+    checkout: str,
     answer_seq: int,
     answering_run_id: str | None,
 ) -> HandlePauseResult:
-    """Resume the question's run with the answer and report it as a result."""
-    with store.read() as transaction:
-        record = get_question(transaction, key)
-    if record is None:
-        raise ValueError(f"no question {key} to resume")
-    steps = LocalSteps(store, StepEdges(deps.clock, lambda: config))
+    """Resume the question's run with a recorded answer that was not handed over, and
+    report it as a result; a claim another attempt holds is ``resume_in_progress``."""
     resumed = claim_and_resume(steps, answer_seq, deps)
+    if resumed is None:
+        return skipped(SkipReason.RESUME_IN_PROGRESS, key, checkout)
+    return resumed_result(resumed, key, checkout, answering_run_id, answer_seq)
+
+
+def resumed_result(
+    resumed: ResumeResult,
+    key: QuestionKey,
+    checkout: str,
+    answering_run_id: str | None,
+    answer_seq: int,
+) -> HandlePauseResult:
     return HandlePauseResult(
         _OUTCOME_OF_RESUME[resumed.outcome],
         detail=resumed.detail,
         key=key,
-        checkout=record.checkout,
+        checkout=checkout,
         answering_run_id=answering_run_id,
         answer_seq=answer_seq,
     )
 
 
-def claim_and_resume(steps: Steps, answer_seq: int, deps: Deps) -> ResumeResult:
-    """Take the answer's resume claim, then resume on it; the stored final outcome
-    when the answer already has one.
+def claim_and_resume(steps: Steps, answer_seq: int, deps: Deps) -> ResumeResult | None:
+    """Take the answer's resume claim, then resume on it. The stored final outcome
+    when the answer already has one; ``None`` when another attempt holds the claim.
 
     Raises:
-        StoreRowError: Another attempt holds the claim (until 4.7 gives that a skip).
         SquadronError: See ``resume``.
     """
     claim = steps.run(RESUME_CLAIM, ResumeClaimRequest(answer_seq=answer_seq))
     if claim.claim is not None:
         return resume(steps, claim.claim, deps)
     if claim.final_outcome is None:
-        raise StoreRowError(
-            f"answer {answer_seq} has no resume outcome to report: another attempt "
-            "holds its resume claim"
-        )
+        return None
     return ResumeResult(claim.final_outcome, claim.final_detail, claim.final_log)
 
 

@@ -8,7 +8,6 @@ from pathlib import Path
 
 from store.question_support import NOW, claimed_question, waiting_question
 
-from amoeba.operations.handle_pause import handle_pause
 from amoeba.operations.pause_models import (
     HandlePauseOutcome,
     HandlePauseResult,
@@ -17,6 +16,7 @@ from amoeba.operations.pause_models import (
 from amoeba.store.answers import add_pm_answer, answers_of
 from amoeba.store.questions import get_question, insert_question
 from amoeba.store.vocabulary import QuestionState
+from amoeba.wiring_pause import handle_pause_locally
 from operations.handle_rig import KEY, PROJECT_ID, RUN, World, world
 from operations.pause_support import START
 
@@ -29,7 +29,9 @@ def _record_started_in(w: World, directory: Path) -> None:
 
 
 def _handle_from(w: World, directory: Path) -> HandlePauseResult:
-    return handle_pause(w.store, w.config, RUN, directory=directory, deps=w.deps)
+    return handle_pause_locally(
+        w.store, w.config, RUN, directory=directory, deps=w.deps
+    )
 
 
 def _second_checkout(tmp_path: Path) -> Path:

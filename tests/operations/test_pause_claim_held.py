@@ -8,7 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from amoeba.answering.values import AnsweredBy, AnsweringEvidence, DeclineReason
+from amoeba.answering.values import AnsweredBy, DeclineReason
 from amoeba.operations.answering_run import scratch_path
 from amoeba.operations.pause_claim import (
     HeldRequest,
@@ -21,26 +21,34 @@ from amoeba.operations.pause_models import (
     SkipReason,
 )
 from amoeba.operations.processes import WaitableChild
+from amoeba.operations.steps.models_pause import PauseBeginReply
+from amoeba.operations.steps.pause import request_facts
 from amoeba.store.answers import answers_of
-from amoeba.store.models import QuestionKey, QuestionRecord
+from amoeba.store.models import QuestionRecord
 from amoeba.store.question_closing import dismiss_question
 from amoeba.store.questions import (
-    NewQuestion,
     get_question,
-    insert_question,
-    settle_answered,
 )
 from amoeba.store.vocabulary import QuestionState, RequestState, ResumeOutcome
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.upstream.squadron.run_outcome import RunPoll
-from operations.handle_rig import KEY, PAUSE, PROJECT_ID, RUNNING_DOC, World, world
+from operations.handle_rig import (
+    KEY,
+    PAUSE,
+    RUNNING_DOC,
+    World,
+    world,
+)
 from operations.held_support import (
     REQUEST_ID,
     RESULT,
     RESULT_VERSION,
     add_addressee,
+    automatic_answers_to_the_limit,
+    begin_for,
     hold,
     seed_request,
+    steps_for,
     target_of,
 )
 from operations.pause_support import START
@@ -58,28 +66,18 @@ def _record(w: World) -> QuestionRecord:
 
 def _done_request(w: World) -> HeldRequest:
     add_addressee(w.store)
-    return held_request_of(seed_request(w.store, RequestState.DONE))
+    message = seed_request(w.store, RequestState.DONE)
+    with w.store.read() as transaction:
+        facts = request_facts(transaction, message.message_id, w.deps.clock())
+    assert facts.held is not None
+    return held_request_of(facts.held)
 
 
-def _claim(w: World, request: HeldRequest) -> HandlePauseResult:
-    return start_held_claim(w.store, w.config, w.deps, target_of(w), request)
-
-
-def _automatic_answers_to_the_limit(w: World) -> None:
-    for number in range(w.config.answer_limit):
-        earlier = QuestionKey(KEY.run_id, f"2026-11-09T0{number}:00:00+00:00")
-        new = NewQuestion(
-            key=earlier, member_id=PROJECT_ID, question="q", checkout="/c",
-            slice_label=None, source_commit=None, passages=None,
-            answering_run_id=f"earlier-{number}", waiting_reason=None,
-            waiting_detail=None,
-        )  # fmt: skip
-        with w.store.write() as transaction:
-            insert_question(transaction, new, now=START)
-        settle_answered(
-            w.store, earlier, f"earlier-{number}", answer="x", cited=(),
-            evidence=AnsweringEvidence(), gate=lambda _prior: None, now=START,
-        )  # fmt: skip
+def _claim(
+    w: World, request: HeldRequest, begun: PauseBeginReply | None = None
+) -> HandlePauseResult:
+    begun = begin_for(w) if begun is None else begun
+    return start_held_claim(steps_for(w), w.deps, target_of(w), begun, request)
 
 
 def test_a_done_request_is_claimed_answered_from_its_passage_and_resumed(
@@ -115,7 +113,7 @@ def test_at_the_answer_limit_the_held_question_waits_and_starts_nothing(
 ) -> None:
     with world(tmp_path, paused_polls=DIRECT_POLLS) as w:
         request = _done_request(w)
-        _automatic_answers_to_the_limit(w)
+        automatic_answers_to_the_limit(w)
         hold(w)
 
         result = _claim(w, request)
@@ -161,6 +159,8 @@ def test_a_second_call_after_the_claim_is_already_claimed(tmp_path: Path) -> Non
     with world(tmp_path, paused_polls=DIRECT_POLLS) as w:
         request = _done_request(w)
         hold(w)
+        # Both calls read the held row before either claims it.
+        begun = begin_for(w)
         second_calls: list[HandlePauseResult] = []
         real_spawn = w.deps.spawn
 
@@ -168,12 +168,12 @@ def test_a_second_call_after_the_claim_is_already_claimed(tmp_path: Path) -> Non
             argv: Sequence[str], cwd: Path, logs: LaunchLogs
         ) -> WaitableChild | LaunchError:
             if not second_calls and "--resume" not in argv:
-                second_calls.append(_claim(w, request))
+                second_calls.append(_claim(w, request, begun))
             return real_spawn(argv, cwd, logs)
 
         w.deps = replace(w.deps, spawn=second_call_during_the_run)
 
-        first = _claim(w, request)
+        first = _claim(w, request, begun)
 
         (second,) = second_calls
         assert second.outcome is HandlePauseOutcome.SKIPPED

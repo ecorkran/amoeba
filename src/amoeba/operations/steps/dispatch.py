@@ -10,6 +10,7 @@ from typing import Any, Final
 from pydantic import ValidationError
 
 from amoeba.config.user_config import UserConfig
+from amoeba.operations.steps.begin import pause_begin
 from amoeba.operations.steps.context import StepContext
 from amoeba.operations.steps.models import STEP_MODELS, StepModel
 from amoeba.operations.steps.pause import (
@@ -38,6 +39,7 @@ STEP_FUNCTIONS: Final[dict[str, StepFunction]] = {
     "question_wait": question_wait,
     "question_settle": question_settle,
     "pause_sources": pause_sources,
+    "pause_begin": pause_begin,
 }
 
 

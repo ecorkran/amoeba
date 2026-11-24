@@ -515,7 +515,7 @@ one short write transaction, so a PM answer made meanwhile wins.
 | the shared resume (both) | `answers.resume_started_at` just before every spawn, then `resume_outcome`, `resume_detail`, `resume_log`, `resume_at` |
 | `dismiss` | `closed` with `closed_reason` `dismissed`, `closed_detail` (the PM's reason) and `closed_at`, from `claimed`, `waiting_on_pm`, `waiting_on_request` or `answered` with an unresumed answer; that answer becomes `not_delivered` (`dismissed`) in the same transaction |
 | `retract` | `answers.retracted_at` and `retract_reason` on a PM answer, once |
-| the close sweep: `handle_pause` (that run's rows at other pauses), `status` (open rows of the members in scope) | `closed` with `closed_reason` `run_moved_on` or `run_gone` and the run's state as `closed_detail`; a claim only once older than `answering_wait_seconds`; an unresumed answer past `resume_bound_seconds` becomes `not_delivered` |
+| the close sweep: `handle_pause` (that run's rows at other pauses), `status` (open rows of the members in scope) | `closed` with `closed_reason` `run_moved_on` or `run_gone` and the run's state as `closed_detail`; a claim only once its `updated_at` is `pause_claim_seconds` old; a `refused` answer whose newest sign of life is `resume_claim_seconds` old becomes `not_delivered`, and an answer with no outcome is left to its resume attempt (slice 262) |
 | `set_up` removal | `members.removed_at`; the member's `dependency_pairs` rows are deleted |
 
 How each state ends with nobody editing a file: `claimed` settles, or is replaced or

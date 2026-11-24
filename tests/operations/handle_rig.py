@@ -38,13 +38,14 @@ from user_configs import user_config
 from amoeba.answering.settings import AnswererSettings
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.deps import Deps
-from amoeba.operations.handle_pause import HandlePauseResult, handle_pause
+from amoeba.operations.handle_pause import HandlePauseResult
 from amoeba.operations.member_answering import answering_for
 from amoeba.operations.processes import WaitableChild
 from amoeba.store.models import Member, QuestionKey
 from amoeba.store.store import Store
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.upstream.squadron.run_outcome import RunPoll
+from amoeba.wiring_pause import handle_pause_locally
 from operations.pause_support import FakeChild, build_deps, register_member
 
 RUN = "demo-run"
@@ -101,7 +102,7 @@ class World:
         return answering_for(self.member.settings, self.config).settings
 
     def handle(self) -> HandlePauseResult:
-        return handle_pause(
+        return handle_pause_locally(
             self.store, self.config, RUN, directory=self.directory, deps=self.deps
         )
 

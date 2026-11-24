@@ -9,16 +9,22 @@ from enum import StrEnum
 from typing import Final
 
 from amoeba.answering.values import AnsweringEvidence, DeclineReason, PassageRef
+from amoeba.operations.here_document import HereCaller, HereNotAProject
+from amoeba.operations.member_answering import MemberAnswering
+from amoeba.operations.pause_models import SkipReason
+from amoeba.operations.question_judge import SweepResult
 from amoeba.operations.steps.model_base import Step, StepModel
 from amoeba.operations.steps.models_resume import ResumeClaimPayload
 from amoeba.store.models import (
+    AnswerRecord,
     Member,
     PmPrecedent,
     Program,
+    QuestionRecord,
     StandingAnswerRow,
 )
 from amoeba.store.row_values import decode_timestamp, encode_timestamp
-from amoeba.store.vocabulary import RequestState
+from amoeba.store.vocabulary import ClosedReason, RequestState
 
 
 class PassageRefModel(StepModel):
@@ -284,4 +290,74 @@ PAUSE_SOURCES: Final = Step(
     PauseSourcesReply,
     writes=False,
     needs_config=False,
+)
+
+
+# --- pause_begin (4.4) -----------------------------------------------------------
+
+
+class FateFields(StepModel):
+    """Where the run is now, as far as its older open questions go (``RunFate``)."""
+
+    reason: ClosedReason
+    detail: str
+    #: The pause the run is at now; a row there is never touched.
+    current_paused_at: str | None
+
+
+class PauseBeginRequest(StepModel):
+    """What the client knows before it asks anything of the hub: the run, what the
+    poll said about the pause, the caller (``None`` when the run alone decides the
+    skip) and the run's fate for the sweep (``None`` when the poll could not say)."""
+
+    run_id: str
+    here: HereCaller | HereNotAProject | None
+    outcome: str
+    paused: bool
+    checkpoint_kind: str | None
+    paused_at: str | None
+    question: str | None
+    fate: FateFields | None
+
+
+class LimitResult(StepModel):
+    """The run's automatic answers against its limit (``_limit_reached``)."""
+
+    given: int
+    reached: bool
+
+
+class PauseBeginReply(StepModel):
+    """What the sweep closed, then the skip, or what the claim paths need (D4)."""
+
+    swept: SweepResult
+    skip: SkipReason | None = None
+    skip_detail: str | None = None
+    #: The caller's Context Forge project is in no program: register, then ask again.
+    not_in_program: str | None = None
+    member: Member | None = None
+    answering: MemberAnswering | None = None
+    answering_wait_seconds: float | None = None
+    resume_wait_seconds: float | None = None
+    #: The hub's retention, for the text of a request that was pruned.
+    prune_after_days: int | None = None
+    row: QuestionRecord | None = None
+    claim_stale: bool = False
+    #: The name of the machine the row is on, when it is not the calling one.
+    other_machine: str | None = None
+    latest_answer: AnswerRecord | None = None
+    #: No row: the request the question's marker names, or why it names none.
+    link_request_id: str | None = None
+    link_problem: str | None = None
+    #: A held row: its request, and for a new or held claim the limit result.
+    request: RequestFacts | None = None
+    limit: LimitResult | None = None
+
+
+PAUSE_BEGIN: Final = Step(
+    "pause_begin",
+    PauseBeginRequest,
+    PauseBeginReply,
+    writes=True,
+    needs_config=True,
 )

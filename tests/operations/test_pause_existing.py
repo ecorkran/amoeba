@@ -17,6 +17,8 @@ from amoeba.answering.values import AnsweredBy, AnsweringEvidence, DeclineReason
 from amoeba.operations.answering_run import Claim, scratch_path
 from amoeba.operations.answering_settle import Superseded, settle
 from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.store_steps import LocalSteps
 from amoeba.store.answers import Settled, add_pm_answer, answers_of, record_resume
 from amoeba.store.held_questions import claim_held
 from amoeba.store.models import AnswerRecord, QuestionRecord
@@ -271,7 +273,7 @@ def test_a_running_answering_run_and_an_old_claim_stalls_and_a_late_reply_is_ign
         # The answering run finishes after all: its reply finds the claim gone.
         _write_replies(w, OLD_RUN)
         late = settle(
-            w.store,
+            LocalSteps(w.store, StepEdges(w.deps.clock, lambda: w.config)),
             w.deps,
             Claim(
                 key=KEY,

@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from amoeba.store import sql
+from amoeba.store import sql, sql_local_work
 from amoeba.store.answers import latest_answer, mark_not_delivered
 from amoeba.store.errors import StoreRowError
 from amoeba.store.models import QuestionKey, QuestionRecord
@@ -138,6 +138,17 @@ def open_rows_of_run(
     """The run's open questions, oldest first."""
     rows = transaction.execute(
         sql.SELECT_OPEN_ROWS_OF_RUN, (run_id, *_OPEN_PARAMETERS)
+    ).fetchall()
+    return tuple(question_from_row(row) for row in rows)
+
+
+def open_rows_of_run_on_machine(
+    transaction: Transaction, run_id: str, machine_id: int
+) -> tuple[QuestionRecord, ...]:
+    """The run's open questions on one machine, oldest first (262 D9)."""
+    rows = transaction.execute(
+        sql_local_work.SELECT_OPEN_ROWS_OF_RUN_ON_MACHINE,
+        (run_id, machine_id, *_OPEN_PARAMETERS),
     ).fetchall()
     return tuple(question_from_row(row) for row in rows)
 

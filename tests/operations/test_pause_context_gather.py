@@ -17,7 +17,7 @@ from amoeba.answering.passages import (
     SourcesProblemKind,
 )
 from amoeba.answering.values import AnsweringEvidence, DeclineReason
-from amoeba.operations.pause_context import NO_SLICE_LABEL, PauseContext
+from amoeba.operations.pause_context import NO_SLICE_LABEL, PauseContext, gather
 from amoeba.store.answers import add_pm_answer, settle_answered
 from amoeba.store.models import QuestionKey
 from amoeba.store.programs import upsert_program
@@ -26,10 +26,13 @@ from amoeba.store.standing import give_standing, withdraw_standing
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import StandingReach
 from operations.gather_rig import (
+    ASKER_CF_ID,
     NOW,
     SLICE_LABEL,
     SLICE_PARAM,
+    facts,
     gather_rig,
+    settings,
 )
 from operations.program_rig import (
     ASKING_MEMBER,
@@ -302,7 +305,7 @@ def test_with_no_rows_the_passages_are_as_before(tmp_path: Path) -> None:
     assert after.refs == before.refs
 
 
-def test_gather_reads_the_store_once(
+def test_pause_sources_reads_the_store_once_and_the_gather_reads_none(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     with gather_rig(tmp_path) as rig:
@@ -314,10 +317,21 @@ def test_gather_reads_the_store_once(
             entries.append(None)
             return original(store)
 
+        sources = rig.sources()
         monkeypatch.setattr(Store, "read", counting)
-        _context(rig.gather({}))
+        monkeypatch.setattr(Store, "write", counting)
+        context = gather(
+            sources,
+            rig.asker_repo,
+            rig.member,
+            facts({}),
+            settings(),
+            rig.run,
+            cf_project_id=ASKER_CF_ID,
+        )
 
-    assert len(entries) == 1
+    assert isinstance(context, PauseContext)
+    assert entries == []
 
 
 def test_standing_answers_that_tip_the_cap_give_both_shares(tmp_path: Path) -> None:

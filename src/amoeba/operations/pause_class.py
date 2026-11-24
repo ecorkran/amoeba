@@ -9,61 +9,20 @@ on them.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from enum import StrEnum
-
+from amoeba.operations.pause_observed import (
+    ObservedPause,
+    PauseClass,
+    classify_run_only,
+)
 from amoeba.store.models import AnswerRecord, QuestionRecord
 from amoeba.store.vocabulary import QuestionState, ResumeOutcome
 from amoeba.upstream.squadron.run_file import ExecutionMode, RunFacts
-from amoeba.upstream.squadron.run_outcome import (
-    CheckpointKind,
-    RunOutcome,
-    RunOutcomeDocument,
-    parse_checkpoint_kind,
-)
-
-
-class PauseClass(StrEnum):
-    """What a run's pause is, in the D3 table's order."""
-
-    NOT_PAUSED = "not_paused"
-    OTHER_CHECKPOINT = "other_checkpoint"
-    NO_QUESTION_TEXT = "no_question_text"
-    PROMPT_ONLY = "prompt_only"
-    UNHANDLED = "unhandled"
-    CLAIM_LIVE = "claim_live"
-    CLAIM_STALE = "claim_stale"
-    WAITING_ON_PM = "waiting_on_pm"
-    ANSWERED_UNRESUMED = "answered_unresumed"
-    SETTLED = "settled"
-    #: The pause's question was closed (228 D3); the run is still paused.
-    CLOSED = "closed"
-    #: The question is held on a request this repo sent (242 D9).
-    WAITING_ON_REQUEST = "waiting_on_request"
-
+from amoeba.upstream.squadron.run_outcome import RunOutcome, RunOutcomeDocument
 
 #: Resume outcomes after which the answer needs no further delivery.
 DELIVERED: frozenset[ResumeOutcome] = frozenset(
     {ResumeOutcome.RESUMED, ResumeOutcome.NOT_DELIVERED}
 )
-
-
-@dataclass(frozen=True)
-class ObservedPause:
-    """What Squadron says about a run, in the terms both callers can give.
-
-    ``sq runs wait`` and ``sq runs list`` report a run differently (an outcome and a
-    status string); each caller reduces its report to this.
-    """
-
-    #: Whether the run is paused.
-    paused: bool
-    #: The checkpoint's kind, raw as Squadron printed it.
-    kind: str | None
-    #: The checkpoint's ``paused_at`` as ``sq runs wait --json`` prints it.
-    paused_at: str | None
-    question: str | None
 
 
 def observed_from_document(document: RunOutcomeDocument) -> ObservedPause:
@@ -75,18 +34,6 @@ def observed_from_document(document: RunOutcomeDocument) -> ObservedPause:
         paused_at=None if checkpoint is None else checkpoint.paused_at_text,
         question=None if checkpoint is None else checkpoint.question,
     )
-
-
-def classify_run_only(observed: ObservedPause) -> PauseClass | None:
-    """The first three classes, which need nothing but the run; ``None`` if the run
-    is a paused agent question with text, whose class depends on the rest."""
-    if not observed.paused:
-        return PauseClass.NOT_PAUSED
-    if parse_checkpoint_kind(observed.kind) is not CheckpointKind.AGENT_QUESTION:
-        return PauseClass.OTHER_CHECKPOINT
-    if observed.paused_at is None or not (observed.question or "").strip():
-        return PauseClass.NO_QUESTION_TEXT
-    return None
 
 
 def run_facts_needed(
@@ -109,14 +56,14 @@ def classify_pause(  # noqa: PLR0913 - the D3 table's inputs, each a value
     question_row: QuestionRecord | None,
     latest_answer: AnswerRecord | None,
     run_facts: RunFacts | None,
-    claim_age_limit: float,
-    now: datetime,
+    claim_stale: bool,
 ) -> PauseClass:
     """The D3 class of a pause.
 
-    ``claim_age_limit`` is ``pause_claim_seconds``; a claim as old as the limit is
-    stale. ``latest_answer`` is the question's newest answer, required for an
-    ``answered`` row.
+    ``claim_stale`` is the hub's judgment (``claim_is_stale``) of a ``claimed`` row's
+    age against ``pause_claim_seconds``; it is ignored for any other state.
+    ``latest_answer`` is the question's newest answer, required for an ``answered``
+    row.
 
     Raises:
         ValueError: ``run_facts`` is missing where :func:`run_facts_needed` is true,
@@ -135,10 +82,7 @@ def classify_pause(  # noqa: PLR0913 - the D3 table's inputs, each a value
         case QuestionState.WAITING_ON_REQUEST:
             return PauseClass.WAITING_ON_REQUEST
         case QuestionState.CLAIMED:
-            age = now - question_row.updated_at
-            if age >= timedelta(seconds=claim_age_limit):
-                return PauseClass.CLAIM_STALE
-            return PauseClass.CLAIM_LIVE
+            return PauseClass.CLAIM_STALE if claim_stale else PauseClass.CLAIM_LIVE
         case QuestionState.CLOSED:
             return PauseClass.CLOSED
         case QuestionState.ANSWERED:
