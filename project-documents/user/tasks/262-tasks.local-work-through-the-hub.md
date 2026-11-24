@@ -8,12 +8,26 @@ dependencies:
 - 261-slice.members-by-name
 projectState: Slices 220 to 244, 260 and 261 are merged on main. Package version 0.2.9,
   store schema 12 (migrations 001 to 012). The door serves 261's operations; handle-pause
-  and wake-run refuse on a joined machine with NotServedError; held questions are started
-  by request_release through wiring_release.start_after after seven operations. sq 0.24.38
-  and cf 0.19.28 on 20261123.
+  and wake-run refuse on a joined machine with NotServedError; held questions are
+  started by request_release through wiring_release.start_after after seven operations.
+  sq 0.24.38 and cf 0.19.28 on 20261123.
 dateCreated: 20261123
-dateUpdated: 20261123
+dateUpdated: 20261124
 status: not_started
+turns: 28
+promptTokens: 2359781
+cachedTokens: 2228802
+cacheWriteTokens: 130931
+completionTokens: 33444
+durationSeconds: 308.7
+costUsd: 2.162578
+usageRounds: 1
+pricedRounds: 1
+usageByModel:
+  claude-opus-5-5:
+    rounds: 1
+    costUsd: 2.1625777999999998
+    completionTokens: 33444
 ---
 
 # Tasks: Local Work Through the Hub
