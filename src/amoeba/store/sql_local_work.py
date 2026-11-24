@@ -66,6 +66,8 @@ WHERE seq = ?
 
 #: The latest answers of ``answered`` questions on a machine with no outcome that
 #: ``claim_resume`` would take: no claim, or a claim at least as old as the limit.
+#: Unlike ``CLAIM_RESUME`` it leaves out ``refused``: a refused resume is not pending
+#: work, and is tried again only by a new ``answer`` or ``handle-pause`` (D6, D10).
 #: Oldest first. Parameters: machine id, the answered state, the oldest
 #: ``resume_started_at`` that still holds a claim (inclusive).
 SELECT_RESUME_WORK: Final = """
@@ -85,7 +87,9 @@ ORDER BY answers.seq
 #: in the last ``answering_wait_seconds``. Never-started first, then the oldest start.
 #: Parameters: machine id, the held state, the newest ``start_attempted_at`` that
 #: allows a start (inclusive), then the four terminal request states, the open state
-#: and now (an open request at or past its expiry has ended). A row that names a note,
+#: and now (an open request at or past its expiry has ended). A request no longer
+#: stored (pruned) counts as ended, as 242 made it: its ``handle-pause`` waits on the
+#: PM as ``request_unknown``. A row that names a note,
 #: which has no state, is due too: its ``handle-pause`` reports the corrupt row, and
 #: the cap ends it.
 SELECT_HELD_WORK: Final = f"""

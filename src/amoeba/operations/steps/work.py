@@ -34,6 +34,7 @@ from amoeba.operations.steps.models_work import (
     WorkItem,
 )
 from amoeba.operations.steps.resume import ResumeClaimed, claim_resume
+from amoeba.store import sql_local_work
 from amoeba.store.answers import record_resume
 from amoeba.store.held_questions import mark_start_attempted, settle_held_waiting
 from amoeba.store.machines import acting_machine_id, acting_machine_name
@@ -126,6 +127,9 @@ def _refuse_resume(context: StepContext, work: ResumeWork) -> None:
         at=context.now,
         claim_id=None,
     )
+    # The run-out claim of the last attempt goes with the refusal: a refused answer
+    # is taken again only by a new ``answer`` or a ``handle-pause`` (D6, D10).
+    context.transaction.execute(sql_local_work.CLEAR_RESUME_CLAIM, (work.answer_seq,))
 
 
 def _claim_pauses(

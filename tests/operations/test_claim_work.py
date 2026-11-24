@@ -186,6 +186,7 @@ def test_a_resume_handed_out_three_times_with_no_outcome_is_then_refused_with_th
     assert answer is not None
     assert answer.resume_outcome is ResumeOutcome.REFUSED
     assert str(MAX_AUTOMATIC_STARTS) in (answer.resume_detail or "")
+    assert answer.resume_claim_id is None
     # A refused resume is never handed out again.
     rig.advance(RESUME_LIMIT * 10)
     assert rig.claim().items == ()
