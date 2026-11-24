@@ -10,7 +10,7 @@ projectState: Slices 220 to 244, 260 and 261 are merged on main. Package version
   store schema 12 (migrations 001 to 012). The door serves 261's operations; handle-pause
   and wake-run refuse on a joined machine with NotServedError; held questions are
   started by request_release through wiring_release.start_after after seven operations.
-  sq 0.24.38 and cf 0.19.28 on 20261123.
+  sq 0.24.38 and cf 0.19.28, read with `sq --version` and `cf --version` on 20261123.
 dateCreated: 20261123
 dateUpdated: 20261124
 status: not_started
@@ -35,15 +35,16 @@ usageByModel:
 ## Context Summary
 
 - Working on slice 262 (design: `user/slices/262-slice.local-work-through-the-hub.md`; decisions D1 to D16 are cited by number, success criteria by their text). Every store transaction that `handle-pause`, the resume and the wake wrapper make becomes one **step**: a plain function in `operations.steps`, run in process on the local store (`LocalSteps`) or as one door call (`DoorSteps`). Every done reply carries a **work flag**; a client that sees it calls `claim_work` and starts what it gets detached. `answer` and `send` with waking are served. Next slice: 263 (`amoeba-mcp` as a client, its tick).
-- **Precondition: 260 and 261 are merged on the target.** Checked at breakdown on 20261123: schema 12, and every name below exists. This file uses their names: `wire.protocol` (`SERVED_OPERATIONS`, `WRITING_CALLS`, `UNKNOWN_ADVICE`, `HELLO_CALL`, `MAX_CALL_BYTES`), `wire.times` (`DOOR_VERSION`, `CALL_BOUND_SECONDS`), `operations/served.py` (`run_served`, `ServedEdges`), `operations/errors.py` (`OPERATION_ERRORS`, `CallRefused`), `operations/caller.py` (`find_caller`, `find_member`), `operations/here.py`, `operations/run_gather.py`, `operations/runs_document.py`, `operations/wake_door.py` (261's wake refusal, deleted in 5.1), `hub/calls.py` (`handle_call`, `DoorHooks`), `hub/admin.py` (`rm_machine`), `store/store.py` (`call_scope`, `act_as`), `operations/state_move.py` (`open_state_store`), `hub/store_open.py` (`open_hub_store`), `wiring_door.py` (`refuse_if_joined`, `NotServedError`), `client/errors.py` (`ClientFileError`, `HubUnreachableError`, `HubRefusedError`), `tests/hub/in_process_hub.py`, `tests/hub_fixture.py` (`two_machine_hub`), `tests/load/test_door_load.py`.
+- **Precondition: 260 and 261 are merged on the target.** Checked at breakdown on 20261123: schema 12, and every name below exists. This file uses their names: `wire.protocol` (`SERVED_OPERATIONS`, `WRITING_CALLS`, `UNKNOWN_ADVICE`, `HELLO_CALL`, `MAX_CALL_BYTES`), `wire.times` (`DOOR_VERSION`, `CALL_BOUND_SECONDS`), `operations/served.py` (`run_served`, `ServedEdges`), `operations/errors.py` (`OPERATION_ERRORS`, `CallRefused`), `operations/caller.py` (`find_caller`, `find_member`), `operations/here.py`, `operations/run_gather.py`, `operations/runs_document.py`, `operations/wake_door.py` (261's wake refusal, deleted in 5.1), `hub/calls.py` (`handle_call`, `DoorHooks`), `hub/admin.py` (`rm_machine`), `store/store.py` (`call_scope`, `act_as`), `operations/state_move.py` (`open_state_store`), `hub/store_open.py` (`open_hub_store`), `wiring_door.py` (`refuse_if_joined`, `NotServedError`, `route`), `client/errors.py` (`ClientFileError`, `HubUnreachableError`, `HubRefusedError`), `tests/hub/in_process_hub.py`, `tests/hub_fixture.py` (`two_machine_hub`), `tests/load/test_door_load.py`.
 - Paths: no prefix means under `src/amoeba/`. `tests/`, `docs/`, `scripts/` are from the repo root; `user/` means `project-documents/user/`.
-- New modules (Component Structure): `operations/steps/` (`__init__`, `models`, `limits`, `pause`, `resume`, `wake`, `open_runs`, `work`, `dispatch`), `operations/store_steps.py`, `operations/work_start.py`, `operations/resume_run.py`, `wiring_steps.py`, `cli/resume_command.py`, `store/schema/013_local_work.sql`. Added by this breakdown: `operations/resume_attempt.py` (the attempt file, 3.3), `hub/call_work.py` (the flag in a done reply, 7.2; `hub/calls.py` is already 326 lines), `tests/store/schema_12.py` (1.2). Deleted: `operations/request_release.py`, `wiring_release.py` (6.5), `operations/wake_door.py` (5.1).
+- New modules (Component Structure): `operations/steps/` (`__init__`, `models`, `limits`, `pause`, `resume`, `wake`, `open_runs`, `work`, `dispatch`), `operations/store_steps.py`, `operations/work_start.py`, `operations/resume_run.py`, `wiring_steps.py`, `cli/resume_command.py`, `store/schema/013_local_work.sql`. Added by this breakdown: `operations/resume_attempt.py` (the attempt file, 3.3), `hub/call_work.py` (the flag in a done reply, 7.2), `store/sql_local_work.py` (1.2), `tests/store/schema_12.py` (1.4). Deleted: `operations/request_release.py`, `wiring_release.py` (6.6), `operations/wake_door.py` (5.1).
+- Size: `store/sql.py` (543 lines) gets only the edited inserts; new statements on questions and answers go in `store/sql_local_work.py`, on wakes in `sql_wakes.py`, on held rows in `sql_held.py`. `store/answers.py` (296) gets only the claim-id clause in `record_resume`; `claim_resume` lives in `steps/resume.py`. `hub/calls.py` (326) and `wiring.py` (297) get call sites only; the logic goes in `hub/call_work.py` and `wiring_steps.py`.
 - Order: each commit leaves the suite passing on the local store. Until section 7 only `LocalSteps` exists, and `handle-pause` and `wake-run` keep `refuse_if_joined`; 7.4 removes it.
-- Closed values are defined once and imported: `pause_claim_seconds`, `resume_claim_seconds`, `MAX_AUTOMATIC_STARTS` (3), `MAX_WORK_PER_CLAIM` (5) in `steps.limits`; step names and writing flags in `STEP_MODELS`, mirrored as strings in `wire.protocol.STEP_CALLS` and `WRITING_STEPS` with a test that they agree; body keys `via`, `logs_dir`; reply keys `work`, `work_problem`; the `runs` document's `absent_runs`; the new enum values.
+- Closed values are defined once and imported: `pause_claim_seconds`, `resume_claim_seconds`, `MAX_AUTOMATIC_STARTS` (3), `MAX_WORK_PER_CLAIM` (5) in `steps.limits`; step names, writing flags and config needs in `STEP_MODELS`, the names and writing flags mirrored as strings in `wire.protocol.STEP_CALLS` and `WRITING_STEPS` with a test that they agree; body keys `via`, `logs_dir`; reply keys `work`, `work_problem`; the `runs` document's `absent_runs`; the new enum values.
 - Clocks (D2): a step takes the clock it is given and passes it to the store functions, whose signatures stay. No step request carries a date or time field. The client's clock only names files and measures its own waits.
 - Checks, from the repo root: `uv run ruff format --check .`, `uv run ruff check .`, `uv run pyright`, `uv run pytest -q`. "Checks pass" means all four, with no failure beyond the baseline noted in 0.2.
 - Tests use the autouse `AMOEBA_HOME` fixture, `tests/store/seed.py`, `tests/store_open.py`, `tests/cf_stub.py`, `tests/sq_stub.py` with `tests/sq_stub_resume.py`, `tests/fault_injection.py`, `tests/hub/in_process_hub.py` (`DoorHooks`, the rig's settable clock) and `tests/hub_fixture.py`. Destructive SQL runs only against throwaway stores.
-- **Existing tests.** In the task that makes a change, update mechanically every test that builds a changed type, calls a changed signature, patches a moved or deleted name, or pins a set, count or text the change alters, without changing what it asserts; note the modules touched under the task. A test that built a `Store` for a client-run function builds `LocalSteps` on it. Beyond that the design allows five kinds of edit (Migration Plan), each named in its task: the stale age and resume bound (2.1), `start_after`'s seven operations (6.5), the sweep split (4.4), and the answering-run skip (4.5). If any other test fails, fix the code, not the test.
+- **Existing tests.** In the task that makes a change, update mechanically every test that builds a changed type, calls a changed signature, patches a moved or deleted name, or pins a set, count or text the change alters, without changing what it asserts; note the modules touched under the task. A test that built a `Store` for a client-run function builds `LocalSteps` on it. Beyond that, two groups of tests change what they assert, each named in its task: the design's five kinds of edit (Migration Plan): the stale age and resume bound (2.2), `start_after`'s seven operations (6.6), the sweep split (4.4), and the answering-run skip (4.5); and the tests that pin a refusal or version this slice removes by design (5.1, 7.1, 7.4). If any other test fails, fix the code, not the test.
 - `tests/test_contract_docs.py` requires each new column, value, flag and field in the contract docs, so the task that adds one adds its entry; 9.2 writes the prose.
 - Production state: no task writes the live store or config. Migration 013 rides the next release through `scripts/update_live.py update` (D14); 9.3 tests the script on copies.
 - Work on branch `262-slice.local-work-through-the-hub` (0.2). Commit only at `**Commit**:` markers. Update this file through the `task-checker` agent. Do not merge or push.
@@ -64,26 +65,26 @@ usageByModel:
 
 ## 1. Migration 013 and the machine on rows (D14; effort 4)
 
-- [ ] **1.1 The new enum values**
+- [ ] **1.1 `store/schema/013_local_work.sql` and the new values**
   - [ ] `store/vocabulary.py`: `ClosedReason.MACHINE_REMOVED` and `WakeOutcome.MACHINE_REMOVED` (`machine_removed`). `answering/values.py`: `DeclineReason.STARTS_EXHAUSTED` (`starts_exhausted`). Each with its display text where the enum has one
-  - [ ] Success: the values import; no other behavior changes yet
-- [ ] **1.2 `store/schema/013_local_work.sql`**
   - [ ] Rebuild `questions` and `wakes` (SQLite cannot widen a `CHECK`), carrying every column, index and trigger each has at schema 12, 260's owner column and trigger included. Order: create the new table, copy, drop, rename, then the machine triggers (a trigger fires on `INSERT ... SELECT`)
   - [ ] `questions.machine_id` and `wakes.machine_id`, nullable, referencing `machines`; `closed_reason` and `outcome` `CHECK` lists gain `machine_removed`; an index on `questions(machine_id, state)` and on `wakes(machine_id)`
   - [ ] `answers.resume_claim_id TEXT` (null) and `answers.resume_start_count INTEGER NOT NULL DEFAULT 0`; `questions.start_count INTEGER NOT NULL DEFAULT 0`; `messages.wake_wanted_at` timestamp, null
   - [ ] A `BEFORE INSERT` trigger on `questions` and on `wakes` that aborts when `machine_id` is null, worded like 260's owner triggers
-  - [ ] `EXPECTED_SCHEMA_VERSION` becomes 13. Update the schema-version pins and `COLUMN_REASONS` in `tests/store/test_schema_holds_no_mirrored_state.py`, giving each new column a reason from the existing `docs/store-contract.md` bullets (machine columns: membership; claim id and start counts: run state, as the stamps beside them; `wake_wanted_at`: as the request's other stamps)
+  - [ ] `EXPECTED_SCHEMA_VERSION` becomes 13. Update the schema-version pins, `tests/store/test_migration_012.py`'s `== 12` among them
+  - [ ] `COLUMN_REASONS` in `tests/store/test_schema_holds_no_mirrored_state.py`, using its existing reasons: `questions.machine_id`, `questions.start_count`, `answers.resume_claim_id`, `answers.resume_start_count` under `record` (beside `questions.start_attempted_at` and `answers.resume_started_at`); `wakes.machine_id` under `waking`; `messages.wake_wanted_at` under `messages`. Add each to the same reason's bullet in `docs/store-contract.md`
   - [ ] `docs/store-contract.md`: the six columns, two indexes, two triggers and the three new values
-- [ ] **1.3 Store inserts bind the acting machine**
+- [ ] **1.2 Store inserts bind the acting machine**
   - [ ] `insert_question`, `insert_held` (`store/questions.py`, `store/held_questions.py`) and `claim_wake` (`store/wakes.py`) bind `machine_id` from the store's acting machine (260 D12), with no new parameter
-  - [ ] Reads by machine, in `store/sql.py`, `sql_held.py`, `sql_wakes.py`: open questions on a machine, a question's machine name, wakes on a machine. Statements only; callers come in later tasks
-- [ ] **1.4 The opener gives old rows `local`**
+  - [ ] Reads by machine: open questions on a machine and a question's machine name in the new `store/sql_local_work.py`; wakes on a machine in `sql_wakes.py`; held rows on a machine in `sql_held.py`. Statements only; callers come in later tasks
+- [ ] **1.3 The opener gives old rows `local`**
   - [ ] `open_state_store`, after `act_as_local`, reads for one question or wake with a null machine and, when there is one, sets all of them to `local` in one write. `open_hub_store` does not (D14)
-- [ ] **1.5 Migration tests** (`tests/store/test_migration_013.py`, helper `tests/store/schema_12.py` modeled on `schema_11.py`)
+- [ ] **1.4 Migration tests** (`tests/store/test_migration_013.py`, helper `tests/store/schema_12.py` modeled on `schema_11.py`)
   - [ ] A schema-12 store holding question, answer and wake rows migrates: row counts unchanged; every column, index and trigger of both rebuilt tables present (compare `sqlite_master` before and after)
   - [ ] An insert with a null machine is refused on both tables; `machine_removed` accepted in both `CHECK`s; `tests/store/test_vocabulary_pinning.py` passes with the new values
   - [ ] Opening the migrated store with `open_state_store` gives old rows `local`; a second open writes nothing (the read finds no row)
-  - [ ] Existing insert tests bind through the acting machine; a stored question and wake carry `local`
+  - [ ] Tests that raw-insert into `questions` or `wakes` after migrating to the latest version (`tests/store/test_migrations.py`, and any other `grep -rn "INSERT INTO questions\|INSERT INTO wakes" tests` finds) insert a `machines` row first where none exists and bind its `machine_id`; inserts made before the store reaches 13 are unchanged
+  - [ ] Inserts through the store functions carry the acting machine; a stored question and wake carry `local`
   - [ ] Success: checks pass
 
 **Commit**: `feat: add migration 013 with the machine on questions and wakes`
@@ -91,13 +92,13 @@ usageByModel:
 ## 2. Limits, the resume claim and the wake rule (D5, D6, D8; effort 3)
 
 - [ ] **2.1 `operations/steps/limits.py`**
-  - [ ] `pause_claim_seconds(config)` = `answering_wait_seconds + 2 * CALL_BOUND_SECONDS`; `resume_claim_seconds(config)` = today's `resume_bound_seconds` with `2 * CALL_BOUND_SECONDS` in place of its one store wait; `MAX_AUTOMATIC_STARTS = 3`; `MAX_WORK_PER_CLAIM = 5` (replaces `MAX_STARTS_PER_CALL`, which 6.5 deletes)
-  - [ ] Every place that judges a claim stale at `answering_wait_seconds` (`pause_class.classify_pause`, `pause_existing`, `mcp/detached.py` if it judges one) uses `pause_claim_seconds`; `answering_wait_seconds` stays the least time between two starts of one row
+  - [ ] `pause_claim_seconds(config)` = `answering_wait_seconds + 2 * CALL_BOUND_SECONDS`; `resume_claim_seconds(config)` = today's `resume_bound_seconds` with `2 * CALL_BOUND_SECONDS` in place of its one store wait; `MAX_AUTOMATIC_STARTS = 3`; `MAX_WORK_PER_CLAIM = 5` (replaces `MAX_STARTS_PER_CALL`, which 6.6 deletes)
+  - [ ] Every place that judges a claim stale at `answering_wait_seconds` uses `pause_claim_seconds`: the limit `handle_pause` passes to `pause_class.classify_pause`, the limit `status` passes to `status_runs.classify_runs`, and `question_sweep._judge`'s claimed-row age. `answering_wait_seconds` stays the answering run's own wait (`pause_claim`, `pause_existing`) and the least time between two starts of one row
   - [ ] `docs/config-contract.md`: the two limits and what they are worked out from; the `answering_wait_seconds` row no longer says it is the dead-claim age
 - [ ] **2.2 Limit tests**
   - [ ] With the starter config, `resume_claim_seconds` is 216.5 and `pause_claim_seconds` is `answering_wait_seconds + 86`
   - [ ] Design-allowed edit: tests that pinned the stale age or the resume bound use the two limits (name each)
-  - [ ] A claim at `pause_claim_seconds - 1` is young; at `pause_claim_seconds` it is stale
+  - [ ] A claim at `pause_claim_seconds - 1` is young; at `pause_claim_seconds` it is stale, in `classify_pause`, `classify_runs` and the sweep
 - [ ] **2.3 `steps/resume.claim_resume` and `record_resume`**
   - [ ] `claim_resume(transaction, answer, now, limit)`: one `UPDATE` that sets `resume_started_at` to `now` and `resume_claim_id` to a new `uuid4().hex`, applied only when the outcome is not final (`resumed`, `not_delivered`) and the claim id is null or `resume_started_at` is older than `resume_claim_seconds`; returns the claim id or why it lost (in flight, final outcome stored)
   - [ ] `record_resume` writes the outcome unless one is final (as today), clears `resume_claim_id` only when it equals the caller's, and returns what the store holds
@@ -121,7 +122,7 @@ usageByModel:
 ## 3. Steps, `LocalSteps`, the resume and `answer` (D3, D6, D7; effort 4)
 
 - [ ] **3.1 The step machinery**
-  - [ ] `steps/models.py`: a frozen Pydantic request and reply model per step and `STEP_MODELS`, the one table from step name to `(request model, reply model, writes)`. Rows are added as each step is written
+  - [ ] `steps/models.py`: a frozen Pydantic request and reply model per step and `STEP_MODELS`, the one table from step name to its request model, reply model, whether it writes, and whether it needs the config (false for `resume_record`, `wake_set_pid`, `wake_finish`, D10). Rows are added as each step is written
   - [ ] `steps/dispatch.run_step(name, store, document, edges)`: validates the document against the request model, runs the step function in its own transaction (`store.write()` for a writing step, `store.read()` otherwise), returns the reply model. `edges` carries config, clock and the acting machine
   - [ ] `operations/store_steps.py`: the `Steps` protocol (`run(step, request) -> reply`) and `LocalSteps`, which calls `run_step` on the local store
   - [ ] `tests/test_import_boundaries.py`: the client-run modules (`handle_pause`, the `pause_*` modules, `claim_waiting`, `answering_settle`, `resume`, `resume_run`, `wake_run`, `prune`, `work_start`) import no `amoeba.store.store`; `operations.steps` imports no module that runs `cf`, `sq` or `git`, and nothing from `amoeba.answering` that reads a file. Rules for modules not yet moved are added in the task that moves them
@@ -135,6 +136,7 @@ usageByModel:
 - [ ] **3.4 Resume tests** (on `LocalSteps`)
   - [ ] Existing resume tests pass with `LocalSteps`
   - [ ] Each row of the attempt-file table: final outcome replayed with no second `sq run --resume`; `started` and run gone records `resumed`; `started` and run still paused starts `sq` again; `refused` in the file is never replayed (a refused resume retried starts `sq` again)
+  - [ ] No file and an unreadable first poll: `refused` with the reason is recorded and the claim is freed (a new `resume_claim` succeeds at once)
   - [ ] `started` and an unreadable first poll: nothing recorded, file unchanged, the next attempt records `resumed`
   - [ ] A failed attempt-file write logs at error level and the resume still records its outcome
 - [ ] **3.5 `answer` split into client and hub parts**
@@ -144,6 +146,7 @@ usageByModel:
 - [ ] **3.6 `answer` tests**
   - [ ] Existing `answer` tests pass on the local store (machine always `local`)
   - [ ] A question with another machine's id returns `waiting_on_machine` and starts nothing; a question with a null machine is recorded and marked `not_delivered`
+  - [ ] An unreadable first poll returns the refused result
   - [ ] Success: checks pass
 
 **Commit**: `refactor: run the resume and answer on steps with an attempt file`
@@ -164,19 +167,21 @@ usageByModel:
   - [ ] The close sweep (D9), in both sweeps: an answer with no outcome is left; a `refused` one is marked `not_delivered` once its newest sign of life is `resume_claim_seconds` old
   - [ ] Design-allowed edit: `tests/operations/test_question_sweep.py`'s test that an unresumed answer past the bound becomes `not_delivered` is split: no outcome left; refused marked
   - [ ] Tests: each `pause_begin` reply shape; only the calling machine's rows are swept; a refused answer is not marked one second before `resume_claim_seconds`
-- [ ] **4.5 `handle_pause` and the pause modules take `Steps`**
-  - [ ] `handle_pause`, `pause_eligibility`, `pause_claim`, `pause_held`, `pause_existing`, `pause_results`, `pause_class`, `claim_waiting`, `answering_settle`, `pause_context` take `Steps` in place of a store and a config, in D5's order. `classify_pause` takes `claim_stale` in place of a limit and a time. Add their import-boundary rule
+- [ ] **4.5 The pause entry takes `Steps`**
+  - [ ] `handle_pause`, `pause_eligibility` and `pause_class` take `Steps` in place of a store and a config, in D5's steps 1 to 4: poll, `classify_run_only`, the `cf` gather, `pause_begin`, the run-file checks. `classify_pause` takes `claim_stale` in place of a limit and a time
   - [ ] "Not in a program": gather the checkout, call the new `register` callable (built in `wiring` from the placement `amoeba add` uses), call `pause_begin` again; a rejected `add` is today's skip
-  - [ ] New skips `SkipReason.OTHER_MACHINE` and `RESUME_IN_PROGRESS`. A held claim at the limit waits as `answer_limit_reached` with nothing gathered. The settle's claim drives the resume
-  - [ ] `cli.commands.run_handle_pause` builds `LocalSteps` (7.4 switches to `steps_for`)
+  - [ ] New skip `SkipReason.OTHER_MACHINE`. `cli.commands.run_handle_pause` builds `LocalSteps` (7.4 switches to `steps_for`)
   - [ ] Design-allowed edit: `tests/operations/test_pause_eligibility.py`'s answering-run skip test asserts the skip with `cf` answering and exit 3 with `cf` failing
-  - [ ] `docs/cli-contract.md`: the two skips
-- [ ] **4.6 Pause-path tests** (on `LocalSteps`)
+- [ ] **4.6 The claim paths take `Steps`**
+  - [ ] `pause_claim`, `pause_held`, `pause_existing`, `pause_results`, `claim_waiting`, `answering_settle` and `pause_context` take `Steps`, in D5's step 5 paths: each store call becomes the step D4 names. A held claim at the limit waits as `answer_limit_reached` with nothing gathered. The settle's claim drives the resume; `resume_claim` that loses is the new skip `SkipReason.RESUME_IN_PROGRESS`
+  - [ ] Add the import-boundary rule for every module of 4.5 and 4.6. `docs/cli-contract.md`: the two skips
+- [ ] **4.7 Pause-path tests** (on `LocalSteps`)
   - [ ] Every existing pause, hold and settle test passes; `test_pause_claim_held.py` needs no edit beyond `LocalSteps`
   - [ ] `handle-pause` for a run that is not paused makes no `cf` call; an answering run's own pause is skipped as `answering_run`
   - [ ] Two `handle-pause` calls that both read one stale claim: one replaces it and runs the answering run, the other is skipped as `already_claimed` and runs nothing
   - [ ] A question on another machine is skipped as `other_machine`, and that machine's rows are not swept; a resume claim in flight is skipped as `resume_in_progress` and starts nothing
   - [ ] A held question whose request is done, at its answer limit, waits as `answer_limit_reached`: nothing gathered, no answering run. The same for a question held and released in one call
+  - [ ] An answered question whose resume's first poll is unreadable makes `handle-pause` raise `SquadronError`
   - [ ] Success: checks pass
 
 **Commit**: `refactor: run handle-pause on steps, ending with pause_begin`
@@ -184,9 +189,10 @@ usageByModel:
 ## 5. Wakes, the sweeps and the prune on steps (D8, D9, D12; effort 4)
 
 - [ ] **5.1 `send`'s hub part wakes**
-  - [ ] The hub part writes the request, sets the mark (2.5), then: a due wake with a wakeable checkout on the calling machine is claimed and returned; due with wakeable checkouts only elsewhere returns `SendResult.wake_waiting_on` (each machine's name and `last_called_at`); else nothing. `log_stem` is `<logs_dir>/wake/<wake id>` from the new body key `logs_dir`
+  - [ ] The hub part takes a `logs_dir` argument, writes the request, sets the mark (2.5), then: a due wake with a wakeable checkout on the calling machine is claimed and returned with `log_stem` `<logs_dir>/wake/<wake id>`; due with wakeable checkouts only elsewhere returns `SendResult.wake_waiting_on` (each machine's name and `last_called_at`); else nothing. The in-process placement passes the layout's logs directory; 7.1 adds the door's body key
   - [ ] The client part starts `amoeba wake-run <wake id>` detached on a returned claim, as today; a failed start is `wake_finish` as `start_failed`
   - [ ] Delete `operations/wake_door.py` and its call; `not_served` for `send` no longer exists
+  - [ ] Design-required edit: `tests/hub/test_door_operations.py`'s `test_a_send_to_a_member_a_wake_is_due_for_is_not_served_and_writes_nothing` is deleted; 5.2's tests take its place. `test_a_hub_part_refusal_keeps_no_result_for_a_repeat` provokes its refusal with another hub part's `CallRefused` (a `status` call whose `runs` document `operations/runs_document.py` refuses) and keeps its assertion that a repeat is refused again. The `RefusalCode(NOT_SERVED)` identity assertion stays
   - [ ] `docs/cli-contract.md`: `wake_waiting_on`, the machine on wake entries
 - [ ] **5.2 `send` tests**
   - [ ] `send` from the machine with the wakeable checkout starts the wake in that call; a wake `send` claims in the call that set the mark is that mark's wake, and after it ends no second wake is due
@@ -228,12 +234,14 @@ usageByModel:
   - [ ] `operations/work_start.start_claimed(items, deps)`: each item started detached in its own session, never waiting: `amoeba resume-run <seq> <claim id>` with stdout and stderr in `logs/resume-run/<seq>-<stamp>.stdout.log` and `.stderr.log`; `amoeba handle-pause <run id>` in the row's checkout, as `request_release` does today; `amoeba wake-run <wake id>`. A failed start: logged and in the calls log (`handle-pause`), `resume_record` `refused` (resume), `wake_finish` `start_failed` (wake). Never raises
   - [ ] `operations/resume_run.py`: `resume_read` with the claim id, then `resume` (3.3). `cli/resume_command.py` registers `amoeba resume-run ANSWER_SEQ CLAIM_ID`, CLI only, beside `wake-run`, building `LocalSteps`. It runs no after-step
   - [ ] Tests: each kind started with the right argv, directory and log paths; each failed start recorded as listed; `resume-run` with a claim id no longer the answer's starts nothing; `docs/cli-contract.md`: the command and its logs
-- [ ] **6.5 The after-step replaces `start_after`**
-  - [ ] `wiring_steps.py`: `steps_for(layout)`, which also takes the door times and an optional session identity (263's four header values, D3), returns `LocalSteps` until 7.4; `after_call(...)` runs the prune when due (except after `handle-pause` and `status`), then, if the last reply had the flag, one `claim_work` and `start_claimed`. On `HubUnreachableError` it makes no call. Never raises, never changes the result. With `LocalSteps` the flag is one read of `work_waiting`
-  - [ ] `wiring.invoke` calls `after_call` after every operation on the CLI door, and after every operation but `answer` on the MCP door. `run_handle_pause` calls it at the end on every path, a raise included
-  - [ ] Delete `operations/request_release.py` and `wiring_release.py`; move their remaining tests to the after-step
-  - [ ] Design-allowed edit: tests of `start_after`'s seven operations assert the after-step for any operation. `tests/test_wiring_release.py`'s MCP `reply` and `cancel` test stays and passes against the after-step (rename the module to match if it names `wiring_release` only by file)
-- [ ] **6.6 After-step tests**
+- [ ] **6.5 `wiring_steps` and the after-step's call sites**
+  - [ ] `wiring_steps.py`: `steps_for(layout)` returns `LocalSteps` until 7.4. `after_call(...)` runs the prune when due (except after `handle-pause` and `status`), then, if the last reply had the flag, one `claim_work` and `start_claimed`. On `HubUnreachableError` it makes no call. Never raises, never changes the result. With `LocalSteps` the flag is one read of `work_waiting`
+  - [ ] `wiring.invoke` calls `after_call` on both of its paths, the door path that returns `route`'s result and the local path, after every operation on the CLI door and after every operation but `answer` on the MCP door. `run_handle_pause` calls it at the end on every path, a raise included
+- [ ] **6.6 Delete `request_release` and `wiring_release`**
+  - [ ] Delete `operations/request_release.py` and `wiring_release.py`; remove their references in `operations/handle_pause.py`, `operations/status_runs.py` and `store/models.py`
+  - [ ] Move or delete the tests that import them, one by one: `tests/operations/test_request_release.py`, `test_request_release_child.py`, `test_held_question_exits.py`, `test_handle_pause.py`, `test_status_calls.py`, `tests/test_message_timing.py`, `tests/test_import_boundaries.py`, `tests/load/test_start_ended_held_load.py` and its helper `tests/release_child_wait.py`. A test of behavior the after-step keeps (which rows start, the cap, the start-mark spacing, the child's wait) is moved onto `after_call` or `claim_work` with its assertion unchanged; a test of the deleted function's own signature is deleted. Note each under this task
+  - [ ] Design-allowed edit: tests of `start_after`'s seven operations assert the after-step for any operation. `tests/test_wiring_release.py`'s MCP `reply` and `cancel` test stays and passes against the after-step
+- [ ] **6.7 After-step tests**
   - [ ] With no client file, a `reply` and a `cancel` through the MCP door each start the released held question's `handle-pause`; an MCP `answer` runs no after-step
   - [ ] On a machine that runs only `send` and `inbox`, wake and resume logs past `prune_after_days` are removed
   - [ ] A prune problem after `send` is a log line, not in the result
@@ -246,24 +254,28 @@ usageByModel:
 
 - [ ] **7.1 Step names and the door version in `wire`**
   - [ ] `wire.protocol`: `STEP_CALLS` (the sixteen names of D4), `WRITING_STEPS`, reply keys `work` and `work_problem`, body keys `via` and `logs_dir`. `answer` joins `SERVED_OPERATIONS` and `WRITING_CALLS`. `UNKNOWN_ADVICE` gains `answer` (run `amoeba list` and look at the question before answering again) and one text for every writing step (D11)
-  - [ ] `wire.times.DOOR_VERSION` becomes 2; 260's pinned tuple test holds the new value
+  - [ ] `wire.times.DOOR_VERSION` becomes 2
+  - [ ] Design-required edits: `tests/wire/test_times.py`'s pinned tuple starts with 2; `tests/hub/test_handle_call.py::test_an_unserved_name_is_not_served` and the `not_served` case in `tests/hub/test_app.py` use a name that is in no served or step list in place of `answer`
   - [ ] Tests: `STEP_CALLS` and `WRITING_STEPS` equal the names and writing rows of `STEP_MODELS`; every writing step has advice
 - [ ] **7.2 The hub routes steps and adds the flag**
-  - [ ] `handle_call` accepts a name in `SERVED_OPERATIONS`, `HELLO_CALL` or `STEP_CALLS` and refuses others as `not_served`; a step runs `run_step` inside the call scope, so it and its kept result commit together. A document that does not validate is `malformed_call`; an `OPERATION_ERRORS` failure is `hub_error`
+  - [ ] `handle_call` accepts a name in `SERVED_OPERATIONS`, `HELLO_CALL` or `STEP_CALLS` and refuses others as `not_served`; a step runs `run_step` inside the call scope. A document that does not validate is `malformed_call`; an `OPERATION_ERRORS` failure is `hub_error`
+  - [ ] Writing steps are writing calls on every path: the keep after the operation and the kept-result lookup in `hub/calls.py` (today `WRITING_CALLS` only) also take `WRITING_STEPS`, so a step and its kept result commit together and a repeat returns it; `_needs_config` reads a step's config need from `STEP_MODELS`; `client/call.py` gives a writing step's unknown outcome its `UNKNOWN_ADVICE` text
   - [ ] `hub/call_work.py`: after the operation, inside the call scope, `work_waiting` for the acting machine into every done reply, fresh on a kept-result repeat. If the hub's `config.yaml` cannot load: no `work`, and `work_problem` with the error's text. Refused replies carry neither. A call whose own work needs the config is refused `hub_error` as today
   - [ ] `served.py`: the `answer` case, and `send` with `logs_dir`
-  - [ ] Tests: an unknown name refused `not_served`; a malformed step `malformed_call`; a done reply carries `work`; a repeat gets a fresh flag; with a broken config, `mark_read` and `wake_finish` succeed with `work_problem` and no `work`
+  - [ ] Tests: an unknown name refused `not_served`; a malformed step `malformed_call`; a writing step repeated with its call id returns the kept reply and applies once; a done reply carries `work`; a repeat gets a fresh flag; with a broken config, `mark_read` and `wake_finish` succeed with `work_problem` and no `work`
 - [ ] **7.3 `DoorSteps` and `StepReplyError`**
   - [ ] `DoorSteps` in `wiring_steps.py`: reads the client file on each call (gone: `ClientFileError` naming it, never a local store), posts the request model as `document` to `POST /call/<step>`, validates the reply against the step's model. A reply that does not fit raises `StepReplyError` (new, in `wiring.OPERATIONAL_ERRORS`, not `OPERATION_ERRORS`), naming the step and field and, for a writing step, that the hub applied it. Keeps the last reply's flag for the after-step and prints `work_problem` as one stderr line
   - [ ] `steps_for(layout)` returns `DoorSteps` when a client file exists, `LocalSteps` otherwise, once per command
   - [ ] Tests: every step through `DoorSteps` against the in-process hub (each reply runs through its model); a reply missing a field raises `StepReplyError` and exit 3; a client at door version 1 calling `send` is refused `door_version` and no request or wake row is written
+  - [ ] Tests of D3's two remaining rules: a command that started with `LocalSteps` on a machine that joins meanwhile fails its next step with `LocalStoreClosedError`; a step that raises one of `OPERATION_ERRORS` on the hub is refused `hub_error` and the command exits 3
 - [ ] **7.4 Joined machines run the commands**
   - [ ] Remove `refuse_if_joined` for `handle-pause` and `wake-run` in `cli/main.py`; `run_handle_pause`, `run_wake_run`, `resume-run` and the after-step use `steps_for`. `amoeba-mcp` start stays refused on a joined machine
   - [ ] `handle-pause` passes the `register` callable that places `add` through the door when joined
+  - [ ] Design-required edit: `tests/hub/test_joined_entry_points.py`'s lists of unserved operations and CLI commands drop `answer`, `handle-pause` and `wake-run`; its `amoeba-mcp` test stays
   - [ ] Update 260's entry-point table in `docs/cli-contract.md` (or where it lives) and `docs/squadron-hook.md`: `handle-pause` on a joined machine and what a down hub leaves behind
-  - [ ] Tests: `handle-pause` on a joined fixture machine passes with no local `config.yaml`; a client file removed partway fails the next step with `ClientFileError` and opens no local store, with a set-aside store put back in place; a `handle-pause` failing at `pause_begin` with the hub stopped returns after one call bound and its after-step makes no `open_runs` or `claim_work`, including when a prune is due
-- [ ] **7.5 The fixture's `sq` per machine**
-  - [ ] `tests/hub_fixture.py`: each client home gets the `sq` stub (with its resume stub) on its `PATH` and its own Squadron runs directory under that home
+  - [ ] Tests: `handle-pause` on a joined fixture machine passes with no local `config.yaml`; a client file removed partway fails the next step with `ClientFileError` and opens no local store, with a set-aside store put back in place; a `handle-pause` failing at `pause_begin` with the hub stopped returns after one call bound and its after-step makes no `open_runs` or `claim_work`, including when a prune is due; a served `list` on a joined machine whose reply has `work: true` makes one `claim_work` and starts what it returns
+- [ ] **7.5 Each fixture machine has its own home for `sq`**
+  - [ ] `tests/hub_fixture.py` `env_for`: a client's `HOME` is that client's own home directory, not the shared `root` (the hub home keeps `root`). Its `PATH` already puts its own `sq` stub first, so the stub's state (`$HOME/.sq-stub/runs`) and the Squadron runs directory (`$HOME/.config/squadron/runs`) are then per machine. Fix any fixture test that relied on the shared `HOME`, noted under this task
   - [ ] Test: a run created on `alpha` is not visible on `beta`
 - [ ] **7.6 One body, two ways**
   - [ ] A parametrized subset of the pause, resume and wake tests, one per path in D5, runs on `DoorSteps` against the in-process hub as well as `LocalSteps`
@@ -292,6 +304,7 @@ usageByModel:
   - [ ] A client whose clock is an hour ahead runs a pause, an answer, a held question and a wake against the in-process hub: every stored time is the hub's, and no expiry, age or claim differs from a run with a correct clock
 - [ ] **8.4 The load test** (`tests/load/test_door_load.py`)
   - [ ] Seed 500 questions and 500 requests across both machines; add `claim_work` callers; keep both bounds (every call inside 2 s with 16 clients; idle median under 200 ms); the idle case also times each step once with the same median. Record the figures for the slice notes (10.1)
+  - [ ] The test stays under `tests/load`, which CI's bare `uv run pytest` step collects, so CI gates it; `tests/test_ci_gates_load.py` passes
 - [ ] **8.5 Live variants**
   - [ ] `tests/live/hold` and `tests/live/waking` each gain a variant on the two-machine fixture with the repos split across machines; run both once (they spend on models) and note the result
   - [ ] Success: checks pass; both live tiers pass
@@ -302,7 +315,7 @@ usageByModel:
 
 - [ ] **9.1 `rm-machine` closes what waits on the machine**
   - [ ] `hub/admin.rm_machine`, in its one transaction before the machine row is deleted: close every open question on the machine as `machine_removed` with the machine's name; mark each such answered question's latest answer `not_delivered` with the same detail and clear its claim; end every unended wake as `machine_removed` naming the machine; null `machine_id` on its question and wake rows and `log_stem` on its wake rows
-  - [ ] Tests: no open question, no answer without a final outcome and no unended wake left on the machine; no `log_stem`; a later `answer` to one of those questions is recorded and marked `not_delivered`; a wake wrapper whose machine was removed stops its command's process group at its next step
+  - [ ] Tests: no open question, no answer without a final outcome and no unended wake left on the machine; the wakes it ended name the machine in their detail; no `log_stem`; a later `answer` to one of those questions is recorded and marked `not_delivered`; a wake wrapper whose machine was removed stops its command's process group at its next step
 - [ ] **9.2 Documents** (D15)
   - [ ] `docs/store-contract.md` (every store time is the store's own clock), `docs/cli-contract.md` (work starts after any call but an MCP `answer`), `docs/config-contract.md`, `docs/squadron-hook.md`, `docs/mcp-server.md`: complete the prose for every item D15 lists; `tests/test_contract_docs.py` passes
 - [ ] **9.3 `scripts/update_live.py`**
