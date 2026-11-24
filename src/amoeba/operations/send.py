@@ -12,11 +12,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
+from pathlib import Path
 
 from pydantic import ValidationError
 
 from amoeba.config.user_config import UserConfig
-from amoeba.operations.deps import Deps
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.message_document import declared_text
 from amoeba.operations.message_member import (
@@ -32,7 +32,7 @@ from amoeba.operations.names import OperationName
 from amoeba.operations.reject_codes import RejectCode, validation_problems
 from amoeba.operations.send_note import write_note
 from amoeba.operations.send_write import write_send
-from amoeba.operations.wake import wake_for_sent_request
+from amoeba.operations.wake import claim_wake_for_send
 from amoeba.operations.wake_door import refuse_a_wake_the_door_cannot_start
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import MessageKind
@@ -47,17 +47,19 @@ def send(
     *,
     here: HereCaller | HereNotAProject,
     clock: Callable[[], datetime],
-    local: Deps | None,
+    logs_dir: Path | None,
 ) -> SendResult:
-    """Send the request in ``document`` from the member whose checkout ``here`` is.
+    """The hub part: send the request in ``document`` from the member whose checkout
+    ``here`` is, and claim a wake for it when one is due (262 D8).
 
-    ``local`` is this machine's own edges, which start the wake step; ``None`` on the
-    hub, which starts none (261 D9): a send to a member a wake would be due for is
-    refused before anything is written.
+    ``logs_dir`` is the calling machine's logs directory, under which the claimed
+    wake's logs go. ``None`` is a call through the door, which does not serve waking
+    until 7.2: a send to a member a wake would be due for is refused before anything
+    is written (261 D9). The client part starts the claimed wake (``wake_start``).
 
     Raises:
         StoreError: The store cannot be used.
-        CallRefused: ``local`` is ``None`` and a wake is due (``not_served``).
+        CallRefused: ``logs_dir`` is ``None`` and a wake is due (``not_served``).
     """
     now = clock()
     caller = caller_of(store, here, declared_text(document, "member"))
@@ -87,7 +89,7 @@ def send(
         )
     if recipient is None:
         raise AssertionError("a request names its recipient; the model checked")
-    if local is None:
+    if logs_dir is None:
         refuse_a_wake_the_door_cannot_start(store, config, recipient.member_id, now)
     result = write_send(
         store,
@@ -97,9 +99,11 @@ def send(
         request=request,
         now=now,
     )
-    if local is None:
+    if logs_dir is None:
         return result
-    return wake_for_sent_request(store, config, local, recipient, result)
+    return claim_wake_for_send(
+        store, config, clock(), recipient.member_id, result, logs_dir
+    )
 
 
 def _refuse(

@@ -661,8 +661,11 @@ set the `notice`. The text adds a **Live sessions** section, one line per sessio
 `<client>  <directory>  up <age>  last beat <age> ago  push confirmed|push unconfirmed`.
 
 A member's `wake` (slice 244) is present only for a member with a wake command, else
-null: `{command, running, stopped, last_problem}`. `command` is the stored command in
-plain text. `running` is the member's wake not yet recorded as ended, or null:
+null: `{command, machine, waiting_on, running, stopped, last_problem}`. `command` is the
+stored command in plain text. `machine` (slice 262) is the machine whose checkout's
+command it is, shown as `wake command (on <machine>):`; `waiting_on` lists the other
+machines (`machine`, `last_called_at`) a due wake waits for, which claim it at their next
+call. `running` is the member's wake not yet recorded as ended, or null:
 `{started_at, deadline_at, command_pid, log_stem, overdue}`; `overdue` is true once
 `deadline_at` has passed with the row still unended, which most likely means its wrapper
 is gone (the row cannot show it; it only shows that no end was recorded): it no longer
@@ -710,8 +713,11 @@ or how the started `handle-pause` ended.
 `next` is `{operation, run_id, paused_at, directory}` or null. For `handle_pause`,
 `directory` is the run's own checkout: run the command there. A waiting question
 (`waiting_on_pm`) has `run_id`, `paused_at`, `question`, `slice_label`,
-`waiting_reason`, `waiting_detail`, `since`, `run_state`, `next` and `request_id`: the
-request behind a `request_*` reason (slice 242), else null. Every open waiting
+`waiting_reason`, `waiting_detail`, `since`, `run_state`, `next`, `request_id`, `machine`
+and `machine_last_called_at`. `request_id` is the request behind a `request_*` reason
+(slice 242), else null. `machine` (slice 262) is the machine the run paused on, null once
+it was removed, shown as a `machine:` line; `machine_last_called_at` is set only when that
+is not the calling machine, because an answer for it waits for its next call. Every open waiting
 question of a member in scope is listed. `run_state` is `at_pause` (`next` is
 `answer`); `moved_on` (`detail` gives the run's state) and `not_listed` appear only for
 a row a failed closing left open, since the closing otherwise closes them in the same
@@ -1010,7 +1016,14 @@ Every result has `outcome`, `notice`, `rejection` (a code, null unless rejected)
 a string when the wake step of a stored request failed with a store error, so no wake
 was claimed or its start could not be recorded, and null otherwise. The request is
 written regardless, and the text output prints the line; a same-id retry while the
-request is still `open` runs the wake step again.
+request is still `open` runs the wake step again. Slice 262 adds two more. `woke` is the
+wake the hub claimed for the calling machine (`wake_id`, `directory`, `log_stem`), which
+the client then starts as `amoeba wake-run <wake id>`, detached; it is null when no wake
+was claimed here. `wake_waiting_on` lists each machine (`machine`, and `last_called_at`,
+the hub's time it last called, or null) that has the recipient's wakeable checkout when a
+wake is due and none of the calling machine's checkouts can take it: that machine claims
+the wake at its next call, and the text output says so. A request nobody can wake waits
+for an agent or its expiry.
 
 A request view has `id`, `direction` (`sent` or `received`, relative to the caller; null
 when the caller is neither party, as for a `cancel` from a session in no member),

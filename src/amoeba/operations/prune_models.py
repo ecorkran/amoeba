@@ -6,11 +6,12 @@ reads the answering and resume logs.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from amoeba.store.store import Store
+from amoeba.operations.steps.models_runs import OpenRunsReply
 
 
 @dataclass(frozen=True)
@@ -30,7 +31,9 @@ class Prune(Protocol):
     """``prune`` with the layout bound: removes what is settled and old."""
 
     def __call__(
-        self, store: Store, /, *, now: datetime, after_days: int
+        self, open_runs: Callable[[], OpenRunsReply], /, *, now: datetime
     ) -> PruneReport:
-        """Remove entries older than ``after_days`` that no open question needs."""
+        """Remove entries older than the hub's ``prune_after_days`` that no open
+        question on this machine needs. ``open_runs`` is called only when a walk is
+        due, so a quiet machine makes no call for it (262 D12)."""
         ...

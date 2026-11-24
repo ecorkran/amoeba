@@ -287,3 +287,61 @@ def test_an_old_answer_with_no_outcome_is_left_by_the_status_sweep(
         answer = latest_answer(transaction, WAITING)
     assert answer is not None
     assert answer.resume_outcome is None
+
+
+def _on_another_machine(store: Store, key: QuestionKey) -> None:
+    with store.write() as transaction:
+        transaction.execute(
+            "INSERT INTO machines (name, owner_id, created_at, last_called_at) "
+            "VALUES ('beta', (SELECT owner_id FROM owners), 't', "
+            "'2026-11-01T00:00:00+00:00')"
+        )
+        transaction.execute(
+            "UPDATE questions SET machine_id = "
+            "(SELECT machine_id FROM machines WHERE name = 'beta') "
+            "WHERE run_id = ? AND paused_at = ?",
+            (key.run_id, key.paused_at),
+        )
+
+
+def test_status_closes_this_machines_question_and_leaves_another_machines_open(
+    store: Store, tmp_path: Path, core_dir: Path
+) -> None:
+    _waiting(store, WAITING)
+    _waiting(store, GONE)
+    _on_another_machine(store, GONE)
+    runs = [
+        _listed(WAITING.run_id, "completed", core_dir),
+        _listed(GONE.run_id, "completed", core_dir),
+    ]
+
+    result = _status(store, tmp_path, core_dir, runs)
+
+    assert [entry.run_id for entry in result.closed_now] == [WAITING.run_id]
+    assert _row(store, WAITING).state is QuestionState.CLOSED
+    assert _row(store, GONE).state is QuestionState.WAITING_ON_PM
+
+
+def test_a_waiting_entry_names_its_machine_and_another_machines_last_call(
+    store: Store, tmp_path: Path, core_dir: Path
+) -> None:
+    _waiting(store, WAITING)
+    _waiting(store, GONE)
+    _on_another_machine(store, GONE)
+    runs = [
+        _listed(WAITING.run_id, "paused", core_dir, WAITING.paused_at),
+        _listed(GONE.run_id, "paused", core_dir, GONE.paused_at),
+    ]
+
+    result = _status(store, tmp_path, core_dir, runs)
+
+    entries = {
+        entry.run_id: entry
+        for program in result.programs
+        for member in program.members
+        for entry in member.waiting_on_pm
+    }
+    assert entries[WAITING.run_id].machine == "local"
+    assert entries[WAITING.run_id].machine_last_called_at is None
+    assert entries[GONE.run_id].machine == "beta"
+    assert entries[GONE.run_id].machine_last_called_at == "2026-11-01T00:00:00+00:00"

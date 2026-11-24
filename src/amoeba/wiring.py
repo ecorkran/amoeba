@@ -13,6 +13,7 @@ and ``state_home()``; the store is opened only through ``open_state_store``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from functools import partial
 from pathlib import Path
@@ -42,6 +43,7 @@ from amoeba.operations.prune_models import Prune, PruneReport
 from amoeba.operations.resume import LOG_STAMP_FORMAT
 from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.operations.state_move import open_state_store, prepare_state_home
+from amoeba.operations.steps.models_runs import OpenRunsReply
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.wire.join_line import JoinError
@@ -127,8 +129,10 @@ def open_store(layout: StateLayout) -> Store:
 def _prune_in(layout: StateLayout) -> Prune:
     """``prune`` with the layout bound, so the operations never see the environment."""
 
-    def prune_layout(store: Store, *, now: datetime, after_days: int) -> PruneReport:
-        return prune(store, layout, now, after_days)
+    def prune_layout(
+        open_runs: Callable[[], OpenRunsReply], *, now: datetime
+    ) -> PruneReport:
+        return prune(open_runs, layout, now)
 
     return prune_layout
 

@@ -39,7 +39,10 @@ class _Rig:
         return self.time
 
     def gather(
-        self, listing: list[ListedRun] | RunListProblem, cf: object
+        self,
+        listing: list[ListedRun] | RunListProblem,
+        cf: object,
+        open_run_ids: Sequence[str] = (),
     ) -> RunsDocument:
         return gather_runs(
             list_runs=lambda: listing,
@@ -48,6 +51,7 @@ class _Rig:
             calls_dir=self.calls_dir,
             scratch_dirs=(self.scratch,),
             clock=self.clock,
+            open_run_ids=open_run_ids,
         )
 
     def write_run_file(self, run_id: str) -> None:
@@ -251,3 +255,23 @@ def test_the_documents_status_names_are_squadrons() -> None:
     """``runs_document`` may not import ``upstream``, so it names the paused status
     itself; this pins it to the listing reader's."""
     assert PAUSED_STATUS == LIST_PAUSED_STATUS
+
+
+def test_an_open_run_the_listing_lacks_is_absent_only_when_its_file_is_gone(
+    rig: _Rig,
+) -> None:
+    rig.write_run_file("has-a-file")
+    shown = in_directory(recorded_run(RUNNING), Path("/work/anywhere"))
+
+    document = rig.gather(
+        [shown],
+        FakeCf({}),
+        open_run_ids=("has-a-file", "no-file", shown.run_id),
+    )
+
+    # The listing's run is shown, and a run with a file is still Squadron's (262 D9).
+    assert document.absent_runs == ("no-file",)
+
+
+def test_no_open_run_ids_report_none_absent(rig: _Rig) -> None:
+    assert rig.gather([], FakeCf({})).absent_runs == ()

@@ -28,6 +28,7 @@ from operations.list_support import ListCf, project_entry
 from operations.release_support import SettableClock
 from operations.status_placed import list_view, status
 from operations.status_support import CfAnswer, status_deps
+from operations.wake_run_support import local_steps
 
 ELSEWHERE = Path("/work/elsewhere")
 PROJECTS = [project_entry(CORE, "core-name"), project_entry(LINT, "lint-name")]
@@ -252,7 +253,7 @@ def test_no_command_text_reaches_the_document_beyond_the_command_field(
         claimed = claim(transaction, "w1", member_id=CORE, now=clock.now)
     assert claimed is not None
 
-    outcome = run_wake(store, deps, "w1", popen=contained_popen)
+    outcome = run_wake(local_steps(store, deps), "w1", popen=contained_popen)
 
     assert outcome is WakeOutcome.START_FAILED
     document = json.dumps(_status(store, deps).model_dump(mode="json"))
@@ -261,3 +262,19 @@ def test_no_command_text_reaches_the_document_beyond_the_command_field(
     assert SECRET_MARKER in wake.command
     assert wake.last_problem is not None
     assert wake.last_problem.detail == "FileNotFoundError: No such file or directory"
+
+
+def test_a_wake_entry_names_the_machine_of_its_command(
+    store: Store, deps: Deps, clock: SettableClock
+) -> None:
+    result = _status(store, deps)
+
+    wakes = [
+        member.wake
+        for program in result.programs
+        for member in program.members
+        if member.wake is not None
+    ]
+    assert wakes
+    assert {wake.machine for wake in wakes} == {"local"}
+    assert all(wake.waiting_on == () for wake in wakes)

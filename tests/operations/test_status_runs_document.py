@@ -56,7 +56,6 @@ def _status(
         here=here or NOWHERE,
         runs=runs,
         clock=deps.clock,
-        local=deps,
     )
 
 
@@ -163,23 +162,14 @@ def _waiting(store: Store, run_id: str) -> QuestionKey:
     return key
 
 
-def test_a_question_whose_run_was_cut_stays_open_while_its_run_file_exists(
+def test_a_question_whose_run_was_cut_stays_open_unless_the_client_found_it_absent(
     store: Store, tmp_path: Path
 ) -> None:
+    # The client found the run's file (it is in no ``absent_runs``): the hub reads no
+    # disk and keeps the row open (262 D9).
     key = _waiting(store, "cut-run")
-    deps = status_deps(tmp_path, cf=FakeCf({}), runs=[])
-    deps.squadron_runs_dir.mkdir(parents=True, exist_ok=True)
-    (deps.squadron_runs_dir / "cut-run.json").write_text("{}", encoding="utf-8")
 
-    result = status_module.status(
-        store,
-        CONFIG,
-        {},
-        here=NOWHERE,
-        runs=RunsDocument(left_out=LeftOut(completed=1)),
-        clock=deps.clock,
-        local=deps,
-    )
+    result = _status(store, tmp_path, RunsDocument(left_out=LeftOut(completed=1)))
 
     assert result.closed_now == ()
     with store.read() as transaction:
@@ -187,12 +177,12 @@ def test_a_question_whose_run_was_cut_stays_open_while_its_run_file_exists(
     assert row is not None and row.state is QuestionState.WAITING_ON_PM
 
 
-def test_a_question_whose_run_the_document_lacks_and_has_no_file_is_gone(
+def test_a_question_whose_run_the_document_lacks_and_names_absent_is_gone(
     store: Store, tmp_path: Path
 ) -> None:
     _waiting(store, "vanished-run")
 
-    result = _status(store, tmp_path, RunsDocument())
+    result = _status(store, tmp_path, RunsDocument(absent_runs=("vanished-run",)))
 
     (closed,) = result.closed_now
     assert closed.closed_reason is ClosedReason.RUN_GONE

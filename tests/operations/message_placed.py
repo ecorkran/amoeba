@@ -23,6 +23,9 @@ from amoeba.operations.message_results import (
     ReplyResult,
     SendResult,
 )
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.store_steps import LocalSteps
+from amoeba.operations.wake_start import start_woken_wake
 from amoeba.store.store import Store
 
 
@@ -30,9 +33,11 @@ def send(
     store: Store, config: UserConfig, document: object, *, directory: Path, deps: Deps
 ) -> SendResult:
     here = gather_caller(directory, deps.cf_run)
-    return send_module.send(
-        store, config, document, here=here, clock=deps.clock, local=deps
+    result = send_module.send(
+        store, config, document, here=here, clock=deps.clock, logs_dir=deps.logs_dir
     )
+    steps = LocalSteps(store, StepEdges(deps.clock, lambda: config))
+    return start_woken_wake(steps, deps, result)
 
 
 def inbox(

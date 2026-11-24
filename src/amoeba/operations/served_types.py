@@ -38,6 +38,7 @@ from amoeba.operations.runs_document import RunsDocument
 from amoeba.operations.set_up_models import SetUpResult
 from amoeba.operations.standing_models import StandingResult, WithdrawResult
 from amoeba.operations.status import StatusResult
+from amoeba.operations.steps.models_runs import OpenRunsReply
 
 type ServedResult = (
     DecisionsResult
@@ -82,6 +83,9 @@ class ClientValues:
 
     here: Here | None = None
     runs: RunsDocument | None = None
+    #: What ``open_runs`` said when the client asked for the runs document: the
+    #: client part reuses it for the prune after the hub part (262 D9, D12).
+    open_runs: OpenRunsReply | None = None
 
 
 class HereKind(StrEnum):

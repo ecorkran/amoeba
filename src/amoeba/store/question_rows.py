@@ -10,6 +10,8 @@ from amoeba.store.models import QuestionKey, QuestionRecord
 from amoeba.store.question_json import parse_evidence, parse_passages
 from amoeba.store.row_values import (
     decode_timestamp,
+    integer,
+    optional_integer,
     optional_text,
     optional_timestamp,
     text,
@@ -51,4 +53,6 @@ def question_from_row(row: Sequence[object]) -> QuestionRecord:
         closed_at=optional_timestamp(row[17], "questions.closed_at"),
         request_id=optional_text(row[18], "questions.request_id"),
         start_attempted_at=optional_timestamp(row[19], "questions.start_attempted_at"),
+        machine_id=optional_integer(row[20], "questions.machine_id"),
+        start_count=integer(row[21], "questions.start_count"),
     )

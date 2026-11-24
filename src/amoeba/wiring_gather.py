@@ -19,6 +19,8 @@ from amoeba.operations.add_gather import gather_add
 from amoeba.operations.deps import Deps
 from amoeba.operations.here import gather_caller
 from amoeba.operations.here_document import here_to_document
+from amoeba.operations.list_view import ListResult
+from amoeba.operations.message_results import SendResult
 from amoeba.operations.names import OperationName
 from amoeba.operations.run_gather import gather_machine_runs
 from amoeba.operations.runs_document import runs_to_document
@@ -31,6 +33,12 @@ from amoeba.operations.served import (
     run_served,
 )
 from amoeba.operations.set_up_models import SetUpResult
+from amoeba.operations.status import StatusResult
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.steps.models import OPEN_RUNS
+from amoeba.operations.steps.models_runs import OpenRunsReply, OpenRunsRequest
+from amoeba.operations.store_steps import LocalSteps, Steps
+from amoeba.operations.wake_start import start_woken_wake
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import Door
 from amoeba.wire.protocol import HERE_BODY_KEY, RUNS_BODY_KEY
@@ -48,13 +56,20 @@ def gather_values(
     directory: Path | None,
     door: Door,
     deps: Deps,
+    steps: Steps | None,
 ) -> ClientValues | SetUpResult:
     """What the client part gathers for ``name`` on ``document``, or the door's refusal
     of ``add`` (a rejected result, returned before anything is gathered).
 
+    ``steps`` asks the hub which runs this machine's open questions name
+    (``open_runs``), for the runs document's ``absent_runs`` (262 D9); ``None`` is a
+    call through the door, which cannot ask until 7.3 and so reports none absent.
+
     Raises:
         ContextForgeError: ``cf`` or ``git`` gave no usable answer.
         ValueError: The operation needs the caller's directory and none was given.
+        HubUnreachableError, HubRefusedError: ``open_runs`` got no reply or was
+            refused.
     """
     needed = gather_needed(name.value, document)
     if name is OperationName.ADD:
@@ -68,8 +83,12 @@ def gather_values(
     here = None
     if needed.here is HereKind.CALLER:
         here = gather_caller(_required(name, directory), deps.cf_run)
-    runs = gather_machine_runs(deps) if needed.runs else None
-    return ClientValues(here=here, runs=runs)
+    runs = None
+    open_runs = None
+    if needed.runs:
+        open_runs = None if steps is None else steps.run(OPEN_RUNS, OpenRunsRequest())
+        runs = gather_machine_runs(deps, () if open_runs is None else open_runs.run_ids)
+    return ClientValues(here=here, runs=runs, open_runs=open_runs)
 
 
 def place_served(  # noqa: PLR0913 - invoke's arguments and what the gather needs
@@ -82,11 +101,45 @@ def place_served(  # noqa: PLR0913 - invoke's arguments and what the gather need
     load_config: Callable[[], UserConfig],
 ) -> ServedResult | SetUpResult:
     """The gather, then the hub part in process with this machine's own edges."""
-    values = gather_values(name, document, directory, door, deps)
+    steps = LocalSteps(store, StepEdges(deps.clock, load_config))
+    values = gather_values(name, document, directory, door, deps, steps)
     if isinstance(values, SetUpResult):
         return values
     edges = ServedEdges(clock=deps.clock, load_config=load_config, local=deps)
-    return run_served(name.value, store, document, edges, values)
+    result = run_served(name.value, store, document, edges, values)
+    if isinstance(result, SendResult):
+        # The hub part claimed any wake; this machine's client part starts it (262 D8).
+        return start_woken_wake(steps, deps, result)
+    if values.open_runs is not None:
+        if isinstance(result, StatusResult):
+            return pruned_status(result, deps, values.open_runs)
+        if isinstance(result, ListResult):
+            return pruned_list(result, deps, values.open_runs)
+    return result
+
+
+def pruned_status(
+    result: StatusResult, deps: Deps, open_runs: OpenRunsReply
+) -> StatusResult:
+    """``result`` after the client's file clean-up, whose problems join its
+    ``file_problems`` (262 D12). It reuses the ``open_runs`` reply the gather made."""
+    report = deps.prune(lambda: open_runs, now=deps.clock())
+    return _with_problems(result, report.problems)
+
+
+def pruned_list(result: ListResult, deps: Deps, open_runs: OpenRunsReply) -> ListResult:
+    """``pruned_status`` for the default ``list`` view, which is ``status``'s result."""
+    return result.model_copy(
+        update={"status": pruned_status(result.status, deps, open_runs)}
+    )
+
+
+def _with_problems(result: StatusResult, problems: tuple[str, ...]) -> StatusResult:
+    if not problems:
+        return result
+    return result.model_copy(
+        update={"file_problems": (*result.file_problems, *problems)}
+    )
 
 
 def body_keys(values: ClientValues) -> dict[str, object]:

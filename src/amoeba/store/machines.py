@@ -38,6 +38,35 @@ class ActingMachine:
     owner_id: int
 
 
+@dataclass(frozen=True)
+class MachineCalled:
+    """A machine's name and when it last called the hub."""
+
+    name: str
+    last_called_at: datetime | None
+
+
+def machines_called(transaction: Transaction) -> dict[int, MachineCalled]:
+    """Every machine by id, for the listings that name where a question is."""
+    return {
+        int(row[0]): MachineCalled(
+            text(row[1], "machines.name"),
+            optional_timestamp(row[2], "machines.last_called_at"),
+        )
+        for row in transaction.execute(sql_machines.SELECT_MACHINES_CALLED)
+    }
+
+
+def acting_machine_name(transaction: Transaction) -> str:
+    """The name of the machine this call acts as."""
+    row = transaction.execute(
+        sql_machines.SELECT_MACHINE_NAME, (acting_machine_id(transaction),)
+    ).fetchone()
+    if row is None:
+        raise StoreError("the acting machine is not in the store")
+    return text(row[0], "machines.name")
+
+
 def acting_machine_id(transaction: Transaction) -> int:
     """The machine this call acts as: the token's on a hub, ``local`` otherwise."""
     return transaction.acting("checkouts").machine_id

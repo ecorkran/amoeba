@@ -10,15 +10,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from prune_support import open_runs_of
+
 from amoeba.config.user_config import UserConfig
 from amoeba.operations import list_view as list_view_module
 from amoeba.operations import status as status_module
 from amoeba.operations.deps import Deps
 from amoeba.operations.here import gather_caller
-from amoeba.operations.list_view import ListOutcome, needs_here
+from amoeba.operations.list_view import ListOutcome, ListResult, needs_here
 from amoeba.operations.run_gather import gather_machine_runs
 from amoeba.operations.status_models import StatusResult
 from amoeba.store.store import Store
+from amoeba.wiring_gather import pruned_list, pruned_status
 
 
 def status(
@@ -30,10 +33,12 @@ def status(
     deps: Deps,
 ) -> StatusResult:
     here = gather_caller(directory, deps.cf_run)
-    runs = gather_machine_runs(deps)
-    return status_module.status(
-        store, config, document, here=here, runs=runs, clock=deps.clock, local=deps
+    opened = open_runs_of(store, deps.clock())
+    runs = gather_machine_runs(deps, opened.run_ids)
+    result = status_module.status(
+        store, config, document, here=here, runs=runs, clock=deps.clock
     )
+    return pruned_status(result, deps, opened)
 
 
 def list_view(
@@ -46,7 +51,11 @@ def list_view(
 ) -> ListOutcome:
     gathering = needs_here(document)
     here = gather_caller(directory, deps.cf_run) if gathering else None
-    runs = gather_machine_runs(deps) if gathering else None
-    return list_view_module.list_view(
-        store, config, document, here=here, runs=runs, clock=deps.clock, local=deps
+    opened = open_runs_of(store, deps.clock()) if gathering else None
+    runs = gather_machine_runs(deps, opened.run_ids) if opened is not None else None
+    result = list_view_module.list_view(
+        store, config, document, here=here, runs=runs, clock=deps.clock
     )
+    if opened is None or not isinstance(result, ListResult):
+        return result
+    return pruned_list(result, deps, opened)

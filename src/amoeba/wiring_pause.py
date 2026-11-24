@@ -12,13 +12,16 @@ import logging
 from functools import partial
 from pathlib import Path
 
+from amoeba.client.errors import HubRefusedError, HubUnreachableError
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.add_register import in_process_register
 from amoeba.operations.deps import Deps
 from amoeba.operations.handle_pause import HandlePauseResult, handle_pause
 from amoeba.operations.request_release import start_ended_held
 from amoeba.operations.steps.dispatch import StepEdges
-from amoeba.operations.store_steps import LocalSteps
+from amoeba.operations.steps.models import OPEN_RUNS
+from amoeba.operations.steps.models_runs import OpenRunsReply, OpenRunsRequest
+from amoeba.operations.store_steps import LocalSteps, Steps
 from amoeba.store.errors import StoreError
 from amoeba.store.store import Store
 
@@ -40,18 +43,22 @@ def handle_pause_locally(
         directory=directory,
         deps=deps,
         register=in_process_register(store, config, deps),
-        prune_note=partial(_prune_note, store, config, deps),
+        prune_note=partial(_prune_note, steps, deps),
         after=partial(start_ended_held, store, config, deps),
     )
 
 
-def _prune_note(store: Store, config: UserConfig, deps: Deps) -> str | None:
-    """What pruning could not do, as a note. A store failure here is a note, not an
-    error: the result is already decided, and a resume may already have been
-    delivered, so raising would report a failure for work that happened."""
+def _prune_note(steps: Steps, deps: Deps) -> str | None:
+    """What pruning could not do, as a note. A failure here is a note, not an error:
+    the result is already decided, and a resume may already have been delivered, so
+    raising would report a failure for work that happened."""
+
+    def open_runs() -> OpenRunsReply:
+        return steps.run(OPEN_RUNS, OpenRunsRequest())
+
     try:
-        pruned = deps.prune(store, now=deps.clock(), after_days=config.prune_after_days)
-    except StoreError as error:
+        pruned = deps.prune(open_runs, now=deps.clock())
+    except (StoreError, HubUnreachableError, HubRefusedError) as error:
         logger.exception("prune failed after handling the pause")
         return f"prune: {error}"
     return pruned.note()

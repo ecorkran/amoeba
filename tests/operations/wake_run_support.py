@@ -18,7 +18,11 @@ from store.seed import mark_wake_wanted
 from store.wake_support import seed_waking_member
 from store_open import open_local_store
 
+from amoeba.config.user_config import UserConfig
+from amoeba.operations.deps import Deps
 from amoeba.operations.processes import WaitableChild
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.store_steps import LocalSteps
 from amoeba.store.models import Wake
 from amoeba.store.store import Store
 from amoeba.store.wakes import WakeLimits, claim_wake, get_wake
@@ -182,3 +186,12 @@ def popen_failing_on_wait(message: str, started: Callable[..., WaitableChild]) -
         return RaisingWaitChild(started(*args, **kwargs), message)
 
     return popen
+
+
+def local_steps(store: Store, deps: Deps) -> LocalSteps:
+    """The wrapper's steps on the local store: none of them loads a config."""
+
+    def no_config() -> UserConfig:
+        raise AssertionError("a wake step loaded the config")
+
+    return LocalSteps(store, StepEdges(deps.clock, no_config))

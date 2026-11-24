@@ -20,7 +20,9 @@ from amoeba.operations.status_models import (
     WaitingEntry,
     WaitingRunState,
 )
+from amoeba.store.machines import MachineCalled
 from amoeba.store.models import QuestionRecord
+from amoeba.store.row_values import encode_timestamp
 
 __all__ = ["MemberWaiting", "WaitingRunState", "waiting_entries"]
 
@@ -34,18 +36,46 @@ class MemberWaiting:
 
 
 def waiting_entries(
-    open_questions: tuple[QuestionRecord, ...], runs: Mapping[str, RunStanding]
+    open_questions: tuple[QuestionRecord, ...],
+    runs: Mapping[str, RunStanding],
+    machines: Mapping[int, MachineCalled],
+    calling_machine: int,
 ) -> list[MemberWaiting]:
-    """One entry per question, in ``open_questions``'s order (oldest first)."""
+    """One entry per question, in ``open_questions``'s order (oldest first), each
+    naming its machine; one on another machine also says when that machine last
+    called the hub (262 D7)."""
     return [
         MemberWaiting(
-            question.member_id, _entry(question, runs.get(question.key.run_id))
+            question.member_id,
+            _entry(
+                question,
+                runs.get(question.key.run_id),
+                _machine(question, machines, calling_machine),
+            ),
         )
         for question in open_questions
     ]
 
 
-def _entry(question: QuestionRecord, run: RunStanding | None) -> WaitingEntry:
+def _machine(
+    question: QuestionRecord,
+    machines: Mapping[int, MachineCalled],
+    calling_machine: int,
+) -> tuple[str | None, str | None]:
+    """The question's machine name, and its last call when it is another's."""
+    if question.machine_id is None:
+        return None, None
+    machine = machines[question.machine_id]
+    if question.machine_id == calling_machine or machine.last_called_at is None:
+        return machine.name, None
+    return machine.name, encode_timestamp(machine.last_called_at)
+
+
+def _entry(
+    question: QuestionRecord,
+    run: RunStanding | None,
+    machine: tuple[str | None, str | None],
+) -> WaitingEntry:
     state, detail = _where(question, run)
     next_action = None
     if state is WaitingRunState.AT_PAUSE:
@@ -70,6 +100,8 @@ def _entry(question: QuestionRecord, run: RunStanding | None) -> WaitingEntry:
             if question.waiting_reason in REQUEST_DECLINE_REASONS
             else None
         ),
+        machine=machine[0],
+        machine_last_called_at=machine[1],
     )
 
 

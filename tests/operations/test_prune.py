@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from prune_support import prune_store
 from store.question_support import (
     NOW,
     claimed_question,
@@ -17,11 +18,13 @@ from store.question_support import (
 from store_open import open_local_store
 
 from amoeba.answering.values import DeclineReason
+from amoeba.client.errors import HubUnreachableError
 from amoeba.config.home import StateLayout, layout_under
 from amoeba.operations.decisions import DecisionsOutcome, decisions
 from amoeba.operations.dismiss import dismiss
-from amoeba.operations.prune import prune
+from amoeba.operations.prune import PRUNE_MARKER_NAME, prune
 from amoeba.operations.prune_models import PruneReport
+from amoeba.operations.steps.models_runs import OpenRunsReply
 from amoeba.operations.wake import WAKE_LOG_DIRECTORY
 from amoeba.store.answers import add_pm_answer, answers_of, record_resume
 from amoeba.store.models import QuestionKey
@@ -102,7 +105,7 @@ def _settle(store: Store, key: QuestionKey) -> None:
 
 
 def _prune(store: Store, layout: StateLayout) -> PruneReport:
-    return prune(store, layout, CLOCK, AFTER_DAYS)
+    return prune_store(store, layout, CLOCK)
 
 
 def test_settled_and_orphan_scratch_with_their_logs_are_pruned(
@@ -323,7 +326,7 @@ def test_a_second_call_within_the_interval_does_not_walk_again(
     _prune(store, layout)
     orphan = _scratch(layout, ORPHAN_ANSWERING, OLD)
 
-    soon = prune(store, layout, CLOCK + timedelta(minutes=30), AFTER_DAYS)
+    soon = prune_store(store, layout, CLOCK + timedelta(minutes=30))
 
     assert soon == PruneReport(removed=0, problems=())
     assert orphan.exists()
@@ -336,7 +339,7 @@ def test_a_call_after_the_interval_walks_again(
     _prune(store, layout)
     orphan = _scratch(layout, ORPHAN_ANSWERING, OLD)
 
-    later = prune(store, layout, CLOCK + timedelta(hours=2), AFTER_DAYS)
+    later = prune_store(store, layout, CLOCK + timedelta(hours=2))
 
     assert later.removed > 0
     assert not orphan.exists()
@@ -366,3 +369,35 @@ def test_an_emptied_wake_log_directory_is_removed(
 
     assert not old.exists()
     assert not old.parent.exists()
+
+
+def test_a_failed_open_runs_walks_nothing_and_leaves_the_marker_untouched(
+    layout: StateLayout,
+) -> None:
+    layout.state_home.mkdir(parents=True)
+    orphan = _scratch(layout, ORPHAN_ANSWERING, OLD)
+
+    def failing() -> OpenRunsReply:
+        raise HubUnreachableError("no reply")
+
+    with pytest.raises(HubUnreachableError):
+        prune(failing, layout, CLOCK)
+
+    assert orphan.exists()
+    assert not (layout.state_home / PRUNE_MARKER_NAME).exists()
+
+
+def test_open_runs_is_not_asked_inside_the_interval(
+    store: Store, layout: StateLayout
+) -> None:
+    layout.state_home.mkdir(parents=True)
+    _prune(store, layout)
+    asked: list[None] = []
+
+    def counting() -> OpenRunsReply:
+        asked.append(None)
+        return OpenRunsReply(run_ids=(), answering_run_ids=(), prune_after_days=30)
+
+    prune(counting, layout, CLOCK + timedelta(minutes=30))
+
+    assert asked == []

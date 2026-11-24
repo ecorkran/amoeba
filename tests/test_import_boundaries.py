@@ -327,6 +327,8 @@ MODULE_FORBIDDEN: dict[str, tuple[str, ...]] = {
         "pause_context",
         "claim_waiting",
         "answering_settle",
+        "wake_run",
+        "prune",
     )
 }
 #: What runs ``cf``, ``sq`` or ``git``: the whole ``upstream`` package and the module

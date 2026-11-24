@@ -143,6 +143,24 @@ class DeliveryView(FrozenModel):
         )
 
 
+class WokenWake(FrozenModel):
+    """A wake the hub part of ``send`` claimed for the calling machine (262 D8): the
+    client part starts ``amoeba wake-run`` on it, detached."""
+
+    wake_id: str
+    directory: str
+    #: The wake's log files' path without the suffixes: the client's ``logs_dir``,
+    #: ``wake/`` and the wake's id.
+    log_stem: str
+
+
+class WakeWaitingOn(FrozenModel):
+    """A machine a due wake waits for, and when it last called the hub (262 D8)."""
+
+    machine: str
+    last_called_at: str | None
+
+
 class SendResult(FrozenModel):
     """What ``send`` returns."""
 
@@ -160,6 +178,11 @@ class SendResult(FrozenModel):
     #: Why the wake step of a stored request failed (a store error); the request is
     #: written regardless. Null when nothing went wrong (244 D2).
     wake_problem: str | None = None
+    #: A wake claimed for the calling machine, for its client part to start (262 D8).
+    woke: WokenWake | None = None
+    #: Machines a due wake waits for, when none of the calling machine's checkouts
+    #: can take it: each claims it at its next call (262 D8).
+    wake_waiting_on: tuple[WakeWaitingOn, ...] = ()
 
     @classmethod
     def rejected(cls, code: RejectCode, problems: tuple[str, ...]) -> SendResult:

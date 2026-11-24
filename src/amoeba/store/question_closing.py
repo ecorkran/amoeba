@@ -142,6 +142,17 @@ def open_rows_of_run(
     return tuple(question_from_row(row) for row in rows)
 
 
+def open_rows_of_machine(
+    transaction: Transaction, machine_id: int
+) -> tuple[QuestionRecord, ...]:
+    """Every open question on one machine, oldest first (262 D9, D12)."""
+    rows = transaction.execute(
+        sql_local_work.SELECT_OPEN_QUESTIONS_OF_MACHINE,
+        (machine_id, *_OPEN_PARAMETERS),
+    ).fetchall()
+    return tuple(question_from_row(row) for row in rows)
+
+
 def open_rows_of_run_on_machine(
     transaction: Transaction, run_id: str, machine_id: int
 ) -> tuple[QuestionRecord, ...]:
@@ -162,6 +173,21 @@ def sweep_candidates(
     rows = transaction.execute(
         sql.select_open_rows_of_members(len(member_ids)),
         (*member_ids, *_OPEN_PARAMETERS),
+    ).fetchall()
+    return tuple(question_from_row(row) for row in rows)
+
+
+def sweep_candidates_on_machine(
+    transaction: Transaction, member_ids: Sequence[str], machine_id: int
+) -> tuple[QuestionRecord, ...]:
+    """The open questions of these members on one machine, oldest first: the rows the
+    status sweep may judge, because only that machine can say where its runs are
+    (262 D9)."""
+    if not member_ids:
+        return ()
+    rows = transaction.execute(
+        sql.select_open_rows_of_members_on_machine(len(member_ids)),
+        (machine_id, *member_ids, *_OPEN_PARAMETERS),
     ).fetchall()
     return tuple(question_from_row(row) for row in rows)
 

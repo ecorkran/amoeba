@@ -281,7 +281,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?)
 QUESTION_COLUMNS: Final = """run_id, paused_at, member_id, question, checkout, state,
     answering_run_id, waiting_reason, waiting_detail, slice_label, source_commit,
     passages, evidence, claimed_at, updated_at, closed_reason, closed_detail,
-    closed_at, request_id, start_attempted_at"""
+    closed_at, request_id, start_attempted_at, machine_id, start_count"""
 SELECT_QUESTION: Final = (
     f"SELECT {QUESTION_COLUMNS} FROM questions WHERE run_id = ? AND paused_at = ?"
 )
@@ -372,6 +372,15 @@ def select_open_rows_of_members(member_count: int) -> str:
     return (
         f"SELECT {QUESTION_COLUMNS} FROM questions WHERE questions.member_id "
         f"IN ({placeholders(member_count)}) AND {OPEN_QUESTION_CLAUSE}{_OPEN_ORDER}"
+    )
+
+
+def select_open_rows_of_members_on_machine(member_count: int) -> str:
+    """Every open row of the members on one machine, oldest first."""
+    return (
+        f"SELECT {QUESTION_COLUMNS} FROM questions WHERE questions.machine_id = ? "
+        f"AND questions.member_id IN ({placeholders(member_count)}) "
+        f"AND {OPEN_QUESTION_CLAUSE}{_OPEN_ORDER}"
     )
 
 

@@ -188,6 +188,8 @@ def _waiting_entry(name: str, entry: WaitingEntry, now: datetime) -> list[str]:
     if run_state is not None:
         detail = f" ({entry.detail})" if entry.detail else ""
         lines.append(prose_line(indented("run: ", 2), run_state + detail))
+    if entry.machine is not None:
+        lines.append(indented(_machine_text(entry), 2))
     lines += [
         prose_line(QUESTION_PREFIX, entry.question),
         indented("answer it, or close it without an answer:", 2),
@@ -195,6 +197,15 @@ def _waiting_entry(name: str, entry: WaitingEntry, now: datetime) -> list[str]:
         command_line(dismiss_command(key), 3),
     ]
     return lines
+
+
+def _machine_text(entry: WaitingEntry) -> str:
+    """``machine: <name>``; one on another machine says when it last called the hub,
+    because an answer for it waits for that machine's next call (262 D7)."""
+    if entry.machine_last_called_at is None:
+        return f"machine: {entry.machine}"
+    called = entry.machine_last_called_at
+    return f"machine: {entry.machine} (last called the hub at {called})"
 
 
 def _paused(members: list[MemberStatus]) -> list[str]:

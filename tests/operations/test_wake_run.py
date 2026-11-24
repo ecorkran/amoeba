@@ -28,6 +28,7 @@ from operations.release_support import SettableClock
 from operations.wake_run_support import (
     WAKE_ID,
     claimed_store,
+    local_steps,
     popen_failing_on_wait,
     probe_command,
     process_is_gone,
@@ -50,7 +51,9 @@ def _run(tmp_path: Path, command: str) -> WakeOutcome:
     store, _ = claimed_store(tmp_path, command)
     with store:
         return run_wake(
-            store, message_deps(tmp_path, _clock()), WAKE_ID, popen=contained_popen
+            local_steps(store, message_deps(tmp_path, _clock())),
+            WAKE_ID,
+            popen=contained_popen,
         )
 
 
@@ -139,7 +142,9 @@ def test_a_missing_directory_ends_start_failed(tmp_path: Path) -> None:
     )
     with store:
         outcome = run_wake(
-            store, message_deps(tmp_path, _clock()), WAKE_ID, popen=contained_popen
+            local_steps(store, message_deps(tmp_path, _clock())),
+            WAKE_ID,
+            popen=contained_popen,
         )
 
     assert outcome is WakeOutcome.START_FAILED
@@ -170,8 +175,7 @@ def test_a_missing_row_raises_with_no_command_run(tmp_path: Path) -> None:
     store, _ = claimed_store(tmp_path, probe_command(tmp_path))
     with store, pytest.raises(WakeRunError):
         run_wake(
-            store,
-            message_deps(tmp_path, _clock()),
+            local_steps(store, message_deps(tmp_path, _clock())),
             "no-such-wake",
             popen=contained_popen,
         )
@@ -190,7 +194,9 @@ def test_an_ended_row_raises_with_no_command_run_and_no_row_change(
         pytest.raises(WakeRunError),
     ):
         run_wake(
-            reopened, message_deps(tmp_path, _clock()), WAKE_ID, popen=contained_popen
+            local_steps(reopened, message_deps(tmp_path, _clock())),
+            WAKE_ID,
+            popen=contained_popen,
         )
 
     assert stored_row(tmp_path) == before
@@ -208,7 +214,9 @@ def test_a_store_that_cannot_be_read_raises_with_no_command_run(
     monkeypatch.setattr(store, "read", refuse)
     with store, pytest.raises(StoreBusyError):
         run_wake(
-            store, message_deps(tmp_path, _clock()), WAKE_ID, popen=contained_popen
+            local_steps(store, message_deps(tmp_path, _clock())),
+            WAKE_ID,
+            popen=contained_popen,
         )
 
     assert not (tmp_path / "seen.json").exists()
@@ -222,7 +230,7 @@ def test_a_held_store_while_writing_the_pid_is_a_warning_and_the_wake_is_recorde
     def held(*_: object) -> None:
         raise StoreBusyError("held")
 
-    monkeypatch.setattr("amoeba.operations.wake_run.set_command_pid", held)
+    monkeypatch.setattr("amoeba.operations.steps.wake.set_command_pid", held)
     caplog.set_level(logging.WARNING)
 
     outcome = _run(tmp_path, probe_command(tmp_path))
@@ -266,8 +274,7 @@ def test_a_raise_after_the_start_records_wrapper_failed_and_stops_the_group(
     store, _ = claimed_store(tmp_path, probe_command(tmp_path, mode="grandchild-sleep"))
     with store:
         outcome = run_wake(
-            store,
-            message_deps(tmp_path, _clock()),
+            local_steps(store, message_deps(tmp_path, _clock())),
             WAKE_ID,
             popen=popen_failing_on_wait(f"unexpected {SECRET_MARKER}", contained_popen),
         )
@@ -285,7 +292,9 @@ def test_a_raise_before_the_start_records_start_failed(tmp_path: Path) -> None:
     store, _ = claimed_store(tmp_path, probe_command(tmp_path))
     with store:
         outcome = run_wake(
-            store, message_deps(tmp_path, _clock()), WAKE_ID, popen=_popen_that_raises
+            local_steps(store, message_deps(tmp_path, _clock())),
+            WAKE_ID,
+            popen=_popen_that_raises,
         )
 
     row = stored_row(tmp_path)
@@ -303,8 +312,10 @@ def test_a_second_write_that_fails_leaves_the_row_unended_and_is_logged_once(
 
     with store, pytest.raises(StoreBusyError):
         run_wake(
-            flaky,  # pyright: ignore[reportArgumentType]
-            message_deps(tmp_path, _clock()),
+            local_steps(
+                flaky,  # pyright: ignore[reportArgumentType]
+                message_deps(tmp_path, _clock()),
+            ),
             WAKE_ID,
             popen=contained_popen,
         )
@@ -324,8 +335,10 @@ def test_a_failed_end_write_after_a_wrapper_error_is_also_raised_once(
 
     with store, pytest.raises(StoreBusyError):
         run_wake(
-            flaky,  # pyright: ignore[reportArgumentType]
-            message_deps(tmp_path, _clock()),
+            local_steps(
+                flaky,  # pyright: ignore[reportArgumentType]
+                message_deps(tmp_path, _clock()),
+            ),
             WAKE_ID,
             popen=_popen_that_raises,
         )
@@ -350,11 +363,13 @@ def test_a_store_error_after_the_start_stops_the_command_before_it_is_raised(
         started.append(child.pid)
         return child
 
-    monkeypatch.setattr("amoeba.operations.wake_run.set_command_pid", broken)
+    monkeypatch.setattr("amoeba.operations.steps.wake.set_command_pid", broken)
     store, _ = claimed_store(tmp_path, probe_command(tmp_path, mode="sleep"))
     with store, pytest.raises(StoreCorruptError):
         run_wake(
-            store, message_deps(tmp_path, _clock()), WAKE_ID, popen=recording_popen
+            local_steps(store, message_deps(tmp_path, _clock())),
+            WAKE_ID,
+            popen=recording_popen,
         )
 
     row = stored_row(tmp_path)
@@ -371,7 +386,7 @@ def test_a_row_already_ended_by_another_writer_is_kept_and_a_warning_is_logged(
     def already_ended(*_args: object) -> bool:
         return False
 
-    monkeypatch.setattr("amoeba.operations.wake_run.finish_wake", already_ended)
+    monkeypatch.setattr("amoeba.operations.steps.wake.finish_wake", already_ended)
     caplog.set_level(logging.WARNING)
 
     outcome = _run(tmp_path, probe_command(tmp_path))
@@ -405,8 +420,7 @@ def test_a_second_run_of_a_wake_that_already_has_a_command_runs_nothing(
         pytest.raises(WakeRunError, match="already has a command"),
     ):
         run_wake(
-            reopened,
-            message_deps(tmp_path, _clock()),
+            local_steps(reopened, message_deps(tmp_path, _clock())),
             WAKE_ID,
             popen=contained_popen,
         )
@@ -433,7 +447,11 @@ def test_a_run_that_loses_the_race_to_record_its_pid_stops_its_own_command(
         return child
 
     with store, pytest.raises(WakeRunError, match="another run"):
-        run_wake(store, message_deps(tmp_path, _clock()), WAKE_ID, popen=racing_popen)
+        run_wake(
+            local_steps(store, message_deps(tmp_path, _clock())),
+            WAKE_ID,
+            popen=racing_popen,
+        )
 
     row = stored_row(tmp_path)
     assert (row.command_pid, row.ended_at) == (4242, None)

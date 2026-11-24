@@ -41,7 +41,12 @@ from amoeba.upstream.context_forge.project_of import (
     CFProjectNotFound,
     project_of,
 )
-from amoeba.upstream.squadron.run_file import RunFacts, RunFileProblem, read_run_facts
+from amoeba.upstream.squadron.run_file import (
+    RunFacts,
+    RunFileProblem,
+    read_run_facts,
+    run_file_exists,
+)
 from amoeba.upstream.squadron.run_list import (
     ListedCheckpoint,
     ListedRun,
@@ -62,11 +67,14 @@ def gather_runs(  # noqa: PLR0913 - the edges the gather reads, each a value
     calls_dir: Path,
     scratch_dirs: Sequence[Path],
     clock: Callable[[], float],
+    open_run_ids: Sequence[str] = (),
 ) -> RunsDocument:
     """Read the machine's runs.
 
     ``clock`` is a monotonic clock in seconds, for the time limit on the lookups.
     ``scratch_dirs`` are the answering scratch roots: a run in one is left out.
+    ``open_run_ids`` are the run ids the hub says this machine's open questions name:
+    each the listing does not show and whose run file is gone is ``absent`` (262 D9).
     """
     listed = list_runs()
     if isinstance(listed, RunListProblem):
@@ -91,11 +99,18 @@ def gather_runs(  # noqa: PLR0913 - the edges the gather reads, each a value
         for item in listed
         if item.is_completed
     ]
+    shown = {item.run_id for item in listed}
+    absent = [
+        run_id
+        for run_id in open_run_ids
+        if run_id not in shown and not run_file_exists(runs_dir, run_id)
+    ]
     return build_runs_document(
         paused=paused,
         other_open=other,
         completed=completed,
         call_problems=tuple(dict.fromkeys(found.problems)),
+        absent_runs=absent,
     )
 
 
@@ -107,7 +122,7 @@ def scratch_roots(answering_dir: Path, legacy_home: Path | None) -> tuple[Path, 
     return (answering_dir, legacy_home / ANSWERING_DIR_NAME)
 
 
-def gather_machine_runs(deps: Deps) -> RunsDocument:
+def gather_machine_runs(deps: Deps, open_run_ids: Sequence[str] = ()) -> RunsDocument:
     """The runs of this machine through the edges ``deps`` holds."""
     return gather_runs(
         list_runs=deps.list_runs,
@@ -116,6 +131,7 @@ def gather_machine_runs(deps: Deps) -> RunsDocument:
         calls_dir=deps.calls_log_dir,
         scratch_dirs=scratch_roots(deps.answering_dir, deps.legacy_home),
         clock=time.monotonic,
+        open_run_ids=open_run_ids,
     )
 
 

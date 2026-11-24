@@ -12,43 +12,77 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 
+from amoeba.config.user_config import UserConfig
+from amoeba.operations.message_results import WakeWaitingOn
 from amoeba.operations.status_models import (
     WakeLastProblem,
     WakeRunning,
     WakeStatus,
     WakeStopped,
 )
+from amoeba.operations.steps.limits import wake_limits
+from amoeba.store.machines import acting_machine_name
 from amoeba.store.models import Member, Wake
-from amoeba.store.store import Store
+from amoeba.store.row_values import encode_timestamp
+from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import WakeOutcome
-from amoeba.store.wakes import WakeSummary, wake_command_of, wake_summary
+from amoeba.store.wakes import (
+    WakeLimits,
+    WakeSummary,
+    wake_command_of,
+    wake_summary,
+    wake_waiting_machines,
+)
 
 
 def read_member_wakes(
     store: Store,
     members: Mapping[str, Member],
     now: datetime,
-    max_wakes_per_day: int,
+    config: UserConfig,
 ) -> dict[str, WakeStatus]:
-    """The ``WakeStatus`` of each member that has a wake command; others are absent."""
+    """The ``WakeStatus`` of each member that has a wake command here; others are
+    absent. A wake due for a member waits on the machines that can take it (D8)."""
+    limits = wake_limits(config)
     with store.read() as transaction:
+        machine = acting_machine_name(transaction)
         return {
             project_id: build_wake_status(
                 command,
+                machine,
                 wake_summary(transaction, project_id, now),
-                max_wakes_per_day,
+                config.max_wakes_per_day,
+                _waiting_on(transaction, project_id, now, limits),
             )
             for project_id in members
             if (command := wake_command_of(transaction, project_id)) is not None
         }
 
 
-def build_wake_status(
-    command: str, summary: WakeSummary, max_wakes_per_day: int
+def _waiting_on(
+    transaction: Transaction, member_id: str, now: datetime, limits: WakeLimits
+) -> tuple[WakeWaitingOn, ...]:
+    return tuple(
+        WakeWaitingOn(
+            machine=name,
+            last_called_at=None if called is None else encode_timestamp(called),
+        )
+        for name, called in wake_waiting_machines(transaction, member_id, now, limits)
+    )
+
+
+def build_wake_status(  # noqa: PLR0913 - the pieces of one member's display
+    command: str,
+    machine: str,
+    summary: WakeSummary,
+    max_wakes_per_day: int,
+    waiting_on: tuple[WakeWaitingOn, ...] = (),
 ) -> WakeStatus:
     """The display of one member's wakes from its summary."""
     return WakeStatus(
         command=command,
+        machine=machine,
+        waiting_on=waiting_on,
         running=_running(summary),
         stopped=(
             WakeStopped(used=summary.used_in_window, limit=max_wakes_per_day)

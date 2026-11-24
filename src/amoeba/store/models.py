@@ -139,6 +139,10 @@ class QuestionRecord:
     request_id: str | None
     #: When ``start_ended_held`` last started ``handle_pause`` for the held row.
     start_attempted_at: datetime | None
+    #: The machine the run paused on (262 D14); ``None`` after ``rm-machine``.
+    machine_id: int | None
+    #: Automatic starts ``claim_work`` has handed out for the row (262 D10).
+    start_count: int
 
 
 @dataclass(frozen=True)
@@ -289,6 +293,8 @@ class Wake:
     exit_code: int | None
     #: Why, for a start failure or an error; never argv text.
     detail: str | None
+    #: The machine the wake was claimed for; ``None`` after ``rm-machine`` (262 D13).
+    machine_id: int | None
 
 
 @dataclass(frozen=True)

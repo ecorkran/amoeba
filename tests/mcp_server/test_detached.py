@@ -15,6 +15,7 @@ import anyio
 import pytest
 from cf_fixtures import DEFAULT_WORKTREE, write_fake_cf
 from fake_sq import write_fake_sq
+from prune_support import prune_store
 from store_open import open_local_store
 from user_configs import example_config_text
 
@@ -37,7 +38,6 @@ from amoeba.mcp.detached import (
 )
 from amoeba.mcp.tools import RequestError
 from amoeba.operations.names import OperationName
-from amoeba.operations.prune import prune
 from amoeba.upstream.squadron.launch import LaunchLogs
 
 WAIT_SECONDS = 20
@@ -241,7 +241,7 @@ def test_an_old_detached_log_is_pruned_with_its_emptied_directories(
     old = _log(layout, "old.stdout.log", 40)
 
     with open_local_store(layout.store_path) as store:
-        prune(store, layout, NOW, 30)
+        prune_store(store, layout, NOW)
 
     assert not old.exists()
     assert not (layout.logs_dir / "mcp").exists()
@@ -253,7 +253,7 @@ def test_a_young_detached_log_stays(tmp_path: Path) -> None:
     young = _log(layout, "young.stdout.log", 5)
 
     with open_local_store(layout.store_path) as store:
-        prune(store, layout, NOW, 30)
+        prune_store(store, layout, NOW)
 
     assert not old.exists()
     assert young.exists()

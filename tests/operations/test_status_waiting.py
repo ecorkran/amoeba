@@ -8,6 +8,7 @@ from amoeba.answering.values import DeclineReason
 from amoeba.operations.runs_document import standings
 from amoeba.operations.status_models import NextOperation, WaitingEntry, WaitingRunState
 from amoeba.operations.status_waiting import waiting_entries
+from amoeba.store.machines import MachineCalled
 from amoeba.store.models import QuestionKey, QuestionRecord
 from amoeba.store.vocabulary import QuestionState
 from amoeba.upstream.squadron.run_list import ListedRun
@@ -24,7 +25,10 @@ def _entries(
     return [
         item.entry
         for item in waiting_entries(
-            questions, standings(document_of(*listed, lookup=project("cf")))
+            questions,
+            standings(document_of(*listed, lookup=project("cf"))),
+            {1: MachineCalled("local", None)},
+            1,
         )
     ]
 

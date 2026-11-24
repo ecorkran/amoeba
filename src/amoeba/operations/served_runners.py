@@ -162,7 +162,6 @@ def run_list(
         here=here,
         runs=values.runs,
         clock=edges.clock,
-        local=edges.local,
     )
 
 
@@ -176,7 +175,6 @@ def run_status(
         here=_caller(values),
         runs=_runs(values),
         clock=edges.clock,
-        local=edges.local,
     )
 
 
@@ -195,7 +193,7 @@ def run_send(
         document,
         here=_caller(values),
         clock=edges.clock,
-        local=edges.local,
+        logs_dir=None if edges.local is None else edges.local.logs_dir,
     )
 
 

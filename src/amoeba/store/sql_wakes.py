@@ -15,11 +15,17 @@ LIVE_WAKE: Final = "ended_at IS NULL AND deadline_at > ?"
 #: Select order: ``store.wakes._wake`` reads these positionally.
 _WAKE_COLUMNS: Final = (
     "wake_id, member_id, directory, command, started_at, deadline_at, log_stem, "
+    "command_pid, ended_at, outcome, exit_code, detail, machine_id"
+)
+#: The columns the insert names itself: every ``_WAKE_COLUMNS`` one but the machine,
+#: which follows the owner.
+_INSERT_COLUMNS: Final = (
+    "wake_id, member_id, directory, command, started_at, deadline_at, log_stem, "
     "command_pid, ended_at, outcome, exit_code, detail"
 )
 
 INSERT_WAKE: Final = (
-    f"INSERT INTO wakes ({_WAKE_COLUMNS}, owner_id, machine_id) "
+    f"INSERT INTO wakes ({_INSERT_COLUMNS}, owner_id, machine_id) "
     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 SELECT_WAKE: Final = f"SELECT {_WAKE_COLUMNS} FROM wakes WHERE wake_id = ?"
@@ -60,6 +66,15 @@ FINISH_WAKE: Final = (
 DELETE_AGED_WAKES: Final = "DELETE FROM wakes WHERE started_at < ?"
 SELECT_AGED_WAKE_EXISTS: Final = (
     "SELECT EXISTS (SELECT 1 FROM wakes WHERE started_at < ?)"
+)
+
+#: Each machine with a checkout of the member that has a wake command, with when it
+#: last called the hub. Parameter: member id.
+SELECT_WAKEABLE_MACHINES: Final = (
+    "SELECT DISTINCT machines.name, machines.last_called_at FROM checkouts "
+    "JOIN machines ON machines.machine_id = checkouts.machine_id "
+    "WHERE checkouts.member_id = ? AND checkouts.wake_command IS NOT NULL "
+    "ORDER BY machines.name"
 )
 
 # --- the wake mark (262 D8) ---------------------------------------------------

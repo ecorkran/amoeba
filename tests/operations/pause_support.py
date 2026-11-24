@@ -16,6 +16,7 @@ from store.seed import insert_checkout
 from amoeba.operations.deps import Deps
 from amoeba.operations.processes import Spawner, WaitableChild
 from amoeba.operations.prune_models import PruneReport
+from amoeba.operations.steps.models_runs import OpenRunsReply
 from amoeba.store.models import Member, MemberSettings
 from amoeba.store.programs import get_member, upsert_member, upsert_program
 from amoeba.store.store import Store
@@ -133,7 +134,7 @@ def unused_amoeba_script() -> Path:
     raise AssertionError("this test gave no amoeba script")
 
 
-def no_prune(store: Store, *, now: datetime, after_days: int) -> PruneReport:
+def no_prune(open_runs: Callable[[], OpenRunsReply], *, now: datetime) -> PruneReport:
     """A ``prune`` that removes nothing: a unit test of another operation."""
     return PruneReport(removed=0, problems=())
 

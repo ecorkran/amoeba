@@ -138,6 +138,9 @@ class RunsDocument(_Frozen):
     left_out: LeftOut = LeftOut()
     #: Calls-log read problems, once each.
     call_problems: tuple[str, ...] = ()
+    #: Run ids the machine's open questions name that the listing does not show and
+    #: whose run file is gone too (262 D9): the one fact the hub cannot check.
+    absent_runs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -206,6 +209,7 @@ def build_runs_document(
     other_open: Sequence[OpenRun],
     completed: Sequence[CompletedRun],
     call_problems: Sequence[str],
+    absent_runs: Sequence[str] = (),
     max_bytes: int = RUNS_DOCUMENT_MAX_BYTES,
 ) -> RunsDocument:
     """The document holding as many runs as fit, paused first, with the rest counted.
@@ -218,6 +222,7 @@ def build_runs_document(
         max_bytes
         - _TAIL_ALLOWANCE_BYTES
         - sum(len(text.encode("utf-8")) + _SEPARATOR_BYTES for text in problems)
+        - sum(len(run.encode("utf-8")) + _SEPARATOR_BYTES for run in absent_runs)
     )
     kept_paused, left_paused, budget = _fit(paused, budget)
     kept_other, left_other, budget = _fit(other_open, budget)
@@ -227,6 +232,7 @@ def build_runs_document(
         completed_runs=tuple(kept_completed),
         left_out=LeftOut(paused=left_paused, open=left_other, completed=left_completed),
         call_problems=problems,
+        absent_runs=tuple(absent_runs),
     )
 
 

@@ -43,7 +43,17 @@ def waking_section(members: list[MemberStatus], now: datetime) -> list[str]:
 
 
 def _member_lines(wake: WakeStatus, now: datetime) -> list[str]:
-    lines = [indented("wake command:", 2), command_line(wake.command, depth=3)]
+    on = "" if wake.machine is None else f" (on {wake.machine})"
+    lines = [indented(f"wake command{on}:", 2), command_line(wake.command, depth=3)]
+    for waiting in wake.waiting_on:
+        called = "never" if waiting.last_called_at is None else waiting.last_called_at
+        lines.append(
+            indented(
+                f"a wake waits for {waiting.machine}, which last called the hub at "
+                f"{called}",
+                2,
+            )
+        )
     if wake.running is not None:
         lines.append(indented(_running_text(wake.running, now), 2))
     if wake.stopped is not None:

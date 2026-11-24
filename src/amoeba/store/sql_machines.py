@@ -38,6 +38,9 @@ TOUCH_MACHINE: Final = (
     "UPDATE machines SET last_called_at = ?, "
     "client_version = COALESCE(?, client_version) WHERE token_hash = ?"
 )
+SELECT_MACHINES_CALLED: Final = (
+    "SELECT machine_id, name, last_called_at FROM machines ORDER BY machine_id"
+)
 SELECT_MACHINE_NAME: Final = "SELECT name FROM machines WHERE machine_id = ?"
 SELECT_MACHINES: Final = (
     "SELECT name, token_hash IS NOT NULL, last_called_at, client_version "

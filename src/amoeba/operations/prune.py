@@ -1,8 +1,9 @@
 """Pruning (slice 228, D9): settled scratch, logs and calls-log days older than a limit.
 
-``prune`` is called at the end of ``handle_pause`` and ``status``, and does its walk
-at most once per ``PRUNE_INTERVAL`` (the mtime of one marker file in the state home),
-so a burst of hook calls does not each walk every log. Everything tied to an
+``prune`` is called at the end of ``handle_pause`` and ``status`` (and after any other
+call, 262 D12), and does its walk at most once per ``PRUNE_INTERVAL`` (the mtime of
+one marker file in the state home), so a burst of hook calls does not each walk every
+log. Everything tied to an
 open question is kept whatever its age: it is evidence for the PM and for the
 dead-claim path. The store's rows are never pruned. An ``OSError`` on one entry goes
 into ``PruneReport.problems`` and the other entries are still pruned.
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -25,12 +27,8 @@ from amoeba.operations.answering_run import (
 )
 from amoeba.operations.calls_log import DAY_FILE_SUFFIX, DAY_FORMAT
 from amoeba.operations.prune_models import PruneReport
-from amoeba.operations.resume import RESUME_LOG_DIRECTORY
-from amoeba.store.question_closing import (
-    open_answering_run_ids,
-    run_ids_with_open_question,
-)
-from amoeba.store.store import Store
+from amoeba.operations.resume_attempt import RESUME_LOG_DIRECTORY
+from amoeba.operations.steps.models_runs import OpenRunsReply
 
 #: Directories under ``logs/`` that are never removed, even when empty.
 PROTECTED_LOG_DIRECTORIES: Final = (
@@ -199,22 +197,23 @@ def _mark_walked(marker: Path, now: datetime) -> str | None:
 
 
 def prune(
-    store: Store, layout: StateLayout, now: datetime, after_days: int
+    open_runs: Callable[[], OpenRunsReply], layout: StateLayout, now: datetime
 ) -> PruneReport:
-    """Remove settled and orphaned scratch and logs older than ``after_days``;
-    nothing if the last walk was under ``PRUNE_INTERVAL`` ago.
+    """Remove settled and orphaned scratch and logs older than the hub's
+    ``prune_after_days``; nothing if the last walk was under ``PRUNE_INTERVAL`` ago.
+
+    ``open_runs`` is called only when a walk is due; if it raises, nothing is walked
+    and the marker is untouched, so the next call tries again (262 D12).
 
     Raises:
-        StoreError: The open questions could not be read.
+        StoreError, HubUnreachableError, HubRefusedError: ``open_runs`` failed.
     """
     marker = layout.state_home / PRUNE_MARKER_NAME
     if _pruned_recently(marker, now):
         return PruneReport(0, ())
-    with store.read() as transaction:
-        evidence = _Evidence(
-            open_answering_run_ids(transaction), run_ids_with_open_question(transaction)
-        )
-    state = _Pass(layout, now, after_days)
+    reply = open_runs()
+    evidence = _Evidence(frozenset(reply.answering_run_ids), frozenset(reply.run_ids))
+    state = _Pass(layout, now, reply.prune_after_days)
     state.run(evidence)
     marking_problem = _mark_walked(marker, now)
     problems = (*state.problems, *([marking_problem] if marking_problem else []))

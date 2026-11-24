@@ -17,7 +17,7 @@ from typing import Final
 
 from amoeba.store import sql_wakes
 from amoeba.store.checkouts import Checkout, first_wakeable_checkout
-from amoeba.store.machines import acting_machine_id
+from amoeba.store.machines import acting_machine_id, acting_machine_name
 from amoeba.store.models import Wake
 from amoeba.store.programs import get_member
 from amoeba.store.row_values import (
@@ -81,6 +81,7 @@ def _wake(row: Sequence[object]) -> Wake:
         else vocabulary(outcome, WakeOutcome, "wakes.outcome"),
         exit_code=optional_integer(row[10], "wakes.exit_code"),
         detail=optional_text(row[11], "wakes.detail"),
+        machine_id=optional_integer(row[12], "wakes.machine_id"),
     )
 
 
@@ -219,6 +220,29 @@ def wake_due(
     return _due_checkout(transaction, member_id, now, limits, scope) is not None
 
 
+def wake_waiting_machines(
+    transaction: Transaction, member_id: str, now: datetime, limits: WakeLimits
+) -> tuple[tuple[str, datetime | None], ...]:
+    """The machines a due wake waits for, each with when it last called the hub.
+
+    Empty unless a wake is due for the member on some machine (``wake_due`` over
+    ``ALL_MACHINES``) and not on the acting one: the machines with a wakeable checkout
+    that are not this one claim it at their next call (262 D8).
+    """
+    if wake_due(transaction, member_id, now, limits, WakeScope.ACTING_MACHINE):
+        return ()
+    if not wake_due(transaction, member_id, now, limits, WakeScope.ALL_MACHINES):
+        return ()
+    here = acting_machine_name(transaction)
+    return tuple(
+        (text(row[0], "machines.name"), optional_timestamp(row[1], "last_called_at"))
+        for row in transaction.execute(
+            sql_wakes.SELECT_WAKEABLE_MACHINES, (member_id,)
+        ).fetchall()
+        if row[0] != here
+    )
+
+
 def set_wake_mark(
     transaction: Transaction,
     message_id: str,
@@ -333,7 +357,7 @@ def wake_summary(
     return WakeSummary(
         unended=None if unended is None else _wake(unended),
         # ``LIVE_WAKE`` negated in SQL, so the predicate is written once.
-        overdue=unended is not None and integer(unended[12], "wake overdue") == 1,
+        overdue=unended is not None and integer(unended[13], "wake overdue") == 1,
         used_in_window=_used_in_window(transaction, member_id, now),
         newest_ended=None if ended is None else _wake(ended),
     )

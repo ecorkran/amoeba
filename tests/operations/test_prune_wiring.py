@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -20,6 +20,7 @@ from amoeba.operations.pause_models import HandlePauseOutcome
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
 from amoeba.operations.status import StatusResult
+from amoeba.operations.steps.models_runs import OpenRunsReply
 from amoeba.store.errors import StoreBusyError
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
@@ -80,8 +81,10 @@ def _status(
         calls_log_dir=deps.calls_log_dir,
     )
 
-    def real_prune(target: Store, *, now: datetime, after_days: int) -> PruneReport:
-        return prune(target, layout, now, after_days)
+    def real_prune(
+        open_runs: Callable[[], OpenRunsReply], *, now: datetime
+    ) -> PruneReport:
+        return prune(open_runs, layout, now)
 
     deps = replace(deps, prune=real_prune if prune_fn is None else prune_fn)
     result = status(store, user_config(), {}, directory=core_dir, deps=deps)
@@ -121,7 +124,9 @@ def test_prune_problems_reach_status_file_problems(
     core_dir = tmp_path / "core"
     core_dir.mkdir()
 
-    def failing(target: Store, *, now: datetime, after_days: int) -> PruneReport:
+    def failing(
+        open_runs: Callable[[], OpenRunsReply], *, now: datetime
+    ) -> PruneReport:
         return PruneReport(removed=0, problems=("prune: cannot remove a file",))
 
     result = _status(store, tmp_path, core_dir, failing)
@@ -134,8 +139,10 @@ def test_status_passes_the_configured_age(store: Store, tmp_path: Path) -> None:
     core_dir.mkdir()
     seen: list[int] = []
 
-    def recording(target: Store, *, now: datetime, after_days: int) -> PruneReport:
-        seen.append(after_days)
+    def recording(
+        open_runs: Callable[[], OpenRunsReply], *, now: datetime
+    ) -> PruneReport:
+        seen.append(open_runs().prune_after_days)
         return PruneReport(removed=0, problems=())
 
     _status(store, tmp_path, core_dir, recording)
@@ -147,7 +154,9 @@ def test_handle_pause_prunes_once_and_after_the_resume(tmp_path: Path) -> None:
     with world(tmp_path) as w:
         resumes_at_prune: list[int] = []
 
-        def recording(target: Store, *, now: datetime, after_days: int) -> PruneReport:
+        def recording(
+            open_runs: Callable[[], OpenRunsReply], *, now: datetime
+        ) -> PruneReport:
             resumes_at_prune.append(len(w.spawned.resumes))
             return PruneReport(removed=0, problems=())
 
@@ -163,7 +172,9 @@ def test_handle_pause_prunes_once_and_after_the_resume(tmp_path: Path) -> None:
 def test_handle_pause_puts_prune_problems_in_the_detail(tmp_path: Path) -> None:
     with world(tmp_path) as w:
 
-        def failing(target: Store, *, now: datetime, after_days: int) -> PruneReport:
+        def failing(
+            open_runs: Callable[[], OpenRunsReply], *, now: datetime
+        ) -> PruneReport:
             return PruneReport(removed=0, problems=("prune: cannot remove a file",))
 
         w.deps = replace(w.deps, prune=failing)
@@ -181,7 +192,9 @@ def test_a_prune_store_failure_after_a_resume_is_a_note_not_an_error(
 ) -> None:
     with world(tmp_path) as w:
 
-        def failing(target: Store, *, now: datetime, after_days: int) -> PruneReport:
+        def failing(
+            open_runs: Callable[[], OpenRunsReply], *, now: datetime
+        ) -> PruneReport:
             raise StoreBusyError("the store is locked")
 
         w.deps = replace(w.deps, prune=failing)

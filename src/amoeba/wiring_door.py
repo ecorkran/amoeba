@@ -111,7 +111,7 @@ def route(  # noqa: PLR0913 - invoke's arguments and the deps the gather needs
         return None
     if name.value not in SERVED_OPERATIONS:
         raise NotServedError(_not_served(client_file, name.value))
-    values = gather_values(name, document, directory, door, make_deps())
+    values = gather_values(name, document, directory, door, make_deps(), None)
     if isinstance(values, SetUpResult):
         return values
     result = call(

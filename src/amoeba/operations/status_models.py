@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from amoeba.answering.values import DeclineReason
 from amoeba.operations.calls_log import CallEntry
 from amoeba.operations.decisions_models import MemberName
-from amoeba.operations.message_results import RequestDirection
+from amoeba.operations.message_results import RequestDirection, WakeWaitingOn
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.store.vocabulary import (
@@ -112,6 +112,12 @@ class WaitingEntry(_Model):
     next: NextAction | None
     #: The request behind a ``request_*`` waiting reason; else null (242 D9).
     request_id: str | None = None
+    #: The machine the run paused on (262 D14); null for a question whose machine was
+    #: removed.
+    machine: str | None = None
+    #: When that machine last called the hub, set only when it is not the calling one:
+    #: an answer for it waits for its next call (262 D7).
+    machine_last_called_at: str | None = None
 
 
 class RequestEntry(_Model):
@@ -195,6 +201,10 @@ class WakeStatus(_Model):
 
     #: The member's wake command, in plain text.
     command: str
+    #: The machine whose checkout's command this is (262 D8).
+    machine: str | None = None
+    #: Machines a due wake waits for, each with when it last called the hub (262 D8).
+    waiting_on: tuple[WakeWaitingOn, ...] = ()
     running: WakeRunning | None
     stopped: WakeStopped | None
     last_problem: WakeLastProblem | None

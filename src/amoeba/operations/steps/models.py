@@ -34,8 +34,14 @@ from amoeba.operations.steps.models_resume import (
     ResumeRecordReply,
     ResumeRecordRequest,
 )
+from amoeba.operations.steps.models_runs import OPEN_RUNS
+from amoeba.operations.steps.models_wake import WAKE_FINISH, WAKE_READ, WAKE_SET_PID
 
 __all__ = [
+    "OPEN_RUNS",
+    "WAKE_FINISH",
+    "WAKE_READ",
+    "WAKE_SET_PID",
     "PAUSE_BEGIN",
     "PAUSE_SOURCES",
     "QUESTION_CLAIM_HELD",
@@ -75,5 +81,9 @@ STEP_MODELS: Final[dict[str, Step[Any, Any]]] = {
         QUESTION_SETTLE,
         PAUSE_SOURCES,
         PAUSE_BEGIN,
+        WAKE_READ,
+        WAKE_SET_PID,
+        WAKE_FINISH,
+        OPEN_RUNS,
     )
 }

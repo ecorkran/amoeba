@@ -132,6 +132,12 @@ def render_send(result: SendResult, *, now: datetime) -> str:
     lines = [head, *_request_block(result.request, now)]
     if result.wake_problem is not None:
         lines.append(result.wake_problem)
+    for waiting in result.wake_waiting_on:
+        called = "never" if waiting.last_called_at is None else waiting.last_called_at
+        lines.append(
+            f"a wake waits for {waiting.machine}, which last called the hub at "
+            f"{called}; it wakes the repo at that machine's next call"
+        )
     return _with_notice(result.notice, lines)
 
 

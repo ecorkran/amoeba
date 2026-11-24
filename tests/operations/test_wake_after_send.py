@@ -14,9 +14,11 @@ from store.seed import insert_member
 from store.wake_support import confirmed_session
 
 from amoeba.amoeba_script import AmoebaScriptMissing
+from amoeba.operations import send as send_module
 from amoeba.operations import wake as wake_module
 from amoeba.operations.message_models import SendOutcome
 from amoeba.operations.message_sweep import sweep_messages
+from amoeba.operations.steps import wake as wake_steps
 from amoeba.store.errors import StoreBusyError
 from amoeba.store.models import Session
 from amoeba.store.programs import remove_member
@@ -378,7 +380,7 @@ class _TransactionCounts:
     def __init__(self, store: Store, monkeypatch: pytest.MonkeyPatch) -> None:
         self.reads = 0
         self.writes = 0
-        real_step = wake_module.wake_after_send
+        real_step = send_module.claim_wake_for_send
 
         def counted_step(step_store: Store, *args: Any) -> Any:
             real_read, real_write = step_store.read, step_store.write
@@ -392,7 +394,7 @@ class _TransactionCounts:
                 monkeypatch.setattr(step_store, "read", real_read)
                 monkeypatch.setattr(step_store, "write", real_write)
 
-        monkeypatch.setattr(wake_module, "wake_after_send", counted_step)
+        monkeypatch.setattr(send_module, "claim_wake_for_send", counted_step)
 
     def _counting(self, real: Any, attribute: str) -> Any:
         def begin() -> Any:
@@ -463,7 +465,7 @@ def test_a_store_error_recording_a_start_failure_leaves_the_row_unended(
     def failing(*_: Any) -> Any:
         raise StoreBusyError("the store is held")
 
-    monkeypatch.setattr(wake_module, "finish_wake", failing)
+    monkeypatch.setattr(wake_steps, "finish_wake", failing)
 
     result = send_request(store, rig, "ask")
 
