@@ -14,7 +14,7 @@ projectState: Slices 220 to 244, 260 and 261 are merged on main. Package version
   and again at the latest revision, 20261123 local time (dateUpdated is the UTC date).
 dateCreated: 20261123
 dateUpdated: 20261124
-status: not_started
+status: complete
 turns: 79
 promptTokens: 10903397
 cachedTokens: 10610430
@@ -406,12 +406,14 @@ Note: folded into the next marker's commit: 6.5 to 6.9 move the same modules and
 
 ## 10. Verification and close (effort 2)
 
-- [ ] **10.1 Verification walkthrough**
-  - [ ] Run the design's two `pytest` commands (Verification Walkthrough) and the by-hand pass on the fixture's hub with `alpha` and `beta`; on a throwaway schema-12 home, `amoeba list` migrates it and shows machine `local`, and the 242 and 244 walkthroughs (each design's Verification Walkthrough) behave as before
-  - [ ] Record the output, the load figures (8.4) and any departure under a dated "Implementation Notes as built" in the design; fix any dead end found and note it
-- [ ] **10.2 Final checks**
-  - [ ] Checks pass. Every new source file, and each existing one the slice grows that was near 300 lines at breakdown (`wiring.py`, `hub/calls.py`, `operations/status.py`, `operations/pause_claim.py`, `operations/pause_context.py`, `store/answers.py`, `cli/render/waiting.py`), is near 300 lines (`wc -l`); files over it are noted with why. `store/sql.py` was 543 lines before the slice and gets edits to existing statements only; it is noted as over, not split. `rg "request[_-]release|wiring_release|start_after|start_ended_held|wake_door|MAX_STARTS_PER_CALL|START_BOUND_SECONDS" src tests docs --glob '!src/amoeba/store/schema/*'` finds nothing (applied migrations are never edited)
-  - [ ] The design's Migration Plan lists the test edits made; the design's and this file's `status` are `complete`
-  - [ ] Success: the slice branch holds every commit; the working tree is clean
+- [x] **10.1 Verification walkthrough**
+  - [x] Run the design's two `pytest` commands (Verification Walkthrough) and the by-hand pass on the fixture's hub with `alpha` and `beta`; on a throwaway schema-12 home, `amoeba list` migrates it and shows machine `local`, and the 242 and 244 walkthroughs (each design's Verification Walkthrough) behave as before
+  - [x] Record the output, the load figures (8.4) and any departure under a dated "Implementation Notes as built" in the design; fix any dead end found and note it
+  - Note: by-hand pass recorded in the design's notes: the cross-machine walkthrough runs as tests/hub/test_across_machines.py and the live hold split variant; a throwaway schema-12 home migrated to 13 by `amoeba list members -j` with every question and wake on machine local.
+- [x] **10.2 Final checks**
+  - [x] Checks pass. Every new source file, and each existing one the slice grows that was near 300 lines at breakdown (`wiring.py`, `hub/calls.py`, `operations/status.py`, `operations/pause_claim.py`, `operations/pause_context.py`, `store/answers.py`, `cli/render/waiting.py`), is near 300 lines (`wc -l`); files over it are noted with why. `store/sql.py` was 543 lines before the slice and gets edits to existing statements only; it is noted as over, not split. `rg "request[_-]release|wiring_release|start_after|start_ended_held|wake_door|MAX_STARTS_PER_CALL|START_BOUND_SECONDS" src tests docs --glob '!src/amoeba/store/schema/*'` finds nothing (applied migrations are never edited)
+  - [x] The design's Migration Plan lists the test edits made; the design's and this file's `status` are `complete`
+  - [x] Success: the slice branch holds every commit; the working tree is clean
+  - Note: files over about 300 lines are listed with why in the design's notes (store/sql.py 551, store/wakes.py 379, operations/steps/models_pause.py 363, and call-site growth in hub/calls.py, pause_claim.py, wiring.py, cli/render/waiting.py, store/answers.py, store/models.py).
 
 **Commit**: `docs: record the slice 262 walkthrough and notes`

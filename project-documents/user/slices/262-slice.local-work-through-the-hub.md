@@ -10,8 +10,8 @@ interfaces:
 - 263
 - 264
 dateCreated: 20261120
-dateUpdated: 20261123
-status: not_started
+dateUpdated: 20261124
+status: complete
 turns: 43
 promptTokens: 2643963
 cachedTokens: 2395735
@@ -630,6 +630,8 @@ This is a refactoring slice. The order keeps the suite passing on the local stor
   - The test that an answering run is skipped before Context Forge is asked (`tests/operations/test_pause_eligibility.py`) asserts the skip with `cf` answering, and exit 3 with `cf` failing (D4).
 
   The test that a held question at the answer limit waits and starts nothing (`tests/operations/test_pause_claim_held.py`) passes with no edit beyond `LocalSteps`. 260's pinned tuple test takes the new door version.
+
+  Test edits made, as built (each is noted under its task in `262-tasks.local-work-through-the-hub.md`): the stale age and resume bound (`test_every_state_exits.py`, `test_question_sweep.py`, `test_status_matches_handle_pause.py`, `test_status_sweep.py`); the sweep split; the answering-run skip (`test_pause_eligibility.py`); the first-poll refusal (`test_resume.py`); `start_after`'s tests moved onto the after-step and `claim_work` (`test_wiring_release.py` to `test_after_step.py`, `test_request_release.py` to `test_after_step_starts.py`, `test_request_release_child.py` to `test_handle_pause_child.py`, `test_start_ended_held_load.py` to `test_after_step_load.py`); the message timing figures (`test_message_timing.py`); the door's refusals and version (`tests/wire/`, `tests/hub/test_handle_call.py`, `test_app.py`, `test_join.py`, `test_joined_entry_points.py`, `test_door_operations.py`); hello and every done reply carrying `work`; the message-sweep note tests (`test_handle_pause_message_sweep.py`, the sweep is now part of `pause_begin`); the `mark_start_attempted` callers (`expected_state`); and every `record_resume` caller (`claim_id`).
 - **Existing data.** Migration 013, and the opener's one write that gives old rows the `local` machine.
 
 ### API Contracts
@@ -870,3 +872,22 @@ Dead ends found by the full-text design review of 20261121, and how each is reso
 - A resume cut off after it started the run was to be recorded `resumed` from its attempt file. But `list`, `status` and the next pause's `handle-pause` sweep before their after-step, and the sweep marked the answer `not_delivered` first. The sweep now leaves an answer with no outcome to its resume attempt (D6, D9).
 - An MCP `reply` or `cancel` no longer started the held question it released, on the PM's own install, until 263. The after-step now runs on both doors in this slice (D10).
 - A held question on a run at its answer limit started an answering run before the settle refused it. The limit is now read for a held row and checked before the gather (D4, D5).
+
+## Implementation Notes as built (20261124)
+
+**Verification.** `uv run pytest tests/operations tests/hub tests/store/test_migration_013.py tests/load/test_door_load.py` passes as part of the full suite: ruff format, ruff check and pyright clean; `uv run pytest` 5682 passed, 1 skipped. `uv run pytest tests/live/hold tests/live/waking` 16 passed, the two new two-machine variants among them (hold 45.6 s, waking 10.0 s).
+
+**Load figures** (`tests/load/test_door_steps_load.py`, store seeded with 500 questions and 500 open requests across both machines): 16 clients, two of them `claim_work` callers, 160 calls, slowest 0.020 s, median 0.008 s. On the idle hub each of the sixteen steps once: median 4.8 ms, slowest `pause_begin` 11 ms.
+
+**The by-hand pass.** The cross-machine path the walkthrough steps through (a pause on `alpha`, answered from `beta` with `waiting_on_machine: alpha`, resumed by `alpha`'s next call through its after-step and `resume-run`, `beta` starting nothing) is run as `tests/hub/test_across_machines.py::test_a_pause_on_alpha_answered_from_beta_is_resumed_by_alphas_next_call` on two joined homes, and with real `sq` and models by `tests/live/hold/test_hold_split_live.py`. On a throwaway home seeded at schema 12 (`tests/store/schema_12.py`), `amoeba list members -j` exits 0, the store is at schema 13, and its three questions and two wakes all have machine `local`. The 242 and 244 behaviors pass unchanged in their tests (held questions, waking), now through the after-step.
+
+**Departures.**
+- Steps' models are split across `steps/model_base.py`, `models_resume.py`, `models_pause.py`, `models_wake.py`, `models_runs.py`, `models_work.py`, with `models.py` the one table; `pause_begin` is `steps/begin.py`, `question_settle` `steps/settle.py`, `pause_sources` `steps/sources.py`.
+- `wake_due` lives in `store.wakes` (D8 updated during 2.5): `claim_wake` calls it and `store` may not import `operations`.
+- `steps_for(layout, last, load_config)` is a context manager that opens the local store when there is no client file; it does not yet take door times or a session identity (263 adds those with the tick).
+- `rm-machine`'s closing is `store/machine_removal.close_machine_work`, called by `hub/admin.rm_machine` before `machines.remove_machine` in the one transaction.
+- The cross-machine tests (8.1, 8.2) run two joined homes in one process against the in-process hub; the live variants run on the subprocess fixture. In the hold live variant `alpha` uses the real `HOME`, which real `sq` needs.
+- The seeded load test is its own module beside `test_door_load.py`.
+- Bugs found and fixed while building: a kept-result repeat computed the work flag without acting as the caller (`hub/calls.py`); the after-step skipped the clean-up after a `list` with a subject (`wiring_steps.after_operation`); the live tier ran the recorded `cf` that 7c0545ee put on every test's `PATH` (`tests/live/conftest.py`).
+
+**Files over about 300 lines.** `store/sql.py` (551; 543 before the slice, edits to existing statements and two shared clauses only, noted as over and not split). `store/wakes.py` (379, from 278: the wake-due rules and the claim share their private helpers and one transaction). `operations/steps/models_pause.py` (363: the pause steps' request and reply models, one class per shape). `hub/calls.py` (333, from 326), `operations/pause_claim.py` (332, from 308), `wiring.py` (324, from 297), `cli/render/waiting.py` (319, from 307), `store/answers.py` (317, from 296), `store/models.py` (314, from 304): call sites and fields only, the logic in their new modules.
