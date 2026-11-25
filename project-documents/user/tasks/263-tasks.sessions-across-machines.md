@@ -13,8 +13,8 @@ projectState: Slices 220 to 244 and 260 to 262 are merged on main. Package versi
   and inbox watcher). sq 0.24.38 and cf 0.19.28, read with `sq --version` and
   `cf --version` at breakdown, 20261124.
 dateCreated: 20261124
-dateUpdated: 20261124
-status: not_started
+dateUpdated: 20261125
+status: complete
 ---
 
 # Tasks: Sessions Across Machines

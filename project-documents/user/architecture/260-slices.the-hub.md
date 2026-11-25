@@ -8,7 +8,7 @@ component: the-hub
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 260. The hub process, its door and machines; then members known by name across machines; then the work that needs local files, run through the hub; then sessions across machines; then moving the PM's live store to the hub and deleting the local-store way; then members in several programs.
 dateCreated: 20261120
-dateUpdated: 20261124
+dateUpdated: 20261125
 status: in_progress
 ---
 
@@ -118,7 +118,7 @@ Slice numbers are execution order. The first slice takes the plan's index (260).
    **Risk Level:** High. It is the largest refactor, it resumes real runs, and it is where one piece of work could start twice.
    **Relative Effort:** 5
 
-4. [ ] **(263) Sessions Across Machines** — `amoeba-mcp` becomes a client.
+4. [x] **(263) Sessions Across Machines** — `amoeba-mcp` becomes a client.
    - **One tick.** Every `notify_poll_seconds`, one hub call reads the member's highest delivery number and refreshes the session row when a heartbeat is due. Its reply carries the work flag. Ticks run one after another, off the event loop, and do not retry.
    - **The directory.** A migration adds the client version and door version to a session row, the door version to a machine, and each machine's last reported runs (260 already added the machine, because its `rm-machine` removes a machine's sessions). `list` and `status` show who is working where, on which machine, and which sessions and machines are behind the hub's door version. Stale rows are judged on the hub's clock.
    - **Tools.** Every MCP tool goes through the door. The check that an `answer` fits inside the MCP call deadline runs on the hub with the network times added. The wake command field is never sent from MCP.
