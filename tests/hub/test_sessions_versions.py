@@ -64,6 +64,7 @@ def _tick(rig: HubRig, session: str, door: int) -> RefusedReply:
         session_id=session,
         client="claude-code",
         directory="/work/core",
+        client_version="1.2.3",
         last_seen=None,
         push_confirmed=False,
     )

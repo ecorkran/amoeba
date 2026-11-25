@@ -56,6 +56,7 @@ from amoeba.wiring_presence import (
     StoreError,
     gather_here,
     machine_name,
+    program_version,
     tick_session,
     way_of,
 )
@@ -124,8 +125,18 @@ async def _here(
     return found
 
 
+@dataclass(frozen=True)
+class Baseline:
+    """What a pass reads of ``PresenceState``, copied on the event loop before the
+    worker thread starts: only the loop touches the state."""
+
+    way: str | None
+    last_seen: int | None
+    push_confirmed: bool
+
+
 def _request(
-    state: PresenceState,
+    baseline: Baseline,
     here: HereCaller | HereNotAProject,
     identity: SessionIdentity,
     way: str,
@@ -134,11 +145,12 @@ def _request(
     the one the baseline was taken on (the two stores' numbers are unrelated, D1)."""
     return SessionTickRequest(
         here=here,
-        session_id=state.session_id,
+        session_id=identity.session_id,
         client=identity.client,
         directory=identity.directory,
-        last_seen=state.last_seen if way == state.way else None,
-        push_confirmed=state.push_confirmed_at is not None,
+        client_version=program_version(),
+        last_seen=baseline.last_seen if way == baseline.way else None,
+        push_confirmed=baseline.push_confirmed,
     )
 
 
@@ -163,12 +175,13 @@ async def _step(
         directory=_directory(state),
     )
     state.identity = identity
+    baseline = Baseline(state.way, state.last_seen, state.push_confirmed_at is not None)
 
     def work() -> TickOutcome:
         last = LastReply()
         with deps.open_steps(last, identity) as steps:
             way = way_of(steps)
-            reply = tick_session(steps, _request(state, here, identity, way))
+            reply = tick_session(steps, _request(baseline, here, identity, way))
         return TickOutcome(reply, way, machine_name(), last)
 
     # Abandoned at exit rather than waited for (D8): it finishes on its own.

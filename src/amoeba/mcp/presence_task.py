@@ -24,9 +24,11 @@ from amoeba.wire.times import TICK_BOUND_SECONDS
 from amoeba.wiring_presence import (
     ClientFileError,
     ConfigError,
+    HubCertificateError,
     HubRefusedError,
     HubUnreachableError,
     LastReply,
+    SessionIdentity,
     StoreError,
     end_session,
 )
@@ -50,12 +52,9 @@ async def _serve_presence(
         group.start_soon(run_ticks, connection, state, deps, client, runner)
 
 
-def _end_in_thread(state: PresenceState, deps: PresenceDeps) -> None:
-    identity = state.identity
-    if identity is None:
-        raise ValueError("a session that was told it has a member has ticked")
+def _end_in_thread(identity: SessionIdentity, deps: PresenceDeps) -> None:
     with deps.open_steps(LastReply(), identity) as steps:
-        end_session(steps, state.session_id)
+        end_session(steps, identity.session_id)
 
 
 async def _end_session(state: PresenceState, deps: PresenceDeps) -> None:
@@ -64,15 +63,20 @@ async def _end_session(state: PresenceState, deps: PresenceDeps) -> None:
     A failure that is an absence of a reply leaves the row to go stale; any other
     error is a bug and is not caught here.
     """
+    # Read on the loop: the worker thread is given the identity, never the state.
+    identity = state.identity
+    if identity is None:
+        raise ValueError("a session that was told it has a member has ticked")
     with (
         anyio.CancelScope(shield=True),
         anyio.move_on_after(TICK_BOUND_SECONDS) as bound,
     ):
         try:
             await anyio.to_thread.run_sync(
-                _end_in_thread, state, deps, abandon_on_cancel=True
+                _end_in_thread, identity, deps, abandon_on_cancel=True
             )
         except (
+            HubCertificateError,
             HubUnreachableError,
             HubRefusedError,
             ClientFileError,

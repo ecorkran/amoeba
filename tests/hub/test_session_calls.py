@@ -51,6 +51,7 @@ def _tick(here: HereCaller | HereNotAProject | None = None) -> dict[str, object]
         session_id=SESSION,
         client="claude-code",
         directory="/work/core",
+        client_version="1.2.3",
         last_seen=None,
         push_confirmed=False,
     )
@@ -270,3 +271,12 @@ def test_a_wake_is_held_off_only_for_a_session_on_the_version_the_hub_serves(
     _wake_due_for_core(rig, session)
 
     assert _work_flag(rig) is (not held_off)
+
+
+def test_an_accepted_tick_stores_the_version_the_client_sent(rig: HubRig) -> None:
+    parsed = result_of(rig.call("session_tick", _tick(), headers=_session_headers()))
+
+    assert isinstance(parsed, DoneReply), parsed
+    assert rig.rows(SESSION_ROWS) == [
+        (SESSION, CORE, "claude-code", "/work/core", "1.2.3", DOOR_VERSION)
+    ]

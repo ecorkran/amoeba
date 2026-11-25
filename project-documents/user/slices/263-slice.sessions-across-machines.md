@@ -119,7 +119,7 @@ This slice changes some of what 260 and 262 say, the after-step among them. Each
 
 Import rules added to `tests/test_import_boundaries.py`:
 
-- `amoeba.mcp` and `wiring_presence` import nothing from `amoeba.store` but its error types, and nothing from `amoeba.client`. A session reaches the store only through `Steps`.
+- `amoeba.mcp` and `wiring_presence` import nothing from `amoeba.store` but its error types and vocabularies. `amoeba.mcp` imports nothing from `amoeba.client`; `wiring_presence` imports from it only the error types and the client-file loader (the machine name), and re-exports them. A session reaches the store only through `Steps`.
 - `store.sessions.heartbeat`, `delete_session` and the `store.push_reads` functions are called only from `operations.steps.session`. The refusal path in `hub.calls` (D6) writes its row through a function in `operations.steps.session` too.
 - `steps.models` still holds no field of a date or time type (262's test covers the two new request models).
 

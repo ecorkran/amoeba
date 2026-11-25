@@ -364,7 +364,7 @@ def test_update_and_restore_against_a_copy_of_a_schema_13_store(
     assert _version(store_path()) == 13
 
 
-def test_a_status_without_the_one_local_machine_or_its_runs_row_fails(
+def test_a_status_without_the_local_machine_or_its_runs_row_fails(
     live: Path,
 ) -> None:
     failures = update_live.check_status({"machines": [{"name": "beta"}]})
@@ -372,6 +372,18 @@ def test_a_status_without_the_one_local_machine_or_its_runs_row_fails(
     assert len(failures) == 2
     assert "status machines" in failures[0]
     assert "machine_runs holds []" in failures[1]
+
+
+def test_a_status_with_another_machine_beside_local_has_no_machines_failure(
+    live: Path,
+) -> None:
+    document = {
+        "machines": [{"name": update_live.LOCAL_MACHINE_NAME}, {"name": "beta"}]
+    }
+
+    failures = update_live.check_status(document)
+
+    assert not any("status machines" in failure for failure in failures)
 
 
 def test_a_store_with_no_local_machine_fails_the_read_back(live: Path) -> None:

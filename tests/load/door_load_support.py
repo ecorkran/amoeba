@@ -281,6 +281,7 @@ def session_body(
             session_id=identity.session_id,
             client=SESSION_CLIENT,
             directory=directory,
+            client_version="1.2.3",
             last_seen=None,
             push_confirmed=False,
         )

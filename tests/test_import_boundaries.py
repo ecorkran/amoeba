@@ -425,6 +425,33 @@ def test_wiring_presence_takes_only_error_types_and_vocabulary_from_the_store() 
     assert not stray, f"wiring_presence imports {stray}"
 
 
+#: What ``wiring_presence`` may take from the client: the error types the tick
+#: handles and the client-file loader the machine name comes from (263 D6).
+WIRING_PRESENCE_CLIENT_ALLOWED = ("amoeba.client.errors", "amoeba.client.client_file")
+
+
+def test_wiring_presence_takes_only_errors_and_the_client_file_from_the_client() -> (
+    None
+):
+    source = (SRC / "wiring_presence.py").read_text(encoding="utf-8")
+    client = [
+        name for name in _imported_names(source) if _mentions({name}, "amoeba.client")
+    ]
+    assert client
+    stray = [
+        name
+        for name in client
+        if not any(_mentions({name}, ok) for ok in WIRING_PRESENCE_CLIENT_ALLOWED)
+    ]
+    assert not stray, f"wiring_presence imports {stray}"
+
+
+def test_mcp_imports_nothing_from_the_client() -> None:
+    for path in sorted((SRC / "mcp").rglob("*.py")):
+        found = forbidden_imports(path.read_text(encoding="utf-8"), ("amoeba.client",))
+        assert not found, f"{path.relative_to(SRC)} imports {found}"
+
+
 def test_the_session_store_functions_are_called_only_from_the_session_steps() -> None:
     assert SESSION_STEPS.exists()
     for path in sorted(SRC.rglob("*.py")):

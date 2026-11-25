@@ -190,7 +190,7 @@ def test_both_steps_run_in_a_write_transaction(
     assert counts == {"reads": 0, "writes": 2}
 
 
-def test_the_hub_clock_alone_dates_therow_of(store: Store) -> None:
+def test_the_hub_clock_alone_dates_the_row_of(store: Store) -> None:
     run_tick(store, datetime(2026, 1, 1, tzinfo=UTC))
 
     row = row_of(store)

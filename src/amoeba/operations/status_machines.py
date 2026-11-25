@@ -25,10 +25,18 @@ from amoeba.store.machines import (
 from amoeba.store.store import Store
 
 
+def differs_from_hub(door_version: int, hub_door_version: int) -> bool:
+    """The one statement of "behind": a door version other than the hub's (a session
+    on another version cannot take a wake, D6). ``sql_sessions.WAKING_SESSION`` is the
+    same rule in SQL."""
+    return door_version != hub_door_version
+
+
 def is_behind(door_version: int | None, hub_door_version: int) -> bool | None:
-    """Whether a door version differs from the hub's (a session on another version
-    cannot take a wake, D6); ``None`` when none is recorded."""
-    return None if door_version is None else door_version != hub_door_version
+    """``differs_from_hub``, or ``None`` when no door version is recorded."""
+    if door_version is None:
+        return None
+    return differs_from_hub(door_version, hub_door_version)
 
 
 def store_calling_runs(store: Store, runs: RunsDocument, now: datetime) -> str | None:

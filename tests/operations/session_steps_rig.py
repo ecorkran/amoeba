@@ -23,6 +23,7 @@ from operations.message_support import (
 )
 
 SESSION_ID = "a" * 32
+CLIENT_VERSION = "9.8.7"
 CONFIG = user_config()
 HEARTBEAT = timedelta(seconds=CONFIG.session_heartbeat_seconds)
 STALE = timedelta(seconds=CONFIG.session_stale_seconds)
@@ -44,6 +45,7 @@ def run_tick(
         "session_id": session_id,
         "client": "claude-code",
         "directory": "/work",
+        "client_version": CLIENT_VERSION,
         "last_seen": last_seen,
         "push_confirmed": push_confirmed,
     }

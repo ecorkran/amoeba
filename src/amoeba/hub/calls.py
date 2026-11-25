@@ -369,7 +369,9 @@ def handle_call(
     errors, ``hub_fault`` for anything else, with its traceback in the hub log). A
     failure before the scope, such as the store not opening, is refused the same way
     without the touch. Every refusal writes one log line. ``door_version`` is the
-    version this hub serves; only a test serves another.
+    version this hub serves; only a test serves another. It decides the door check,
+    the session steps and the work flag; the wake and status operations read the
+    program's own ``DOOR_VERSION``, which is what a served hub always is.
     """
     refuser = Refuser(clock, request.peer)
     try:

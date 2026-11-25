@@ -322,6 +322,16 @@ _DOOR_VERSION: Final = re.compile(DOOR_VERSION_PATTERN)
 SESSION_DIRECTORY_MAX_LENGTH: Final = 4096
 
 
+def is_session_directory(text: str) -> bool:
+    """Whether a decoded session directory is storable: not empty, not over-long, and
+    free of control characters. The tick's header path and its request share it."""
+    return (
+        bool(text)
+        and len(text) <= SESSION_DIRECTORY_MAX_LENGTH
+        and all(char.isprintable() for char in text)
+    )
+
+
 def parse_door_version(text: str | None) -> int | None:
     """The door version ``text`` states, or ``None`` when it has no such shape."""
     if text is None or _DOOR_VERSION.fullmatch(text) is None:

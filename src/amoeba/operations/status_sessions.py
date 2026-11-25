@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import datetime
 
+from amoeba.operations.status_machines import differs_from_hub
 from amoeba.operations.status_models import SessionEntry
 from amoeba.store.models import Session
 from amoeba.store.sessions import live_sessions, session_machine_names
@@ -46,5 +47,5 @@ def _entry(row: Session, machine: str, hub_door_version: int) -> SessionEntry:
         machine=machine,
         client_version=row.client_version,
         door_version=row.door_version,
-        behind=row.door_version != hub_door_version,
+        behind=differs_from_hub(row.door_version, hub_door_version),
     )

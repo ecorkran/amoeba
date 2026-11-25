@@ -35,6 +35,7 @@ from amoeba.operations.steps.models_session import (
     TickEntry,
 )
 from amoeba.operations.store_steps import Steps
+from amoeba.program_version import program_version
 from amoeba.store.errors import StoreBusyError, StoreError
 from amoeba.store.vocabulary import DeliveryEvent, MessageKind
 from amoeba.upstream.context_forge.cli_call import CfRun
@@ -73,6 +74,7 @@ __all__ = [
     "end_session",
     "gather_here",
     "machine_name",
+    "program_version",
     "run_after_step",
     "tick_session",
     "way_of",

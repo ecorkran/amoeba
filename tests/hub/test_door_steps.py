@@ -350,6 +350,7 @@ def test_the_session_headers_go_on_the_two_session_steps_and_no_other(
                 session_id=identity.session_id,
                 client="claude-code",
                 directory="/work",
+                client_version="1.2.3",
                 last_seen=None,
                 push_confirmed=False,
             ),

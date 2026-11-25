@@ -10,7 +10,6 @@ import pytest
 from store.message_support import NOW
 
 from amoeba.operations.steps.dispatch import StepDocumentError, StepEdges, run_step
-from amoeba.program_version import program_version
 from amoeba.store.store import Store
 from amoeba.wire.times import DOOR_VERSION
 from operations.message_support import (
@@ -20,6 +19,7 @@ from operations.message_support import (
     open_message_store,
 )
 from operations.session_steps_rig import (
+    CLIENT_VERSION,
     CONFIG,
     HEARTBEAT,
     SESSION_ID,
@@ -43,12 +43,12 @@ def test_a_first_tick_writes_the_row_with_the_hubs_time_and_versions(
     row = row_of(store)
     assert row is not None
     assert (row.member_id, row.started_at, row.heartbeat_at) == (RECIPIENT, NOW, NOW)
-    assert (row.client_version, row.door_version) == (program_version(), DOOR_VERSION)
+    assert (row.client_version, row.door_version) == (CLIENT_VERSION, DOOR_VERSION)
     assert (reply.member_id, reply.member_name) == (RECIPIENT, RECIPIENT_NAME)
     assert reply.notify_poll_seconds == CONFIG.notify_poll_seconds
 
 
-def test_a_tick_with_nothing_due_changes_norow_of(store: Store) -> None:
+def test_a_tick_with_nothing_due_changes_no_row_of(store: Store) -> None:
     run_tick(store)
 
     run_tick(store, NOW + HEARTBEAT - timedelta(seconds=1))
@@ -108,6 +108,7 @@ def test_a_client_clock_an_hour_ahead_changes_nothing_stored(store: Store) -> No
         "session_id": SESSION_ID,
         "client": "claude-code",
         "directory": "/work",
+        "client_version": CLIENT_VERSION,
         "last_seen": None,
         "push_confirmed": False,
         "client_time": (NOW + timedelta(hours=1)).isoformat(),
@@ -121,3 +122,35 @@ def test_a_client_clock_an_hour_ahead_changes_nothing_stored(store: Store) -> No
     row = row_of(store)
     assert row is not None
     assert row.heartbeat_at == NOW
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("client", "has/slash"),
+        ("client", ""),
+        ("directory", ""),
+        ("directory", "/work\nsecond line"),
+        ("directory", "/" + "d" * 5000),
+    ],
+)
+def test_a_tick_with_a_bad_client_or_directory_is_refused_and_writes_nothing(
+    store: Store, field: str, value: str
+) -> None:
+    document = {
+        "here": {"project_id": RECIPIENT},
+        "session_id": SESSION_ID,
+        "client": "claude-code",
+        "directory": "/work",
+        "client_version": CLIENT_VERSION,
+        "last_seen": None,
+        "push_confirmed": False,
+        field: value,
+    }
+
+    with pytest.raises(StepDocumentError, match=field):
+        run_step(
+            "session_tick", store, document, StepEdges(lambda: NOW, lambda: CONFIG)
+        )
+
+    assert row_of(store) is None

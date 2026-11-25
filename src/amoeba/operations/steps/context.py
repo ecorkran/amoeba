@@ -18,7 +18,9 @@ class StepContext:
     transaction: Transaction
     now: datetime
     config: UserConfig | None
-    #: The door version the program serving the call runs (slice 263, D6).
+    #: The door version the program serving the call runs (slice 263, D6). The
+    #: session steps and the work flag read it; the wake and status operations read
+    #: ``DOOR_VERSION``, the same value in every served hub.
     door_version: int
 
     def require_config(self) -> UserConfig:

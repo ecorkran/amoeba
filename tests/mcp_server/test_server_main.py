@@ -239,6 +239,7 @@ def test_a_tool_call_and_a_tick_run_on_a_joined_machine_with_no_local_config(
             session_id=identity.session_id,
             client=identity.client,
             directory=identity.directory,
+            client_version="1.2.3",
             last_seen=None,
             push_confirmed=False,
         )

@@ -52,6 +52,7 @@ def _tick(rig: HubRig) -> None:
         session_id=SESSION,
         client="claude-code",
         directory="/work/core",
+        client_version="1.2.3",
         last_seen=None,
         push_confirmed=False,
     )

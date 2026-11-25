@@ -28,7 +28,7 @@ from amoeba.wire.protocol import (
     HEADER_SESSION_DIRECTORY,
     HEADER_SESSION_ID,
     HEADER_SESSION_PROJECT,
-    SESSION_DIRECTORY_MAX_LENGTH,
+    is_session_directory,
     is_session_id,
 )
 
@@ -52,9 +52,7 @@ def _directory(text: str | None) -> str | None:
     except UnicodeDecodeError:
         # Not UTF-8 after decoding: the value is bad, so no row is written.
         return None
-    if not decoded or len(decoded) > SESSION_DIRECTORY_MAX_LENGTH:
-        return None
-    return None if any(not char.isprintable() for char in decoded) else decoded
+    return decoded if is_session_directory(decoded) else None
 
 
 def write_behind_row(  # noqa: PLR0913 - the call's parts the row is made from
@@ -86,12 +84,12 @@ def write_behind_row(  # noqa: PLR0913 - the call's parts the row is made from
         if project
         else HereNotAProject(not_a_project="no project header")
     )
-    try:
-        # A savepoint of the call scope, made after ``act_as`` so it acts as the caller.
-        with store.write() as transaction:
-            member = find_caller(transaction, machine_id, here)
-            if not isinstance(member, Member):
-                return
+    # A savepoint of the call scope, made after ``act_as`` so it acts as the caller.
+    with store.write() as transaction:
+        member = find_caller(transaction, machine_id, here)
+        if not isinstance(member, Member):
+            return
+        try:
             write_behind_session(
                 transaction,
                 now,
@@ -102,7 +100,7 @@ def write_behind_row(  # noqa: PLR0913 - the call's parts the row is made from
                 client_version,
                 door_version,
             )
-    except SessionOfAnotherMachineError:
-        # The session id belongs to another machine: no column was changed, and the
-        # refusal the caller is owed stands.
-        return
+        except SessionOfAnotherMachineError:
+            # The session id belongs to another machine: no column was changed, and
+            # the refusal the caller is owed stands.
+            return

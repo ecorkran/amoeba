@@ -248,16 +248,17 @@ def check_store(expected_members: int, cf_projects: set[str]) -> list[str]:
 
 def check_status(document: dict[str, Any]) -> list[str]:
     """Read-back failures of ``amoeba status`` (slice 263): its ``machines`` list holds
-    the one ``local`` machine, and ``machine_runs`` holds one row, for it."""
+    the ``local`` machine, and so does ``machine_runs``. Another machine that joined
+    since is no failure."""
     failures: list[str] = []
     names = [entry.get("name") for entry in document.get("machines", [])]
-    if names != [LOCAL_MACHINE_NAME]:
-        failures.append(f"status machines {names}, not just {LOCAL_MACHINE_NAME!r}")
+    if LOCAL_MACHINE_NAME not in names:
+        failures.append(f"status machines {names} lack {LOCAL_MACHINE_NAME!r}")
     with _read_only(store_path()) as connection:
         reported = [row[0] for row in connection.execute(SELECT_MACHINE_RUNS_NAMES)]
-    if reported != [LOCAL_MACHINE_NAME]:
+    if LOCAL_MACHINE_NAME not in reported:
         failures.append(
-            f"machine_runs holds {reported}, not one {LOCAL_MACHINE_NAME!r}"
+            f"machine_runs holds {reported}, lacking {LOCAL_MACHINE_NAME!r}"
         )
     return failures
 

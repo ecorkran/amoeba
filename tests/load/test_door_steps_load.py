@@ -219,6 +219,7 @@ def _step_documents() -> list[tuple[str, object]]:
                 "session_id": "a" * 32,
                 "client": "claude-code",
                 "directory": "/alpha",
+                "client_version": "1.2.3",
                 "last_seen": None,
                 "push_confirmed": False,
             },

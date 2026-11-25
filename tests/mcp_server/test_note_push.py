@@ -91,6 +91,7 @@ def test_a_direct_note_a_program_note_and_a_release_note_make_one_event(
                 "session_id": "b" * 32,
                 "client": "claude-code",
                 "directory": "/work",
+                "client_version": "1.2.3",
                 "last_seen": last_seen,
                 "push_confirmed": False,
             },

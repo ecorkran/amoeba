@@ -8,9 +8,12 @@ from __future__ import annotations
 
 from typing import Final
 
+from pydantic import field_validator
+
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.steps.model_base import Step, StepModel
 from amoeba.store.vocabulary import DeliveryEvent, MessageKind
+from amoeba.wire.protocol import CLIENT_NAME_PATTERN, is_session_directory
 
 
 class SessionTickRequest(StepModel):
@@ -20,9 +23,26 @@ class SessionTickRequest(StepModel):
     session_id: str
     client: str
     directory: str
+    #: The version of the program that sends the tick, stored as the session's
+    #: ``client_version`` (the hub's own version is not the client's over the door).
+    client_version: str
     #: The highest delivery number the session has seen, or ``None`` for a baseline.
     last_seen: int | None
     push_confirmed: bool
+
+    @field_validator("client")
+    @classmethod
+    def _client_has_the_shape_of_a_name(cls, value: str) -> str:
+        if CLIENT_NAME_PATTERN.fullmatch(value) is None:
+            raise ValueError("client is not a client name the list may show")
+        return value
+
+    @field_validator("directory")
+    @classmethod
+    def _directory_is_storable(cls, value: str) -> str:
+        if not is_session_directory(value):
+            raise ValueError("directory is empty, too long or holds control characters")
+        return value
 
 
 class TickEntry(StepModel):

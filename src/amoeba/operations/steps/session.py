@@ -20,7 +20,6 @@ from amoeba.operations.steps.models_session import (
     SessionTickRequest,
     TickEntry,
 )
-from amoeba.program_version import program_version
 from amoeba.store.deliveries import highest_assigned_seq
 from amoeba.store.machines import acting_machine_id
 from amoeba.store.models import Member, Session
@@ -74,7 +73,7 @@ def _refresh(
             started_at=now if kept is None else kept.started_at,
             heartbeat_at=now,
             push_confirmed_at=confirmed_at,
-            client_version=program_version(),
+            client_version=request.client_version,
             door_version=context.door_version,
         ),
     )
