@@ -64,7 +64,7 @@ the old store untouched.
 | 0 | The operation ran | `add` or `rm` applied or unchanged; `list` and `status` listed; `handle-pause` any outcome, including `skipped`; `answer` recorded; `dismiss` dismissed or unchanged; `retract` retracted or unchanged; `decisions` listed; `mark-read` moved or unchanged; `report-release` recorded, versioned, corrected, unchanged or withdrawn; `changes` listed; `send` sent or unchanged; `inbox` listed; `reply` applied; `cancel` cancelled |
 | 1 | The operation refused the request; the result says why | `add`, `rm`, `list`, `answer`, `dismiss`, `retract`, `status`, `decisions`, `mark-read`, `report-release`, `changes`, `send`, `inbox`, `reply` or `cancel` rejected |
 | 2 | Usage | bad arguments (a missing or non-integer `mark-read --through`, an old command name, `--all` with `list members`, `--file` with another `add` flag, mutually exclusive rules flags, an empty side of `--concept`), or an `add --file` request file that cannot be read, is not UTF-8 or is not YAML, a `send --body-file` that cannot be read or is not UTF-8, or `send --body` with `--body-file` |
-| 3 | Operational failure; message on stderr as `error: <ExceptionName>: <message>` | `ConfigError`, `AmoebaHomeError`, `ContextForgeError`, `SquadronError`, any `StoreError` (including `StoreRelocateError`, a legacy store that could not be moved, `LocalStoreClosedError`, `HubHomeError`, `NoActingMachineError` and `HubStoreMissingError`); and, from slice 260, `JoinError`, `ClientFileError`, `HubUnreachableError`, `HubCertificateError`, `HubRefusedError`, `NotServedError`, `HubConfigError`, `HubStartError` and `BackupError` (see "The hub and joined machines") |
+| 3 | Operational failure; message on stderr as `error: <ExceptionName>: <message>` | `ConfigError`, `AmoebaHomeError`, `ContextForgeError`, `SquadronError`, any `StoreError` (including `StoreRelocateError`, a legacy store that could not be moved, `LocalStoreClosedError`, `HubHomeError`, `NoActingMachineError` and `HubStoreMissingError`); and, from slice 260, `JoinError`, `ClientFileError`, `HubUnreachableError`, `HubCertificateError`, `HubRefusedError`, `HubConfigError`, `HubStartError` and `BackupError` (see "The hub and joined machines") |
 
 A Squadron or Context Forge failure is an exit 3, never a skip: "cannot tell" is not
 "not mine". Nothing is written before it.
@@ -670,14 +670,39 @@ the PM. A member's `rejected_calls` are its retained refused `send`, `reply` and
 detail, created_at}`.
 
 A member's `sessions` are its live `amoeba-mcp` sessions (slice 241), oldest first,
-each `{client, directory, started_at, heartbeat_at, push_confirmed_at}`: `client` is
+each `{client, directory, started_at, heartbeat_at, push_confirmed_at, machine,
+client_version, door_version, behind}`: `client` is
 the client's name as it gave it (or `unrecognized`), `directory` the server's working
-directory, `heartbeat_at` its last beat, and `push_confirmed_at` when its agent first
+directory, `machine` the machine it runs on (slice 263, sessions of every machine are
+listed), `client_version` and `door_version` those of its program, `behind` true when
+its door version differs from the hub's, `heartbeat_at` its last beat, and `push_confirmed_at` when its agent first
 answered a channel event with an `inbox` call (null while unconfirmed). A session
 whose last beat is older than `session_stale_seconds` is gone and not listed, and only
 active members show sessions. Sessions do not count as waiting on the PM and do not
 set the `notice`. The text adds a **Live sessions** section, one line per session:
-`<client>  <directory>  up <age>  last beat <age> ago  push confirmed|push unconfirmed`.
+`<client>  <machine>  <directory>  up <age>  last beat <age> ago  push confirmed|push
+unconfirmed`, ending `behind` for a behind one.
+
+`status` also returns (slice 263) `hub_door_version`, the door version the hub serves,
+and `machines`: each machine with a token and the calling machine, by name, each
+`{name, last_called_at, client_version, door_version, behind, calling, runs_reported_at,
+runs, runs_problem}`. `behind` is true when `door_version` differs from the hub's, false
+when equal, null when none is recorded (the `local` machine); `calling` is true for the
+machine that made the call. For every other machine `runs_reported_at` is when it last
+reported its runs (null when it never did), `runs` its runs not completed, each
+`{run_id, pipeline, status, directory, checkpoint}` (`checkpoint` for a paused run), and
+`runs_problem` the error text when its stored report does not validate, with no `runs`;
+the next `status` or `list` that machine makes replaces the report. The calling
+machine's own runs are in the other fields. Nothing on another machine is placed under
+a member, closed or swept by this call. The text adds **Runs on other machines**: one
+heading per other machine, `<machine>, reported <age> ago`, `<machine>, nothing
+reported` or `<machine>, reported <age> ago, runs unreadable: <runs_problem>`, with one
+line per run (id, pipeline, status, directory); and **Behind the hub**, when any machine
+or session is behind: each with its client and door version, `uv tool install --force
+amoeba-ai`, and a note to restart the sessions listed. One whose door version is above
+the hub's is marked `ahead of the hub`, and the section then says to upgrade the hub
+and gives no client command. Neither section counts as waiting on the PM or sets the
+`notice`.
 
 A member's `wake` (slice 244) is present only for a member with a wake command, else
 null: `{command, machine, waiting_on, running, stopped, last_problem}`. `command` is the
@@ -740,7 +765,9 @@ is not the calling machine, because an answer for it waits for its next call. Ev
 question of a member in scope is listed. `run_state` is `at_pause` (`next` is
 `answer`); `moved_on` (`detail` gives the run's state) and `not_listed` appear only for
 a row a failed closing left open, since the closing otherwise closes them in the same
-call. `reason` of an unplaced run is `no_directory` (a run from before `sq` 0.24.24), `directory_missing`
+call. `other_machine` (slice 263) is a question on a machine other than the caller's:
+this call cannot say where its run is (`next` is null), and its first line ends
+`on <machine>`. `reason` of an unplaced run is `no_directory` (a run from before `sq` 0.24.24), `directory_missing`
 or `lookup_failed` (`detail` has the `cf` error). A run's `status` is Squadron's text,
 so a status newer than this code is shown as it is.
 
@@ -1136,7 +1163,7 @@ check is made on every call, before anything local is read or written.
 |---|---|
 | `decisions`, `mark-read`, `dismiss`, `retract`, `standing`, `withdraw`, (slice 261) `add`, `rm`, `list`, `status`, `send`, `inbox`, `reply`, `cancel`, `changes`, `report-release`, and (slice 262) `answer` | Run on the hub's store. The text, `-j` JSON and exit codes are the ones the local way gives. Members show by name |
 | `handle-pause`, `wake-run`, `resume-run` (slice 262) | Run on this machine, each store step a door call (below). No local `config.yaml` is read: the hub's settings come with the first step |
-| `amoeba-mcp` start | `NotServedError`: this machine is joined to the hub at `<address>`, and the door does not serve `amoeba-mcp` yet. Exit 3, nothing local is read or written |
+| `amoeba-mcp` start | Starts: reads the client file and saved certificate, nothing local, and calls no hub (a hub that is down skips ticks, `mcp-server.md`). A client file that does not load: `ClientFileError`, exit 3 |
 | `amoeba hub ...` | `LocalStoreClosedError` naming the hub, before `hub.yaml` is read or any file is written |
 | `amoeba join`, `amoeba leave` | Run (below) |
 
@@ -1212,7 +1239,7 @@ nothing. Where nothing is joined and nothing is set aside it does nothing and ex
 | `HubUnreachableError` | 3 | No reply within the retry time (30 s), or nothing at the address speaks TLS; a writing call adds that its outcome is unknown and what to run |
 | `HubCertificateError` | 3 | The hub did not present the saved certificate; never retried |
 | `HubRefusedError` | 3 | The hub refused the call; the message holds the hub's address, the code and its text. `door_version` adds the upgrade command and `bad_token` adds `hub invite` and `join` |
-| `NotServedError` | 3 | A joined machine ran a command the door does not serve |
+| `NotServedError` | 3 | Removed in slice 263: every operation is served, so no entry point raises it. The hub still refuses a call name it does not know with `not_served` |
 | `StepReplyError` | 3 | A step's reply did not fit its model (slice 262): names the step and the field, and for a writing step says the hub applied it |
 | `LocalStoreClosedError` | 3 | A command found the machine joined, or a local store set aside for a hub |
 
@@ -1233,8 +1260,8 @@ with one stderr line.
 |---|---|---|---|
 | `amoeba hub serve [--from-backup DIR]` (`DIR` may be relative) | Starts the hub (D14): loads `hub.yaml`, binds the socket, decides the start from what the state directory and `backup_dir` hold, migrates after a pre-migration backup, takes a timed backup if due, serves | — | no |
 | `amoeba hub invite MACHINE` | Makes the machine, or gives an existing one a new token (ending the old one), and prints the join line `<address>,<fingerprint>,<token>`; needs `hub.yaml` for the address and the certificate for the fingerprint | the name is not `[a-z0-9][a-z0-9._-]*`, at most 64 characters | `{"machine", "join_line", "new"}` |
-| `amoeba hub machines` | Lists each machine: name, whether it has a token, last call time and client version | — | a list of `{"name", "has_token", "last_called_at", "client_version"}` |
-| `amoeba hub rm-machine MACHINE` | In one transaction: closes what waits on the machine (its open questions as `machine_removed`, their undelivered answers as `not_delivered`, its unended wakes as `machine_removed`), then deletes the machine, its sessions and its kept results; its next call is `bad_token`, and a wake wrapper still running there stops its command at its next step. A later `answer` to one of its questions is recorded and `not_delivered` | no such machine | `{"removed"}` |
+| `amoeba hub machines` | Lists each machine: name, whether it has a token, last call time, client version and door version; the first line is the hub's own door version, and a machine whose door version differs ends its line with `behind` or `ahead of the hub` | — | a list of `{"name", "has_token", "last_called_at", "client_version", "door_version", "behind"}`; `door_version` is the last one a non-session call recorded, `behind` is true when it differs from the hub's (its sessions cannot take a wake) and both are null when none is recorded |
+| `amoeba hub rm-machine MACHINE` | In one transaction: closes what waits on the machine (its open questions as `machine_removed`, their undelivered answers as `not_delivered`, its unended wakes as `machine_removed`), then deletes the machine, its sessions, its stored runs report and its kept results; its next call is `bad_token`, and a wake wrapper still running there stops its command at its next step. A later `answer` to one of its questions is recorded and `not_delivered` | no such machine | `{"removed"}` |
 | `amoeba hub backup` | Takes a timed backup now and prints its path; safe while the hub serves | — | `{"path"}` |
 
 `--from-backup DIR` restores a backup's store, certificate and key into the state

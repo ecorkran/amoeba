@@ -30,6 +30,7 @@ from amoeba.operations.served import (
 from amoeba.operations.standing_models import StandingResult
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
+from amoeba.wire.times import DOOR_VERSION
 from amoeba.wiring_results import result_from_document
 
 
@@ -44,6 +45,7 @@ def _run(store: Store, name: str, document: object) -> ServedResult:
     edges = ServedEdges(
         clock=lambda: NOW,
         load_config=user_config,
+        door_version=DOOR_VERSION,
     )
     return run_served(name, store, document, edges)
 

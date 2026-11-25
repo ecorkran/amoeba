@@ -10,6 +10,7 @@ value, because this package imports nothing from the rest of ``amoeba``.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final, Literal
 
@@ -74,6 +75,8 @@ STEP_CALLS: Final[tuple[str, ...]] = (
     "wake_read",
     "wake_set_pid",
     "wake_finish",
+    "session_tick",
+    "session_end",
 )
 #: The steps whose result is kept for a repeated call: the writing rows of
 #: ``STEP_MODELS``.
@@ -116,6 +119,12 @@ HEADER_AUTHORIZATION: Final = "Authorization"
 HEADER_DOOR_VERSION: Final = "Amoeba-Door-Version"
 HEADER_CLIENT_VERSION: Final = "Amoeba-Client-Version"
 HEADER_CALL_ID: Final = "Amoeba-Call-Id"
+#: The four a session's tick and exit carry (263 D6): the one part of a call the hub
+#: reads before it checks the door version, so a refused tick still leaves a row.
+HEADER_SESSION_ID: Final = "Amoeba-Session-Id"
+HEADER_SESSION_PROJECT: Final = "Amoeba-Session-Project"
+HEADER_SESSION_CLIENT: Final = "Amoeba-Session-Client"
+HEADER_SESSION_DIRECTORY: Final = "Amoeba-Session-Directory"
 BEARER_PREFIX: Final = "Bearer "
 #: The URL path of a call is ``CALL_PATH_PREFIX + <name>``.
 CALL_PATH_PREFIX: Final = "/call/"
@@ -285,3 +294,64 @@ def is_header_value(text: str) -> bool:
         len(text) <= HEADER_VALUE_MAX_LENGTH
         and _HEADER_VALUE.fullmatch(text) is not None
     )
+
+
+#: A session id: ``uuid4().hex`` (263 D2, D6).
+SESSION_ID_PATTERN: Final = r"[0-9a-f]{32}"
+_SESSION_ID: Final = re.compile(SESSION_ID_PATTERN)
+
+
+def is_session_id(text: str) -> bool:
+    """Whether ``text`` has the shape of a session id."""
+    return _SESSION_ID.fullmatch(text) is not None
+
+
+#: A ``clientInfo.name`` the sessions list may show (241 D6); the hub checks the same
+#: shape on the session header.
+CLIENT_NAME_PATTERN: Final = re.compile(r"[A-Za-z0-9._ -]{1,64}")
+#: Most entries a tick's reply lists, and a channel event names; the rest are counted
+#: (241 D4, 263 D2).
+CHANNEL_EVENT_MAX_ENTRIES: Final = 10
+
+
+#: The door version a client states: a non-negative integer of at most four digits.
+#: A value of another shape is never stored (263 D6).
+DOOR_VERSION_PATTERN: Final = r"[0-9]{1,4}"
+_DOOR_VERSION: Final = re.compile(DOOR_VERSION_PATTERN)
+#: The longest decoded session directory the hub stores.
+SESSION_DIRECTORY_MAX_LENGTH: Final = 4096
+
+
+#: What a machine on another door version than the hub's runs, and how it is told so
+#: (one text for ``machines``, ``status`` and a refused call).
+UPGRADE_COMMAND: Final = "uv tool install --force amoeba-ai"
+AHEAD_OF_THE_HUB: Final = "ahead of the hub"
+
+
+def is_session_directory(text: str) -> bool:
+    """Whether a decoded session directory is storable: not empty, not over-long, and
+    free of control characters. The tick's header path and its request share it."""
+    return (
+        bool(text)
+        and len(text) <= SESSION_DIRECTORY_MAX_LENGTH
+        and all(char.isprintable() for char in text)
+    )
+
+
+def parse_door_version(text: str | None) -> int | None:
+    """The door version ``text`` states, or ``None`` when it has no such shape."""
+    if text is None or _DOOR_VERSION.fullmatch(text) is None:
+        return None
+    return int(text)
+
+
+@dataclass(frozen=True)
+class SessionIdentity:
+    """Who a session's tick and exit call are for (263 D6): sent as the four session
+    headers so the hub can leave a row even when it refuses the call's door version."""
+
+    session_id: str
+    #: The directory's Context Forge project id; ``None`` for a non-project.
+    project_id: str | None
+    client: str
+    directory: str

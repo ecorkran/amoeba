@@ -28,6 +28,7 @@ from amoeba.store.questions import get_question, insert_question
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ClosedReason, QuestionState
 from amoeba.upstream.squadron.errors import SquadronError
+from amoeba.wire.times import DOOR_VERSION
 from operations.runs_doc_support import open_run, project
 from operations.status_support import FakeCf, in_directory, recorded_run, status_deps
 
@@ -56,6 +57,7 @@ def _status(
         here=here or NOWHERE,
         runs=runs,
         clock=deps.clock,
+        door_version=DOOR_VERSION,
     )
 
 

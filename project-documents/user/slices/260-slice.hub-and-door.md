@@ -103,7 +103,7 @@ Three new packages and additions to five existing ones. The shared package is na
 
 Import rules, added to `tests/test_import_boundaries.py`:
 
-- `wire` imports nothing from any other `amoeba` package. The served names are plain strings in `wire.protocol`, and a test asserts each is an `OperationName` value.
+- `wire` imports nothing from any other `amoeba` package. The served names are plain strings in `wire.protocol`, and a test asserts each is an `OperationName` value. 263 also puts the session id's shape, the client-name pattern (moved from `mcp/presence.py`) and `CHANNEL_EVENT_MAX_ENTRIES` there (263 D6).
 - `client` imports nothing from `store`, `hub` or `upstream`.
 - `hub` imports nothing from `client`, `upstream`, `cli`, `mcp` or the `wiring` modules.
 - Edges the build added: `operations` imports `client.client_file` (the openers read the hub's address from the client file for their message), `hub` imports `operations.errors`, `operations.served` and its own `hub.store_open` (`open_hub_store`). The hub must not reach `client` through any chain of imports, and `tests/test_import_boundaries.py` follows them to check it; the hub's opener therefore names the client file, not the hub address inside it. None crosses a forbidden direction.

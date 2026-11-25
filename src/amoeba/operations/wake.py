@@ -48,6 +48,7 @@ def claim_wake_for_send(  # noqa: PLR0913 - what the hub part of the step is giv
     member_id: str,
     result: SendResult,
     logs_dir: Path,
+    door_version: int,
 ) -> SendResult:
     """``result`` with the wake the hub claimed for this machine, the machines a due
     wake waits for, or ``wake_problem``; unchanged when no wake applies.
@@ -59,7 +60,7 @@ def claim_wake_for_send(  # noqa: PLR0913 - what the hub part of the step is giv
     if not _request_is_open(result):
         return result
     try:
-        return _claim(store, config, now, member_id, result, logs_dir)
+        return _claim(store, config, now, member_id, result, logs_dir, door_version)
     except StoreError as error:
         # The request is written; exit 3 would report a failure for work that
         # happened, so the failure is one line of the result instead.
@@ -81,8 +82,9 @@ def _claim(  # noqa: PLR0913 - what the hub part of the step is given
     member_id: str,
     result: SendResult,
     logs_dir: Path,
+    door_version: int,
 ) -> SendResult:
-    limits = wake_limits(config)
+    limits = wake_limits(config, door_version)
     with store.read() as transaction:
         due_here = wake_due(transaction, member_id, now, limits)
         waiting = (

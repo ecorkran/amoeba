@@ -1,22 +1,24 @@
 """The ``amoeba://inbox`` resource and the capabilities push declares (slice 241, D3,
 D5).
 
-Every handler first waits for presence to resolve, so none answers from the pending
-state; only that request waits. ``read`` returns the member and the number ``inbox``
-reports as ``as_of_seq``, never message text. ``subscribe`` and ``unsubscribe`` set
-and clear a flag on the event loop, which the watcher reads before sending a
-resource update. Capabilities are fixed at ``initialize``, before the member is
-known, so every server declares both the channel and the subscribable resources.
+``read``, ``subscribe`` and ``unsubscribe`` first wait for presence to resolve (the
+first tick ends), so none answers from the pending state; only that request waits.
+``list`` answers at once: the resource is listed whether or not there is a member.
+They answer from memory, from the newest tick reply (263 D10): ``read`` returns the
+member and the number ``inbox`` reports as ``as_of_seq``, never message text, and makes
+no store read and no hub call. ``subscribe`` and ``unsubscribe`` set and clear a
+flag on the event loop, which the tick reads before sending a resource update.
+Capabilities are fixed at ``initialize``, before the member is known, so every server
+declares both the channel and the subscribable resources, and lists the resource
+whether or not it has a member.
 """
 
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass
 from typing import Any, Final
 
-import anyio.to_thread
 import mcp_types as types
 from mcp.server import Server, ServerRequestContext
 from mcp.server.models import InitializationOptions
@@ -24,7 +26,6 @@ from mcp.shared.exceptions import MCPError
 
 from amoeba.mcp.channel_event import CHANNEL_CAPABILITY
 from amoeba.mcp.presence import PresenceState
-from amoeba.wiring_presence import StoreError, StoreOpener, read_as_of_seq
 
 #: The one resource this server offers.
 INBOX_URI: Final = "amoeba://inbox"
@@ -36,34 +37,39 @@ RESOURCE_UPDATED_METHOD: Final = "notifications/resources/updated"
 MEMBER_FIELD: Final = "member"
 AS_OF_SEQ_FIELD: Final = "as_of_seq"
 
-logger = logging.getLogger(__name__)
-
 
 @dataclass(frozen=True)
 class InboxResource:
-    """The four handlers, over the server's presence and its store opener."""
+    """The four handlers, over the server's presence."""
 
     state: PresenceState
-    open_store: StoreOpener
 
-    async def _member(self, uri: str) -> str:
-        """The member, for a request about ``INBOX_URI``; invalid-params otherwise."""
+    async def _member(self, uri: str) -> tuple[str, int]:
+        """The member and ``as_of_seq`` of the newest tick reply, for a request about
+        ``INBOX_URI`` (D10's table).
+
+        Raises:
+            MCPError: Internal error naming the tick's last error before any reply;
+                invalid-params for no member or another resource.
+        """
         await self.state.resolved.wait()
-        member = self.state.member_id
+        member, as_of_seq = self.state.member_id, self.state.as_of_seq
+        if as_of_seq is None:
+            raise MCPError(
+                types.INTERNAL_ERROR,
+                self.state.last_error or "no tick has had a reply yet",
+            )
         if member is None:
             raise MCPError(types.INVALID_PARAMS, "this server serves no member")
         if uri != INBOX_URI:
             raise MCPError(types.INVALID_PARAMS, f"unknown resource {uri!r}")
-        return member
+        return member, as_of_seq
 
     async def list_resources(
         self,
         ctx: ServerRequestContext[Any],
         params: types.PaginatedRequestParams | None,
     ) -> types.ListResourcesResult:
-        await self.state.resolved.wait()
-        if self.state.member_id is None:
-            return types.ListResourcesResult(resources=[])
         resource = types.Resource(
             name=INBOX_NAME, uri=INBOX_URI, mime_type=INBOX_MIME_TYPE
         )
@@ -72,15 +78,7 @@ class InboxResource:
     async def read_resource(
         self, ctx: ServerRequestContext[Any], params: types.ReadResourceRequestParams
     ) -> types.ReadResourceResult:
-        member = await self._member(str(params.uri))
-        try:
-            as_of_seq = await anyio.to_thread.run_sync(read_as_of_seq, self.open_store)
-        except StoreError as error:
-            # This request fails, naming the error; the server keeps serving.
-            logger.exception("inbox resource read failed")
-            raise MCPError(
-                types.INTERNAL_ERROR, f"{type(error).__name__}: {error}"
-            ) from error
+        member, as_of_seq = await self._member(str(params.uri))
         document = {MEMBER_FIELD: member, AS_OF_SEQ_FIELD: as_of_seq}
         contents = types.TextResourceContents(
             uri=INBOX_URI, mime_type=INBOX_MIME_TYPE, text=json.dumps(document)
@@ -102,15 +100,13 @@ class InboxResource:
         return types.EmptyResult()
 
 
-def register_inbox_resource(
-    server: Server[Any], state: PresenceState, open_store: StoreOpener
-) -> None:
+def register_inbox_resource(server: Server[Any], state: PresenceState) -> None:
     """Serve the resource's four methods on ``server``.
 
     Registering ``resources/subscribe`` is what makes the SDK declare
     ``resources: {subscribe: true}``.
     """
-    resource = InboxResource(state, open_store)
+    resource = InboxResource(state)
     server.add_request_handler(
         "resources/list", types.PaginatedRequestParams, resource.list_resources
     )

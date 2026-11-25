@@ -60,6 +60,7 @@ def write_send(
     recipient: str,
     request: SendRequest,
     now: datetime,
+    door_version: int,
 ) -> SendResult:
     """Store ``request`` from ``sender`` to ``recipient``, or say why not.
 
@@ -71,7 +72,13 @@ def write_send(
         existing = get_message(transaction, request.id)
         if existing is not None:
             return _resend(
-                transaction, config, existing, (sender, recipient), request, now
+                transaction,
+                config,
+                existing,
+                (sender, recipient),
+                request,
+                now,
+                door_version,
             )
         parent_depth: int | None = None
         if request.parent is not None:
@@ -99,7 +106,11 @@ def write_send(
         )
         # The mark is written here, before any wake claim reads it (262 D8).
         set_wake_mark(
-            transaction, stored.message_id, recipient, now, wake_limits(config)
+            transaction,
+            stored.message_id,
+            recipient,
+            now,
+            wake_limits(config, door_version),
         )
         return sent_result(SendOutcome.SENT, stored, now)
 
@@ -147,6 +158,7 @@ def _resend(  # noqa: PLR0913 - the transaction, the stored row and the send aga
     parties: tuple[str, str],
     request: SendRequest,
     now: datetime,
+    door_version: int,
 ) -> SendResult:
     """D2: the same id again. Same content is a retry; anything else is refused.
 
@@ -173,7 +185,13 @@ def _resend(  # noqa: PLR0913 - the transaction, the stored row and the send aga
             "send it again under a new id",
         )
         return reject_send(transaction, sender, request, problem, now)
-    set_wake_mark(transaction, existing.message_id, recipient, now, wake_limits(config))
+    set_wake_mark(
+        transaction,
+        existing.message_id,
+        recipient,
+        now,
+        wake_limits(config, door_version),
+    )
     return sent_result(SendOutcome.UNCHANGED, existing, now)
 
 

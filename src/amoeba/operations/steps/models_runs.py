@@ -21,5 +21,10 @@ class OpenRunsReply(StepModel):
 
 
 OPEN_RUNS: Final = Step(
-    "open_runs", OpenRunsRequest, OpenRunsReply, writes=False, needs_config=True
+    "open_runs",
+    OpenRunsRequest,
+    OpenRunsReply,
+    writes=False,
+    keeps_result=False,
+    needs_config=True,
 )

@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from amoeba.mcp.channel_event import (
-    CHANNEL_EVENT_MAX_ENTRIES,
     META_COUNT,
     META_FIRST_SEQ,
     META_LAST_SEQ,
@@ -13,6 +12,7 @@ from amoeba.mcp.channel_event import (
 )
 from amoeba.store.models import PushRow
 from amoeba.store.vocabulary import DeliveryEvent, MessageKind
+from amoeba.wire.protocol import CHANNEL_EVENT_MAX_ENTRIES
 
 #: Planted where message text would be if it leaked; the counterparty is the only
 #: free-ish value a row carries, and it is a Context Forge id.

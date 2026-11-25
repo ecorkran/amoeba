@@ -1,7 +1,7 @@
 """The after-step: start the work a machine has waiting (slice 262, D10).
 
-``after_call`` runs once at the end of ``wiring.invoke`` (the CLI door after every
-operation, the MCP door after every operation but ``answer``) and at the end of
+``after_call`` runs once at the end of ``wiring.invoke`` on the CLI door (the MCP door
+leaves it to the session's tick, 263 D7) and at the end of
 ``amoeba handle-pause``, on every path, a raise included. It runs the file clean-up when
 one is due, then, if the last reply said this machine has work waiting, makes one
 ``claim_work`` call and starts what it returns, detached. It never raises and never
@@ -29,7 +29,12 @@ from pydantic import ValidationError
 
 from amoeba.client.call import call
 from amoeba.client.client_file import load_client_file
-from amoeba.client.errors import HubRefusedError, HubUnreachableError
+from amoeba.client.errors import (
+    ClientFileError,
+    HubCertificateError,
+    HubRefusedError,
+    HubUnreachableError,
+)
 from amoeba.config.home import (
     AmoebaHomeError,
     StateLayout,
@@ -39,17 +44,22 @@ from amoeba.config.home import (
 from amoeba.config.user_config import ConfigError, UserConfig
 from amoeba.operations import list_view
 from amoeba.operations.deps import Deps
-from amoeba.operations.names import Door, OperationName
+from amoeba.operations.names import OperationName
 from amoeba.operations.state_move import open_state_store
 from amoeba.operations.steps.dispatch import StepEdges
 from amoeba.operations.steps.models import CLAIM_WORK, OPEN_RUNS, Step, StepModel
 from amoeba.operations.steps.models_runs import OpenRunsReply, OpenRunsRequest
+from amoeba.operations.steps.models_session import SESSION_END, SESSION_TICK
 from amoeba.operations.steps.models_work import ClaimWorkRequest
 from amoeba.operations.store_steps import LocalSteps, Steps
 from amoeba.operations.work_start import start_claimed
 from amoeba.store.errors import StoreError
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS
-from amoeba.wire.protocol import WORK_PROBLEM_REPLY_KEY, WORK_REPLY_KEY
+from amoeba.wire.protocol import (
+    WORK_PROBLEM_REPLY_KEY,
+    WORK_REPLY_KEY,
+    SessionIdentity,
+)
 from amoeba.wire.times import DoorTimes
 
 logger = logging.getLogger(__name__)
@@ -89,19 +99,30 @@ class StepReplyError(Exception):
     disagree inside one door version, which is a bug. Raised on the client."""
 
 
+#: The two steps that carry the session headers, and no other (263 D6).
+SESSION_STEP_NAMES: Final = frozenset({SESSION_TICK.name, SESSION_END.name})
+
+
 class DoorSteps:
     """Each step as one door call: the request model as the ``document`` of
     ``POST /call/<step>``, the reply validated against the step's reply model.
 
     The client file is read on every call; gone, it raises ``ClientFileError``
     naming it, and no local store is opened (D3). Each reply's work keys go into
-    ``last`` for the after-step.
+    ``last`` for the after-step. ``identity``, when given, goes as the session headers
+    on ``session_tick`` and ``session_end`` only.
     """
 
-    def __init__(self, last: LastReply, times: DoorTimes = DoorTimes()) -> None:  # noqa: B008  frozen
+    def __init__(
+        self,
+        last: LastReply,
+        times: DoorTimes = DoorTimes(),  # noqa: B008  frozen
+        identity: SessionIdentity | None = None,
+    ) -> None:
         #: What this command's last reply said about waiting work.
         self.last = last
         self._times = times
+        self._identity = identity
 
     def run[Request: StepModel, Reply: StepModel](
         self, step: Step[Request, Reply], request: Request
@@ -109,8 +130,16 @@ class DoorSteps:
         cert_path = pinned_cert_path()
         client_file = load_client_file(client_file_path(), cert_path)
         document = request.model_dump(mode="json")
+        identity = self._identity if step.name in SESSION_STEP_NAMES else None
         try:
-            result = call(client_file, cert_path, step.name, document, self._times)
+            result = call(
+                client_file,
+                cert_path,
+                step.name,
+                document,
+                self._times,
+                identity=identity,
+            )
         except HubUnreachableError:
             self.last.unreachable = True
             raise
@@ -122,7 +151,7 @@ class DoorSteps:
                 ".".join(str(part) for part in problem["loc"]) or "(the reply)"
                 for problem in error.errors()
             )
-            applied = " The hub applied the step." if step.writes else ""
+            applied = " The hub applied the step." if step.keeps_result else ""
             raise StepReplyError(
                 f"the reply to step {step.name} does not fit its model at {fields}."
                 f"{applied}"
@@ -131,14 +160,19 @@ class DoorSteps:
 
 @contextmanager
 def steps_for(
-    layout: StateLayout, last: LastReply, load_config: Callable[[], UserConfig]
+    layout: StateLayout,
+    last: LastReply,
+    load_config: Callable[[], UserConfig],
+    times: DoorTimes = DoorTimes(),  # noqa: B008  frozen
+    identity: SessionIdentity | None = None,
 ) -> Generator[Steps]:
     """The steps one command uses to its end: ``DoorSteps`` when a client file
     exists, otherwise ``LocalSteps`` on the local store, opened here and closed when
     the command is done. ``load_config`` is called only by a local step that needs
-    the config."""
+    the config. ``times`` and ``identity`` are the door's; the local store ignores
+    them."""
     if client_file_path().exists():
-        yield DoorSteps(last)
+        yield DoorSteps(last, times, identity)
         return
     with open_state_store(layout) as store:
         yield LocalSteps(store, StepEdges(lambda: datetime.now(UTC), load_config))
@@ -147,17 +181,13 @@ def steps_for(
 def after_operation(  # noqa: PLR0913 - what the after-step is given
     name: OperationName,
     document: object,
-    door: Door,
     steps: Steps | None,
     last: LastReply,
     deps: Callable[[], Deps],
 ) -> None:
-    """The after-step of ``wiring.invoke``: after every operation on the CLI door, and
-    on the MCP door after every operation but ``answer``, whose call a deadline bounds
-    by its resume alone (``check_deadline``). ``status`` and the default ``list`` view
-    prune in their own placement, so the after-step does not prune after them."""
-    if door is Door.MCP and name is OperationName.ANSWER:
-        return
+    """The after-step of ``wiring.invoke`` when its door runs one. ``status`` and the
+    default ``list`` view prune in their own placement, so the after-step does not prune
+    after them."""
     pruned_already = name is OperationName.STATUS or (
         name is OperationName.LIST and list_view.needs_here(document)
     )
@@ -181,24 +211,45 @@ def after_call(  # noqa: PLR0913 - the pieces of one after-step
     if steps is None or last.unreachable:
         return
     try:
-        built = deps()
-        if prunes:
-            _prune(steps, built)
-        if _work_waiting(steps, last):
-            reply = steps.run(
-                CLAIM_WORK, ClaimWorkRequest(logs_dir=str(built.logs_dir))
-            )
-            start_claimed(steps, built, reply.items)
+        run_after_step(steps, deps, last, prunes=prunes)
     except (ConfigError, AmoebaHomeError) as error:
         # Not re-raised: the call this follows has committed, so raising would report a
         # failure for work that happened. One line and no traceback: a missing or
         # invalid config is the person's to fix, not a crash. The work is found again
         # by the next call.
         logger.error("the after-step stopped; its work is found again: %s", error)
-    except (StoreError, HubUnreachableError, HubRefusedError, OSError):
+    except AFTER_STEP_ERRORS:
         # Not re-raised, for the reason above. Nothing was started; the claims, if the
         # hub applied them, run out and the work is handed out again (D10, D11).
         logger.exception("the after-step stopped; its work is found again next call")
+
+
+#: What the after-step's own calls raise when they cannot finish; the work is found
+#: again by the next call, so each caller logs it and goes on.
+AFTER_STEP_ERRORS: Final = (
+    StoreError,
+    HubUnreachableError,
+    HubRefusedError,
+    ClientFileError,
+    HubCertificateError,
+    OSError,
+)
+
+
+def run_after_step(
+    steps: Steps, deps: Callable[[], Deps], last: LastReply, *, prunes: bool
+) -> None:
+    """The after-step's work: the clean-up when due, then one ``claim_work`` call and
+    the start of what it returns. Raises what it cannot finish (``ConfigError``,
+    ``AmoebaHomeError`` and ``AFTER_STEP_ERRORS``); ``after_call`` logs it for the CLI
+    and the session's runner (``mcp.after_runner``) logs it by the run.
+    """
+    built = deps()
+    if prunes:
+        _prune(steps, built)
+    if _work_waiting(steps, last):
+        reply = steps.run(CLAIM_WORK, ClaimWorkRequest(logs_dir=str(built.logs_dir)))
+        start_claimed(steps, built, reply.items)
 
 
 def _prune(steps: Steps, deps: Deps) -> None:

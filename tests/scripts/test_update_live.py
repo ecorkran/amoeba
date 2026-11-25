@@ -13,6 +13,7 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 import yaml
@@ -23,13 +24,20 @@ from store.schema_12 import (
     WAKE_COUNT,
     build_schema_12_store,
 )
+from store.schema_13 import build_schema_13_store
 from store.seed import insert_member, insert_program
 from store_open import open_local_store
 from user_configs import example_config_text
 
 from amoeba.config.home import config_path, state_layout, store_path
 from amoeba.operations.names import OperationName
+from amoeba.operations.runs_document import RunsDocument
 from amoeba.operations.state_move import open_state_store
+from amoeba.operations.status import StatusResult
+from amoeba.operations.status_machine_models import MachineEntry
+from amoeba.operations.status_machines import store_calling_runs
+from amoeba.operations.status_models import StatusOutcome
+from amoeba.store.machines import list_machines
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
 from amoeba.store.store import Store
 
@@ -86,6 +94,32 @@ def live(amoeba_home: Path) -> Path:
     return amoeba_home
 
 
+def _status_document(*names: str) -> dict[str, Any]:
+    """A status result as ``amoeba status -j`` prints it, listing ``names``."""
+    machines = tuple(
+        MachineEntry(
+            name=name,
+            last_called_at=None,
+            client_version=None,
+            door_version=None,
+            behind=None,
+        )
+        for name in names
+    )
+    result = StatusResult(outcome=StatusOutcome.LISTED, machines=machines)
+    return result.model_dump(mode="json")
+
+
+def fake_status() -> dict[str, Any]:
+    """What ``amoeba status -j`` leaves: this machine's runs report stored, and a
+    document whose ``machines`` lists the machines the store holds."""
+    with closing(open_state_store(state_layout())) as store:
+        store_calling_runs(store, RunsDocument(), NOW)
+        with store.read() as transaction:
+            rows = list_machines(transaction)
+    return _status_document(*(row.name for row in rows))
+
+
 class FakeSteps:
     """The steps ``update`` and ``restore`` call, over fakes.
 
@@ -116,6 +150,7 @@ class FakeSteps:
             migrate=self._migrate,
             cf_projects=lambda: self.cf_ids,
             list_tools=lambda: self.tools,
+            status=fake_status,
         )
 
     def _migrate(self) -> None:
@@ -220,6 +255,7 @@ def test_a_failed_read_back_restores_store_config_and_tool(live: Path) -> None:
         migrate=lose_a_member,
         cf_projects=set,
         list_tools=lambda: ALL_TOOLS,
+        status=fake_status,
     )
     with pytest.raises(update_live.UpdateError, match="members 1 != 2"):
         update_live.update(VERSION, PREVIOUS, steps, NOW)
@@ -324,6 +360,56 @@ def test_update_and_restore_against_a_copy_of_a_schema_ten_store(
     assert update_live.member_count(store_path()) == 2
 
 
+def test_update_and_restore_against_a_copy_of_a_schema_13_store(
+    amoeba_home: Path,
+) -> None:
+    build_schema_13_store(store_path())
+    config_path().write_text(example_config_text(), encoding="utf-8")
+    fake = FakeSteps()
+
+    update_live.update(VERSION, PREVIOUS, fake.steps(), NOW)
+
+    assert _version(store_path()) == EXPECTED_SCHEMA_VERSION
+    with closing(sqlite3.connect(store_path())) as connection:
+        assert connection.execute("SELECT count(*) FROM machine_runs").fetchone() == (
+            1,
+        )
+    backup = update_live.newest_backup()
+    assert _version(backup / update_live.STORE_BACKUP) == 13
+
+    restored = update_live.restore(backup, fake.steps())
+
+    assert restored == PREVIOUS
+    assert _version(store_path()) == 13
+
+
+def test_a_status_without_the_local_machine_or_its_runs_row_fails(
+    live: Path,
+) -> None:
+    failures = update_live.check_status(_status_document("beta"))
+
+    assert len(failures) == 2
+    assert "status machines" in failures[0]
+    assert "machine_runs holds []" in failures[1]
+
+
+def test_a_status_with_another_machine_beside_local_has_no_machines_failure(
+    live: Path,
+) -> None:
+    document = _status_document(update_live.LOCAL_MACHINE_NAME, "beta")
+
+    failures = update_live.check_status(document)
+
+    assert not any("status machines" in failure for failure in failures)
+
+
+def test_a_status_document_that_is_not_a_status_result_fails(live: Path) -> None:
+    failures = update_live.check_status({"machines": ["local"]})
+
+    assert len(failures) == 1
+    assert "not a status result" in failures[0]
+
+
 def test_a_store_with_no_local_machine_fails_the_read_back(live: Path) -> None:
     def forget_local() -> None:
         with closing(sqlite3.connect(store_path())) as connection:
@@ -338,6 +424,7 @@ def test_a_store_with_no_local_machine_fails_the_read_back(live: Path) -> None:
         migrate=forget_local,
         cf_projects=set,
         list_tools=lambda: ALL_TOOLS,
+        status=fake_status,
     )
 
     with pytest.raises(update_live.UpdateError, match="machines holds"):
@@ -421,6 +508,7 @@ def test_a_member_with_no_name_fails_the_read_back(old_live: FakeSteps) -> None:
         migrate=migrate_without_naming,
         cf_projects=set,
         list_tools=lambda: ALL_TOOLS,
+        status=fake_status,
     )
 
     with pytest.raises(update_live.UpdateError, match="2 members have no name"):
@@ -438,6 +526,7 @@ def test_a_cf_projects_that_raises_restores_the_same_way(old_live: FakeSteps) ->
         migrate=old_live._migrate,  # pyright: ignore[reportPrivateUsage]
         cf_projects=cf_down,
         list_tools=lambda: ALL_TOOLS,
+        status=fake_status,
     )
 
     with pytest.raises(update_live.UpdateError, match="cf could not list"):
@@ -457,6 +546,7 @@ def test_a_list_tools_that_raises_restores_the_same_way(old_live: FakeSteps) -> 
         migrate=old_live._migrate,  # pyright: ignore[reportPrivateUsage]
         cf_projects=lambda: old_live.cf_ids,
         list_tools=server_down,
+        status=fake_status,
     )
 
     with pytest.raises(update_live.UpdateError, match="TimeoutError"):
@@ -479,6 +569,7 @@ def test_a_failed_amoeba_list_restores_the_store_config_and_version_then_a_rerun
         migrate=_failing_migrate,
         cf_projects=lambda: old_live.cf_ids,
         list_tools=lambda: ALL_TOOLS,
+        status=fake_status,
     )
 
     with pytest.raises(update_live.UpdateError, match="CalledProcessError") as raised:
@@ -515,6 +606,7 @@ def test_a_killed_update_after_the_migration_keeps_its_backup_on_the_rerun(
         migrate=migrate_then_die,
         cf_projects=lambda: old_live.cf_ids,
         list_tools=lambda: ALL_TOOLS,
+        status=fake_status,
     )
 
     with pytest.raises(KeyboardInterrupt):
@@ -546,6 +638,7 @@ def test_a_rerun_after_a_kill_before_the_migration_takes_a_new_backup(
         migrate=die_before_migrating,
         cf_projects=lambda: old_live.cf_ids,
         list_tools=lambda: ALL_TOOLS,
+        status=fake_status,
     )
     with pytest.raises(KeyboardInterrupt):
         update_live.update(VERSION, PREVIOUS, killed, NOW)
@@ -588,6 +681,7 @@ def test_main_returns_1_and_says_what_failed_and_which_version_was_restored(
         migrate=_failing_migrate,
         cf_projects=lambda: old_live.cf_ids,
         list_tools=lambda: ALL_TOOLS,
+        status=fake_status,
     )
     monkeypatch.setattr(update_live, "PRODUCTION", broken)
     monkeypatch.setattr(update_live, "check_checkout", lambda: VERSION)
@@ -666,6 +760,7 @@ def test_a_failed_read_back_logs_the_traceback(
         migrate=_failing_migrate,
         cf_projects=lambda: old_live.cf_ids,
         list_tools=lambda: ALL_TOOLS,
+        status=fake_status,
     )
 
     with pytest.raises(update_live.UpdateError):
@@ -691,6 +786,7 @@ def test_a_failed_install_puts_the_config_back_and_the_store_is_untouched(
         migrate=old_live._migrate,  # pyright: ignore[reportPrivateUsage]
         cf_projects=lambda: old_live.cf_ids,
         list_tools=lambda: ALL_TOOLS,
+        status=fake_status,
     )
 
     with pytest.raises(update_live.UpdateError, match="uv could not install"):

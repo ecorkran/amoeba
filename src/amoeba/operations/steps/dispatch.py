@@ -22,11 +22,13 @@ from amoeba.operations.steps.pause import (
     question_wait,
 )
 from amoeba.operations.steps.resume import resume_claim, resume_read, resume_record
+from amoeba.operations.steps.session import session_end, session_tick
 from amoeba.operations.steps.settle import question_settle
 from amoeba.operations.steps.sources import pause_sources
 from amoeba.operations.steps.wake import wake_finish, wake_read, wake_set_pid
 from amoeba.operations.steps.work import claim_work
 from amoeba.store.store import Store
+from amoeba.wire.times import DOOR_VERSION
 
 type StepFunction = Callable[[StepContext, Any], StepModel]
 
@@ -48,6 +50,8 @@ STEP_FUNCTIONS: Final[dict[str, StepFunction]] = {
     "wake_finish": wake_finish,
     "open_runs": open_runs,
     "claim_work": claim_work,
+    "session_tick": session_tick,
+    "session_end": session_end,
 }
 
 
@@ -66,6 +70,9 @@ class StepEdges:
     clock: Callable[[], datetime]
     #: Called only for a step whose ``STEP_MODELS`` row needs config.
     load_config: Callable[[], UserConfig]
+    #: The door version the serving program runs: local and CLI paths run this one,
+    #: and the hub sets the version it serves (slice 263, D6).
+    door_version: int = DOOR_VERSION
 
 
 def run_step(name: str, store: Store, document: object, edges: StepEdges) -> StepModel:
@@ -92,5 +99,7 @@ def run_step(name: str, store: Store, document: object, edges: StepEdges) -> Ste
     function = STEP_FUNCTIONS[name]
     transaction_scope = store.write() if spec.writes else store.read()
     with transaction_scope as transaction:
-        reply = function(StepContext(transaction, edges.clock(), config), request)
+        reply = function(
+            StepContext(transaction, edges.clock(), config, edges.door_version), request
+        )
     return reply

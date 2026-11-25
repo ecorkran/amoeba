@@ -44,6 +44,7 @@ from amoeba.operations.status_local import (
     file_problems,
     joined,
 )
+from amoeba.operations.status_machines import read_machines, store_calling_runs
 from amoeba.operations.status_models import (
     MemberStatus,
     ProgramStatus,
@@ -150,6 +151,7 @@ def status(
     here: HereCaller | HereNotAProject,
     runs: RunsDocument,
     clock: Callable[[], datetime],
+    door_version: int,
 ) -> StatusResult:
     """What is running, paused and waiting on the PM, per program and member.
 
@@ -184,6 +186,9 @@ def status(
             "status needs `sq runs list --json` (Squadron with #303): "
             f"{runs.listing_problem}"
         )
+    # The calling machine's report for the others to show (263 D11), after the listing
+    # check so a call that fails there stores nothing.
+    report_problem = store_calling_runs(store, runs, clock())
     # The listing is ``--all`` so the sweep can tell a finished run from an unknown
     # one; completed runs stay out of the per-member run lists, as before.
     with store.read() as transaction:
@@ -210,9 +215,9 @@ def status(
     waiting = waiting_entries(open_rows, standing, machines, calling_machine)
     messages = read_member_messages(store, members, clock())
     sessions = read_member_sessions(
-        store, members, clock(), config.session_stale_seconds
+        store, members, clock(), config.session_stale_seconds, door_version
     )
-    wakes = read_member_wakes(store, members, clock(), config)
+    wakes = read_member_wakes(store, members, clock(), config, door_version)
     program_of = {
         m.project_id: entry.program_id for entry in scope for m in entry.members
     }
@@ -229,8 +234,10 @@ def status(
         ),
         unplaced_runs=placement.unplaced,
         closed_now=closed_now_entries(swept, program_of, names),
-        sweep_problem=joined(message_problem, swept.problem),
+        sweep_problem=joined(message_problem, report_problem, swept.problem),
         file_problems=file_problems(runs, with_calls.problems, ()),
+        hub_door_version=door_version,
+        machines=read_machines(store, door_version),
     )
 
 

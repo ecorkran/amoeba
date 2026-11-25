@@ -48,6 +48,7 @@ from amoeba.wire.protocol import (
     RUNS_BODY_KEY,
     VIA_BODY_KEY,
 )
+from amoeba.wire.times import DOOR_VERSION
 from amoeba.wiring_results import OperationResult
 
 
@@ -117,7 +118,12 @@ def place_served(  # noqa: PLR0913 - invoke's arguments and what the gather need
     values = gather_values(name, document, directory, door, deps, steps)
     if isinstance(values, SetUpResult):
         return values
-    edges = ServedEdges(clock=deps.clock, load_config=load_config, local=deps)
+    edges = ServedEdges(
+        clock=deps.clock,
+        load_config=load_config,
+        door_version=DOOR_VERSION,
+        local=deps,
+    )
     result = run_served(name.value, store, document, edges, values)
     return finish_client_part(result, steps, deps, values)
 

@@ -119,11 +119,17 @@ def test_both_doors_reach_invoke_with_the_same_call(
     request.write_text("program: trial\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     calls: list[tuple[OperationName, object, Path | None, Door]] = []
+    keywords_seen: list[dict[str, object]] = []
 
     def recorder(
-        name: OperationName, document: object, directory: Path | None, door: Door
+        name: OperationName,
+        document: object,
+        directory: Path | None,
+        door: Door,
+        **keywords: object,
     ) -> MarkReadResult:
         calls.append((name, document, directory, door))
+        keywords_seen.append(keywords)
         return STUB_RESULT
 
     monkeypatch.setattr(commands, "invoke", recorder)
@@ -140,6 +146,8 @@ def test_both_doors_reach_invoke_with_the_same_call(
     if _spec(name).takes_directory:
         assert by_cli[2] == by_mcp[2] == Path.cwd()
     assert (by_cli[3], by_mcp[3]) == (Door.CLI, Door.MCP)
+    # The CLI runs the after-step; the MCP door leaves it to the session's tick.
+    assert keywords_seen == [{}, {"after_step": False}]
     assert returned == printed
 
 
@@ -180,7 +188,11 @@ def _blocking(release: threading.Event) -> Callable[..., MarkReadResult]:
     """A stand-in for ``invoke`` that waits for ``release`` when asked to block."""
 
     def invoke(
-        name: OperationName, document: object, directory: Path | None, door: Door
+        name: OperationName,
+        document: object,
+        directory: Path | None,
+        door: Door,
+        **_keywords: object,
     ) -> MarkReadResult:
         if isinstance(document, dict) and document.get("block"):  # pyright: ignore[reportUnknownMemberType]
             assert release.wait(WAIT_SECONDS), "the test never released the worker"
@@ -338,7 +350,11 @@ def test_an_answer_is_refused_before_it_acts_when_the_config_outgrew_the_deadlin
     calls: list[OperationName] = []
 
     def recorder(
-        name: OperationName, document: object, directory: Path | None, door: Door
+        name: OperationName,
+        document: object,
+        directory: Path | None,
+        door: Door,
+        **_keywords: object,
     ) -> MarkReadResult:
         calls.append(name)
         return STUB_RESULT
@@ -358,7 +374,7 @@ def test_an_answer_is_refused_before_it_acts_when_the_config_outgrew_the_deadlin
 def test_only_answer_is_held_to_the_answer_bound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def stub_invoke(*_arguments: object) -> MarkReadResult:
+    def stub_invoke(*_arguments: object, **_keywords: object) -> MarkReadResult:
         return STUB_RESULT
 
     monkeypatch.setattr(wiring, "invoke", stub_invoke)
@@ -378,7 +394,11 @@ def test_an_exception_raised_after_the_deadline_is_logged_at_error(
     release = threading.Event()
 
     def failing_late(
-        name: OperationName, document: object, directory: Path | None, door: Door
+        name: OperationName,
+        document: object,
+        directory: Path | None,
+        door: Door,
+        **_keywords: object,
     ) -> MarkReadResult:
         assert release.wait(WAIT_SECONDS), "the test never released the worker"
         raise SquadronError("sq went away")

@@ -22,18 +22,12 @@ from amoeba import wiring
 from amoeba.cli.main import EXIT_ERROR, main
 from amoeba.client.client_file import ClientFile, write_client_file
 from amoeba.config.home import StateLayout, state_layout
-from amoeba.mcp import server as mcp_server
-from amoeba.mcp.in_process import run_in_process
 from amoeba.mcp.presence import PresenceDeps, PresenceState
 from amoeba.mcp.presence_task import run_presence
-from amoeba.mcp.tools import TOOLS
-from amoeba.operations.names import Door, OperationName
-from amoeba.store.errors import LocalStoreClosedError
-from amoeba.wire.protocol import SERVED_OPERATIONS
-from amoeba.wiring_door import NotServedError
+from amoeba.wire.times import TICK_TIMES
+from amoeba.wiring_steps import steps_for
 
 HUB = "hub.example:8443"
-UNSERVED = [name for name in OperationName if name.value not in SERVED_OPERATIONS]
 
 
 def _join_files(layout: StateLayout) -> None:
@@ -52,18 +46,6 @@ def joined_home() -> StateLayout:
     layout = state_layout()
     _join_files(layout)
     return layout
-
-
-@pytest.mark.parametrize("name", UNSERVED, ids=lambda name: name.value)
-def test_every_unserved_operation_raises_not_served_and_writes_nothing(
-    joined_home: StateLayout, name: OperationName
-) -> None:
-    before = _tree(joined_home.state_home)
-
-    with pytest.raises(NotServedError, match=HUB):
-        wiring.invoke(name, {}, Path("/anywhere"), Door.CLI)
-
-    assert _tree(joined_home.state_home) == before
 
 
 @pytest.mark.parametrize(
@@ -88,48 +70,19 @@ def test_each_hub_command_raises_local_store_closed_and_writes_nothing(
     assert _tree(joined_home.state_home) == before
 
 
-@pytest.mark.parametrize(
-    "spec",
-    [spec for spec in TOOLS if spec.name in UNSERVED and spec.timeout_advice],
-    ids=lambda spec: spec.name.value,
-)
-def test_every_unserved_in_process_mcp_tool_raises_not_served(
-    joined_home: StateLayout, spec: object
-) -> None:
-    before = _tree(joined_home.state_home)
-
-    async def call() -> None:
-        await run_in_process(spec, {}, Path("/anywhere"))  # type: ignore[arg-type]
-
-    with pytest.raises(NotServedError):
-        anyio.run(call)
-
-    assert _tree(joined_home.state_home) == before
-
-
-def test_amoeba_mcp_start_raises_not_served_before_the_state_move(
-    joined_home: StateLayout, capsys: pytest.CaptureFixture[str]
-) -> None:
-    before = _tree(joined_home.state_home)
-
-    with pytest.raises(SystemExit):
-        mcp_server.main()
-
-    assert "NotServedError" in capsys.readouterr().err
-    assert _tree(joined_home.state_home) == before
-
-
-def test_a_running_mcp_server_that_is_then_joined_hits_the_store_error_handler(
+def test_a_running_mcp_server_that_is_then_joined_ticks_on_the_door_and_writes_nothing(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     layout = state_layout()
     seed_member(layout.store_path)
     clock = FakeClock()
     deps = PresenceDeps(
-        open_store=partial(wiring.open_store, layout),
+        open_steps=lambda last, identity: steps_for(
+            layout, last, lambda: FAST, TICK_TIMES, identity
+        ),
         cf_run=fake_cf_run(DEFAULT_WORKTREE),
         clock=clock,
-        timing=FAST,
+        after_deps=partial(wiring.default_deps, layout),
     )
     state = PresenceState(started_at=clock())
     connection = make_connection(RecordingOutbound())
@@ -146,18 +99,14 @@ def test_a_running_mcp_server_that_is_then_joined_hits_the_store_error_handler(
             before = _tree(layout.state_home)
             await eventually(
                 lambda: any(
-                    "presence stopped" in r.getMessage() for r in caplog.records
+                    r.getMessage().startswith("tick failed:") for r in caplog.records
                 ),
-                "presence to stop",
+                "a tick to fail on the door",
             )
             assert _tree(layout.state_home) == before
+            group.cancel_scope.cancel()
 
     with caplog.at_level(logging.INFO):
         anyio.run(scenario)
 
-    stopped = [
-        r.exc_info[1]
-        for r in caplog.records
-        if r.exc_info is not None and isinstance(r.exc_info[1], LocalStoreClosedError)
-    ]
-    assert stopped
+    assert not [r for r in caplog.records if "presence stopped" in r.getMessage()]

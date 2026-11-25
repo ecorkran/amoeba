@@ -35,6 +35,9 @@ from amoeba.hub.serve import BackupCheck, make_server, run
 from amoeba.hub.start import FROM_BACKUP_FLAG, prepare_start
 from amoeba.hub.store_open import open_hub_store, refuse_unless_a_ready_hub
 from amoeba.operations.state_move import refuse_local_store_if_joined
+from amoeba.operations.status_machines import is_ahead_of_hub
+from amoeba.wire.protocol import AHEAD_OF_THE_HUB
+from amoeba.wire.times import DOOR_VERSION
 
 HUB_COMMAND: Final = "hub"
 ACTION: Final = "hub_action"
@@ -148,16 +151,30 @@ def _run_invite(layout: StateLayout, arguments: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _door_text(door_version: int | None) -> str:
+    """A machine's door version and, when it differs from the hub's, which way."""
+    if door_version is None:
+        return "door: unknown"
+    if door_version == DOOR_VERSION:
+        return f"door: {door_version}"
+    direction = (
+        AHEAD_OF_THE_HUB if is_ahead_of_hub(door_version, DOOR_VERSION) else "behind"
+    )
+    return f"door: {door_version}  {direction}"
+
+
 def _run_machines(layout: StateLayout, arguments: argparse.Namespace) -> int:
     rows = admin.machines(layout)
-    text = "\n".join(
+    heading = f"hub door version: {DOOR_VERSION}"
+    lines = [
         f"{row.name}  token: {'yes' if row.has_token else 'no'}  last call: "
         f"{'never' if row.last_called_at is None else row.last_called_at.isoformat()}  "
-        f"client: {row.client_version or 'unknown'}"
+        f"client: {row.client_version or 'unknown'}  {_door_text(row.door_version)}"
         for row in rows
-    )
+    ]
+    text = "\n".join([heading, *(lines or ["no machines"])])
     print_text_or_json(
-        text or "no machines",
+        text,
         [
             {
                 "name": row.name,
@@ -168,6 +185,8 @@ def _run_machines(layout: StateLayout, arguments: argparse.Namespace) -> int:
                     else row.last_called_at.isoformat()
                 ),
                 "client_version": row.client_version,
+                "door_version": row.door_version,
+                "behind": admin.is_behind(row.door_version),
             }
             for row in rows
         ],

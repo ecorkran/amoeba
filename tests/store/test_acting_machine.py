@@ -36,6 +36,7 @@ from amoeba.store.vocabulary import (
     StandingReach,
 )
 from amoeba.store.wakes import WakeLimits, claim_wake
+from amoeba.wire.times import DOOR_VERSION
 from store.seed import insert_checkout, insert_member, insert_program, mark_wake_wanted
 from store.seed import insert_question as seed_question
 
@@ -46,7 +47,12 @@ RECORD_TABLES = (
     "wakes",
 )  # fmt: skip
 SEEDED_KEY = QuestionKey("run-seed", "2026-11-20T11:00:00Z")
-LIMITS = WakeLimits(timeout_seconds=600, max_per_day=3, session_stale_seconds=90)
+LIMITS = WakeLimits(
+    timeout_seconds=600,
+    max_per_day=3,
+    session_stale_seconds=90,
+    door_version=DOOR_VERSION,
+)
 
 
 def _seed(path: Path) -> None:
@@ -128,7 +134,7 @@ def _inserts() -> dict[str, Callable[[Transaction], object]]:
         authorize_deny=(),
         rules_from=RulesFrom.NAMED,
     )
-    session = Session("s1", "m1", "claude", "/c", NOW, NOW, None)
+    session = Session("s1", "m1", "claude", "/c", NOW, NOW, None, "9.9.9", DOOR_VERSION)
     return {
         "programs": lambda tx: upsert_program(
             tx, program_id="other", concept_member=None, concept_path=None, now=NOW
@@ -239,7 +245,10 @@ def test_records_written_through_the_local_opener_carry_the_owner_and_machine() 
             name="m1",
             now=NOW,
         )
-        upsert_session(tx, Session("s1", "m1", "claude", "/c", NOW, NOW, None))
+        upsert_session(
+            tx,
+            Session("s1", "m1", "claude", "/c", NOW, NOW, None, "9.9.9", DOOR_VERSION),
+        )
     with store.read() as tx:
         owner = the_owner(tx)
         local = tx.execute(

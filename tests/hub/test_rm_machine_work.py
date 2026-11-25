@@ -24,11 +24,14 @@ from amoeba.client.errors import HubRefusedError
 from amoeba.hub.admin import rm_machine
 from amoeba.operations.steps.dispatch import StepEdges
 from amoeba.operations.wake_run import run_wake
-from amoeba.store.models import QuestionKey
+from amoeba.store.machine_runs import put_machine_runs
+from amoeba.store.models import QuestionKey, Session
 from amoeba.store.questions import insert_question
+from amoeba.store.sessions import upsert_session
 from amoeba.store.store import Store
 from amoeba.store.wakes import WakeLimits, claim_wake
 from amoeba.wire.protocol import DoneReply
+from amoeba.wire.times import DOOR_VERSION
 from amoeba.wiring_door import join
 from hub.call_support import ALPHA_TOKEN, BETA_TOKEN, NOW, HubRig, build_rig, result_of
 from hub.in_process_hub import InProcessHub
@@ -62,7 +65,7 @@ def _seed(rig: HubRig) -> None:
                 transaction,
                 CORE,
                 NOW,
-                WakeLimits(600, 3, 90),
+                WakeLimits(600, 3, 90, DOOR_VERSION),
                 "wake-on-alpha",
                 "/alpha/logs/wake/wake-on-alpha",
             )
@@ -153,3 +156,33 @@ def test_a_wake_wrapper_whose_machine_was_removed_stops_its_command_at_its_next_
 
 def _no_config() -> Any:
     raise AssertionError("a wake step loaded the config")
+
+
+def _session(session_id: str) -> Session:
+    return Session(
+        session_id=session_id,
+        member_id=CORE,
+        client="claude-code",
+        directory="/work",
+        started_at=NOW,
+        heartbeat_at=NOW,
+        push_confirmed_at=NOW,
+        client_version="9.9.9",
+        door_version=DOOR_VERSION,
+    )
+
+
+def test_removing_a_machine_deletes_its_sessions_and_stored_runs_only(
+    rig: HubRig,
+) -> None:
+    for token, session_id in ((ALPHA_TOKEN, "on-alpha"), (BETA_TOKEN, "on-beta")):
+        with _acting(rig, token) as store, store.write() as transaction:
+            upsert_session(transaction, _session(session_id))
+            put_machine_runs(transaction, "{}", NOW)
+
+    rm_machine(rig.layout, "alpha", NOW)
+
+    assert [row[0] for row in rig.rows("SELECT session_id FROM sessions")] == [
+        "on-beta"
+    ]
+    assert len(rig.rows("SELECT machine_id FROM machine_runs")) == 1

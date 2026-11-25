@@ -42,6 +42,7 @@ TABLES = {
     "call_results",
     "closed_mark",
     "checkouts",
+    "machine_runs",
 }
 
 

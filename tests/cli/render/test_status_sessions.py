@@ -20,9 +20,19 @@ CORE = MemberName(id="id-core", name="core")
 LINT = MemberName(id="id-lint", name="lint")
 
 
-def _session(*, confirmed: bool, directory: str = "/work/core") -> SessionEntry:
+def _session(
+    *,
+    confirmed: bool,
+    directory: str = "/work/core",
+    machine: str = "alpha",
+    behind: bool = False,
+) -> SessionEntry:
     return SessionEntry(
         client="claude-code",
+        machine=machine,
+        client_version="0.2.3",
+        door_version=3,
+        behind=behind,
         directory=directory,
         started_at=NOW - timedelta(hours=2, minutes=5),
         heartbeat_at=NOW - timedelta(minutes=1),
@@ -49,7 +59,7 @@ def test_a_session_renders_as_one_line_under_its_member() -> None:
     start = lines.index(LIVE_SESSIONS)
     assert lines[start + 1].strip() == "core"
     assert lines[start + 2].strip() == (
-        "claude-code  /work/core  up 2h 5m  last beat 1m ago  push confirmed"
+        "claude-code  alpha  /work/core  up 2h 5m  last beat 1m ago  push confirmed"
     )
 
 

@@ -35,7 +35,7 @@ from amoeba.operations.changes_models import (
 )
 from amoeba.operations.decisions import DecisionsResult
 from amoeba.operations.dismiss import DismissResult
-from amoeba.operations.errors import ContextForgeError
+from amoeba.operations.errors import ContextForgeError, DeadlineError
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
@@ -65,7 +65,6 @@ from amoeba.store.errors import StoreBusyError, StoreError
 from amoeba.store.vocabulary import ConsumedMode
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.wire.join_line import JoinError
-from amoeba.wiring_door import NotServedError
 from amoeba.wiring_steps import StepReplyError
 
 #: For each in-process operation, a document it refuses and the result type it gives.
@@ -114,6 +113,7 @@ def test_the_operational_errors_are_the_ones_the_cli_maps_to_exit_three() -> Non
         AmoebaHomeError,
         ConfigError,
         ContextForgeError,
+        DeadlineError,
         SquadronError,
         StoreError,
         JoinError,
@@ -121,7 +121,6 @@ def test_the_operational_errors_are_the_ones_the_cli_maps_to_exit_three() -> Non
         HubUnreachableError,
         HubCertificateError,
         HubRefusedError,
-        NotServedError,
         StepReplyError,
     }
 

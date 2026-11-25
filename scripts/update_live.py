@@ -10,10 +10,13 @@ merges:
 ``update`` backs up the store and config, appends any config key the new code
 requires (value from the starter config Amoeba ships), installs the checkout's
 version from PyPI with ``uv tool install`` (never a build of the checkout), runs
-``amoeba list`` (which migrates the store and names the members) and reads the result
+``amoeba list`` (which migrates the store and names the members), ``amoeba status -j``
+(which stores this machine's runs report) and reads the result
 back (the schema version, integrity, foreign keys, the member count, that ``owners``
-holds its one row and ``machines`` the one ``local`` row, that no member lacks a name
-and every active member ``cf`` lists has a checkout here, and the MCP tool list).
+holds its one row, that ``status`` is a status result that lists the ``local``
+machine, that ``machine_runs`` and ``machines`` hold a ``local`` row, that no member
+lacks a name and every active member ``cf`` lists has a checkout here, and the MCP
+tool list).
 Anything that fails after the install, a failed ``amoeba list`` included, restores
 automatically: the store, the config and the previous version, and exits 1 saying what
 failed. ``restore`` checks the newest backup is whole, then puts it back and
@@ -34,6 +37,7 @@ Paths honour ``AMOEBA_HOME`` exactly as amoeba does.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import shutil
@@ -50,11 +54,13 @@ from typing import Any
 
 import anyio
 from mcp import ClientSession, StdioServerParameters, stdio_client
+from pydantic import ValidationError
 
 from amoeba.config.home import config_path, state_home, store_path
 from amoeba.config.starter import fill_missing_keys, starter_values
 from amoeba.config.user_config import ConfigError
 from amoeba.operations.names import OperationName
+from amoeba.operations.status import StatusResult
 from amoeba.store import sql, sql_local_work
 from amoeba.store.machines import LOCAL_MACHINE_NAME
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
@@ -77,6 +83,10 @@ MCP_LIST_TIMEOUT_SECONDS = 30
 INTEGRITY_OK = "ok"
 SELECT_OWNER_COUNT = "SELECT count(*) FROM owners"
 SELECT_MACHINE_NAMES = "SELECT name FROM machines ORDER BY name"
+SELECT_MACHINE_RUNS_NAMES = (
+    "SELECT machines.name FROM machine_runs "
+    "JOIN machines ON machines.machine_id = machine_runs.machine_id"
+)
 
 
 class UpdateError(Exception):
@@ -92,6 +102,9 @@ class Steps:
     #: The ids of the projects ``cf`` lists with a path; raises when ``cf`` fails.
     cf_projects: Callable[[], set[str]]
     list_tools: Callable[[], set[str]]
+    #: ``amoeba status -j`` as the installed program prints it, parsed; it also stores
+    #: this machine's runs report (slice 263).
+    status: Callable[[], dict[str, Any]]
 
 
 def backups_root() -> Path:
@@ -236,6 +249,29 @@ def check_store(expected_members: int, cf_projects: set[str]) -> list[str]:
     return failures
 
 
+def check_status(document: dict[str, Any]) -> list[str]:
+    """Read-back failures of ``amoeba status`` (slice 263): its ``machines`` list holds
+    the ``local`` machine, and so does ``machine_runs``. Another machine that joined
+    since is no failure."""
+    try:
+        result = StatusResult.model_validate(document)
+    except ValidationError as error:
+        # The document is the one thing read back here: one that is not a status
+        # result is a failed read-back, with pydantic's first problem named.
+        return [f"status document is not a status result: {error.errors()[0]['msg']}"]
+    failures: list[str] = []
+    names = [machine.name for machine in result.machines]
+    if LOCAL_MACHINE_NAME not in names:
+        failures.append(f"status machines {names} lack {LOCAL_MACHINE_NAME!r}")
+    with _read_only(store_path()) as connection:
+        reported = [row[0] for row in connection.execute(SELECT_MACHINE_RUNS_NAMES)]
+    if LOCAL_MACHINE_NAME not in reported:
+        failures.append(
+            f"machine_runs holds {reported}, lacking {LOCAL_MACHINE_NAME!r}"
+        )
+    return failures
+
+
 def install_spec(version: str) -> str:
     """The release or a later one: the install records a floor, never a pin, so a
     later `uv tool upgrade amoeba-ai` still moves it."""
@@ -356,6 +392,7 @@ def _read_back(expected_members: int, steps: Steps) -> list[str]:
     failed read-back too, and the caller restores."""
     steps.migrate()
     failures = check_store(expected_members, steps.cf_projects())
+    failures += check_status(steps.status())
     tools = steps.list_tools()
     wanted = {name.value for name in OperationName}
     if tools != wanted:
@@ -450,6 +487,16 @@ def _amoeba_list() -> None:
     )
 
 
+def _amoeba_status() -> dict[str, Any]:
+    done = subprocess.run(
+        [tool_command("amoeba"), "status", "-j"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(done.stdout)
+
+
 def _cf_projects() -> set[str]:
     """The ids of the projects ``cf`` lists that have a path, as the naming read."""
     found = project_details(subprocess.run)
@@ -501,6 +548,7 @@ PRODUCTION = Steps(
     migrate=_amoeba_list,
     cf_projects=_cf_projects,
     list_tools=_installed_tools,
+    status=_amoeba_status,
 )
 
 

@@ -74,15 +74,26 @@ class ResumeRecordReply(StepModel):
 
 
 RESUME_CLAIM: Final = Step(
-    "resume_claim", ResumeClaimRequest, ResumeClaimReply, writes=True, needs_config=True
+    "resume_claim",
+    ResumeClaimRequest,
+    ResumeClaimReply,
+    writes=True,
+    keeps_result=True,
+    needs_config=True,
 )
 RESUME_READ: Final = Step(
-    "resume_read", ResumeReadRequest, ResumeReadReply, writes=False, needs_config=True
+    "resume_read",
+    ResumeReadRequest,
+    ResumeReadReply,
+    writes=False,
+    keeps_result=False,
+    needs_config=True,
 )
 RESUME_RECORD: Final = Step(
     "resume_record",
     ResumeRecordRequest,
     ResumeRecordReply,
     writes=True,
+    keeps_result=True,
     needs_config=False,
 )

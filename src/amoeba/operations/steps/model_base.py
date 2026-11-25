@@ -26,8 +26,11 @@ class Step[Request: StepModel, Reply: StepModel]:
     name: str
     request: type[Request]
     reply: type[Reply]
-    #: Its transaction is a write, and through the door its reply is kept.
+    #: Its transaction is a write; this is all ``run_step`` reads.
     writes: bool
+    #: Through the door its reply is kept for a repeated call. A step that writes
+    #: but is safe to run twice (a session tick or end) keeps none.
+    keeps_result: bool
     #: It reads the hub's ``config.yaml``. The steps that record an end (a resume's
     #: outcome, a wake's pid and end) load none on purpose: a broken config must not
     #: stop an outcome from being recorded (D10).

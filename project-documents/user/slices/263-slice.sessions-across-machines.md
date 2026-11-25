@@ -10,8 +10,8 @@ dependencies:
 interfaces:
 - 264
 dateCreated: 20261120
-dateUpdated: 20261121
-status: not_started
+dateUpdated: 20261125
+status: complete
 turns: 29
 promptTokens: 2452589
 cachedTokens: 2210522
@@ -86,7 +86,7 @@ Facts about other tools, read 20261120 on this machine:
 
 - From 260: `client.call` and `DoorTimes` (D7, D10), the headers of a call (D6), the touch and the refusal path in `hub.calls.handle_call` (D8), `OPERATION_ERRORS` in `operations/errors.py` (D8), `RefusalCode`, `wire.times`, `sessions.machine_id` and the acting machine (D12), `amoeba hub machines` and `amoeba hub rm-machine` (D13), `amoeba join --set-aside-local` and `amoeba leave` (D4), the two-machine fixture and the door load test (D18).
 - From 261: `operations.here` for the caller, `find_caller`, the `runs` document and the hub part of `status` (D5, D6, D11).
-- From 262: `Steps`, `STEP_MODELS`, `run_step`, `LocalSteps`, `DoorSteps` and `steps_for` (D3); the `work` reply key, `claim_work` and `wiring_steps.after_call` (D10); the hub part of `answer` with `via` (D7); the presence read in `wake_due` (D8); the machine on question entries; `resume_claim_seconds` (D6), and `resume_bound_seconds` unchanged.
+- From 262: `Steps`, `STEP_MODELS`, `run_step`, `LocalSteps`, `DoorSteps` and `steps_for` (D3); the `work` reply key, `claim_work` and `wiring_steps.after_operation` and `after_call` (D10); the hub part of `answer` with `via` (D7); the presence read in `wake_due` (D8); the machine on question entries; `resume_claim_seconds` (D6), and `resume_bound_seconds` unchanged.
 - From 241, already built: `mcp.pinned_loop`, `mcp.channel_event`, `mcp.presence`, `mcp.presence_task`, `mcp.inbox_watcher`, `mcp.inbox_resource`, `store.sessions`, `store.push_reads`, and the config keys `notify_poll_seconds`, `session_heartbeat_seconds` and `session_stale_seconds`.
 
 This slice changes some of what 260 and 262 say, the after-step among them. Each change is listed under "Amendments to 260 and 262".
@@ -119,7 +119,7 @@ This slice changes some of what 260 and 262 say, the after-step among them. Each
 
 Import rules added to `tests/test_import_boundaries.py`:
 
-- `amoeba.mcp` and `wiring_presence` import nothing from `amoeba.store` but its error types, and nothing from `amoeba.client`. A session reaches the store only through `Steps`.
+- `amoeba.mcp` and `wiring_presence` import nothing from `amoeba.store` but its error types and vocabularies. `amoeba.mcp` imports nothing from `amoeba.client`; `wiring_presence` imports from it only the error types and the client-file loader (the machine name), and re-exports them. A session reaches the store only through `Steps`.
 - `store.sessions.heartbeat`, `delete_session` and the `store.push_reads` functions are called only from `operations.steps.session`. The refusal path in `hub.calls` (D6) writes its row through a function in `operations.steps.session` too.
 - `steps.models` still holds no field of a date or time type (262's test covers the two new request models).
 
@@ -188,7 +188,7 @@ The hub side, `steps.session.session_tick`, on the hub's clock and config:
 
 1. **The member.** `find_caller(machine, here)`. With no member, it deletes this session's row if there is one and returns the reason. Nothing else is read.
 2. **The row, when a heartbeat is due.** It is due when the session has no row, the row's heartbeat is at least `session_heartbeat_seconds` old, the row's member is not this member, or `push_confirmed` is true and the row's `push_confirmed_at` is null. Then, in one write: stale rows of every member are deleted, and this row is upserted (D5). When nothing is due, the step writes nothing.
-3. **Deliveries.** The member's highest delivery number. When `last_seen` is given and lower, the entries above it: at most `CHANNEL_EVENT_MAX_ENTRIES` (10, 241's constant), with how many there are in all and the first one's number. So the reply's size does not grow with the backlog. The event's `and K more` comes from the count.
+3. **Deliveries.** The member's highest delivery number. When `last_seen` is given and lower, the entries above it: at most `CHANNEL_EVENT_MAX_ENTRIES` (10, 241's constant, moved to `wire.protocol` because the hub may not import `amoeba.mcp`), with how many there are in all and the first one's number. So the reply's size does not grow with the backlog. The event's `and K more` comes from the count.
 4. **`as_of_seq`,** the highest delivery number assigned to anyone, for the resource (D10).
 
 Reply: the member's id and name or the reason there is none, `high_seq`, `first_seq`, `count`, `entries`, `as_of_seq` and `notify_poll_seconds`. An entry is 241's push row and nothing more: `seq`, `event` and `kind` (both closed enums) and `counterparty` (a member id). The reply model forbids other fields, and a test seeds messages whose subject, body, result and reason hold marker strings and asserts none is in a reply. Through the door, the reply also carries 262's `work` key like every done reply.
@@ -289,7 +289,7 @@ After every tick that got a reply, the session runs 262's after-step with that r
 
 `mcp.after_runner` runs it in its own worker thread, never on the event loop and never in the tick's thread. One runs at a time. A tick that ends while one is still running starts none; the flag is still set in the next tick's reply, which starts it then. So a slow `claim_work` (it retries, up to one call bound) delays neither the next tick nor a heartbeat.
 
-MCP tool calls leave the after-step to the tick. This is a change this slice makes. In 262 the after-step runs at the end of `wiring.invoke` on both doors, as `start_after` does today: after every operation on the CLI door, and after every operation but `answer` on the MCP door. Here `wiring.invoke` takes whether to run it, and the MCP door says no. The existing test `tests/test_wiring_release.py::test_the_mcp_door_starts_the_ended_held_question_too` pins the old behavior for `reply` and `cancel`. This slice changes it to assert that the MCP call starts nothing and that the session's next tick does. A tool's result therefore returns before any claim or clean-up, which keeps them out of the MCP call deadline (D9). The work starts at most one poll interval later.
+MCP tool calls leave the after-step to the tick. This is a change this slice makes. In 262 the after-step runs at the end of `wiring.invoke` on both doors, as `start_after` does today: after every operation on the CLI door, and after every operation but `answer` on the MCP door. Here `wiring.invoke` takes whether to run it, and the MCP door says no. The existing test `tests/test_after_step.py::test_the_mcp_door_starts_the_ended_held_question_too` pins the old behavior for `reply` and `cancel`. This slice changes it to assert that the MCP call starts nothing and that the session's next tick does. A tool's result therefore returns before any claim or clean-up, which keeps them out of the MCP call deadline (D9). The work starts at most one poll interval later.
 
 Two things are not the after-step and are unchanged on the MCP door. They are part of the operation itself, in 262 D7 and D8, and use no `claim_work`:
 
@@ -528,7 +528,7 @@ These change what the two earlier designs say. Each is stated in that design's o
 
 | Design says | This slice | Where |
 |---|---|---|
-| 262 D10: the after-step runs at the end of `wiring.invoke` on both doors, after every operation on the CLI door and after every operation but `answer` on the MCP door | For every operation on the CLI door. `invoke` takes whether to run it. On the MCP door it does not, and the session's tick runs it. `tests/test_wiring_release.py::test_the_mcp_door_starts_the_ended_held_question_too` is changed to assert that | D7 |
+| 262 D10: the after-step runs at the end of `wiring.invoke` on both doors, after every operation on the CLI door and after every operation but `answer` on the MCP door | For every operation on the CLI door. `invoke` takes whether to run it. On the MCP door it does not, and the session's tick runs it. `tests/test_after_step.py::test_the_mcp_door_starts_the_ended_held_question_too` is changed to assert that | D7 |
 | 262 D3: `steps_for(layout)` picks one way "when a command starts, by whether a client file exists, and the command keeps it to its end" | That holds for commands. `steps_for` also takes the door times and a session identity. A session's tick calls it on every tick, with `TICK_TIMES` and the four values the session headers carry | D1, D4, D6 |
 | 260 D7: the pinned tuple is the door version and the network times, and `DOOR_VERSION` is 1 | The tuple also holds `MCP_CALL_DEADLINE_SECONDS`, and the door version goes up by one, to 3 after 262's 2 | D9 |
 | 260 D8: the touch sets `last_called_at` and `client_version` | It also sets `machines.door_version`. For `session_tick` and `session_end` it sets `last_called_at` only. On a `door_version` refusal of a tick it writes the session's row from the headers | D6 |
@@ -536,7 +536,7 @@ These change what the two earlier designs say. Each is stated in that design's o
 | 260 D13: `amoeba hub machines` lists name, token, `last_called_at` and `client_version` | It also shows each machine's door version and whether it differs from the hub's | D12 |
 | 260 Component Structure: `wire.protocol` holds the call and reply shapes | It also holds the session id's shape and the client-name pattern, moved from `mcp/presence.py` | D6 |
 | 260 D6: a call's headers are the token, the two versions and the call id | `session_tick` and `session_end` also send the four `Amoeba-Session-*` headers | D6 |
-| 262 D3: `WRITING_STEPS` are the writing rows of `STEP_MODELS`, the steps whose result is kept | The row's flag means "its result is kept". `session_tick` and `session_end` write and have it unset | D2 |
+| 262 D3: `WRITING_STEPS` are the writing rows of `STEP_MODELS`, the steps whose result is kept; one flag, `Step.writes`, means both "its transaction is a write" and "its result is kept" | Two flags: `writes` ("its transaction is a write", all `run_step` reads) and `keeps_result` ("its reply is kept through the door", what `WRITING_STEPS` and the "hub applied the step" text read). Every 262 row sets `keeps_result` equal to its `writes`. `session_tick` and `session_end` have `writes` set and `keeps_result` unset | D2 |
 | 262 D6 and Provides: `resume_bound_seconds` is unchanged and, with no client file, bounds the MCP deadline check | Through the door the check is on the hub and uses `resume_claim_seconds`, 216.5 seconds with the example config | D9 |
 | 260 D2, 262 D15: `NotServedError` and the served check at the top of every entry point | Both are deleted, because nothing is left unserved | D14 |
 
@@ -554,7 +554,7 @@ This slice restructures `amoeba.mcp`'s presence code. The order keeps the suite 
   - A test that pinned one-shot member resolution asserts the next tick.
   - A test that pinned 180 seconds or 89.5 uses the new constant and limit.
   - The two tests that pin an empty `resources/list` for a session with no member, in `tests/mcp_server/test_inbox_resource.py` and `test_presence_serving.py`, assert the resource is listed and a read is refused (D10).
-  - `tests/test_wiring_release.py::test_the_mcp_door_starts_the_ended_held_question_too` asserts that the MCP call starts nothing and that the session's next tick starts the held question (D7).
+  - `tests/test_after_step.py::test_the_mcp_door_starts_the_ended_held_question_too` asserts that the MCP call starts nothing and that the session's next tick starts the held question (D7).
 - **Existing data.** Migration 014. No row is rewritten.
 
 ### API Contracts
@@ -656,15 +656,15 @@ A tick or tool call that fails at the door fails with 260's errors. This slice a
    uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest -q
    ```
 
-   Expected: no formatting change, `All checks passed!`, `0 errors`, and no test failure.
+   Expected (run 20261125): no formatting change, `All checks passed!`, `0 errors, 0 warnings, 0 informations`, `5907 passed` in about 11 minutes.
 
 2. This slice's own tests:
 
    ```bash
-   uv run pytest tests/mcp_server tests/hub/test_sessions.py tests/store/test_migration_014.py tests/load/test_door_load.py tests/mcp_server/test_protocol_pin.py -v
+   uv run pytest tests/mcp_server tests/hub tests/store/test_migration_014.py tests/load/test_door_load.py tests/mcp_server/test_protocol_pin.py -v
    ```
 
-   Expected: all pass. The load test prints the slowest tick and the longest gap between two replies, both under their bounds.
+   Expected (run 20261125, with `tests/operations` and `tests/scripts` added): `2684 passed` in about 8 minutes. The load test asserts the slowest tick and the longest gap between two replies, both under their bounds.
 
 3. The live tier, which spends on a model:
 
@@ -682,6 +682,8 @@ A tick or tool call that fails at the door fails with 260's errors. This slice a
    - **Work from a tick** ("A tick's reply with `work: true`"). With a run paused on `beta`: on `alpha`, `amoeba answer <run id> --text "Use the v2 schema"` says the run is on `beta`. A few seconds later `amoeba list` shows the answer as resumed, with nothing typed on `beta`.
    - **An agent answers** ("An MCP `answer` for a run on the session's own machine"). With a second run paused on `beta`, ask the session there to answer it with the `answer` tool. The result holds the resume's outcome, `resumed`. While the tool runs, `pgrep -f "amoeba resume-run"` on `beta` prints nothing: the resume ran inside the call. Its `sq` logs and attempt file are under `beta`'s `logs/resume/<run id>/`, as for any resume (262 D6).
    - **Runs elsewhere** ("After `status` on `alpha`"). `amoeba list` on `beta`, then on `alpha`: `beta`'s runs show under **Runs on other machines**, headed `beta, reported <age> ago`.
+
+   Caveat: the by-hand steps are each covered by an automated test (see the 10.2 map in the Slice Notes) and the live tier's two-machine test ran against a real Claude Code; they were not typed by hand.
 
 5. On the local store, after the release's update: `amoeba list` shows each live session with the machine `local`, and a session started before the update is listed by the script as one to restart.
 
@@ -754,3 +756,38 @@ Done as the person running it. Before 264 only fixtures are joined; the PM's ins
 - **Undo.** There is no setting to turn off. For the upgrade itself, `uv run python scripts/update_live.py restore` puts back the store and config from before the update and reinstalls the release that was installed then. Everything recorded since the update is lost, so it is for an update that went wrong, soon after it.
 
 Dead ends found: none.
+
+## Slice Notes
+
+### 0.1, 0.2: setup and baseline (20261124)
+
+- Target `main` (no integration branch). sq 0.24.38, cf 0.19.28. Design edits: the after-step name, the test name (`tests/test_after_step.py`), the channel constant's new home, and the Amendments row for 262 D3 (two flags). The same flag note is in 262 (D3 step names), and 260's Component Structure now names the session id shape, the client-name pattern and `CHANNEL_EVENT_MAX_ENTRIES` in `wire.protocol`. The other Amendments rows were already stated in 260 and 262.
+- Baseline before this slice: format, ruff and pyright clean; 5692 passed, 1 skipped; no failure.
+
+### 1.1 to 1.3: client facts (20261124)
+
+- Claude Code 2.1.325, `mcp` 2.3.0: the same as `docs/mcp-server.md`'s dated facts (2.1.318 and 2.1.325, 20261116), so no correction. The pin test passes (3) and the four live channel tests pass (57 seconds).
+- Long-call test (`tests/live/channels/test_long_call_live.py`, server `tests/mcp_server/long_call_server.py`, tool waits 220 seconds), model sonnet, no timeout setting of the session's own, loaded as a plain server (the harness's `as_channel` is false): **the marker reached the agent** with no setting, 226 seconds after the prompt (the call's 220 plus one model turn). At two minutes the session still showed the spinner for the pending call and no result. Nothing is set; the live fixtures set nothing. `docs/mcp-server.md` (9.2) says the agent gets the result when the call returns, and sees nothing for it before.
+
+### 8.1 to 8.7: cross-machine tests, load and live (20261125)
+
+- Real processes (hub, `amoeba-mcp` over stdio, the CLI) carry the push, presence, config, `rm-machine`, join and resource cases (`tests/hub/test_sessions_across_machines.py`, `test_sessions_faults.py`, `test_sessions_modes.py`, helper `tests/hub_mcp.py`). The cases that need a clock the test sets, a hub the test stops and restarts, or two machines' spawn recorders run in process (`test_sessions_clock.py`, `test_sessions_hub_down.py`, `test_sessions_work.py`, `test_sessions_versions.py`). Each is a file of its own beside the task's names, to stay under the size guide.
+- A hub "one version up" is a client one version down in the version tests: the hub serves `DOOR_VERSION`, and `status` and the waking rule read that constant.
+- **Load found a defect, fixed here.** With the 16 clients and 50 ticking sessions at once, a tick waited up to 5.04 s and a call failed with `StoreBusyError`: every call holds the write lock for its whole scope, and SQLite's busy handler hands it over slowly (it sleeps up to 100 ms between tries) and starves a waiter. `hub.calls.handle_call` now makes calls wait on one `threading.Lock` (`_CALL_ORDER`) before they open the store, so only one waits on SQLite. No call runs sooner or later than before once it holds the lock.
+- Load figures (`tests/load/test_door_load.py`, after the fix; 50 sessions on 10 members, a tick every 0.5 s for 20 s, beside the 16 clients): 1914 ticks; slowest tick 0.661 s (bound 2 s); longest gap between replies 0.728 s (bound 3 s); live rows 50 at every sample (stale time 4 s); the 16 clients' slowest call 0.659 s (260's bound 2 s). 260's two cases are unchanged: median 3.4 ms for `decisions`, 3.4 ms for `inbox`, 5.2 ms for `send`. Before the fix: slowest tick 5.04 s.
+- `resources/subscribe` is deprecated in the SDK's client; the resource test calls it with a pyright ignore, because the server's handler is what is under test.
+- A session in a non-member directory logged nothing after the tick change, and 241's live test waits for `is not a member`: the tick logs `no presence: <directory> is not a member (<reason>)` once per change of reason (`mcp/tick.py`, test in `tests/mcp_server/test_tick.py`).
+- Live (`AMOEBA_LIVE_CHANNEL_MODEL=sonnet uv run pytest tests/live/channels -v`): 6 passed in 300 s: 241's four, the long-call test, and the new `test_two_machines_channels_live.py` (a real Claude Code on `beta`, the request sent from `alpha`: `tool inbox called` in the server log, then `push_confirmed_at` in `list -j` from `alpha`).
+
+### 9.1 to 9.3: admin, documents and the live update (20261125)
+
+- `rm-machine` (`tests/hub/test_rm_machine_work.py`): a test seeds a session and a stored runs report on each of two machines, removes one, and finds only the other's rows. `remove_machine` needed no change.
+- Documents: `docs/mcp-server.md` (the tick, the member worked out each pass, what a failed pass does, the deadline of 300 and the two limits, Codex `tool_timeout_sec` 305, the Claude Code fact from 1.3, the resource in every session, the log lines, start-up on a joined machine), `docs/cli-contract.md` (the `amoeba-mcp` start row and `NotServedError` removed; the Behind and Runs sections were done in 7.2), `docs/store-contract.md` (tick writes `sessions`, `rm-machine` deletes its rows and runs), `docs/config-contract.md` (the two session timings judged on the hub, the third check, `resume_wait_seconds` limits). 1.3 found the result does arrive, so the `answer` tool description is unchanged.
+- `scripts/update_live.py`: `Steps.status` (`_amoeba_status`, `amoeba status -j`) and `check_status` (the `machines` list is the one `local`, `machine_runs` holds one row for it). Tests use a copy of a schema-13 store (`tests/scripts/test_update_live.py`). The script already listed open `amoeba-mcp` sessions to restart.
+- **Restore path:** `uv run python scripts/update_live.py restore` puts back the store as it was before the update, loses every answer, message and decision recorded since, and reinstalls the release installed before. A failed read-back (the new checks included) runs it automatically.
+
+### 10.1, 10.2: sizes and the operator walkthrough (20261125)
+
+- Sizes: `tests/mcp_server/test_tick.py` (738 lines) split into `test_tick.py`, `test_tick_failures.py`, `test_tick_member.py` and `tick_rig.py`; `tests/operations/test_session_steps.py` (398) split into `test_session_steps.py`, `test_session_end_steps.py` and `session_steps_rig.py`. Left as they are: `tests/load/door_load_support.py` (309) and `tests/operations/test_status_machines.py` (315).
+- Walkthrough map, bullet to test: Start 6.3 and 8.1 (`test_hub_mcp_smoke.py`, `test_sessions_across_machines.py`). A client cuts a call off: 8.4. Normal path: 8.2. Repo not added, `cf` broken at start, not a project: 4.2 (`test_tick_member.py`). Hub goes down: 8.3 (`test_sessions_hub_down.py`) and 5.3. Hub config broken: 8.3 and 2.4. Session closed, killed, laptop sleeps: 8.2 (`test_sessions_clock.py`). `answer` refused for the deadline: 6.2. Run answered from another machine: 8.4. Hub upgraded or machine upgraded first: 8.3 and 5.4 (`test_sessions_versions.py`). Machine removed with a session open: 8.3 and 9.1. Machine joins or leaves while a session is open, early resource list: 8.5. Runs on another machine look old: 7.3. Turning push off: 8.2. Undo: 9.3.
+- Dead ends found: none.

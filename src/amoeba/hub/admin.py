@@ -18,6 +18,7 @@ from amoeba.hub.backups import BackupKind, BackupSource, take_backup
 from amoeba.hub.errors import HubStartError
 from amoeba.hub.hub_config import load_hub_config
 from amoeba.hub.store_open import open_hub_store
+from amoeba.operations.status_machines import is_behind as is_behind_the_hub
 from amoeba.store.machine_removal import close_machine_work
 from amoeba.store.machines import (
     MachineRow,
@@ -30,6 +31,7 @@ from amoeba.store.machines import (
 from amoeba.wire.fingerprint import fingerprint
 from amoeba.wire.join_line import format_join_line
 from amoeba.wire.protocol import is_machine_name
+from amoeba.wire.times import DOOR_VERSION
 
 #: How many bytes of randomness a token carries: 256 bits.
 TOKEN_BYTES = 32
@@ -81,6 +83,12 @@ def invite(layout: StateLayout, name: str, now: datetime) -> Invited:
     return Invited(
         name, format_join_line(config.address, fingerprint(pem), token), is_new
     )
+
+
+def is_behind(door_version: int | None) -> bool | None:
+    """Whether a machine's door version differs from the hub's (so its sessions cannot
+    take a wake, 263 D6); ``None`` when none is recorded."""
+    return is_behind_the_hub(door_version, DOOR_VERSION)
 
 
 def machines(layout: StateLayout) -> list[MachineRow]:

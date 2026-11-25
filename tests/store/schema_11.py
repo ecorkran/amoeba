@@ -121,6 +121,7 @@ TABLES: Final = (
     "closed_mark",
     "deliveries",
     "dependency_pairs",
+    "machine_runs",
     "machines",
     "members",
     "message_rejections",

@@ -14,10 +14,9 @@ import ssl
 import time
 import uuid
 from collections.abc import Mapping
-from functools import cache
-from importlib import metadata
 from pathlib import Path
 from typing import Final
+from urllib.parse import quote
 
 from amoeba.client.client_file import ClientFile
 from amoeba.client.errors import (
@@ -26,6 +25,7 @@ from amoeba.client.errors import (
     HubUnreachableError,
 )
 from amoeba.client.trust import pinned_context
+from amoeba.program_version import program_version
 from amoeba.wire.address import split_address
 from amoeba.wire.protocol import (
     CALL_PATH_PREFIX,
@@ -34,27 +34,30 @@ from amoeba.wire.protocol import (
     HEADER_CALL_ID,
     HEADER_CLIENT_VERSION,
     HEADER_DOOR_VERSION,
+    HEADER_SESSION_CLIENT,
+    HEADER_SESSION_DIRECTORY,
+    HEADER_SESSION_ID,
+    HEADER_SESSION_PROJECT,
     UNKNOWN_ADVICE,
+    UPGRADE_COMMAND,
     WRITING_CALLS,
     WRITING_STEPS,
     DoneReply,
     RefusalCode,
     RefusedReply,
+    SessionIdentity,
     parse_reply,
 )
 from amoeba.wire.times import DOOR_VERSION, DoorTimes
 
-PACKAGE_NAME: Final = "amoeba-ai"
-UPGRADE_COMMAND: Final = "uv tool install --force amoeba-ai"
 JSON_TYPE: Final = "application/json"
 #: Where a refused ``bad_token`` names the machine before the hub has told it its name.
 MACHINE_PLACEHOLDER: Final = "<machine>"
 
 
-@cache
 def client_version() -> str:
     """The installed package version, sent with every call."""
-    return metadata.version(PACKAGE_NAME)
+    return program_version()
 
 
 def _address_hint(address: str) -> str:
@@ -88,12 +91,25 @@ def _version_mismatch(client_file: ClientFile, header: str | None) -> HubRefused
     return HubRefusedError(text, RefusalCode.DOOR_VERSION)
 
 
-def _attempt(
+def session_headers(identity: SessionIdentity) -> dict[str, str]:
+    """The four session headers (263 D6): the directory percent-encoded, the project
+    header left out for a non-project."""
+    headers = {
+        HEADER_SESSION_ID: identity.session_id,
+        HEADER_SESSION_CLIENT: identity.client,
+        HEADER_SESSION_DIRECTORY: quote(identity.directory, safe="/"),
+    }
+    if identity.project_id is not None:
+        headers[HEADER_SESSION_PROJECT] = identity.project_id
+    return headers
+
+
+def _attempt(  # noqa: PLR0913 - one attempt's pieces
     client_file: ClientFile,
     context: ssl.SSLContext,
     path: str,
     body: bytes,
-    call_id: str,
+    headers: Mapping[str, str],
     times: DoorTimes,
 ) -> tuple[bytes, str | None]:
     """One attempt; the reply body and its door-version header.
@@ -114,13 +130,7 @@ def _attempt(
             "POST",
             path,
             body=body,
-            headers={
-                HEADER_AUTHORIZATION: f"Bearer {client_file.token}",
-                HEADER_DOOR_VERSION: str(DOOR_VERSION),
-                HEADER_CLIENT_VERSION: client_version(),
-                HEADER_CALL_ID: call_id,
-                "Content-Type": JSON_TYPE,
-            },
+            headers=headers,
         )
         response = connection.getresponse()
         return response.read(), response.getheader(HEADER_DOOR_VERSION)
@@ -157,13 +167,14 @@ def call(  # noqa: PLR0913 - the file, the certificate, the call and how long to
     times: DoorTimes = DoorTimes(),  # noqa: B008  frozen, no state to share
     call_id: str | None = None,
     extra: Mapping[str, object] | None = None,
+    identity: SessionIdentity | None = None,
 ) -> dict[str, object]:
     """Make the call and return its result document.
 
     One call id, made here when none is given, is used by every repeat, so the hub
     applies a repeated writing call once. ``extra`` holds the body keys beside
     ``document`` for values only this machine can read (the caller's project, the
-    runs; 261 D5).
+    runs; 261 D5). ``identity`` adds the session headers (263 D6).
 
     Raises:
         HubCertificateError: The hub did not present the saved certificate; never
@@ -175,11 +186,19 @@ def call(  # noqa: PLR0913 - the file, the certificate, the call and how long to
     path = f"{CALL_PATH_PREFIX}{name}"
     body = json.dumps({DOCUMENT_KEY: document, **(extra or {})}).encode("utf-8")
     sent_id = call_id if call_id is not None else uuid.uuid4().hex
+    headers = {
+        HEADER_AUTHORIZATION: f"Bearer {client_file.token}",
+        HEADER_DOOR_VERSION: str(DOOR_VERSION),
+        HEADER_CLIENT_VERSION: client_version(),
+        HEADER_CALL_ID: sent_id,
+        "Content-Type": JSON_TYPE,
+        **({} if identity is None else session_headers(identity)),
+    }
     started = time.monotonic()
     while True:
         try:
             reply_body, version_header = _attempt(
-                client_file, context, path, body, sent_id, times
+                client_file, context, path, body, headers, times
             )
         except ssl.SSLCertVerificationError as error:
             # A subclass of OSError, so it is caught first: a certificate that does

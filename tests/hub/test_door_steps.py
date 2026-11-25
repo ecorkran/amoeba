@@ -8,6 +8,7 @@ import time
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 from operations.handle_rig import RUN, world
@@ -18,11 +19,13 @@ from store.question_support import ANSWERING_RUN, claimed_question
 
 from amoeba import wiring, wiring_steps
 from amoeba.cli.main import EXIT_ERROR, main
+from amoeba.client.client_file import ClientFile
 from amoeba.client.errors import ClientFileError, HubRefusedError, HubUnreachableError
 from amoeba.config.home import StateLayout, config_path, state_layout
 from amoeba.config.user_config import ConfigError, UserConfig
 from amoeba.operations.deps import Deps
 from amoeba.operations.handle_pause import HandlePauseOutcome
+from amoeba.operations.here_document import HereNotAProject
 from amoeba.operations.list_registry import MembersView
 from amoeba.operations.names import Door, OperationName
 from amoeba.operations.steps.models import (
@@ -31,10 +34,18 @@ from amoeba.operations.steps.models import (
     QUESTION_REPLACE_CLAIM,
     RESUME_READ,
     WAKE_FINISH,
+    Step,
+    StepModel,
 )
 from amoeba.operations.steps.models_pause import QuestionReplaceClaimRequest
 from amoeba.operations.steps.models_resume import ResumeReadRequest
 from amoeba.operations.steps.models_runs import OpenRunsRequest
+from amoeba.operations.steps.models_session import (
+    SESSION_END,
+    SESSION_TICK,
+    SessionEndRequest,
+    SessionTickRequest,
+)
 from amoeba.operations.steps.models_wake import WakeFinishRequest
 from amoeba.operations.steps.models_work import ClaimWorkRequest, ResumeItem
 from amoeba.operations.store_steps import LocalSteps
@@ -42,8 +53,8 @@ from amoeba.store.errors import LocalStoreClosedError
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import WakeOutcome
-from amoeba.wire.protocol import STEP_ADVICE, RefusalCode
-from amoeba.wire.times import DoorTimes
+from amoeba.wire.protocol import STEP_ADVICE, RefusalCode, SessionIdentity
+from amoeba.wire.times import TICK_TIMES, DoorTimes
 from amoeba.wiring_door import join
 from amoeba.wiring_pause import handle_pause_in
 from amoeba.wiring_steps import DoorSteps, LastReply, StepReplyError, steps_for
@@ -298,3 +309,82 @@ def test_a_writing_step_with_no_reply_says_its_outcome_is_unknown_and_what_follo
 
     assert "outcome of this call is unknown" in str(raised.value)
     assert STEP_ADVICE in str(raised.value)
+
+
+def _recording_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[str, SessionIdentity | None, DoorTimes]]:
+    """Replace the door call with one that records the step, the identity and the times
+    it got, then reports no reply; the client file is made up."""
+    seen: list[tuple[str, SessionIdentity | None, DoorTimes]] = []
+
+    def record(*args: object, **kwargs: object) -> dict[str, object]:
+        identity = kwargs["identity"]
+        assert identity is None or isinstance(identity, SessionIdentity)
+        times = args[4]
+        assert isinstance(times, DoorTimes)
+        seen.append((str(args[2]), identity, times))
+        raise HubUnreachableError("no reply")
+
+    monkeypatch.setattr(wiring_steps, "call", record)
+
+    def made_up(_path: Path, _cert: Path) -> ClientFile:
+        return ClientFile(address="hub.example:8443", machine="a", token="t")
+
+    monkeypatch.setattr(wiring_steps, "load_client_file", made_up)
+    return seen
+
+
+def test_the_session_headers_go_on_the_two_session_steps_and_no_other(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen = _recording_call(monkeypatch)
+    identity = SessionIdentity("cd" * 16, "proj", "claude-code", "/work")
+    steps = DoorSteps(LastReply(), TICK_TIMES, identity)
+
+    requests: list[tuple[Step[Any, Any], StepModel]] = [
+        (
+            SESSION_TICK,
+            SessionTickRequest(
+                here=HereNotAProject(not_a_project="not a project"),
+                session_id=identity.session_id,
+                client="claude-code",
+                directory="/work",
+                client_version="1.2.3",
+                last_seen=None,
+                push_confirmed=False,
+            ),
+        ),
+        (SESSION_END, SessionEndRequest(session_id=identity.session_id)),
+        (OPEN_RUNS, OpenRunsRequest()),
+        (CLAIM_WORK, ClaimWorkRequest(logs_dir=LOGS)),
+    ]
+    for step, request in requests:
+        with pytest.raises(HubUnreachableError):
+            steps.run(step, request)
+
+    assert [(name, given) for name, given, _ in seen] == [
+        ("session_tick", identity),
+        ("session_end", identity),
+        ("open_runs", None),
+        ("claim_work", None),
+    ]
+    assert {times for _, _, times in seen} == {TICK_TIMES}
+
+
+def test_the_session_source_gives_a_session_call_one_attempt_after_step_its_retry(
+    hub: InProcessHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = _recording_call(monkeypatch)
+    layout = state_layout()
+    identity = SessionIdentity("ef" * 16, None, "claude-code", "/work")
+    source = wiring.session_step_source(layout)
+
+    with source(LastReply(), identity) as steps:
+        with pytest.raises(HubUnreachableError):
+            steps.run(SESSION_END, SessionEndRequest(session_id=identity.session_id))
+    with source(LastReply(), None) as steps:
+        with pytest.raises(HubUnreachableError):
+            steps.run(OPEN_RUNS, OpenRunsRequest())
+
+    assert [times for _, _, times in seen] == [TICK_TIMES, DoorTimes()]

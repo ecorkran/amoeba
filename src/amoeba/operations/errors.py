@@ -21,6 +21,10 @@ class ContextForgeError(Exception):
     """``cf`` is not working: not a member, and not a non-member either."""
 
 
+class DeadlineError(Exception):
+    """The config lets an ``answer`` run past the MCP call deadline."""
+
+
 #: The two refusals a hub part makes itself (slice 261, D12). Plain strings, so
 #: ``operations`` imports nothing from ``wire``; a test pins each to a
 #: ``RefusalCode`` value.
@@ -47,6 +51,7 @@ OPERATION_ERRORS: Final = (
     AmoebaHomeError,
     ConfigError,
     ContextForgeError,
+    DeadlineError,
     SquadronError,
     StoreError,
 )

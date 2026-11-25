@@ -32,18 +32,12 @@ from amoeba.mcp.detached import (
     start_handle_pause,
 )
 from amoeba.mcp.in_process import (
-    MCP_CALL_DEADLINE_SECONDS,
     CallTimedOut,
     run_in_process,
 )
 from amoeba.mcp.inbox_resource import initialization_options, register_inbox_resource
 from amoeba.mcp.pinned_loop import serve_pinned
-from amoeba.mcp.presence import (
-    PresenceDeps,
-    PresenceState,
-    SessionTiming,
-    ToolPresence,
-)
+from amoeba.mcp.presence import PresenceDeps, PresenceState, ToolPresence
 from amoeba.mcp.presence_task import run_presence
 from amoeba.mcp.tools import (
     TOOLS,
@@ -53,7 +47,7 @@ from amoeba.mcp.tools import (
     input_schema,
     prepare_arguments,
 )
-from amoeba.wiring_presence import StoreOpener
+from amoeba.wire.times import MCP_CALL_DEADLINE_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +178,7 @@ async def call_tool(
         return _error(f"internal error: {error}")
 
 
-def build_server(presence: ToolPresence, open_store: StoreOpener) -> Server[Any]:
+def build_server(presence: ToolPresence) -> Server[Any]:
     """The MCP server: one tool per ``TOOLS`` row, no input validation by the SDK,
     and the ``amoeba://inbox`` resource over ``presence`` (slice 241, D5).
 
@@ -217,14 +211,14 @@ def build_server(presence: ToolPresence, open_store: StoreOpener) -> Server[Any]
         on_list_tools=on_list_tools,
         on_call_tool=on_call_tool,
     )
-    register_inbox_resource(server, presence.state, open_store)
+    register_inbox_resource(server, presence.state)
     return server
 
 
 async def _serve(deps: PresenceDeps) -> None:
     """Serve tools, with presence beside the loop in its own task (slice 241, D1)."""
     state = PresenceState(started_at=deps.clock())
-    server = build_server(ToolPresence(state, deps.clock), deps.open_store)
+    server = build_server(ToolPresence(state, deps.clock))
 
     async def presence(connection: Connection) -> None:
         await run_presence(connection, state, deps)
@@ -244,20 +238,16 @@ def serve(deps: PresenceDeps) -> None:
     anyio.run(_serve, deps)
 
 
-def _presence_deps(config: wiring.UserConfig) -> PresenceDeps:
-    """The real store opener, ``cf`` runner and clock, and the config's timing."""
+def _presence_deps() -> PresenceDeps:
+    """The real step source, ``cf`` runner and clock; the config is read by the steps
+    that need it, never here."""
     layout = wiring.state_layout()
     deps = wiring.default_deps(layout)
-    timing = SessionTiming(
-        notify_poll_seconds=config.notify_poll_seconds,
-        session_heartbeat_seconds=config.session_heartbeat_seconds,
-        session_stale_seconds=config.session_stale_seconds,
-    )
     return PresenceDeps(
-        open_store=partial(wiring.open_store, layout),
+        open_steps=wiring.session_step_source(layout),
         cf_run=deps.cf_run,
         clock=deps.clock,
-        timing=timing,
+        after_deps=partial(wiring.default_deps, layout),
     )
 
 
@@ -267,13 +257,14 @@ def _refuse_to_start(error: Exception) -> NoReturn:
 
 
 def main() -> None:
-    """Check the install and the config, move legacy state, then serve.
+    """Check the install, then the config and the state move, then serve.
 
     Each failure to start is one stderr line, which the client shows, and a non-zero
-    exit: a missing ``amoeba`` script, a failed state move (the next session start
-    tries again), a config missing a key (the push timing keys included), or one
-    whose ``resume_wait_seconds`` is too large for the call deadline. The config is
-    read here, before the event loop starts.
+    exit: a missing ``amoeba`` script, a client file or saved certificate that does not
+    load, a failed state move (the next session start tries again; a hub home refuses
+    it), a config missing a key (the push timing keys included), or one whose
+    ``resume_wait_seconds`` is too large for the call deadline. With a client file the
+    start reads no local file and calls no hub: a hub that is down is a skipped tick.
     """
     logging.basicConfig(
         stream=sys.stderr,
@@ -282,13 +273,13 @@ def main() -> None:
     )
     try:
         resolve_amoeba_script()
-        # A joined machine's door does not serve this server's start: before the
-        # state move and the config load, so nothing local is touched.
-        wiring.refuse_if_joined("amoeba-mcp")
-        wiring.prepare_home()
-        config = wiring.load_config()
-        wiring.check_deadline(config, MCP_CALL_DEADLINE_SECONDS)
-        deps = _presence_deps(config)
+        # With a client file the hub is the store and the config: the client file and
+        # the saved certificate must load, and nothing local is moved or read. The hub
+        # checks an ``answer`` against the deadline on its own part (D8, D9).
+        if wiring.joined() is None:
+            wiring.prepare_home()
+            wiring.check_deadline(wiring.load_config(), MCP_CALL_DEADLINE_SECONDS)
+        deps = _presence_deps()
     except (AmoebaScriptMissing, wiring.DeadlineError, *wiring.OPERATIONAL_ERRORS) as e:
         _refuse_to_start(e)
     serve(deps)

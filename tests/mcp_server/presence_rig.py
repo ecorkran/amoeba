@@ -3,9 +3,12 @@ member, an opener that can be made to fail or block, and short intervals."""
 
 from __future__ import annotations
 
+import inspect
 import subprocess
+import tempfile
 import threading
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -17,23 +20,24 @@ from cf_fixtures import DEFAULT_WORKTREE, fake_cf_run, fixture_document
 from mcp.server.connection import Connection
 from mcp.shared.dispatcher import CallOptions
 from mcp_types.version import LATEST_HANDSHAKE_VERSION
+from operations.status_support import status_deps
 from store.message_support import send_request
 from store.seed import insert_checkout
 from store_open import open_local_store
+from user_configs import user_config
 
-from amoeba.mcp.presence import (
-    PresenceDeps,
-    PresenceState,
-    SessionTiming,
-    ToolPresence,
-)
+from amoeba.config.user_config import UserConfig
+from amoeba.mcp.presence import PresenceDeps, PresenceState, ToolPresence
+from amoeba.operations.deps import Deps
+from amoeba.operations.steps.dispatch import StepEdges
+from amoeba.operations.store_steps import LocalSteps, Steps
 from amoeba.store.deliveries import write_delivery
 from amoeba.store.models import MemberSettings, Session
 from amoeba.store.programs import upsert_member, upsert_program
 from amoeba.store.sessions import live_sessions
-from amoeba.store.store import Store
 from amoeba.store.vocabulary import DeliveryEvent, RulesFrom
 from amoeba.upstream.context_forge.cli_call import CfRun
+from amoeba.wiring_presence import LastReply, SessionIdentity
 
 START: Final = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
 #: The member the recorded ``cf get`` output resolves to.
@@ -41,11 +45,14 @@ MEMBER_ID: Final[str] = fixture_document(DEFAULT_WORKTREE)["id"]
 PROGRAM_ID: Final = "demo"
 #: The second member, who sends the mail a test delivers.
 PEER: Final = "peer-member"
-#: Short real intervals, so a loop turns many times in a test.
-FAST: Final = SessionTiming(
-    notify_poll_seconds=0.01,
-    session_heartbeat_seconds=0.02,
-    session_stale_seconds=90,
+#: The config the local steps read: short real intervals, so a loop turns many times
+#: in a test.
+FAST: Final[UserConfig] = user_config().model_copy(
+    update={
+        "notify_poll_seconds": 0.01,
+        "session_heartbeat_seconds": 0.02,
+        "session_stale_seconds": 90,
+    }
 )
 #: How long a test waits for a loop to reach a state before failing.
 WAIT_SECONDS: Final = 5.0
@@ -64,19 +71,30 @@ class FakeClock:
 
 @dataclass
 class Opener:
-    """Opens the throwaway store. Each queued entry answers one open: an error is
-    raised instead, ``None`` opens normally. While ``block`` is set an open waits on
+    """Opens the steps one worker thread uses, on a throwaway store: each call opens
+    its own store and ``LocalSteps`` and closes both when the thread is done, as
+    ``wiring.session_step_source`` does. Each queued entry answers one open: an error
+    is raised instead, ``None`` opens normally. While ``block`` is set an open waits on
     it (a store held elsewhere). ``on_open`` runs first with the open's number, so a
-    test can write between two reads."""
+    test can write between two ticks. ``make_deps`` binds the clock and the config.
+    """
 
     path: Path
     errors: list[Exception | None] = field(default_factory=lambda: [])
     block: threading.Event | None = None
     on_open: Callable[[int], None] | None = None
     opens: int = 0
+    #: The identity each open was given, in order.
+    identities: list[SessionIdentity | None] = field(default_factory=lambda: [])
+    clock: Callable[[], datetime] | None = None
+    config: UserConfig = FAST
 
-    def __call__(self) -> Store:
+    @contextmanager
+    def __call__(
+        self, last: LastReply, identity: SessionIdentity | None
+    ) -> Generator[Steps]:
         self.opens += 1
+        self.identities.append(identity)
         if self.on_open is not None:
             self.on_open(self.opens)
         if self.block is not None:
@@ -84,7 +102,25 @@ class Opener:
         queued = self.errors.pop(0) if self.errors else None
         if queued is not None:
             raise queued
-        return open_local_store(self.path)
+        if self.clock is None:
+            raise AssertionError("bind the opener's clock with make_deps")
+        with open_local_store(self.path) as store:
+            yield LocalSteps(store, StepEdges(self.clock, lambda: self.config))
+
+
+def raise_when_called_from(
+    function: str, errors: list[Exception]
+) -> Callable[[int], None]:
+    """An ``Opener.on_open`` that raises the queued ``errors`` one at a time, but only
+    for an open made under the worker function ``function`` (the tick's ``work``, the
+    exit's ``_end_in_thread``, the runner's ``_body``): the three open steps at once,
+    so a queue shared by number would hand an error to whichever thread asks first."""
+
+    def hook(_number: int) -> None:
+        if errors and any(frame.function == function for frame in inspect.stack()):
+            raise errors.pop(0)
+
+    return hook
 
 
 def seed_member(path: Path, member_id: str = MEMBER_ID) -> None:
@@ -141,27 +177,38 @@ def timed_out_cf(
     raise subprocess.TimeoutExpired(list(argv), 30)
 
 
+_AFTER_DIRECTORY: Final = tempfile.TemporaryDirectory()
+
+
+def _after_deps() -> Deps:
+    """The after-step's edges: fakes, with nothing running and nothing to prune."""
+    return status_deps(
+        Path(_AFTER_DIRECTORY.name), cf=fake_cf_run(DEFAULT_WORKTREE), runs=[]
+    )
+
+
 def make_deps(
     opener: Opener,
-    clock: FakeClock,
+    clock: Callable[[], datetime],
     *,
     cf_run: CfRun | None = None,
-    timing: SessionTiming = FAST,
+    config: UserConfig = FAST,
+    after_deps: Callable[[], Deps] = _after_deps,
 ) -> PresenceDeps:
+    opener.clock, opener.config = clock, config
     return PresenceDeps(
-        open_store=opener,
+        open_steps=opener,
         cf_run=cf_run if cf_run is not None else fake_cf_run(DEFAULT_WORKTREE),
         clock=clock,
-        timing=timing,
+        after_deps=after_deps,
     )
 
 
 def member_state(clock: FakeClock, directory: Path) -> PresenceState:
-    """A state already resolved to the member, as the heartbeat finds it."""
+    """A state in ``directory``, as the presence task leaves it before the first
+    tick: nothing known yet (the member comes from the tick's reply)."""
     state = PresenceState(started_at=clock())
-    state.member_id = MEMBER_ID
     state.directory = str(directory)
-    state.resolved.set()
     return state
 
 

@@ -55,6 +55,9 @@ class SessionSpec:
     scratch: Path
     environ: Mapping[str, str]
     extra_environment: Mapping[str, str] = field(default_factory=lambda: {})
+    #: Whether the session loads the server as a development channel. A server that
+    #: sends no channel events (the long-call server) is loaded as a plain one.
+    as_channel: bool = True
 
 
 def register(spec: SessionSpec) -> tuple[list[str], dict[str, str]]:

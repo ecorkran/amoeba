@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import threading
 from collections.abc import Awaitable, Callable
 from functools import partial
@@ -19,6 +18,7 @@ from mcp.server import Server
 from mcp.shared.exceptions import MCPError
 from store_open import open_local_store
 
+from amoeba.mcp import tick as tick_module
 from amoeba.mcp.inbox_resource import (
     AS_OF_SEQ_FIELD,
     INBOX_URI,
@@ -29,7 +29,6 @@ from amoeba.mcp.inbox_resource import (
 from amoeba.mcp.presence import PresenceDeps, PresenceState
 from amoeba.store.deliveries import highest_assigned_seq
 from amoeba.store.errors import StoreBusyError
-from amoeba.wiring_presence import StoreOpener
 from mcp_server.presence_rig import (
     MEMBER_ID,
     FakeClock,
@@ -54,12 +53,11 @@ def _run(
     clock: FakeClock,
     test: Callable[[ClientSession, PresenceState], Awaitable[None]],
     received: Received | None = None,
-    resource_opener: StoreOpener | None = None,
 ) -> None:
     async def main() -> None:
         state = PresenceState(started_at=clock())
         server: Server[Any] = Server("inbox-test")
-        register_inbox_resource(server, state, resource_opener or deps.open_store)
+        register_inbox_resource(server, state)
         with anyio.fail_after(15):
             async with serving(
                 server, presence_background(state, deps), received
@@ -69,7 +67,7 @@ def _run(
     anyio.run(main)
 
 
-def test_a_list_made_while_resolving_waits_then_gets_the_answer(
+def test_a_list_made_while_the_first_tick_is_stuck_gets_the_resource_at_once(
     store_path: Path,
 ) -> None:
     clock = FakeClock()
@@ -77,30 +75,26 @@ def test_a_list_made_while_resolving_waits_then_gets_the_answer(
     deps = make_deps(Opener(store_path, block=block), clock)
 
     async def test(session: ClientSession, state: PresenceState) -> None:
-        answers: list[types.ListResourcesResult] = []
-
-        async def ask() -> None:
-            answers.append(await session.list_resources())
-
-        async with anyio.create_task_group() as group:
-            group.start_soon(ask)
-            await anyio.sleep(0.2)
-            assert answers == [] and not state.resolved.is_set()
+        try:
+            with anyio.fail_after(2):
+                answer = await session.list_resources()
+            assert not state.resolved.is_set()
+            assert [str(r.uri) for r in answer.resources] == [INBOX_URI]
+        finally:
             block.set()
-        (answer,) = answers
-        assert [str(r.uri) for r in answer.resources] == [INBOX_URI]
 
     _run(deps, clock, test)
 
 
-def test_a_non_member_lists_nothing_and_every_other_method_is_invalid(
+def test_a_non_member_lists_the_resource_and_every_other_method_is_invalid(
     store_path: Path,
 ) -> None:
     clock = FakeClock()
     deps = make_deps(Opener(store_path), clock, cf_run=fake_cf_run(OUTSIDE_ANY_PROJECT))
 
     async def test(session: ClientSession, state: PresenceState) -> None:
-        assert (await session.list_resources()).resources == []
+        listed = (await session.list_resources()).resources
+        assert [str(r.uri) for r in listed] == [INBOX_URI]
         for call in (
             session.read_resource,
             partial(subscribe, session),
@@ -119,6 +113,8 @@ def test_read_gives_the_member_and_the_number_inbox_reports(store_path: Path) ->
     deps = make_deps(Opener(store_path), clock)
 
     async def test(session: ClientSession, state: PresenceState) -> None:
+        listed = (await session.list_resources()).resources
+        assert [str(r.uri) for r in listed] == [INBOX_URI]
         result = await session.read_resource(INBOX_URI)
         (contents,) = result.contents
         assert isinstance(contents, types.TextResourceContents)
@@ -166,26 +162,28 @@ def test_a_foreign_uri_is_invalid_for_a_member(store_path: Path) -> None:
     _run(deps, clock, test)
 
 
-def test_a_store_error_in_read_fails_only_that_request(
-    store_path: Path, caplog: pytest.LogCaptureFixture
+def test_before_a_first_reply_a_read_or_subscribe_fails_with_the_ticks_last_error(
+    store_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(tick_module, "TICK_SECONDS_BEFORE_FIRST_REPLY", 0.01)
     clock = FakeClock()
-    deps = make_deps(Opener(store_path), clock)
-    resource_opener = Opener(store_path, errors=[StoreBusyError("database is locked")])
+    busy: list[Exception | None] = [StoreBusyError("database is locked")] * 10_000
+    deps = make_deps(Opener(store_path, errors=busy), clock)
 
     async def test(session: ClientSession, state: PresenceState) -> None:
-        with pytest.raises(MCPError) as raised:
-            await session.read_resource(INBOX_URI)
-        assert raised.value.error.code == types.INTERNAL_ERROR
-        assert "StoreBusyError" in raised.value.error.message
-        assert (await session.read_resource(INBOX_URI)).contents
+        listed = (await session.list_resources()).resources
+        assert [str(r.uri) for r in listed] == [INBOX_URI]
+        for call in (
+            session.read_resource,
+            partial(subscribe, session),
+            partial(unsubscribe, session),
+        ):
+            with pytest.raises(MCPError) as raised:
+                await call(INBOX_URI)
+            assert raised.value.error.code == types.INTERNAL_ERROR
+            assert "StoreBusyError: database is locked" in raised.value.error.message
 
-    with caplog.at_level(logging.ERROR):
-        _run(deps, clock, test, resource_opener=resource_opener)
-
-    (record,) = [r for r in caplog.records if r.levelno == logging.ERROR]
-    assert record.exc_info is not None
-    assert "inbox resource read failed" in record.getMessage()
+    _run(deps, clock, test)
 
 
 @pytest.mark.parametrize(
@@ -206,7 +204,7 @@ def test_only_a_subscribed_client_gets_the_resource_update(
             await (subscribe if step == "subscribe" else unsubscribe)(
                 session, INBOX_URI
             )
-        await eventually(lambda: opener.opens >= 4, "the watcher's baseline")
+        await eventually(lambda: state.as_of_seq is not None, "the baseline tick")
         deliver(store_path)
         await eventually(lambda: state.attempt_at is not None, "the channel event")
         await anyio.sleep(0.2)

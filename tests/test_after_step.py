@@ -1,4 +1,5 @@
-"""``wiring.invoke`` runs the after-step after any operation (slices 242 D7, 262 D10).
+"""``wiring.invoke`` runs the after-step after any operation on the CLI door; the MCP
+door leaves it to the session's tick (slices 242 D7, 262 D10, 263 D7).
 
 The operations themselves are replaced by recorders, so what is checked is the one
 place both doors run the after-step: after which operations, through which door, and
@@ -11,13 +12,16 @@ import os
 import time
 from collections.abc import Iterator
 from dataclasses import replace
-from datetime import datetime
+from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
+from typing import Any
 
 import anyio
 import pytest
 import yaml
-from mcp_server.presence_rig import idle_presence
+from cf_fixtures import DEFAULT_WORKTREE, fake_cf_run
+from mcp_server.presence_rig import eventually, idle_presence
 from operations.pause_support import FakeChild, SpawnRecorder
 from store.message_support import send_request
 from store.question_support import (
@@ -32,6 +36,8 @@ from amoeba import wiring, wiring_steps
 from amoeba.config.home import StateLayout, config_path, state_layout
 from amoeba.config.user_config import ConfigError, UserConfig
 from amoeba.mcp import server
+from amoeba.mcp.after_runner import AfterRunner
+from amoeba.mcp.presence import PresenceDeps
 from amoeba.operations.answer import AnswerOutcome, AnswerResult
 from amoeba.operations.deps import Deps
 from amoeba.operations.message_models import ReplyOutcome
@@ -152,7 +158,7 @@ def test_the_result_is_the_same_with_no_held_question(
 @pytest.mark.parametrize(
     "name", [OperationName.REPLY, OperationName.CANCEL], ids=lambda n: n.value
 )
-def test_the_mcp_door_starts_the_ended_held_question_too(
+def test_the_mcp_door_starts_nothing_and_the_next_tick_starts_the_held_question(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     spawned: SpawnRecorder,
@@ -162,12 +168,34 @@ def test_the_mcp_door_starts_the_ended_held_question_too(
     arguments = {"id": REQUEST_ID, "directory": str(tmp_path)}
     if name is OperationName.REPLY:
         arguments["action"] = "accept"
+    after_steps: list[object] = []
+    real = wiring_steps.run_after_step
 
-    async def call() -> bool:
+    def counting(*args: Any, **kwargs: Any) -> None:
+        after_steps.append(args)
+        real(*args, **kwargs)
+
+    monkeypatch.setattr(wiring_steps, "run_after_step", counting)
+    layout = wiring.state_layout()
+    deps = PresenceDeps(
+        open_steps=wiring.session_step_source(layout),
+        cf_run=fake_cf_run(DEFAULT_WORKTREE),
+        clock=lambda: datetime.now(UTC),
+        after_deps=partial(wiring.default_deps, layout),
+    )
+
+    async def call_then_tick() -> bool:
         result = await server.call_tool(name.value, arguments, idle_presence())
+        # The tool's result is back before any claim: the after-step is the tick's.
+        assert spawned.calls == []
+        assert after_steps == []
+        async with anyio.create_task_group() as group:
+            runner = AfterRunner(deps, lambda work: group.start_soon(work))
+            runner.start(LastReply())
+            await eventually(lambda: not runner.running, "the after-step to end")
         return bool(result.is_error)
 
-    assert anyio.run(call) is False
+    assert anyio.run(call_then_tick) is False
     (started,) = spawned.calls
     assert started.argv[-1] == HELD.run_id
 
@@ -223,7 +251,10 @@ def test_an_mcp_answer_runs_no_after_step(
 
     monkeypatch.setattr(wiring, "answer", recorded)
 
-    assert wiring.invoke(OperationName.ANSWER, {}, tmp_path, Door.MCP) is result
+    assert (
+        wiring.invoke(OperationName.ANSWER, {}, tmp_path, Door.MCP, after_step=False)
+        is result
+    )
     assert spawned.calls == []
 
     # The same answer through the CLI door is followed by it.
@@ -322,7 +353,7 @@ def test_the_after_step_prunes_unless_the_operation_pruned_in_its_placement(
     monkeypatch.setattr(wiring_steps, "after_call", record)
 
     wiring_steps.after_operation(
-        name, document, Door.CLI, None, LastReply(), lambda: _unused_deps()
+        name, document, None, LastReply(), lambda: _unused_deps()
     )
 
     assert seen == [prunes]

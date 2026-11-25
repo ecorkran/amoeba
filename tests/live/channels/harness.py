@@ -107,10 +107,10 @@ class ClaudeSession:
         """Launch the session and answer the start-up screens until it is ready."""
         extra_args, variables = register(self.spec)
         name = self.spec.registration.name
+        channel_args = [CHANNEL_FLAG, f"server:{name}"] if self.spec.as_channel else []
         command = [
             "claude",
-            CHANNEL_FLAG,
-            f"server:{name}",
+            *channel_args,
             "--model",
             self.spec.model,
             "--setting-sources",

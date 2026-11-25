@@ -257,6 +257,10 @@ class Session:
     heartbeat_at: datetime
     #: When the session's agent first answered a channel event; ``None`` until then.
     push_confirmed_at: datetime | None
+    #: The package version and door version of the program serving the session
+    #: (slice 263, D6); the door version decides whether the session is current.
+    client_version: str
+    door_version: int
 
 
 @dataclass(frozen=True)

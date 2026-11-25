@@ -55,11 +55,26 @@ class WakeFinishReply(StepModel):
 
 
 WAKE_READ: Final = Step(
-    "wake_read", WakeReadRequest, WakeReadReply, writes=False, needs_config=False
+    "wake_read",
+    WakeReadRequest,
+    WakeReadReply,
+    writes=False,
+    keeps_result=False,
+    needs_config=False,
 )
 WAKE_SET_PID: Final = Step(
-    "wake_set_pid", WakeSetPidRequest, WakeSetPidReply, writes=True, needs_config=False
+    "wake_set_pid",
+    WakeSetPidRequest,
+    WakeSetPidReply,
+    writes=True,
+    keeps_result=True,
+    needs_config=False,
 )
 WAKE_FINISH: Final = Step(
-    "wake_finish", WakeFinishRequest, WakeFinishReply, writes=True, needs_config=False
+    "wake_finish",
+    WakeFinishRequest,
+    WakeFinishReply,
+    writes=True,
+    keeps_result=True,
+    needs_config=False,
 )

@@ -64,6 +64,7 @@ from amoeba.operations.status import StatusOutcome, StatusResult
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store, Transaction
 from amoeba.wire.protocol import SERVED_OPERATIONS
+from amoeba.wire.times import DOOR_VERSION
 
 STAMP = NOW.isoformat()
 
@@ -80,6 +81,7 @@ def _edges(store: Store, *, max_chars: int | None = None) -> ServedEdges:
     return ServedEdges(
         clock=lambda: NOW,
         load_config=lambda: config,
+        door_version=DOOR_VERSION,
     )
 
 

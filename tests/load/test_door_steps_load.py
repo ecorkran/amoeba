@@ -34,8 +34,8 @@ from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
 from amoeba.store.wakes import WakeLimits, claim_wake
 from amoeba.wire.protocol import STEP_CALLS
-from amoeba.wire.times import DoorTimes
-from load.test_door_load import (
+from amoeba.wire.times import DOOR_VERSION, DoorTimes
+from load.door_load_support import (
     CALLER_HERE,
     MAX_CALL_SECONDS,
     MEDIAN_CALL_SECONDS,
@@ -104,7 +104,12 @@ def _seed_step_rows(store: Store) -> None:
             transaction,
             LINT,
             SEEDED_AT,
-            WakeLimits(timeout_seconds=600, max_per_day=50, session_stale_seconds=90),
+            WakeLimits(
+                timeout_seconds=600,
+                max_per_day=50,
+                session_stale_seconds=90,
+                door_version=DOOR_VERSION,
+            ),
             WAKE_ID,
             f"{LOGS}/wake/{WAKE_ID}",
         )
@@ -207,6 +212,19 @@ def _step_documents() -> list[tuple[str, object]]:
         ),
         ("pause_sources", {"member_id": CORE}),
         ("open_runs", {}),
+        (
+            "session_tick",
+            {
+                "here": {"project_id": LINT},
+                "session_id": "a" * 32,
+                "client": "claude-code",
+                "directory": "/alpha",
+                "client_version": "1.2.3",
+                "last_seen": None,
+                "push_confirmed": False,
+            },
+        ),
+        ("session_end", {"session_id": "a" * 32}),
         ("wake_read", {"wake_id": WAKE_ID}),
         (
             "question_insert",

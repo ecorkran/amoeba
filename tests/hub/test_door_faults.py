@@ -37,7 +37,7 @@ from amoeba.operations.steps.models_work import (
 )
 from amoeba.store.questions import insert_question
 from amoeba.store.vocabulary import ResumeOutcome
-from amoeba.wire.times import DoorTimes
+from amoeba.wire.times import DOOR_VERSION, DoorTimes
 from amoeba.wiring_steps import DoorSteps, LastReply
 from hub.two_homes import ALPHA, BETA, TwoHomes, two_homes
 
@@ -124,7 +124,7 @@ def test_a_lost_claim_hands_the_wake_out_again_after_its_deadline(
         mark_wake_wanted(transaction, LINT, homes.clock())
 
     _claim_lost(homes)
-    homes.clock.advance(wake_limits(_config(homes)).timeout_seconds - 1)
+    homes.clock.advance(wake_limits(_config(homes), DOOR_VERSION).timeout_seconds - 1)
     early = _claim(homes)
     homes.clock.advance(2)
     late = _claim(homes)

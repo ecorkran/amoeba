@@ -145,6 +145,7 @@ def list_view(
     here: HereCaller | HereNotAProject | None,
     runs: RunsDocument | None,
     clock: Callable[[], datetime],
+    door_version: int,
 ) -> ListOutcome:
     """Apply the ``list`` request ``document``, which is validated here.
 
@@ -161,7 +162,7 @@ def list_view(
     except ValidationError as error:
         return _rejected(RejectCode.MALFORMED, validation_problems(error))
     if request.subject is None:
-        return _default_view(store, config, request, here, runs, clock)
+        return _default_view(store, config, request, here, runs, clock, door_version)
     if request.all and request.subject in ALL_NOT_ACCEPTED:
         return _rejected(
             RejectCode.MALFORMED,
@@ -195,6 +196,7 @@ def _default_view(
     here: HereCaller | HereNotAProject | None,
     runs: RunsDocument | None,
     clock: Callable[[], datetime],
+    door_version: int,
 ) -> ListResult:
     if here is None or runs is None:
         raise ValueError("the default list view needs the gathered caller and runs")
@@ -205,6 +207,7 @@ def _default_view(
         here=here,
         runs=runs,
         clock=clock,
+        door_version=door_version,
     )
     if not request.all or result.outcome is StatusOutcome.REJECTED:
         return ListResult(status=result)

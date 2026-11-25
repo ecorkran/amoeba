@@ -93,11 +93,30 @@ def test_a_heartbeat_under_the_poll_interval_fails_naming_both(
     assert POLL in str(raised.value)
 
 
-def test_values_equal_to_both_limits_load(tmp_path: Path) -> None:
+def test_values_equal_to_all_three_limits_load(tmp_path: Path) -> None:
     heartbeat = 7
+    least = max(STALE_HEARTBEATS_MIN * heartbeat, heartbeat + 2 * heartbeat)
 
-    config = _load(
-        tmp_path, _timed(heartbeat, heartbeat, STALE_HEARTBEATS_MIN * heartbeat)
-    )
+    config = _load(tmp_path, _timed(heartbeat, heartbeat, least))
 
-    assert getattr(config, STALE) == STALE_HEARTBEATS_MIN * heartbeat
+    assert getattr(config, STALE) == least
+
+
+def test_heartbeat_and_two_polls_over_the_stale_limit_fails_naming_three_keys(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ConfigError) as raised:
+        _load(tmp_path, _timed(5, 5, 10))
+
+    for key in TIMING_KEYS:
+        assert key in str(raised.value)
+
+
+def test_stale_exactly_at_heartbeat_plus_two_polls_passes_and_one_below_fails(
+    tmp_path: Path,
+) -> None:
+    at_sum = 20 + 2 * 20
+
+    assert getattr(_load(tmp_path, _timed(20, 20, at_sum)), STALE) == at_sum
+    with pytest.raises(ConfigError, match=STALE):
+        _load(tmp_path, _timed(20, 20, at_sum - 1))

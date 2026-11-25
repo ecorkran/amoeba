@@ -46,8 +46,10 @@ def call_result(
     document: object,
     body: Mapping[str, object],
     edges: ServedEdges,
+    door_version: int,
 ) -> dict[str, object]:
-    """The result document of the step or served operation ``name``.
+    """The result document of the step or served operation ``name``; a step runs on
+    the door version the hub serves.
 
     Raises:
         CallRefused: ``malformed_call`` for a step document that does not fit, or the
@@ -56,7 +58,10 @@ def call_result(
     if name in STEP_CALLS:
         try:
             reply = run_step(
-                name, store, document, StepEdges(edges.clock, edges.load_config)
+                name,
+                store,
+                document,
+                StepEdges(edges.clock, edges.load_config, door_version),
             )
         except StepDocumentError as error:
             raise CallRefused(MALFORMED_CALL, str(error)) from error
@@ -77,6 +82,7 @@ def work_keys(
     machine_id: int,
     load_config: Callable[[], UserConfig],
     now: datetime,
+    door_version: int,
 ) -> dict[str, object]:
     """``work`` for ``machine_id``, or ``work_problem`` when the config cannot load.
 
@@ -89,7 +95,7 @@ def work_keys(
         # The client prints this text in place of a flag (D10).
         return {WORK_PROBLEM_REPLY_KEY: f"{type(error).__name__}: {error}"}
     with store.read() as transaction:
-        waiting = work_waiting(transaction, machine_id, config, now)
+        waiting = work_waiting(transaction, machine_id, config, now, door_version)
     return {WORK_REPLY_KEY: waiting}
 
 
@@ -105,10 +111,11 @@ def flagged(
     machine_id: int,
     load_config: Callable[[], UserConfig],
     now: datetime,
+    door_version: int,
 ) -> CallReply:
     """A done reply with the calling machine's work flag, fresh on every return; a
     refusal unchanged. Called inside the call scope, after the call's own work."""
     if reply.status != DONE_STATUS:
         return reply
-    keys = work_keys(store, machine_id, load_config, now)
+    keys = work_keys(store, machine_id, load_config, now, door_version)
     return CallReply(reply.status, with_work(reply.body, keys))

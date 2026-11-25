@@ -251,6 +251,9 @@ def test_the_status_keys_gain_only_the_notice_and_the_two_member_fields(
         "sweep_problem",
         "file_problems",
         "problems",
+        # Slice 263 (D12): the hub's door version and each machine.
+        "hub_door_version",
+        "machines",
     }
     member = document["programs"][0]["members"][0]
     assert set(member) == {

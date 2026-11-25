@@ -16,10 +16,16 @@ from amoeba.store.questions import NewQuestion, insert_question
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import QuestionState, ResumeOutcome
 from amoeba.store.wakes import WakeLimits, claim_wake
+from amoeba.wire.times import DOOR_VERSION
 from store.seed import insert_checkout, insert_member, insert_program, mark_wake_wanted
 
 NOW = datetime(2026, 11, 20, 12, 0, tzinfo=UTC)
-LIMITS = WakeLimits(timeout_seconds=600, max_per_day=3, session_stale_seconds=90)
+LIMITS = WakeLimits(
+    timeout_seconds=600,
+    max_per_day=3,
+    session_stale_seconds=90,
+    door_version=DOOR_VERSION,
+)
 CLAIMED = QuestionKey("run-claimed", "2026-11-20T11:00:00Z")
 HELD = QuestionKey("run-held", "2026-11-20T11:05:00Z")
 

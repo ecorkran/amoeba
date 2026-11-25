@@ -142,11 +142,11 @@ def test_a_client_with_another_door_version_gets_both_versions_and_the_upgrade(
 
 
 def test_a_reply_header_with_another_version_raises_the_same_error(
-    hub: InProcessHub, monkeypatch: pytest.MonkeyPatch
+    hub: InProcessHub,
 ) -> None:
-    from amoeba.hub import app
-
-    monkeypatch.setattr(app, "DOOR_VERSION", DOOR_VERSION + 5)
+    hub.stop()
+    hub.door_version = DOOR_VERSION + 5
+    hub.start()
 
     with pytest.raises(HubRefusedError) as raised:
         call(_client(hub), hub.cert_path, "decisions", {}, SHORT)

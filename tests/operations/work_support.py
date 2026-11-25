@@ -39,6 +39,7 @@ from amoeba.store.messages import insert_request
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
+from amoeba.wire.times import DOOR_VERSION
 
 CONFIG = user_config()
 LOGS = "/state/logs"
@@ -69,7 +70,9 @@ class Rig:
     def waiting(self, machine: ActingMachine | None = None) -> bool:
         target = self.local if machine is None else machine
         with self.store.read() as transaction:
-            return work_waiting(transaction, target.machine_id, CONFIG, self.now)
+            return work_waiting(
+                transaction, target.machine_id, CONFIG, self.now, DOOR_VERSION
+            )
 
     def as_machine(self, machine: ActingMachine) -> None:
         self.store.act_as(machine)

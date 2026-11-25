@@ -51,6 +51,10 @@ class NoActingMachineError(StoreError):
     """
 
 
+class SessionOfAnotherMachineError(StoreError):
+    """A session id is already a row of another machine; nothing was changed."""
+
+
 class LocalStoreClosedError(StoreError):
     """The local store was set aside for a hub, or this machine is joined to one."""
 

@@ -25,6 +25,7 @@ from amoeba.store.models import Session
 from amoeba.store.programs import remove_member
 from amoeba.store.sessions import live_member_ids, upsert_session
 from amoeba.store.store import Store
+from amoeba.wire.times import DOOR_VERSION
 from operations.list_support import ListCf, project_entry
 from operations.release_support import SettableClock
 from operations.status_placed import list_view, status
@@ -72,6 +73,8 @@ def _session(
         started_at=now - started,
         heartbeat_at=now - beat,
         push_confirmed_at=now - beat if confirmed else None,
+        client_version="9.9.9",
+        door_version=DOOR_VERSION,
     )
 
 
@@ -195,6 +198,8 @@ def test_live_member_ids_matches_the_confirmed_fresh_sessions_status_shows(
         if any(entry.push_confirmed_at is not None for entry in member.sessions)
     }
     with store.read() as transaction:
-        live = live_member_ids(transaction, clock.now, CONFIG.session_stale_seconds)
+        live = live_member_ids(
+            transaction, clock.now, CONFIG.session_stale_seconds, DOOR_VERSION
+        )
 
     assert live == shown == {CORE}

@@ -28,6 +28,7 @@ from amoeba.store.models import Session
 from amoeba.store.questions import NewQuestion, insert_question
 from amoeba.store.sessions import upsert_session
 from amoeba.store.vocabulary import ResumeOutcome
+from amoeba.wire.times import DOOR_VERSION
 from amoeba.wiring_steps import DoorSteps, LastReply
 from hub.two_homes import ALPHA, BETA, TwoHomes, two_homes
 
@@ -155,6 +156,8 @@ def test_a_live_session_on_beta_holds_off_a_wake_from_alpha(homes: TwoHomes) -> 
                 started_at=homes.clock(),
                 heartbeat_at=homes.clock(),
                 push_confirmed_at=homes.clock(),
+                client_version="9.9.9",
+                door_version=DOOR_VERSION,
             ),
         )
 

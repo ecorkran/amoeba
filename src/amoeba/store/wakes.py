@@ -48,6 +48,9 @@ class WakeLimits:
     max_per_day: int
     #: Age of a heartbeat past which a session counts as gone (241's rule).
     session_stale_seconds: float
+    #: The door version the program serving the call runs. A session on another
+    #: version cannot take a wake, so it does not hold one off (slice 263, D6).
+    door_version: int
 
 
 @dataclass(frozen=True)
@@ -138,7 +141,9 @@ def _wakeable_checkout(
     checkout = first_wakeable_checkout(transaction, member_id, machine_id)
     if checkout is None:
         return None
-    if member_id in live_member_ids(transaction, now, limits.session_stale_seconds):
+    if member_id in live_member_ids(
+        transaction, now, limits.session_stale_seconds, limits.door_version
+    ):
         return None
     if _has_live_wake(transaction, member_id, now):
         return None

@@ -14,13 +14,13 @@ from amoeba.store.models import Session
 from amoeba.store.programs import remove_member
 from amoeba.store.sessions import (
     delete_session,
-    heartbeat,
     live_member_ids,
     live_sessions,
     prune_stale_sessions,
     upsert_session,
 )
 from amoeba.store.store import Store
+from amoeba.wire.times import DOOR_VERSION
 from store.message_support import ADDRESSEE, NOW, SENDER, THIRD, count, seed_members
 
 STALE_SECONDS = 90
@@ -52,6 +52,8 @@ def _session(
         started_at=started_at,
         heartbeat_at=heartbeat_at,
         push_confirmed_at=push_confirmed_at,
+        client_version="9.9.9",
+        door_version=DOOR_VERSION,
     )
 
 
@@ -68,10 +70,10 @@ def _live(store: Store, now: datetime = NOW) -> tuple[Session, ...]:
 
 def _live_members(store: Store, now: datetime = NOW) -> frozenset[str]:
     with store.read() as transaction:
-        return live_member_ids(transaction, now, STALE_SECONDS)
+        return live_member_ids(transaction, now, STALE_SECONDS, DOOR_VERSION)
 
 
-def test_upsert_inserts_then_updates_only_the_beat_and_the_confirmation(
+def test_upsert_inserts_then_updates_all_but_the_start(
     store: Store,
 ) -> None:
     first = _session("s1")
@@ -84,14 +86,14 @@ def test_upsert_inserts_then_updates_only_the_beat_and_the_confirmation(
         started_at=later,
         heartbeat_at=later,
         push_confirmed_at=later,
+        client_version="9.9.9",
+        door_version=DOOR_VERSION,
     )
 
     _write(store, beat)
 
     (stored,) = _live(store, later)
-    assert stored == dataclasses.replace(
-        first, heartbeat_at=later, push_confirmed_at=later
-    )
+    assert stored == dataclasses.replace(beat, started_at=first.started_at)
 
 
 def test_a_row_recreated_after_a_prune_carries_the_original_start(
@@ -105,9 +107,7 @@ def test_a_row_recreated_after_a_prune_carries_the_original_start(
     assert count_sessions(store) == 0
 
     with store.write() as transaction:
-        heartbeat(
-            transaction, dataclasses.replace(session, heartbeat_at=woke), STALE_SECONDS
-        )
+        upsert_session(transaction, dataclasses.replace(session, heartbeat_at=woke))
 
     (stored,) = _live(store, woke)
     assert stored.started_at == NOW
@@ -181,7 +181,8 @@ def test_one_servers_prune_deletes_every_members_stale_rows_and_keeps_live_ones(
     )
 
     with store.write() as transaction:
-        heartbeat(transaction, _session("beating", member_id=ADDRESSEE), STALE_SECONDS)
+        prune_stale_sessions(transaction, NOW, STALE_SECONDS)
+        upsert_session(transaction, _session("beating", member_id=ADDRESSEE))
 
     with store.read() as transaction:
         ids = [row[0] for row in transaction.execute("SELECT session_id FROM sessions")]

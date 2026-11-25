@@ -47,6 +47,7 @@ def send(
     here: HereCaller | HereNotAProject,
     clock: Callable[[], datetime],
     logs_dir: Path,
+    door_version: int,
 ) -> SendResult:
     """The hub part: send the request in ``document`` from the member whose checkout
     ``here`` is, and claim a wake for it when one is due (262 D8).
@@ -93,9 +94,10 @@ def send(
         recipient=recipient.member_id,
         request=request,
         now=now,
+        door_version=door_version,
     )
     return claim_wake_for_send(
-        store, config, clock(), recipient.member_id, result, logs_dir
+        store, config, clock(), recipient.member_id, result, logs_dir, door_version
     )
 
 

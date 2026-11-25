@@ -42,10 +42,12 @@ def resume_claim_seconds(config: UserConfig) -> float:
     return resume_work_seconds(config) + CLAIM_CALL_BOUNDS * CALL_BOUND_SECONDS
 
 
-def wake_limits(config: UserConfig) -> WakeLimits:
-    """The limits a wake claim and a due-check apply, from the config."""
+def wake_limits(config: UserConfig, door_version: int) -> WakeLimits:
+    """The limits a wake claim and a due-check apply, from the config, with the door
+    version the serving program runs."""
     return WakeLimits(
         timeout_seconds=config.wake_timeout_seconds,
         max_per_day=config.max_wakes_per_day,
         session_stale_seconds=config.session_stale_seconds,
+        door_version=door_version,
     )

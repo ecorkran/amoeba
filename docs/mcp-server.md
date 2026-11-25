@@ -55,7 +55,7 @@ location):
 ```toml
 [mcp_servers.amoeba]
 command = "amoeba-mcp"
-tool_timeout_sec = 185
+tool_timeout_sec = 305
 ```
 
 The server needs, in the environment the client gives it: a `PATH` that reaches `sq`,
@@ -127,7 +127,7 @@ no repo, give `member` instead.
 - A call can take up to 45 s (`send`, `inbox`, `reply` and `cancel`: one `cf get` of the
   caller's directory) when `cf` is slow, and the after-step that follows every call adds up
   to 15 s (slice 262: three store waits), and a `send`'s wake step 25 s more: 85 s at the
-  most, below the 180 s deadline, which is checked by `tests/test_message_timing.py`.
+  most, below the 300 s deadline, which is checked by `tests/test_message_timing.py`.
 
 `directory` is never guessed: a session can start anywhere, so a missing or relative
 `directory` is an error naming the field.
@@ -154,8 +154,8 @@ A failure is an error result whose text starts with its kind:
 - `RequestError: ...`: the call could not form a request (a bad `directory`).
 - `<ExceptionName>: ...`: the CLI's own exit-3 failures, with the CLI's stderr text
   (`SquadronError`, `ContextForgeError`, `ConfigError`, `StoreError` and its kinds).
-- `TimedOut: <tool> did not finish within 180 s; ...`: the call outlived the server's
-  deadline, `MCP_CALL_DEADLINE_SECONDS` (180 s). What to do depends on the tool:
+- `TimedOut: <tool> did not finish within 300 s; ...`: the call outlived the server's
+  deadline, `MCP_CALL_DEADLINE_SECONDS` (300 s). What to do depends on the tool:
   - `status`, `decisions`, `list`, `changes`, `inbox`: it may still finish. Run `amoeba status`,
     `amoeba decisions`, `amoeba list`, `amoeba changes` or `amoeba inbox` in a shell, which has no
     deadline. Do not call the tool again.
@@ -167,18 +167,31 @@ A failure is an error result whose text starts with its kind:
     rejected naming the state the first call reached, which means it took effect.
 - `internal error: ...`: a bug; it is logged on stderr and the server keeps serving.
 
-`answer` cannot time out after it has acted: start-up refuses a config whose
-`resume_wait_seconds` makes an answer's worst case (`resume_wait_seconds` plus 90.5 s)
-reach the deadline, so `resume_wait_seconds` must be below 89.5.
+`answer` cannot time out after it has acted: an `answer` from MCP is refused, before
+anything is recorded, when its worst case reaches the deadline. There are two limits on
+`resume_wait_seconds`, one per way the call runs:
+
+- **Through the door** (a machine joined to a hub): the hub checks its own
+  `resume_wait_seconds`, and it must be below 143.5. A config at 143.5 or more refuses
+  the `answer` with `DeadlineError`, naming the key and the largest value that passes.
+- **Local** (no client file): start-up and each `answer` check the local config, and
+  `resume_wait_seconds` must be below 209.5.
+
+The starter value, 60, passes both. The CLI's `amoeba answer` is never checked: it has no
+deadline.
 
 ### Client timeouts
 
 What each client waits for a tool by default, checked on 20261112:
 
 - **Claude Code** waits about 28 hours for a tool (`MCP_TOOL_TIMEOUT`, in
-  milliseconds; a per-server `timeout` overrides it). Nothing to change.
-- **Codex** waits 60 s by default (`tool_timeout_sec`). That is below the 180 s
-  deadline, so set `tool_timeout_sec` to at least 185, as in the table above.
+  milliseconds; a per-server `timeout` overrides it). Nothing to change. Checked on
+  20261124 (Claude Code 2.1.325) with a tool that waited 220 s and no setting: the
+  session showed the pending call at two minutes and nothing for its result, and the
+  result reached the agent when the call returned (226 s after the prompt). So an
+  `answer` that takes minutes shows nothing until it returns, and then arrives.
+- **Codex** waits 60 s by default (`tool_timeout_sec`). That is below the 300 s
+  deadline, so set `tool_timeout_sec` to at least 305, as in the table above.
   Without it Codex cuts an `answer` off at 60 s while the work goes on.
 
 ## Push and presence
@@ -247,18 +260,30 @@ only the 2026-07-28 era cannot connect.
 At start it declares, for every directory, the channel capability
 (`experimental: {"claude/channel": {}}`) and subscribable resources
 (`resources: {subscribe: true}`): capabilities are fixed at `initialize`, before the
-member is known. Then, beside the tools and without delaying them, it resolves its
-working directory to a member once (one `cf` call):
+member is known. Then, beside the tools and without delaying them, it runs one loop, the
+**tick**, which replaces the separate heartbeat and inbox loops. One pass:
 
-- **Not a member** (no Context Forge project, or a project not in any program): the
-  tools work as always; no session row, no push, and `resources/list` is empty. After
-  `amoeba add`, reconnect the server (`/mcp`) or start a new session.
-- **`cf` or the store fails**: the same, with the error and its traceback on stderr.
-- **A member**: the server writes its session row and keeps it fresh every
-  `session_heartbeat_seconds`; every `notify_poll_seconds` it reads the member's highest
-  delivery number, and when it rises it sends one channel event for all the new
-  deliveries. A held store skips that tick or beat (one WARNING per run of failures);
-  any other failure stops push, deletes the row, and leaves the tools serving.
+1. **Works out the member**, every pass. `cf` is asked until it answers with a project id,
+   and the answer is kept for the process. "Not a project" is asked again once it is 60
+   seconds old, so `amoeba add` or `cf init` in the directory takes effect without a
+   reconnect. A `cf` failure or timeout skips the pass.
+2. **Makes one `session_tick` call** in a worker thread. On a machine with a client file
+   the call goes to the hub, which writes the session row against its own clock, prunes
+   stale rows of every machine, and answers with the member's highest delivery number and
+   the hub's `notify_poll_seconds`. With no client file the same step runs on the local
+   store.
+3. **Handles the reply**: when the member's highest delivery number rose since the last
+   reply, it sends one channel event for all the new deliveries. Then it sleeps the
+   reply's `notify_poll_seconds`, counted from the end of the pass, so two passes never
+   overlap. Before the first reply the wait is 5 seconds, so a session can start with the
+   hub down and find it later.
+
+What a pass that fails does: a hub that is unreachable or refuses the call, a bad
+certificate, a `cf` failure, a held store or a store error skips that pass, logs one
+WARNING per run of failures (and one line when it recovers), and the loop goes on, so a
+session comes back by itself when the hub does. Only a bug stops push, and it is logged
+with its traceback; the tools keep serving. A server that is not a member has no session
+row: the tools work as always, there is no push, and the resource list is empty.
 
 Events arrive in the session as `<channel source="amoeba">` and show as
 `← amoeba: Amoeba: N new deliveries ...`. The event never carries message text, so
@@ -276,17 +301,20 @@ off only for repos with a fresh, push-confirmed session; `list` shows every live
 and whether it is confirmed. A session without the flag, under `claude -p`, or not yet
 sent an event never confirms, so its repo can still be woken.
 
-A clean exit deletes the row. A killed or crashed server's row stops counting after
-`session_stale_seconds` and the next heartbeat of any server deletes it; a computer that
-slept re-creates its row at the next beat.
+A clean exit deletes the row (one attempt, `session_end`). A killed or crashed server's
+row stops counting after `session_stale_seconds`, judged on the hub's clock, and the next
+tick of any server deletes it; a computer that slept re-creates its row at its next tick.
+A session on another machine is listed with its machine, and one whose door version
+differs from the hub's is listed as behind (`cli-contract.md`).
 
 ### Log lines
 
 Each server writes to stderr (which `claude --debug` puts in
 `~/.claude/debug/<session-id>.txt`):
 
-- `presence for <member>: protocol <version>, client <name>` when a member's session
-  starts, or `no presence: <directory> is not a member (...)`;
+- `presence for <member>: protocol <version>, client <name>, machine <machine>` when a
+  member's session starts, and `no presence: <directory> is not a member (<reason>)`
+  once for each change of reason, not once per tick;
 - `channel event attempted: first_seq=A last_seq=B count=N` for each event (attempted:
   the client does not acknowledge it);
 - `tool <name> called` at the start of every tool call.
@@ -315,8 +343,9 @@ two params. Neither carries message text: no subject, body, result, reason or re
 
 ### The `amoeba://inbox` resource
 
-`resources/read` of `amoeba://inbox` returns one `application/json` document, with no
-message text:
+The resource is listed in every session, member or not. `resources/read` of
+`amoeba://inbox` returns one `application/json` document, with no message text, and its
+number is the one in the last tick's reply, so it is at most one tick old:
 
 | Field | Meaning |
 |---|---|
@@ -335,28 +364,23 @@ one stderr line (which the client shows) if:
   `notify_poll_seconds`, `session_heartbeat_seconds` or `session_stale_seconds`;
 - `resume_wait_seconds` is too large for the deadline: the message names the key and
   the largest value that passes;
-- this machine is joined to a hub (slice 260; a `client.yaml` is in the config home):
-  `NotServedError`, before the state move and the config load, so nothing local is
-  read or written. `amoeba-mcp` does not start on a joined machine until the door
-  serves it.
+- this machine is joined to a hub (a `client.yaml` is in the config home) and the client
+  file or its saved certificate does not load (`ClientFileError`).
+
+On a joined machine start-up reads no local file and calls no hub: the hub is the store
+and the config, so a hub that is down does not stop a session from starting; its ticks
+are skipped until the hub answers. The state move, the config load and the deadline
+check are made only with no client file.
 
 The only state the server writes is its session row ("Push and presence"), deleted
 when it ends. It ends when the client closes its end.
 
-## On a joined machine (slice 260)
+## On a joined machine
 
-A machine joined to a hub (`amoeba join`) has no local store. `amoeba-mcp` does not
-start there (see "Start-up"). A server that was already running when the machine
-joined keeps serving its tools, and each tool call goes through `wiring.invoke` like
-the CLI's: the operations the door serves (`decisions`, `mark_read`, `dismiss`,
-`retract`, `standing`, `withdraw`, since slice 261 `add`, `rm`, `list`, `status`,
-`send`, `inbox`, `reply`, `cancel`, `changes`, `report_release`, and since slice 262
-`answer`) go to the hub, each
-after the client part has gathered the caller's project (and the runs, or the checkout)
-here, and any other tool returns an error
-result naming `NotServedError`. The `answer` deadline check, which reads the local
-config, runs only when the machine is not joined. Presence and push stop with a log
-line (the heartbeat's and the inbox watcher's next store read raises
-`LocalStoreClosedError`, handled where store errors already are); no store file is
-opened or created. Push stopping without a message to the agent is acceptable while only
-fixtures join: a later slice makes the tick a hub call.
+A machine joined to a hub (`amoeba join`) has no local store. `amoeba-mcp` starts there
+(see "Start-up") and every tool call goes through `wiring.invoke` like the CLI's: every
+operation is served by the door, each after the client part has gathered the caller's
+project (and the runs, or the checkout) here. The `answer` deadline check is made on the
+hub, against the hub's config (limits above). The tick is a hub call, so presence and
+push work from any joined machine, and a session on one machine is listed on all of them.
+A session open when its machine joins uses the hub from its next tick.

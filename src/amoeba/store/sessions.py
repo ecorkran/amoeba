@@ -1,8 +1,9 @@
 """Serving sessions: register, beat, prune, exit, and who is live (slice 241, D6).
 
-Each serving ``amoeba-mcp`` keeps one row. ``heartbeat`` prunes every member's stale
-rows and upserts its own in one write transaction, so the table holds the live rows
-plus the rows of servers killed since the last beat of any server.
+Each serving ``amoeba-mcp`` keeps one row. A refresh (``operations.steps.session``)
+prunes every member's stale rows and upserts its own in one write transaction, so the
+table holds the live rows plus the rows of servers killed since the last refresh of
+any server.
 """
 
 from __future__ import annotations
@@ -10,11 +11,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from amoeba.store import sql_sessions
+from amoeba.store.errors import SessionOfAnotherMachineError
 from amoeba.store.models import Session
 from amoeba.store.programs import get_member
 from amoeba.store.row_values import (
     decode_timestamp,
     encode_timestamp,
+    integer,
     optional_timestamp,
     text,
 )
@@ -27,14 +30,19 @@ def _oldest_live_heartbeat(now: datetime, stale_seconds: float) -> str:
 
 
 def upsert_session(transaction: Transaction, session: Session) -> None:
-    """Insert ``session``, or set its ``heartbeat_at`` and ``push_confirmed_at``.
+    """Insert ``session``, or set its ``heartbeat_at``, ``push_confirmed_at`` and
+    versions.
 
     A row re-created after a prune carries ``session.started_at``, the caller's
     original start time.
+
+    Raises:
+        SessionOfAnotherMachineError: The id belongs to another machine; no column
+            was changed.
     """
     confirmed = session.push_confirmed_at
     acting = transaction.acting("sessions")
-    transaction.execute(
+    cursor = transaction.execute(
         sql_sessions.UPSERT_SESSION,
         (
             session.session_id,
@@ -44,15 +52,32 @@ def upsert_session(transaction: Transaction, session: Session) -> None:
             encode_timestamp(session.started_at),
             encode_timestamp(session.heartbeat_at),
             None if confirmed is None else encode_timestamp(confirmed),
+            session.client_version,
+            session.door_version,
             acting.owner_id,
             acting.machine_id,
         ),
     )
+    if cursor.rowcount != 1:
+        raise SessionOfAnotherMachineError(
+            f"session {session.session_id} belongs to another machine; "
+            "its row was not changed"
+        )
 
 
 def delete_session(transaction: Transaction, session_id: str) -> None:
-    """Remove the row; an unknown id is a no-op."""
-    transaction.execute(sql_sessions.DELETE_SESSION, (session_id,))
+    """Remove the calling machine's row; an unknown id, or one that belongs to
+    another machine, is a no-op."""
+    transaction.execute(
+        sql_sessions.DELETE_SESSION,
+        (session_id, transaction.acting("sessions").machine_id),
+    )
+
+
+def get_session(transaction: Transaction, session_id: str) -> Session | None:
+    """The row with this id, of any machine, or ``None``."""
+    row = transaction.execute(sql_sessions.SELECT_SESSION, (session_id,)).fetchone()
+    return None if row is None else _session(row)
 
 
 def prune_stale_sessions(
@@ -63,15 +88,6 @@ def prune_stale_sessions(
         sql_sessions.PRUNE_STALE_SESSIONS,
         (_oldest_live_heartbeat(now, stale_seconds),),
     )
-
-
-def heartbeat(transaction: Transaction, session: Session, stale_seconds: float) -> None:
-    """One beat: prune stale rows at ``session.heartbeat_at``, then upsert ``session``.
-
-    The caller runs it inside one write transaction.
-    """
-    prune_stale_sessions(transaction, session.heartbeat_at, stale_seconds)
-    upsert_session(transaction, session)
 
 
 def live_sessions(
@@ -85,18 +101,27 @@ def live_sessions(
     return tuple(_session(row) for row in rows)
 
 
+def session_machine_names(transaction: Transaction) -> dict[str, str]:
+    """The name of the machine each session row belongs to, by session id."""
+    return {
+        text(row[0], "sessions.session_id"): text(row[1], "machines.name")
+        for row in transaction.execute(sql_sessions.SELECT_SESSION_MACHINES)
+    }
+
+
 def live_member_ids(
-    transaction: Transaction, now: datetime, stale_seconds: float
+    transaction: Transaction, now: datetime, stale_seconds: float, door_version: int
 ) -> frozenset[str]:
-    """Active members with a fresh, push-confirmed session: the liveness rule 244
-    wakes by, and the same members ``status`` shows as push confirmed.
+    """Active members with a fresh, push-confirmed session on ``door_version``, the
+    version the hub serves: the liveness rule 244 wakes by (a session on another
+    version cannot take a wake, 263 D6).
 
     A removed member's server keeps beating (D3); ``get_member`` skips it, so "a
     removed member is not a member" stays written once (``sql.ACTIVE_MEMBER``).
     """
     rows = transaction.execute(
         sql_sessions.SELECT_LIVE_MEMBER_IDS,
-        (_oldest_live_heartbeat(now, stale_seconds),),
+        (_oldest_live_heartbeat(now, stale_seconds), door_version),
     ).fetchall()
     member_ids = (text(row[0], "sessions.member_id") for row in rows)
     return frozenset(
@@ -115,4 +140,6 @@ def _session(row: tuple[object, ...]) -> Session:
         started_at=decode_timestamp(row[4], "sessions.started_at"),
         heartbeat_at=decode_timestamp(row[5], "sessions.heartbeat_at"),
         push_confirmed_at=optional_timestamp(row[6], "sessions.push_confirmed_at"),
+        client_version=text(row[7], "sessions.client_version"),
+        door_version=integer(row[8], "sessions.door_version"),
     )
