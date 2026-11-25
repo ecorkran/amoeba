@@ -38,6 +38,7 @@ from amoeba.operations.store_steps import Steps
 from amoeba.store.errors import StoreBusyError, StoreError
 from amoeba.store.vocabulary import DeliveryEvent, MessageKind
 from amoeba.upstream.context_forge.cli_call import CfRun
+from amoeba.wire.protocol import SessionIdentity
 from amoeba.wiring_steps import (
     AFTER_STEP_ERRORS,
     DoorSteps,
@@ -61,6 +62,7 @@ __all__ = [
     "HubUnreachableError",
     "LastReply",
     "MessageKind",
+    "SessionIdentity",
     "SessionTickReply",
     "SessionTickRequest",
     "StepSource",
@@ -78,8 +80,11 @@ __all__ = [
 
 #: Opens the steps one worker thread uses and closes them when the thread is done: a
 #: sqlite connection cannot cross threads, so a ``Steps`` never does either. Each
-#: thread passes its own ``LastReply``.
-type StepSource = Callable[[LastReply], AbstractContextManager[Steps]]
+#: thread passes its own ``LastReply`` and the session's identity (the door sends it as
+#: headers, D6).
+type StepSource = Callable[
+    [LastReply, SessionIdentity | None], AbstractContextManager[Steps]
+]
 
 #: The two ways a tick goes (263 D1): a step number of one is unrelated to the other.
 WAY_DOOR = "door"

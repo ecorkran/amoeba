@@ -20,7 +20,7 @@ from amoeba.mcp.after_runner import AfterRunner
 from amoeba.mcp.presence import PresenceDeps
 from amoeba.mcp.tick import run_ticks
 from amoeba.wire.protocol import RefusalCode
-from amoeba.wiring_presence import LastReply, Steps
+from amoeba.wiring_presence import LastReply, SessionIdentity, Steps
 from mcp_server.presence_rig import (
     MEMBER_ID,
     FakeClock,
@@ -265,9 +265,11 @@ def test_the_tick_and_the_runner_each_open_their_own_store_in_their_own_thread(
     threads: list[int] = []
 
     @contextmanager
-    def recording(last: LastReply) -> Generator[Steps]:
+    def recording(
+        last: LastReply, identity: SessionIdentity | None
+    ) -> Generator[Steps]:
         threads.append(threading.get_ident())
-        with opener(last) as steps:
+        with opener(last, identity) as steps:
             yield steps
 
     recorded = PresenceDeps(recording, deps.cf_run, deps.clock, deps.after_deps)

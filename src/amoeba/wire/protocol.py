@@ -10,6 +10,7 @@ value, because this package imports nothing from the rest of ``amoeba``.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final, Literal
 
@@ -311,3 +312,30 @@ CLIENT_NAME_PATTERN: Final = re.compile(r"[A-Za-z0-9._ -]{1,64}")
 #: Most entries a tick's reply lists, and a channel event names; the rest are counted
 #: (241 D4, 263 D2).
 CHANNEL_EVENT_MAX_ENTRIES: Final = 10
+
+
+#: The door version a client states: a non-negative integer of at most four digits.
+#: A value of another shape is never stored (263 D6).
+DOOR_VERSION_PATTERN: Final = r"[0-9]{1,4}"
+_DOOR_VERSION: Final = re.compile(DOOR_VERSION_PATTERN)
+#: The longest decoded session directory the hub stores.
+SESSION_DIRECTORY_MAX_LENGTH: Final = 4096
+
+
+def parse_door_version(text: str | None) -> int | None:
+    """The door version ``text`` states, or ``None`` when it has no such shape."""
+    if text is None or _DOOR_VERSION.fullmatch(text) is None:
+        return None
+    return int(text)
+
+
+@dataclass(frozen=True)
+class SessionIdentity:
+    """Who a session's tick and exit call are for (263 D6): sent as the four session
+    headers so the hub can leave a row even when it refuses the call's door version."""
+
+    session_id: str
+    #: The directory's Context Forge project id; ``None`` for a non-project.
+    project_id: str | None
+    client: str
+    directory: str

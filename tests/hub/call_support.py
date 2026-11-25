@@ -55,6 +55,8 @@ class HubRig:
     #: Another clock to follow in place of ``clock_now``: a client test's own, so the
     #: hub and the client agree on every time (262 D16).
     follows: Callable[[], datetime] | None = None
+    #: The door version this hub serves; a test serves one a version up.
+    door_version: int = DOOR_VERSION
 
     def clock(self) -> datetime:
         return self.clock_now if self.follows is None else self.follows()
@@ -78,11 +80,20 @@ class HubRig:
         extra: dict[str, object] | None = None,
     ) -> CallReply:
         return handle_call(
-            make_request(name, document, token, call_id, body, headers, extra),
+            make_request(
+                name,
+                document,
+                token,
+                call_id,
+                body,
+                {HEADER_DOOR_VERSION: str(self.door_version), **(headers or {})},
+                extra,
+            ),
             open_store=self.open_store,
             clock=self.clock,
             load_config=self.config,
             hooks=hooks,
+            door_version=self.door_version,
         )
 
     def machine(self, token: str) -> ActingMachine | None:

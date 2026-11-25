@@ -51,6 +51,8 @@ from amoeba.operations.store_steps import LocalSteps, Steps
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.wire.join_line import JoinError
+from amoeba.wire.protocol import SessionIdentity
+from amoeba.wire.times import TICK_TIMES, DoorTimes
 from amoeba.wiring_door import (
     NotServedError,
     joined,
@@ -215,8 +217,13 @@ def session_step_source(layout: StateLayout) -> StepSource:
     """The steps a serving session's worker threads open, each in its own thread: the
     door when a client file exists, otherwise the local store (263 D1)."""
 
-    def source(last: LastReply) -> AbstractContextManager[Steps]:
-        return steps_for(layout, last, load_config)
+    def source(
+        last: LastReply, identity: SessionIdentity | None
+    ) -> AbstractContextManager[Steps]:
+        # A session's own calls (with an identity) are one attempt: the next tick is
+        # the retry (D4). The after-step's writing calls keep the default retry.
+        times = DoorTimes() if identity is None else TICK_TIMES
+        return steps_for(layout, last, load_config, times, identity)
 
     return source
 

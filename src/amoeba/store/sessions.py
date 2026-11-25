@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from amoeba.store import sql_sessions
-from amoeba.store.errors import StoreError
+from amoeba.store.errors import SessionOfAnotherMachineError
 from amoeba.store.models import Session
 from amoeba.store.programs import get_member
 from amoeba.store.row_values import (
@@ -37,7 +37,8 @@ def upsert_session(transaction: Transaction, session: Session) -> None:
     original start time.
 
     Raises:
-        StoreError: The id belongs to another machine; no column was changed.
+        SessionOfAnotherMachineError: The id belongs to another machine; no column
+            was changed.
     """
     confirmed = session.push_confirmed_at
     acting = transaction.acting("sessions")
@@ -58,7 +59,7 @@ def upsert_session(transaction: Transaction, session: Session) -> None:
         ),
     )
     if cursor.rowcount != 1:
-        raise StoreError(
+        raise SessionOfAnotherMachineError(
             f"session {session.session_id} belongs to another machine; "
             "its row was not changed"
         )

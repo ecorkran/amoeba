@@ -18,7 +18,7 @@ from uuid import uuid4
 
 import anyio
 
-from amoeba.wire.protocol import CLIENT_NAME_PATTERN
+from amoeba.wire.protocol import CLIENT_NAME_PATTERN, SessionIdentity
 from amoeba.wiring_presence import CfRun, Deps, StepSource
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,8 @@ class PresenceState:
     #: Why the newest reply had no member.
     off_reason: str | None = None
     directory: str | None = None
+    #: The identity the newest tick went with; the exit call uses it (D6, D8).
+    identity: SessionIdentity | None = None
     subscribed: bool = False
     #: The newest reply's ``as_of_seq``; ``None`` until a tick has had a reply.
     as_of_seq: int | None = None

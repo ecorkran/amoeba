@@ -29,6 +29,7 @@ from amoeba.mcp.presence_task import run_presence
 from amoeba.mcp.tools import TOOLS
 from amoeba.operations.names import Door, OperationName
 from amoeba.wire.protocol import SERVED_OPERATIONS
+from amoeba.wire.times import TICK_TIMES
 from amoeba.wiring_door import NotServedError
 from amoeba.wiring_steps import steps_for
 
@@ -126,7 +127,9 @@ def test_a_running_mcp_server_that_is_then_joined_ticks_on_the_door_and_writes_n
     seed_member(layout.store_path)
     clock = FakeClock()
     deps = PresenceDeps(
-        open_steps=lambda last: steps_for(layout, last, lambda: FAST),
+        open_steps=lambda last, identity: steps_for(
+            layout, last, lambda: FAST, TICK_TIMES, identity
+        ),
         cf_run=fake_cf_run(DEFAULT_WORKTREE),
         clock=clock,
         after_deps=partial(wiring.default_deps, layout),

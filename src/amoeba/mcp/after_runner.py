@@ -93,5 +93,5 @@ class AfterRunner:
         if tick_last.problem is not None:
             raise HubFlagProblem(tick_last.problem)
         last = replace(tick_last)
-        with self._deps.open_steps(last) as steps:
+        with self._deps.open_steps(last, None) as steps:
             run_after_step(steps, self._deps.after_deps, last, prunes=True)

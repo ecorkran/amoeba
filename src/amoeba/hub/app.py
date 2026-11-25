@@ -49,16 +49,20 @@ def _peer(request: Request) -> str:
     return UNKNOWN_PEER if client is None else f"{client.host}:{client.port}"
 
 
-def _response(reply: CallReply) -> Response:
+def _response(reply: CallReply, door_version: int) -> Response:
     return Response(
         reply.body,
         status_code=reply.status,
         media_type=JSON_TYPE,
-        headers={HEADER_DOOR_VERSION: str(DOOR_VERSION)},
+        headers={HEADER_DOOR_VERSION: str(door_version)},
     )
 
 
-def create_app(handle: CallHandler, clock: Callable[[], datetime]) -> Starlette:
+def create_app(
+    handle: CallHandler,
+    clock: Callable[[], datetime],
+    door_version: int = DOOR_VERSION,
+) -> Starlette:
     """The app that hands each call to ``handle`` in a worker thread."""
 
     async def call(request: Request) -> Response:
@@ -69,7 +73,8 @@ def create_app(handle: CallHandler, clock: Callable[[], datetime]) -> Starlette:
                 Refuser(clock, peer).refuse(
                     RefusalCode.MALFORMED_CALL,
                     f"a call needs a Content-Length of at most {MAX_CALL_BYTES} bytes",
-                )
+                ),
+                door_version,
             )
         body = await request.body()
         name = request.path_params["name"]
@@ -77,7 +82,7 @@ def create_app(handle: CallHandler, clock: Callable[[], datetime]) -> Starlette:
             name=name, headers=dict(request.headers), body=body, peer=peer
         )
         reply = await anyio.to_thread.run_sync(handle, call_request)
-        return _response(reply)
+        return _response(reply, door_version)
 
     return Starlette(
         routes=[Route(f"{CALL_PATH_PREFIX}{{name}}", call, methods=["POST"])]

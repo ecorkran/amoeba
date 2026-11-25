@@ -31,6 +31,7 @@ from amoeba.store.machines import (
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION, read_schema_version
 from amoeba.wire.fingerprint import fingerprint
 from amoeba.wire.join_line import parse_join_line
+from amoeba.wire.times import DOOR_VERSION
 from amoeba.wiring import open_store
 from hub.call_support import NOW
 from hub.start_support import complete_state, free_port, tree, write_hub_yaml
@@ -101,6 +102,71 @@ def test_machines_lists_name_token_call_time_and_client_version(
     assert [row["name"] for row in rows] == ["alpha", "beta"]
     assert all(row["has_token"] for row in rows)
     assert rows[0]["last_called_at"] is None and rows[0]["client_version"] is None
+
+
+def _machines_with_doors(
+    hub_home: StateLayout, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``current``, ``behind``, ``ahead`` and ``fresh`` (no version recorded)."""
+    versions = {
+        "current": DOOR_VERSION,
+        "behind": DOOR_VERSION - 1,
+        "ahead": DOOR_VERSION + 1,
+        "fresh": None,
+    }
+    for name in versions:
+        _invite(capsys, name)
+    with open_hub_store(hub_home) as store, store.write() as transaction:
+        for name, version in versions.items():
+            transaction.execute(
+                "UPDATE machines SET door_version = ? WHERE name = ?", (version, name)
+            )
+
+
+def test_machines_text_shows_each_door_version_and_which_way_it_differs(
+    hub_home: StateLayout, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _machines_with_doors(hub_home, capsys)
+
+    code, out, _err = _run(capsys, "hub", "machines")
+
+    lines = out.splitlines()
+    assert code == EXIT_OK
+    assert lines[0] == f"hub door version: {DOOR_VERSION}"
+    by_name = {line.split()[0]: line for line in lines[1:]}
+    assert by_name["current"].endswith(f"door: {DOOR_VERSION}")
+    assert by_name["behind"].endswith(f"door: {DOOR_VERSION - 1}  behind")
+    assert by_name["ahead"].endswith(f"door: {DOOR_VERSION + 1}  ahead of the hub")
+    assert by_name["fresh"].endswith("door: unknown")
+
+
+def test_machines_json_has_door_version_and_behind(
+    hub_home: StateLayout, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _machines_with_doors(hub_home, capsys)
+
+    rows = {
+        row["name"]: row for row in json.loads(_run(capsys, "hub", "machines", "-j")[1])
+    }
+
+    assert (rows["current"]["door_version"], rows["current"]["behind"]) == (
+        DOOR_VERSION,
+        False,
+    )
+    assert rows["behind"]["behind"] is True
+    assert (rows["ahead"]["door_version"], rows["ahead"]["behind"]) == (
+        DOOR_VERSION + 1,
+        True,
+    )
+    assert (rows["fresh"]["door_version"], rows["fresh"]["behind"]) == (None, None)
+
+
+def test_machines_with_none_still_names_the_hubs_door_version(
+    hub_home: StateLayout, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = _run(capsys, "hub", "machines")[1]
+
+    assert out.splitlines() == [f"hub door version: {DOOR_VERSION}", "no machines"]
 
 
 def test_rm_machine_of_an_unknown_name_exits_1(

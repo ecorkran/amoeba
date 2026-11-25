@@ -51,7 +51,10 @@ async def _serve_presence(
 
 
 def _end_in_thread(state: PresenceState, deps: PresenceDeps) -> None:
-    with deps.open_steps(LastReply()) as steps:
+    identity = state.identity
+    if identity is None:
+        raise ValueError("a session that was told it has a member has ticked")
+    with deps.open_steps(LastReply(), identity) as steps:
         end_session(steps, state.session_id)
 
 

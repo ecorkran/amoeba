@@ -37,7 +37,7 @@ from amoeba.store.programs import upsert_member, upsert_program
 from amoeba.store.sessions import live_sessions
 from amoeba.store.vocabulary import DeliveryEvent, RulesFrom
 from amoeba.upstream.context_forge.cli_call import CfRun
-from amoeba.wiring_presence import LastReply
+from amoeba.wiring_presence import LastReply, SessionIdentity
 
 START: Final = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
 #: The member the recorded ``cf get`` output resolves to.
@@ -84,12 +84,17 @@ class Opener:
     block: threading.Event | None = None
     on_open: Callable[[int], None] | None = None
     opens: int = 0
+    #: The identity each open was given, in order.
+    identities: list[SessionIdentity | None] = field(default_factory=lambda: [])
     clock: Callable[[], datetime] | None = None
     config: UserConfig = FAST
 
     @contextmanager
-    def __call__(self, last: LastReply) -> Generator[Steps]:
+    def __call__(
+        self, last: LastReply, identity: SessionIdentity | None
+    ) -> Generator[Steps]:
         self.opens += 1
+        self.identities.append(identity)
         if self.on_open is not None:
             self.on_open(self.opens)
         if self.block is not None:

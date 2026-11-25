@@ -18,9 +18,11 @@ from typing import Final, cast
 
 from amoeba.config.user_config import UserConfig
 from amoeba.hub.call_refusals import CallReply, Refuser
+from amoeba.hub.call_sessions import is_session_call, write_behind_row
 from amoeba.hub.call_work import call_result, flagged, needs_config
 from amoeba.operations.errors import OPERATION_ERRORS, CallRefused
 from amoeba.operations.served import SERVED, ServedEdges
+from amoeba.operations.steps.models_session import SESSION_TICK
 from amoeba.store.call_results import delete_expired, find_kept, keep
 from amoeba.store.machines import (
     ActingMachine,
@@ -49,6 +51,7 @@ from amoeba.wire.protocol import (
     RefusalCode,
     done_reply,
     is_header_value,
+    parse_door_version,
 )
 from amoeba.wire.times import CALL_RESULT_LIFETIME_SECONDS, DOOR_VERSION
 
@@ -130,7 +133,7 @@ def _malformed(client_version: str | None, message: str) -> _Checked:
 
 
 def _check_without_store(
-    request: CallRequest, load_config: Callable[[], UserConfig]
+    request: CallRequest, load_config: Callable[[], UserConfig], door_version: int
 ) -> _Checked:
     """D8 step 2: the version, the headers, the body, the served list and the config.
 
@@ -140,9 +143,9 @@ def _check_without_store(
     sent_version = _header(request, HEADER_CLIENT_VERSION)
     client_version = sent_version if _is_acceptable(sent_version) else None
     version = _header(request, HEADER_DOOR_VERSION)
-    if version != str(DOOR_VERSION):
+    if version != str(door_version):
         message = (
-            f"the hub speaks door version {DOOR_VERSION}, this client sent "
+            f"the hub speaks door version {door_version}, this client sent "
             f"{_shown(version)}"
         )
         return _Checked((RefusalCode.DOOR_VERSION, message), client_version)
@@ -209,6 +212,7 @@ def _operation_reply(  # noqa: PLR0913 - one call's parts
     machine_label: str,
     request_hash: str,
     clock: Callable[[], datetime],
+    door_version: int,
 ) -> bytes:
     """Run the operation and keep its result in one savepoint: a failure in either
     undoes both, so a result is never kept for an operation that did not apply."""
@@ -224,7 +228,12 @@ def _operation_reply(  # noqa: PLR0913 - one call's parts
         )
         reply = done_reply(
             call_result(
-                request.name, store, checked.document, checked.body or {}, edges
+                request.name,
+                store,
+                checked.document,
+                checked.body or {},
+                edges,
+                door_version,
             )
         )
         if _writes(request.name):
@@ -246,12 +255,13 @@ def _loaded(config: UserConfig | None) -> UserConfig:
     return config
 
 
-def _serve(
+def _serve(  # noqa: PLR0913 - one call's parts
     store: Store,
     request: CallRequest,
     refuser: Refuser,
     clock: Callable[[], datetime],
     load_config: Callable[[], UserConfig],
+    door_version: int,
 ) -> tuple[CallReply, bool]:
     """The reply, and whether a call scope committed (so ``after_commit`` runs)."""
     token_hash = _token_hash(request)
@@ -262,11 +272,16 @@ def _serve(
         label = None if known is None else machine_name(reading, known.machine_id)
     if known is None or label is None:
         return refuser.refuse(RefusalCode.BAD_TOKEN, _BAD_TOKEN), False
-    checked = _check_without_store(request, load_config)
+    checked = _check_without_store(request, load_config, door_version)
     request_hash = hashlib.sha256(request.body).hexdigest()
     with store.call_scope() as scope:
         machine = touch_machine(
-            scope, token_hash, clock(), checked.client_version, None
+            scope,
+            token_hash,
+            clock(),
+            checked.client_version,
+            parse_door_version(_header(request, HEADER_DOOR_VERSION)),
+            keep_versions=is_session_call(request.name),
         )
         if machine is None:
             # The token ended between the read and the scope (rm-machine, re-invite).
@@ -275,6 +290,15 @@ def _serve(
         store.act_as(machine)
         if checked.refusal is not None:
             code, message = checked.refusal
+            if request.name == SESSION_TICK.name and code is RefusalCode.DOOR_VERSION:
+                write_behind_row(
+                    store,
+                    machine.machine_id,
+                    clock(),
+                    lambda name: _header(request, name),
+                    checked.client_version,
+                    parse_door_version(_header(request, HEADER_DOOR_VERSION)),
+                )
             return refuser.refuse(code, message, label), True
         delete_expired(scope, clock(), CALL_RESULT_LIFETIME_SECONDS)
         if _writes(request.name):
@@ -288,11 +312,18 @@ def _serve(
                     machine.machine_id,
                     load_config,
                     clock(),
-                    DOOR_VERSION,
+                    door_version,
                 ), True
         try:
             body = _operation_reply(
-                store, request, checked, machine, label, request_hash, clock
+                store,
+                request,
+                checked,
+                machine,
+                label,
+                request_hash,
+                clock,
+                door_version,
             )
         except CallRefused as refusal:
             # The hub part's own refusal (261 D12): the savepoint is already rolled
@@ -305,7 +336,7 @@ def _serve(
             return refuser.for_exception(error, label), True
         reply = CallReply(DONE_STATUS, body)
         return flagged(
-            reply, store, machine.machine_id, load_config, clock(), DOOR_VERSION
+            reply, store, machine.machine_id, load_config, clock(), door_version
         ), True
 
 
@@ -322,6 +353,7 @@ def handle_call(
     clock: Callable[[], datetime],
     load_config: Callable[[], UserConfig],
     hooks: DoorHooks = DoorHooks(),  # noqa: B008  frozen, no state to share
+    door_version: int = DOOR_VERSION,
 ) -> CallReply:
     """Serve one call; never raises to the caller, apart from ``hooks.after_commit``.
 
@@ -329,12 +361,15 @@ def handle_call(
     the touch, keeps nothing and refuses (``hub_error`` for the operations' own
     errors, ``hub_fault`` for anything else, with its traceback in the hub log). A
     failure before the scope, such as the store not opening, is refused the same way
-    without the touch. Every refusal writes one log line.
+    without the touch. Every refusal writes one log line. ``door_version`` is the
+    version this hub serves; only a test serves another.
     """
     refuser = Refuser(clock, request.peer)
     try:
         with open_store() as store:
-            reply, committed = _serve(store, request, refuser, clock, load_config)
+            reply, committed = _serve(
+                store, request, refuser, clock, load_config, door_version
+            )
     except Exception as error:  # noqa: BLE001 - the hub's boundary for a call
         return refuser.for_exception(error, None)
     if committed and hooks.after_commit is not None:

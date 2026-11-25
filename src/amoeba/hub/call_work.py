@@ -46,8 +46,10 @@ def call_result(
     document: object,
     body: Mapping[str, object],
     edges: ServedEdges,
+    door_version: int,
 ) -> dict[str, object]:
-    """The result document of the step or served operation ``name``.
+    """The result document of the step or served operation ``name``; a step runs on
+    the door version the hub serves.
 
     Raises:
         CallRefused: ``malformed_call`` for a step document that does not fit, or the
@@ -56,7 +58,10 @@ def call_result(
     if name in STEP_CALLS:
         try:
             reply = run_step(
-                name, store, document, StepEdges(edges.clock, edges.load_config)
+                name,
+                store,
+                document,
+                StepEdges(edges.clock, edges.load_config, door_version),
             )
         except StepDocumentError as error:
             raise CallRefused(MALFORMED_CALL, str(error)) from error

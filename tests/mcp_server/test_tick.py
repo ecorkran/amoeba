@@ -45,7 +45,7 @@ from amoeba.store.row_values import encode_timestamp
 from amoeba.store.vocabulary import DeliveryEvent, MessageKind
 from amoeba.upstream.context_forge.cli_call import CfRun
 from amoeba.wire.protocol import RefusalCode
-from amoeba.wiring_presence import LastReply
+from amoeba.wiring_presence import LastReply, SessionIdentity
 from mcp_server.presence_rig import (
     FAST,
     MEMBER_ID,
@@ -225,12 +225,12 @@ def test_two_ticks_never_overlap(store_path: Path, tmp_path: Path) -> None:
     seen = {"active": 0, "most": 0, "opens": 0}
 
     @contextmanager
-    def probe(last: LastReply) -> Generator[Any]:
+    def probe(last: LastReply, identity: SessionIdentity | None) -> Generator[Any]:
         seen["active"] += 1
         seen["opens"] += 1
         seen["most"] = max(seen["most"], seen["active"])
         try:
-            with inner(last) as steps:
+            with inner(last, identity) as steps:
                 yield steps
         finally:
             seen["active"] -= 1

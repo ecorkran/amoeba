@@ -164,6 +164,19 @@ def test_a_clean_exit_deletes_the_row(store_path: Path) -> None:
     assert all_session_rows(store_path) == []
 
 
+def test_the_exit_call_uses_the_identity_of_the_last_tick(store_path: Path) -> None:
+    clock = FakeClock()
+    opener = Opener(store_path)
+    deps = make_deps(opener, clock)
+
+    anyio.run(_run_until, deps, clock, "a row", _row_in(store_path))
+
+    ticked, *_, ended = opener.identities
+    assert ticked is not None
+    assert ended == ticked
+    assert ticked.client and ticked.directory
+
+
 @pytest.mark.parametrize(
     "error",
     [

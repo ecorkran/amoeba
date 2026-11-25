@@ -50,6 +50,7 @@ from amoeba.wiring_presence import (
     HubRefusedError,
     HubUnreachableError,
     LastReply,
+    SessionIdentity,
     SessionTickReply,
     SessionTickRequest,
     StoreError,
@@ -126,7 +127,7 @@ async def _here(
 def _request(
     state: PresenceState,
     here: HereCaller | HereNotAProject,
-    client: str,
+    identity: SessionIdentity,
     way: str,
 ) -> SessionTickRequest:
     """The request for a pass that goes ``way``: no ``last_seen`` when the way is not
@@ -134,8 +135,8 @@ def _request(
     return SessionTickRequest(
         here=here,
         session_id=state.session_id,
-        client=client,
-        directory=_directory(state),
+        client=identity.client,
+        directory=identity.directory,
         last_seen=state.last_seen if way == state.way else None,
         push_confirmed=state.push_confirmed_at is not None,
     )
@@ -155,11 +156,19 @@ async def _step(
 ) -> TickOutcome:
     """The pass's step, in a worker thread that opens and closes its own steps."""
 
+    identity = SessionIdentity(
+        session_id=state.session_id,
+        project_id=here.project_id if isinstance(here, HereCaller) else None,
+        client=client,
+        directory=_directory(state),
+    )
+    state.identity = identity
+
     def work() -> TickOutcome:
         last = LastReply()
-        with deps.open_steps(last) as steps:
+        with deps.open_steps(last, identity) as steps:
             way = way_of(steps)
-            reply = tick_session(steps, _request(state, here, client, way))
+            reply = tick_session(steps, _request(state, here, identity, way))
         return TickOutcome(reply, way, machine_name(), last)
 
     # Abandoned at exit rather than waited for (D8): it finishes on its own.
