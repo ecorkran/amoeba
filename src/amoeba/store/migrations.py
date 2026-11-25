@@ -101,11 +101,11 @@ def _apply_pending(connection: sqlite3.Connection) -> bool:
     current = read_schema_version(connection)
     if current > EXPECTED_SCHEMA_VERSION:
         raise StoreSchemaError(
-            f"store is at schema version {current}, newer than the "
-            f"{EXPECTED_SCHEMA_VERSION} this code expects; refusing to downgrade. "
-            "This process is running older code than the store: restart the "
-            "amoeba MCP server (/mcp in Claude Code, or start a new session), "
-            "or upgrade amoeba-ai"
+            "this amoeba is older than its store and will not open it: the store "
+            f"is at schema version {current} and this amoeba reads up to "
+            f"{EXPECTED_SCHEMA_VERSION}. Upgrade amoeba-ai, then restart any amoeba "
+            "MCP server still running the old one (/mcp in Claude Code, or start "
+            "a new session)"
         )
     applied = False
     for version, script in migration_files():

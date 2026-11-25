@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import json
 import os
+import pty
 import shutil
 import sqlite3
 import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from threading import Thread
 from typing import Any
 
 import yaml
@@ -40,6 +42,7 @@ from amoeba.config.home import config_path, store_path
 
 AMOEBA = Path(sys.executable).with_name("amoeba")
 RUN_TIMEOUT_SECONDS = 60
+TERMINAL_READ_BYTES = 65536
 SYSTEM_PATH = "/usr/bin:/bin"
 #: The id and name of the project the default recording is in.
 PROJECT_ID: str = fixture_document(DEFAULT_WORKTREE)["id"]
@@ -88,6 +91,38 @@ def write_origin_free_git(bin_dir: Path) -> None:
     script.chmod(0o755)
 
 
+def _collect_terminal(reader: int, chunks: list[bytes]) -> None:
+    """Read the terminal until its last writer is gone.
+
+    Read while the child runs: macOS holds a process in exit until the terminal it
+    wrote to has been read.
+    """
+    while True:
+        try:
+            chunk = os.read(reader, TERMINAL_READ_BYTES)
+        except OSError:
+            # Linux reports a terminal with no writer left as an error, not as an end.
+            return
+        if not chunk:
+            return
+        chunks.append(chunk)
+
+
+def _communicate_at_terminal(
+    child: subprocess.Popen[Any], stdin: bytes | None, terminal: tuple[int, int]
+) -> tuple[bytes, bytes]:
+    """The child's stdout, and what it wrote to the terminal with plain newlines."""
+    reader, writer = terminal
+    os.close(writer)  # the child holds the only writing end now
+    chunks: list[bytes] = []
+    collector = Thread(target=_collect_terminal, args=(reader, chunks))
+    collector.start()
+    stdout, _ = child.communicate(stdin, timeout=RUN_TIMEOUT_SECONDS)
+    collector.join(RUN_TIMEOUT_SECONDS)
+    os.close(reader)
+    return stdout, b"".join(chunks).replace(b"\r\n", b"\n")
+
+
 def run_amoeba(  # noqa: PLR0913 - the fakes a subprocess run can be given
     tmp_path: Path,
     *arguments: str,
@@ -99,13 +134,15 @@ def run_amoeba(  # noqa: PLR0913 - the fakes a subprocess run can be given
     cwd: Path | None = None,
     routing: Sequence[RoutedProject] | None = None,
     real_git: bool = False,
+    stderr_terminal: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """Run ``amoeba``; ``as_json`` adds ``-j`` after the command name.
 
     ``cwd`` is the working directory (default ``tmp_path``). ``real_git`` runs the
     real ``git`` for ``origin`` too (the default says no repo has one). ``routing``
     replaces the recorded ``cf`` with one that knows those projects, for a test that
-    needs several members.
+    needs several members. ``stderr_terminal`` gives the command a terminal for
+    stderr, as when a person runs it; the default is a pipe, as when a hook does.
     """
     if as_json and arguments and not arguments[0].startswith("-"):
         arguments = (arguments[0], "-j", *arguments[1:])
@@ -135,15 +172,19 @@ def run_amoeba(  # noqa: PLR0913 - the fakes a subprocess run can be given
         HOME=str(home),
         AMOEBA_HOME=os.environ["AMOEBA_HOME"],
     )
+    terminal = pty.openpty() if stderr_terminal else None
     child = contained_popen(
         [str(AMOEBA), *arguments],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.PIPE if terminal is None else terminal[1],
         cwd=tmp_path if cwd is None else cwd,
         env=environment,
     )
-    stdout, stderr = child.communicate(stdin, timeout=RUN_TIMEOUT_SECONDS)
+    if terminal is None:
+        stdout, stderr = child.communicate(stdin, timeout=RUN_TIMEOUT_SECONDS)
+    else:
+        stdout, stderr = _communicate_at_terminal(child, stdin, terminal)
     return subprocess.CompletedProcess(
         child.args, child.returncode, stdout.decode(), stderr.decode()
     )

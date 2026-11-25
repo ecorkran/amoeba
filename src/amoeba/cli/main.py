@@ -3,11 +3,13 @@
 ``main`` parses the arguments, runs the command's runner (``cli.commands``) and turns
 the expected failures into an ``error: <ExceptionName>: <message>`` line on stderr and
 an exit code. ``handle_pause`` also appends the calls-log line (228 D11). The exit
-codes are defined in ``cli.exit_codes`` and re-exported here.
+codes are defined in ``cli.exit_codes`` and re-exported here. At a terminal the
+library's log records are message lines with no traceback (``cli.terminal_log``).
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 from collections.abc import Sequence
 
@@ -28,13 +30,14 @@ from amoeba.cli.exit_codes import (
     EXIT_REJECTED,
     EXIT_USAGE,
 )
-from amoeba.cli.hub_commands import HUB_COMMAND, run_hub
+from amoeba.cli.hub_commands import ACTION, HUB_COMMAND, SERVE, run_hub
 from amoeba.cli.init_command import INIT_COMMAND, run_init
 from amoeba.cli.join_command import JOIN_COMMAND, LEAVE_COMMAND, run_join, run_leave
 from amoeba.cli.parser import build_parser
 from amoeba.cli.registration_arguments import check_usage
 from amoeba.cli.resume_command import run_resume_run
 from amoeba.cli.stand_in_command import STAND_IN_COMMAND, run_stand_in
+from amoeba.cli.terminal_log import terminal_log
 from amoeba.cli.wake_command import run_wake_run
 from amoeba.config.home import StateLayout, state_layout
 from amoeba.hub.backups import BackupError
@@ -58,6 +61,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     arguments = parser.parse_args(argv)
     check_usage(parser, arguments)
+    if _serves_a_hub(arguments):
+        # The serving process logs to its rotating file and nowhere else (260 D16).
+        return _run(parser, arguments)
+    with terminal_log(sys.stderr):
+        return _run(parser, arguments)
+
+
+def _serves_a_hub(arguments: argparse.Namespace) -> bool:
+    return (
+        getattr(arguments, "cli_only", None) == HUB_COMMAND
+        and getattr(arguments, ACTION) == SERVE
+    )
+
+
+def _run(parser: argparse.ArgumentParser, arguments: argparse.Namespace) -> int:
+    """Run the parsed command and report its expected failures."""
     layout: StateLayout | None = None
     # A CLI-only command (``wake-run``) sets no operation.
     name: OperationName | None = getattr(arguments, "operation", None)

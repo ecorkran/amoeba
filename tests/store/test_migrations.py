@@ -79,12 +79,14 @@ def test_a_newer_stamp_raises_and_rolls_back() -> None:
     assert read_schema_version(connection) == 50
 
 
-def test_a_newer_stamp_error_tells_the_operator_to_restart() -> None:
+def test_a_newer_stamp_error_tells_the_operator_to_upgrade_then_restart() -> None:
     connection = _empty_database()
     migrate(connection)
     connection.execute("UPDATE schema_meta SET version = 50")
 
-    with pytest.raises(StoreSchemaError, match="restart the amoeba MCP server"):
+    with pytest.raises(
+        StoreSchemaError, match="Upgrade amoeba-ai, then restart any amoeba MCP"
+    ):
         migrate(connection)
 
 
