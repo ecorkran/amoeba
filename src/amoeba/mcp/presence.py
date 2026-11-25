@@ -9,7 +9,6 @@ sleeps, sends and keeps books.
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -20,6 +19,7 @@ import anyio
 import anyio.to_thread
 
 from amoeba.program_version import program_version
+from amoeba.wire.protocol import CLIENT_NAME_PATTERN
 from amoeba.wire.times import DOOR_VERSION
 from amoeba.wiring_presence import (
     CfRun,
@@ -35,8 +35,7 @@ logger = logging.getLogger(__name__)
 #: How long after an attempted channel event an ``inbox`` call still answers it: a
 #: queued event waits for the agent's current turn to end (D6).
 PUSH_ANSWER_SECONDS: Final = 300
-#: A ``clientInfo.name`` shown by ``list``; anything else is stored as the placeholder.
-CLIENT_NAME_PATTERN: Final = re.compile(r"[A-Za-z0-9._ -]{1,64}")
+#: A ``clientInfo.name`` not matching ``CLIENT_NAME_PATTERN`` is stored as this.
 UNRECOGNIZED_CLIENT: Final = "unrecognized"
 
 

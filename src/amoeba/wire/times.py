@@ -33,3 +33,10 @@ class DoorTimes:
     read_seconds: float = READ_SECONDS
     retry_seconds: float = RETRY_SECONDS
     retry_pause_seconds: float = RETRY_PAUSE_SECONDS
+
+
+#: A session's tick is one attempt: the next tick is the retry (263 D4). A retry time
+#: of 0 is also what keeps ``session_tick`` out of the writing steps.
+TICK_TIMES: Final = DoorTimes(retry_seconds=0.0)
+#: The longest a tick's call takes: one connect and one read.
+TICK_BOUND_SECONDS: Final = CONNECT_SECONDS + READ_SECONDS

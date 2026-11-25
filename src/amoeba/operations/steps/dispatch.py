@@ -22,6 +22,7 @@ from amoeba.operations.steps.pause import (
     question_wait,
 )
 from amoeba.operations.steps.resume import resume_claim, resume_read, resume_record
+from amoeba.operations.steps.session import session_end, session_tick
 from amoeba.operations.steps.settle import question_settle
 from amoeba.operations.steps.sources import pause_sources
 from amoeba.operations.steps.wake import wake_finish, wake_read, wake_set_pid
@@ -49,6 +50,8 @@ STEP_FUNCTIONS: Final[dict[str, StepFunction]] = {
     "wake_finish": wake_finish,
     "open_runs": open_runs,
     "claim_work": claim_work,
+    "session_tick": session_tick,
+    "session_end": session_end,
 }
 
 

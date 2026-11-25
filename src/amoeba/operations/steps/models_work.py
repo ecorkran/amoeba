@@ -53,5 +53,10 @@ class ClaimWorkReply(StepModel):
 
 
 CLAIM_WORK: Final = Step(
-    "claim_work", ClaimWorkRequest, ClaimWorkReply, writes=True, needs_config=True
+    "claim_work",
+    ClaimWorkRequest,
+    ClaimWorkReply,
+    writes=True,
+    keeps_result=True,
+    needs_config=True,
 )

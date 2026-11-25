@@ -118,8 +118,10 @@ def test_a_machine_name_of_64_characters_is_valid() -> None:
 
 def test_the_step_calls_are_the_step_models_names_and_writing_rows() -> None:
     assert set(STEP_CALLS) == set(STEP_MODELS)
-    assert len(STEP_CALLS) == len(set(STEP_CALLS)) == 16
-    assert {name for name, step in STEP_MODELS.items() if step.writes} == WRITING_STEPS
+    assert len(STEP_CALLS) == len(set(STEP_CALLS)) == 18
+    assert {
+        name for name, step in STEP_MODELS.items() if step.keeps_result
+    } == WRITING_STEPS
 
 
 def test_every_writing_step_has_the_step_advice() -> None:

@@ -16,14 +16,13 @@ from collections.abc import Sequence
 from typing import Final, TypedDict
 
 from amoeba.operations.names import OperationName
+from amoeba.wire.protocol import CHANNEL_EVENT_MAX_ENTRIES
 from amoeba.wiring_presence import DeliveryEvent, PushRow
 
 #: The notification method Claude Code listens on (channels reference, 20261116).
 CHANNEL_METHOD: Final = "notifications/claude/channel"
 #: The ``experimental`` capability key that registers the listener.
 CHANNEL_CAPABILITY: Final = "claude/channel"
-#: Most entries listed; the rest are counted as ``and K more``.
-CHANNEL_EVENT_MAX_ENTRIES: Final = 10
 #: ``meta`` keys: identifiers only, or Claude Code drops them silently.
 META_FIRST_SEQ: Final = "first_seq"
 META_LAST_SEQ: Final = "last_seq"

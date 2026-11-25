@@ -35,6 +35,7 @@ from amoeba.operations.steps.models_resume import (
     ResumeRecordRequest,
 )
 from amoeba.operations.steps.models_runs import OPEN_RUNS
+from amoeba.operations.steps.models_session import SESSION_END, SESSION_TICK
 from amoeba.operations.steps.models_wake import WAKE_FINISH, WAKE_READ, WAKE_SET_PID
 from amoeba.operations.steps.models_work import CLAIM_WORK
 
@@ -55,6 +56,8 @@ __all__ = [
     "RESUME_CLAIM",
     "RESUME_READ",
     "RESUME_RECORD",
+    "SESSION_END",
+    "SESSION_TICK",
     "STEP_MODELS",
     "ClaimStatus",
     "ResumeClaimPayload",
@@ -88,5 +91,7 @@ STEP_MODELS: Final[dict[str, Step[Any, Any]]] = {
         WAKE_FINISH,
         OPEN_RUNS,
         CLAIM_WORK,
+        SESSION_TICK,
+        SESSION_END,
     )
 }

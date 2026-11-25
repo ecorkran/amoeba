@@ -122,7 +122,7 @@ class DoorSteps:
                 ".".join(str(part) for part in problem["loc"]) or "(the reply)"
                 for problem in error.errors()
             )
-            applied = " The hub applied the step." if step.writes else ""
+            applied = " The hub applied the step." if step.keeps_result else ""
             raise StepReplyError(
                 f"the reply to step {step.name} does not fit its model at {fields}."
                 f"{applied}"

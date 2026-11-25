@@ -212,6 +212,18 @@ def _step_documents() -> list[tuple[str, object]]:
         ),
         ("pause_sources", {"member_id": CORE}),
         ("open_runs", {}),
+        (
+            "session_tick",
+            {
+                "here": {"project_id": LINT},
+                "session_id": "a" * 32,
+                "client": "claude-code",
+                "directory": "/alpha",
+                "last_seen": None,
+                "push_confirmed": False,
+            },
+        ),
+        ("session_end", {"session_id": "a" * 32}),
         ("wake_read", {"wake_id": WAKE_ID}),
         (
             "question_insert",

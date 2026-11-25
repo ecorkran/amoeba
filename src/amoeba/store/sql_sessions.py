@@ -26,18 +26,22 @@ _SESSION_COLUMNS: Final = (
 )
 
 #: Register and beat in one statement: a first insert sets every column, a later
-#: beat only the heartbeat, the confirmation and the two versions, so ``started_at``
-#: stays the first. The ``WHERE`` keeps another machine's session id from being
-#: refreshed: no row is affected and ``upsert_session`` raises.
+#: beat everything but ``started_at``, which stays the first.
+#: The ``WHERE`` keeps another machine's session id from being refreshed:
+#: no row is affected and ``upsert_session`` raises.
 UPSERT_SESSION: Final = (
     f"INSERT INTO sessions ({_SESSION_COLUMNS}, owner_id, machine_id) "
     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-    "ON CONFLICT (session_id) DO UPDATE SET heartbeat_at = excluded.heartbeat_at, "
+    "ON CONFLICT (session_id) DO UPDATE SET member_id = excluded.member_id, "
+    "client = excluded.client, directory = excluded.directory, "
+    "heartbeat_at = excluded.heartbeat_at, "
     "push_confirmed_at = excluded.push_confirmed_at, "
     "client_version = excluded.client_version, door_version = excluded.door_version "
     "WHERE sessions.machine_id = excluded.machine_id"
 )
-DELETE_SESSION: Final = "DELETE FROM sessions WHERE session_id = ?"
+#: Only the calling machine's row: another machine's session id is left alone.
+DELETE_SESSION: Final = "DELETE FROM sessions WHERE session_id = ? AND machine_id = ?"
+SELECT_SESSION: Final = f"SELECT {_SESSION_COLUMNS} FROM sessions WHERE session_id = ?"
 PRUNE_STALE_SESSIONS: Final = f"DELETE FROM sessions WHERE NOT ({LIVE_SESSION})"
 SELECT_LIVE_SESSIONS: Final = (
     f"SELECT {_SESSION_COLUMNS} FROM sessions WHERE {LIVE_SESSION} "

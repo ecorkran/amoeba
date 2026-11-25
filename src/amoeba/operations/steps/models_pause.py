@@ -193,6 +193,7 @@ QUESTION_INSERT: Final = Step(
     QuestionInsertRequest,
     InsertedReply,
     writes=True,
+    keeps_result=True,
     needs_config=False,
 )
 QUESTION_HOLD: Final = Step(
@@ -200,6 +201,7 @@ QUESTION_HOLD: Final = Step(
     QuestionHoldRequest,
     QuestionHoldReply,
     writes=True,
+    keeps_result=True,
     needs_config=False,
 )
 QUESTION_CLAIM_HELD: Final = Step(
@@ -207,6 +209,7 @@ QUESTION_CLAIM_HELD: Final = Step(
     QuestionClaimHeldRequest,
     QuestionClaimHeldReply,
     writes=True,
+    keeps_result=True,
     needs_config=False,
 )
 QUESTION_REPLACE_CLAIM: Final = Step(
@@ -214,10 +217,16 @@ QUESTION_REPLACE_CLAIM: Final = Step(
     QuestionReplaceClaimRequest,
     AppliedReply,
     writes=True,
+    keeps_result=True,
     needs_config=False,
 )
 QUESTION_WAIT: Final = Step(
-    "question_wait", QuestionWaitRequest, AppliedReply, writes=True, needs_config=False
+    "question_wait",
+    QuestionWaitRequest,
+    AppliedReply,
+    writes=True,
+    keeps_result=True,
+    needs_config=False,
 )
 
 
@@ -282,6 +291,7 @@ QUESTION_SETTLE: Final = Step(
     QuestionSettleRequest,
     QuestionSettleReply,
     writes=True,
+    keeps_result=True,
     needs_config=True,
 )
 PAUSE_SOURCES: Final = Step(
@@ -289,6 +299,7 @@ PAUSE_SOURCES: Final = Step(
     PauseSourcesRequest,
     PauseSourcesReply,
     writes=False,
+    keeps_result=False,
     needs_config=False,
 )
 
@@ -359,5 +370,6 @@ PAUSE_BEGIN: Final = Step(
     PauseBeginRequest,
     PauseBeginReply,
     writes=True,
+    keeps_result=True,
     needs_config=True,
 )

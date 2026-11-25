@@ -74,7 +74,7 @@ def _live_members(store: Store, now: datetime = NOW) -> frozenset[str]:
         return live_member_ids(transaction, now, STALE_SECONDS, DOOR_VERSION)
 
 
-def test_upsert_inserts_then_updates_only_the_beat_and_the_confirmation(
+def test_upsert_inserts_then_updates_all_but_the_start(
     store: Store,
 ) -> None:
     first = _session("s1")
@@ -94,9 +94,7 @@ def test_upsert_inserts_then_updates_only_the_beat_and_the_confirmation(
     _write(store, beat)
 
     (stored,) = _live(store, later)
-    assert stored == dataclasses.replace(
-        first, heartbeat_at=later, push_confirmed_at=later
-    )
+    assert stored == dataclasses.replace(beat, started_at=first.started_at)
 
 
 def test_a_row_recreated_after_a_prune_carries_the_original_start(

@@ -64,8 +64,18 @@ def upsert_session(transaction: Transaction, session: Session) -> None:
 
 
 def delete_session(transaction: Transaction, session_id: str) -> None:
-    """Remove the row; an unknown id is a no-op."""
-    transaction.execute(sql_sessions.DELETE_SESSION, (session_id,))
+    """Remove the calling machine's row; an unknown id, or one that belongs to
+    another machine, is a no-op."""
+    transaction.execute(
+        sql_sessions.DELETE_SESSION,
+        (session_id, transaction.acting("sessions").machine_id),
+    )
+
+
+def get_session(transaction: Transaction, session_id: str) -> Session | None:
+    """The row with this id, of any machine, or ``None``."""
+    row = transaction.execute(sql_sessions.SELECT_SESSION, (session_id,)).fetchone()
+    return None if row is None else _session(row)
 
 
 def prune_stale_sessions(
