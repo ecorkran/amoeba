@@ -36,8 +36,9 @@ from amoeba.config.home import (
 from amoeba.config.user_config import UserConfig, load_user_config
 from amoeba.operations.answer import answer
 from amoeba.operations.answering_run import STDERR_LOG_SUFFIX, STDOUT_LOG_SUFFIX
+from amoeba.operations.deadline import check_within_deadline
 from amoeba.operations.deps import Deps, production_deps
-from amoeba.operations.errors import OPERATION_ERRORS
+from amoeba.operations.errors import OPERATION_ERRORS, DeadlineError
 from amoeba.operations.names import Door, OperationName
 from amoeba.operations.processes import start_child
 from amoeba.operations.prune import prune
@@ -54,9 +55,7 @@ from amoeba.wire.join_line import JoinError
 from amoeba.wire.protocol import SessionIdentity
 from amoeba.wire.times import TICK_TIMES, DoorTimes
 from amoeba.wiring_door import (
-    NotServedError,
     joined,
-    refuse_if_joined,
     route,
 )
 from amoeba.wiring_gather import place_served
@@ -71,7 +70,6 @@ from amoeba.wiring_steps import (
 )
 
 __all__ = [
-    "NotServedError",
     "OPERATIONAL_ERRORS",
     "DeadlineError",
     "Door",
@@ -94,7 +92,6 @@ __all__ = [
     "prepare_home",
     "session_step_source",
     "state_layout",
-    "refuse_if_joined",
     "result_document",
     "start_child",
 ]
@@ -111,7 +108,6 @@ OPERATIONAL_ERRORS: Final = (
     HubUnreachableError,
     HubCertificateError,
     HubRefusedError,
-    NotServedError,
     StepReplyError,
 )
 
@@ -191,6 +187,8 @@ def invoke(
             directory-taking operation got none.
         OPERATIONAL_ERRORS: As the operation raises them.
     """
+    if name is OperationName.HANDLE_PAUSE:
+        raise _not_in_process(name)
     last = LastReply()
     layout = state_layout()
     deps = partial(default_deps, layout)
@@ -232,6 +230,10 @@ def local_edges() -> StepEdges:
     """The local steps' edges: the system clock and the user's config, loaded only by a
     step that needs it."""
     return StepEdges(lambda: datetime.now(UTC), load_config)
+
+
+def _not_in_process(name: OperationName) -> ValueError:
+    return ValueError(f"{name.value} is not run in-process: it is the CLI's own body")
 
 
 def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
@@ -282,9 +284,7 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
                 load_config,
             )
         case OperationName.HANDLE_PAUSE:
-            raise ValueError(
-                f"{name.value} is not run in-process: it is the CLI's own body"
-            )
+            raise _not_in_process(name)
         case _:
             assert_never(name)
 
@@ -309,10 +309,6 @@ def detached_logs(
         stdout=directory / f"{stem}{STDOUT_LOG_SUFFIX}",
         stderr=directory / f"{stem}{STDERR_LOG_SUFFIX}",
     )
-
-
-class DeadlineError(Exception):
-    """The config lets an ``answer`` run past the MCP call deadline."""
 
 
 #: Store waits ``answer`` can make before its resume: the legacy-move lock, the
@@ -340,12 +336,4 @@ def check_deadline(config: UserConfig, deadline_seconds: float) -> None:
         DeadlineError: ``answer_bound_seconds`` is not below ``deadline_seconds``;
             the message names ``resume_wait_seconds`` and the largest value allowed.
     """
-    bound = answer_bound_seconds(config)
-    if bound < deadline_seconds:
-        return
-    largest = deadline_seconds - (bound - config.resume_wait_seconds)
-    raise DeadlineError(
-        f"resume_wait_seconds is {config.resume_wait_seconds:g}, so an answer can "
-        f"take {bound:g} s, which is not below the MCP call deadline of "
-        f"{deadline_seconds:g} s; set resume_wait_seconds below {largest:g}"
-    )
+    check_within_deadline(config, answer_bound_seconds(config), deadline_seconds)

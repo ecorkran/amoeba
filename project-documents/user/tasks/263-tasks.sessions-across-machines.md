@@ -205,23 +205,25 @@ Between 4.4 and 4.7 the tests that touch what moved or is deleted fail by design
 
 ## 6. Start-up, the deadline and the door version (D8, D9, D14; effort 4)
 
-- [ ] **6.1 The deadline constant and the door version**
-  - [ ] `wire.times`: `MCP_CALL_DEADLINE_SECONDS` is 300 and `DOOR_VERSION` becomes 3. `mcp/in_process.py` and `mcp/server.py` import the constant; the 180 in `mcp/in_process.py` is deleted
-  - [ ] 260's pinned-tuple test (find it with `grep -rn DOOR_VERSION tests/wire tests/hub`) holds the version, the times and the deadline together
-  - [ ] Update `tests/mcp_server/test_deadline.py`, `tests/mcp_server/test_in_process.py` and `tests/test_message_timing.py` (it imports `MCP_CALL_DEADLINE_SECONDS` from `amoeba.mcp.in_process` at line 34) to the constant in `wire.times` and the local limit (`resume_wait_seconds` below 209.5). `grep -rn MCP_CALL_DEADLINE_SECONDS tests` finds no import from `amoeba.mcp.in_process` afterward
-  - [ ] Success: checks pass
-- [ ] **6.2 `DeadlineError` and the hub's check** (D9)
-  - [ ] Move `DeadlineError` to `operations/errors.py` and add it to `OPERATION_ERRORS`; `wiring.DeadlineError` stays as a name for the same class. The hub part of `answer` runs the check first when `via` is MCP, before anything is recorded, against `resume_claim_seconds(config)` and the constant; the message names `resume_wait_seconds`, the hub's `config.yaml`, the bound, the deadline and the largest value that passes
-  - [ ] Tests (`tests/hub/test_answer_deadline.py`): `resume_wait_seconds` 143.5 or more is refused as `hub_error` with `DeadlineError` in the message, naming the key and the largest passing value, and no answer is recorded; the example config records and resumes; the same `answer` from the CLI is not checked; the local MCP check is unchanged and bounds by 209.5
-  - [ ] Success: tests pass
-- [ ] **6.3 Start-up by mode** (D8; `mcp/server.py`)
-  - [ ] With no client file: today's checks (script, state move, config, deadline). With one: the `amoeba` script, and the client file and saved certificate load; a missing script or `ClientFileError` refuses with one line on stderr; no hub call, no local read and no config read. Remove 260's `NotServedError` check at start. In a hub home the state move raises `HubHomeError` and nothing opens
-  - [ ] Tests (`tests/mcp_server/test_server_main.py`): a home with only a client file and certificate starts with the hub stopped and creates no local file; with no local `config.yaml` present a tool call and a tick on that machine run; a missing certificate refuses and names the file; a hub home refuses with `HubHomeError` and the hub's store is unchanged
-  - [ ] Success: tests pass
-- [ ] **6.4 Nothing is unserved** (D14)
-  - [ ] Delete `NotServedError`, `refuse_if_joined` (`wiring_door.py`, lines 80-85) and the served check in `wiring_door.route` (line 118), and the tests that expect them. The hub's own `not_served` refusal stays. The design text for 260's entry-point table was brought up to date in 0.1
-  - [ ] Tests: every `OperationName` but `handle_pause` is in `SERVED_OPERATIONS` and `handle_pause` is not; a grep test that no source file names `NotServedError`; an MCP `add` with `wake_command` on a joined machine is rejected by `refuse_door_fields` and the hub's log shows no `add` call
-  - [ ] Success: checks pass
+- [x] **6.1 The deadline constant and the door version**
+  - [x] `wire.times`: `MCP_CALL_DEADLINE_SECONDS` is 300 and `DOOR_VERSION` becomes 3. `mcp/in_process.py` and `mcp/server.py` import the constant; the 180 in `mcp/in_process.py` is deleted
+  - [x] 260's pinned-tuple test (find it with `grep -rn DOOR_VERSION tests/wire tests/hub`) holds the version, the times and the deadline together
+  - [x] Update `tests/mcp_server/test_deadline.py`, `tests/mcp_server/test_in_process.py` and `tests/test_message_timing.py` (it imports `MCP_CALL_DEADLINE_SECONDS` from `amoeba.mcp.in_process` at line 34) to the constant in `wire.times` and the local limit (`resume_wait_seconds` below 209.5). `grep -rn MCP_CALL_DEADLINE_SECONDS tests` finds no import from `amoeba.mcp.in_process` afterward
+  - [x] Success: checks pass
+- [x] **6.2 `DeadlineError` and the hub's check** (D9)
+  - [x] Move `DeadlineError` to `operations/errors.py` and add it to `OPERATION_ERRORS`; `wiring.DeadlineError` stays as a name for the same class. The hub part of `answer` runs the check first when `via` is MCP, before anything is recorded, against `resume_claim_seconds(config)` and the constant; the message names `resume_wait_seconds`, the hub's `config.yaml`, the bound, the deadline and the largest value that passes
+  - [x] Tests (`tests/hub/test_answer_deadline.py`): `resume_wait_seconds` 143.5 or more is refused as `hub_error` with `DeadlineError` in the message, naming the key and the largest passing value, and no answer is recorded; the example config records and resumes; the same `answer` from the CLI is not checked; the local MCP check is unchanged and bounds by 209.5
+  - [x] Success: tests pass
+  - Note: the hub check uses `resume_claim_seconds(config)` as the bound (216.5 at 60 s); values of 143.5 or more are refused. One shared `check_within_deadline` serves local and hub, with a `config_in` text saying whose config it is.
+- [x] **6.3 Start-up by mode** (D8; `mcp/server.py`)
+  - [x] With no client file: today's checks (script, state move, config, deadline). With one: the `amoeba` script, and the client file and saved certificate load; a missing script or `ClientFileError` refuses with one line on stderr; no hub call, no local read and no config read. Remove 260's `NotServedError` check at start. In a hub home the state move raises `HubHomeError` and nothing opens
+  - [x] Tests (`tests/mcp_server/test_server_main.py`): a home with only a client file and certificate starts with the hub stopped and creates no local file; with no local `config.yaml` present a tool call and a tick on that machine run; a missing certificate refuses and names the file; a hub home refuses with `HubHomeError` and the hub's store is unchanged
+  - [x] Success: tests pass
+- [x] **6.4 Nothing is unserved** (D14)
+  - [x] Delete `NotServedError`, `refuse_if_joined` (`wiring_door.py`, lines 80-85) and the served check in `wiring_door.route` (line 118), and the tests that expect them. The hub's own `not_served` refusal stays. The design text for 260's entry-point table was brought up to date in 0.1
+  - [x] Tests: every `OperationName` but `handle_pause` is in `SERVED_OPERATIONS` and `handle_pause` is not; a grep test that no source file names `NotServedError`; an MCP `add` with `wake_command` on a joined machine is rejected by `refuse_door_fields` and the hub's log shows no `add` call
+  - [x] Success: checks pass
+  - Note: `wiring.invoke` now raises the `handle_pause` ValueError ahead of `route`, since `route` no longer has the served check. Docs still naming `NotServedError` (`cli-contract.md` lines about `amoeba-mcp start` and the error table, `mcp-server.md` start-up text) are rewritten in 9.2.
 
 **Commit**: `feat: start amoeba-mcp from a client file and raise the answer deadline to 300`
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 from functools import partial
 from pathlib import Path
-from typing import Final
 
 import anyio
 import anyio.to_thread
@@ -19,15 +18,9 @@ import anyio.to_thread
 from amoeba import wiring
 from amoeba.mcp.tools import ToolSpec
 from amoeba.operations.names import Door, OperationName
+from amoeba.wire.times import MCP_CALL_DEADLINE_SECONDS
 
 logger = logging.getLogger(__name__)
-
-#: The longest any MCP call may take. It must exceed ``wiring.answer_bound_seconds``
-#: for a sane config (that is 150.5 s for the config contract's example), so it cannot
-#: sit under Codex's default tool timeout of 60 s; the install doc tells Codex users to
-#: raise ``tool_timeout_sec`` to at least this plus 5. Claude Code's default is about
-#: 28 hours. Checked 20261112 (slice 226, task 0.3).
-MCP_CALL_DEADLINE_SECONDS: Final = 180.0
 
 
 class CallTimedOut(Exception):

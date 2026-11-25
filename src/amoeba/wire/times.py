@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Final
 
 #: The shape of the door. Raised when the call format or a time changes.
-DOOR_VERSION: Final = 2
+DOOR_VERSION: Final = 3
 #: Longest wait to connect, in seconds.
 CONNECT_SECONDS: Final = 3.0
 #: Longest wait for a reply to one attempt, in seconds.
@@ -23,6 +23,13 @@ RETRY_PAUSE_SECONDS: Final = 0.5
 CALL_BOUND_SECONDS: Final = RETRY_SECONDS + CONNECT_SECONDS + READ_SECONDS
 #: How long the hub keeps a writing call's result.
 CALL_RESULT_LIFETIME_SECONDS: Final = 600.0
+#: The longest any MCP call may take (263 D9). It must exceed ``answer_bound_seconds``
+#: for a sane config (150.5 s for the config contract's example) and the hub part of
+#: ``answer`` on the door, so it cannot sit under Codex's default tool timeout of 60 s;
+#: the install doc tells Codex users to raise ``tool_timeout_sec`` to at least this
+#: plus 5. Claude Code's default is about 28 hours. A change is a door version change:
+#: the hub checks ``answer`` against it.
+MCP_CALL_DEADLINE_SECONDS: Final = 300.0
 
 
 @dataclass(frozen=True)

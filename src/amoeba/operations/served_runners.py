@@ -18,6 +18,7 @@ from amoeba.operations.add import AddRequest, add, names_no_member
 from amoeba.operations.answer import record_answer
 from amoeba.operations.cancel import cancel
 from amoeba.operations.changes import changes
+from amoeba.operations.deadline import check_within_deadline
 from amoeba.operations.decisions import decisions
 from amoeba.operations.dismiss import dismiss
 from amoeba.operations.here_document import (
@@ -47,8 +48,11 @@ from amoeba.operations.served_types import (
 )
 from amoeba.operations.standing import standing
 from amoeba.operations.status import status
+from amoeba.operations.steps.limits import resume_claim_seconds
 from amoeba.operations.withdraw import withdraw
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import Door
+from amoeba.wire.times import MCP_CALL_DEADLINE_SECONDS
 
 
 def gather_caller_always(document: object) -> Gather:
@@ -225,9 +229,17 @@ def run_answer(
     """The hub part of ``answer`` (262 D7); the client part runs the resume."""
     if values.via is None:
         raise AssertionError("answer needs the door it came through; none was parsed")
-    return record_answer(
-        store, edges.load_config(), document, now=edges.clock(), via=values.via
-    )
+    config = edges.load_config()
+    if edges.local is None and values.via is Door.MCP:
+        # On the hub: the MCP door's call must outlast the whole of an answer, the
+        # claim's life included, so the check comes before anything is recorded (D9).
+        check_within_deadline(
+            config,
+            resume_claim_seconds(config),
+            MCP_CALL_DEADLINE_SECONDS,
+            config_in=" in the hub's config.yaml",
+        )
+    return record_answer(store, config, document, now=edges.clock(), via=values.via)
 
 
 def run_reply(

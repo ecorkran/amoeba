@@ -40,7 +40,6 @@ from amoeba.store.set_aside import (
 )
 from amoeba.store.vocabulary import Door
 from amoeba.wire.join_line import JoinError, parse_join_line
-from amoeba.wire.protocol import SERVED_OPERATIONS
 from amoeba.wiring_gather import body_keys, finish_client_part, gather_values
 from amoeba.wiring_results import OperationResult, result_from_document
 from amoeba.wiring_steps import DoorSteps, take_work_keys
@@ -48,10 +47,6 @@ from amoeba.wiring_steps import DoorSteps, take_work_keys
 #: How the two commands are named in a message.
 JOIN_COMMAND: Final = "join"
 LEAVE_COMMAND: Final = "leave"
-
-
-class NotServedError(Exception):
-    """This machine is joined and the door does not serve the operation yet."""
 
 
 def local_served_edges(
@@ -77,21 +72,6 @@ def joined() -> ClientFile | None:
     return load_client_file(client_path, pinned_cert_path())
 
 
-def refuse_if_joined(operation: str) -> None:
-    """Raise ``NotServedError`` when this machine is joined: the entry points whose
-    operation the door does not serve call this before reading anything local."""
-    client_file = joined()
-    if client_file is not None:
-        raise NotServedError(_not_served(client_file, operation))
-
-
-def _not_served(client_file: ClientFile, operation: str) -> str:
-    return (
-        f"this machine is joined to the hub at {client_file.address}, and the door "
-        f"does not serve {operation} yet"
-    )
-
-
 def route(  # noqa: PLR0913 - invoke's arguments, the deps and the door's steps
     name: OperationName,
     document: object,
@@ -106,17 +86,14 @@ def route(  # noqa: PLR0913 - invoke's arguments, the deps and the door's steps
     ``ContextForgeError`` is raised before any hub call), goes through
     ``client.call`` with the gathered values beside the document, and comes back as
     the typed result the local way returns, after the client part that follows the
-    hub part (a resume, a wake, the file clean-up) ran on ``steps``; any other
-    raises ``NotServedError``. ``add``'s door refusal is returned as the result it
-    is, with no call. With a client file nothing local is read or written first. The
-    reply's work keys go into ``steps.last``; a call that got no reply marks it
-    unreachable.
+    hub part (a resume, a wake, the file clean-up) ran on ``steps``. ``add``'s door
+    refusal is returned as the result it is, with no call. With a client file nothing
+    local is read or written first. The reply's work keys go into ``steps.last``; a
+    call that got no reply marks it unreachable.
     """
     client_file = joined()
     if client_file is None:
         return None
-    if name.value not in SERVED_OPERATIONS:
-        raise NotServedError(_not_served(client_file, name.value))
     deps = make_deps()
     values = gather_values(name, document, directory, door, deps, steps)
     if isinstance(values, SetUpResult):

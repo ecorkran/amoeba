@@ -7,9 +7,9 @@ import pytest
 from user_configs import user_config
 
 from amoeba.config.user_config import UserConfig
-from amoeba.mcp.in_process import MCP_CALL_DEADLINE_SECONDS
 from amoeba.operations.resume_timing import resume_bound_seconds
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS
+from amoeba.wire.times import MCP_CALL_DEADLINE_SECONDS
 from amoeba.wiring import (
     ANSWER_STORE_WAITS,
     DeadlineError,
@@ -75,3 +75,10 @@ def test_the_real_deadline_refuses_a_wait_it_cannot_cover() -> None:
     # that it is above zero), so ``check_deadline`` at start-up is the guard.
     with pytest.raises(DeadlineError, match="resume_wait_seconds"):
         check_deadline(_with_wait(MCP_CALL_DEADLINE_SECONDS), MCP_CALL_DEADLINE_SECONDS)
+
+
+def test_the_local_limit_on_resume_wait_seconds_is_below_209_5() -> None:
+    """The 300 s deadline less the answer's fixed 90.5 s (263 D9)."""
+    check_deadline(_with_wait(209), MCP_CALL_DEADLINE_SECONDS)
+    with pytest.raises(DeadlineError, match="resume_wait_seconds"):
+        check_deadline(_with_wait(209.5), MCP_CALL_DEADLINE_SECONDS)

@@ -31,7 +31,6 @@ from operations.message_support import (
 from operations.release_support import SettableClock
 from operations.set_up_support import DIRECTORY, FakeCf
 
-from amoeba.mcp.in_process import MCP_CALL_DEADLINE_SECONDS
 from amoeba.operations.deps import RUN_POLL_TIMEOUT_SECONDS, Deps
 from amoeba.operations.here import ORIGIN_READ_TIMEOUT_SECONDS
 from amoeba.operations.names import OperationName
@@ -40,6 +39,7 @@ from amoeba.operations.wake import WAKE_BOUND_SECONDS
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.store.vocabulary import Door
 from amoeba.upstream.context_forge.project_of import CF_GET_TIMEOUT_SECONDS
+from amoeba.wire.times import MCP_CALL_DEADLINE_SECONDS
 from amoeba.wiring_gather import place_served
 from amoeba.wiring_messages import (
     MESSAGE_LOOKUPS,

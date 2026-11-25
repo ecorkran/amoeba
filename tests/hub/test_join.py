@@ -25,7 +25,7 @@ from amoeba.store.machines import hash_token, machine_for_token
 from amoeba.store.questions import insert_question
 from amoeba.wire.join_line import JoinError
 from amoeba.wire.protocol import RefusalCode
-from amoeba.wiring_door import NotServedError, join, join_address, leave
+from amoeba.wiring_door import join, join_address, leave
 from hub.call_support import ALPHA_TOKEN, BETA_TOKEN
 from hub.in_process_hub import InProcessHub
 from hub.join_support import (
@@ -288,7 +288,7 @@ def test_a_joined_machine_serves_the_served_operations_through_the_hub_and_no_ot
         Path("/anywhere"),
         Door.CLI,
     )
-    with pytest.raises(NotServedError, match="does not serve handle_pause"):
+    with pytest.raises(ValueError, match="handle_pause is not run in-process"):
         wiring.invoke(OperationName.HANDLE_PAUSE, {}, Path("/anywhere"), Door.CLI)
 
     assert getattr(listed, "outcome").value == "listed"  # noqa: B009
