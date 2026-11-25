@@ -1,8 +1,8 @@
 """241's push check reports a note the way it reports a request (slice 243, push).
 
 A fixture member has a baseline; a direct note, a program note and a release note
-(through ``report_release``) reach it by the real operations; the push check (the
-watcher's two reads and ``channel_event``) then finds one event whose entries name
+(through ``report_release``) reach it by the real operations; the tick's reply
+and ``channel_event`` then finds one event whose entries name
 ``note``, ``sent`` and the sender's member id, and holds no subject, body or note id.
 """
 
@@ -30,13 +30,15 @@ from store.message_support import PROGRAM
 from store.release_support import FULL_HASH, PROVIDER, seed_checkout
 from store.seed import insert_member, insert_pair
 from store_open import open_local_store
+from user_configs import user_config
 
 from amoeba.mcp.channel_event import channel_event
 from amoeba.operations.release_notes import RELEASE_NOTE_ID_PREFIX
 from amoeba.operations.report_release_models import ReportOutcome
+from amoeba.operations.steps.dispatch import StepEdges, run_step
+from amoeba.operations.steps.models_session import SessionTickReply
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ConsumedMode, DeliveryEvent, MessageKind
-from amoeba.wiring_presence import read_high_seq, read_push_rows
 from mcp_server.presence_rig import START
 
 #: Planted in the text of every note; must never reach the event.
@@ -80,10 +82,24 @@ def test_a_direct_note_a_program_note_and_a_release_note_make_one_event(
     send_deps = message_deps(tmp_path, clock)
     release_dependencies = release_deps(tmp_path, clock)
 
-    def open_store() -> Store:
-        return open_local_store(store.path)
+    def tick(last_seen: int | None) -> SessionTickReply:
+        reply = run_step(
+            "session_tick",
+            store,
+            {
+                "here": {"project_id": RECIPIENT},
+                "session_id": "b" * 32,
+                "client": "claude-code",
+                "directory": "/work",
+                "last_seen": last_seen,
+                "push_confirmed": False,
+            },
+            StepEdges(lambda: START, user_config),
+        )
+        assert isinstance(reply, SessionTickReply)
+        return reply
 
-    baseline = read_high_seq(open_store, RECIPIENT)
+    baseline = tick(None).high_seq
     direct = send_note_as_sender(
         store,
         send_deps,
@@ -109,9 +125,10 @@ def test_a_direct_note_a_program_note_and_a_release_note_make_one_event(
     assert direct.outcome.value == shared.outcome.value == "sent"
     assert reported.outcome is ReportOutcome.RECORDED
 
-    assert read_high_seq(open_store, RECIPIENT) > baseline
-    rows = read_push_rows(open_store, RECIPIENT, baseline)
-    event = channel_event(rows)
+    reply = tick(baseline)
+    assert reply.high_seq > baseline
+    rows = reply.entries
+    event = channel_event(rows, count=reply.count, last_seq=reply.high_seq)
 
     assert [(row.kind, row.event) for row in rows] == [
         (MessageKind.NOTE, DeliveryEvent.SENT)

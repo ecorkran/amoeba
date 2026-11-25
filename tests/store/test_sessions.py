@@ -14,7 +14,6 @@ from amoeba.store.models import Session
 from amoeba.store.programs import remove_member
 from amoeba.store.sessions import (
     delete_session,
-    heartbeat,
     live_member_ids,
     live_sessions,
     prune_stale_sessions,
@@ -108,9 +107,7 @@ def test_a_row_recreated_after_a_prune_carries_the_original_start(
     assert count_sessions(store) == 0
 
     with store.write() as transaction:
-        heartbeat(
-            transaction, dataclasses.replace(session, heartbeat_at=woke), STALE_SECONDS
-        )
+        upsert_session(transaction, dataclasses.replace(session, heartbeat_at=woke))
 
     (stored,) = _live(store, woke)
     assert stored.started_at == NOW
@@ -184,7 +181,8 @@ def test_one_servers_prune_deletes_every_members_stale_rows_and_keeps_live_ones(
     )
 
     with store.write() as transaction:
-        heartbeat(transaction, _session("beating", member_id=ADDRESSEE), STALE_SECONDS)
+        prune_stale_sessions(transaction, NOW, STALE_SECONDS)
+        upsert_session(transaction, _session("beating", member_id=ADDRESSEE))
 
     with store.read() as transaction:
         ids = [row[0] for row in transaction.execute("SELECT session_id FROM sessions")]

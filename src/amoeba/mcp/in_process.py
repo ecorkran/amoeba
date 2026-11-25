@@ -54,7 +54,7 @@ def _invoke_logged(
         wiring.check_deadline(wiring.load_config(), MCP_CALL_DEADLINE_SECONDS)
     try:
         return wiring.result_document(
-            wiring.invoke(name, document, directory, Door.MCP)
+            wiring.invoke(name, document, directory, Door.MCP, after_step=False)
         )
     except Exception:
         logger.exception("%s failed in its worker thread", name.value)

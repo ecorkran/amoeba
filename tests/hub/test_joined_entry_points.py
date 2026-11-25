@@ -28,9 +28,9 @@ from amoeba.mcp.presence import PresenceDeps, PresenceState
 from amoeba.mcp.presence_task import run_presence
 from amoeba.mcp.tools import TOOLS
 from amoeba.operations.names import Door, OperationName
-from amoeba.store.errors import LocalStoreClosedError
 from amoeba.wire.protocol import SERVED_OPERATIONS
 from amoeba.wiring_door import NotServedError
+from amoeba.wiring_steps import steps_for
 
 HUB = "hub.example:8443"
 UNSERVED = [name for name in OperationName if name.value not in SERVED_OPERATIONS]
@@ -119,17 +119,17 @@ def test_amoeba_mcp_start_raises_not_served_before_the_state_move(
     assert _tree(joined_home.state_home) == before
 
 
-def test_a_running_mcp_server_that_is_then_joined_hits_the_store_error_handler(
+def test_a_running_mcp_server_that_is_then_joined_ticks_on_the_door_and_writes_nothing(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     layout = state_layout()
     seed_member(layout.store_path)
     clock = FakeClock()
     deps = PresenceDeps(
-        open_store=partial(wiring.open_store, layout),
+        open_steps=lambda last: steps_for(layout, last, lambda: FAST),
         cf_run=fake_cf_run(DEFAULT_WORKTREE),
         clock=clock,
-        timing=FAST,
+        after_deps=partial(wiring.default_deps, layout),
     )
     state = PresenceState(started_at=clock())
     connection = make_connection(RecordingOutbound())
@@ -146,18 +146,14 @@ def test_a_running_mcp_server_that_is_then_joined_hits_the_store_error_handler(
             before = _tree(layout.state_home)
             await eventually(
                 lambda: any(
-                    "presence stopped" in r.getMessage() for r in caplog.records
+                    r.getMessage().startswith("tick failed:") for r in caplog.records
                 ),
-                "presence to stop",
+                "a tick to fail on the door",
             )
             assert _tree(layout.state_home) == before
+            group.cancel_scope.cancel()
 
     with caplog.at_level(logging.INFO):
         anyio.run(scenario)
 
-    stopped = [
-        r.exc_info[1]
-        for r in caplog.records
-        if r.exc_info is not None and isinstance(r.exc_info[1], LocalStoreClosedError)
-    ]
-    assert stopped
+    assert not [r for r in caplog.records if "presence stopped" in r.getMessage()]

@@ -1,7 +1,8 @@
 """``amoeba.mcp`` holds no operation logic and reaches nothing but ``wiring`` and the
 operations' types (slice 226, D10, task 5.3).
 
-It imports none of ``store``, ``config``, ``upstream``, ``answering`` or ``cli``: what
+It imports none of ``store``, ``config``, ``upstream``, ``answering``, ``cli`` or
+``client`` (263 D1): what
 it needs from them (``start_child``, ``LaunchError``, ``LaunchLogs``, the log paths)
 comes through ``wiring``. The scan walks the parsed source and resolves relative
 imports, so ``from ..store import x`` is caught as ``amoeba.store``.
@@ -22,6 +23,7 @@ FORBIDDEN = (
     "amoeba.upstream",
     "amoeba.answering",
     "amoeba.cli",
+    "amoeba.client",
 )
 
 
@@ -80,6 +82,8 @@ def test_no_mcp_module_imports_a_forbidden_package(path: Path) -> None:
         "from ..store import Store\n",
         "from ..config import home\n",
         "from .. import cli\n",
+        "from amoeba.client.call import call\n",
+        "from ..client import errors\n",
     ],
 )
 def test_the_scan_catches_each_way_of_importing(source: str) -> None:

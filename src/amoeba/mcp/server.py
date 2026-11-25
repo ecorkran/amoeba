@@ -38,12 +38,7 @@ from amoeba.mcp.in_process import (
 )
 from amoeba.mcp.inbox_resource import initialization_options, register_inbox_resource
 from amoeba.mcp.pinned_loop import serve_pinned
-from amoeba.mcp.presence import (
-    PresenceDeps,
-    PresenceState,
-    SessionTiming,
-    ToolPresence,
-)
+from amoeba.mcp.presence import PresenceDeps, PresenceState, ToolPresence
 from amoeba.mcp.presence_task import run_presence
 from amoeba.mcp.tools import (
     TOOLS,
@@ -53,7 +48,6 @@ from amoeba.mcp.tools import (
     input_schema,
     prepare_arguments,
 )
-from amoeba.wiring_presence import StoreOpener
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +178,7 @@ async def call_tool(
         return _error(f"internal error: {error}")
 
 
-def build_server(presence: ToolPresence, open_store: StoreOpener) -> Server[Any]:
+def build_server(presence: ToolPresence) -> Server[Any]:
     """The MCP server: one tool per ``TOOLS`` row, no input validation by the SDK,
     and the ``amoeba://inbox`` resource over ``presence`` (slice 241, D5).
 
@@ -217,14 +211,14 @@ def build_server(presence: ToolPresence, open_store: StoreOpener) -> Server[Any]
         on_list_tools=on_list_tools,
         on_call_tool=on_call_tool,
     )
-    register_inbox_resource(server, presence.state, open_store)
+    register_inbox_resource(server, presence.state)
     return server
 
 
 async def _serve(deps: PresenceDeps) -> None:
     """Serve tools, with presence beside the loop in its own task (slice 241, D1)."""
     state = PresenceState(started_at=deps.clock())
-    server = build_server(ToolPresence(state, deps.clock), deps.open_store)
+    server = build_server(ToolPresence(state, deps.clock))
 
     async def presence(connection: Connection) -> None:
         await run_presence(connection, state, deps)
@@ -244,20 +238,16 @@ def serve(deps: PresenceDeps) -> None:
     anyio.run(_serve, deps)
 
 
-def _presence_deps(config: wiring.UserConfig) -> PresenceDeps:
-    """The real store opener, ``cf`` runner and clock, and the config's timing."""
+def _presence_deps() -> PresenceDeps:
+    """The real step source, ``cf`` runner and clock; the config is read by the steps
+    that need it, never here."""
     layout = wiring.state_layout()
     deps = wiring.default_deps(layout)
-    timing = SessionTiming(
-        notify_poll_seconds=config.notify_poll_seconds,
-        session_heartbeat_seconds=config.session_heartbeat_seconds,
-        session_stale_seconds=config.session_stale_seconds,
-    )
     return PresenceDeps(
-        open_store=partial(wiring.open_store, layout),
+        open_steps=wiring.session_step_source(layout),
         cf_run=deps.cf_run,
         clock=deps.clock,
-        timing=timing,
+        after_deps=partial(wiring.default_deps, layout),
     )
 
 
@@ -288,7 +278,7 @@ def main() -> None:
         wiring.prepare_home()
         config = wiring.load_config()
         wiring.check_deadline(config, MCP_CALL_DEADLINE_SECONDS)
-        deps = _presence_deps(config)
+        deps = _presence_deps()
     except (AmoebaScriptMissing, wiring.DeadlineError, *wiring.OPERATIONAL_ERRORS) as e:
         _refuse_to_start(e)
     serve(deps)

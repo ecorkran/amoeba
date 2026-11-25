@@ -1,9 +1,10 @@
-"""Presence: which member this server is, its session row and push confirmation
-(slice 241, D2, D3, D6).
+"""Presence: what a serving session knows of its member and its push (slice 241, D2,
+D6; slice 263, D1, D3, D4).
 
-Only event-loop tasks touch ``PresenceState``. Every store and ``cf`` call runs in a
-worker thread that opens its own store through the injected opener, so the loop only
-sleeps, sends and keeps books.
+Only event-loop tasks touch ``PresenceState``. The tick (``mcp.tick``) updates it from
+each reply, the resource handlers and the tools read it, and every step and ``cf`` call
+runs in a worker thread that opens its own steps, so the loop only sleeps, sends and
+keeps books.
 """
 
 from __future__ import annotations
@@ -16,19 +17,9 @@ from typing import Final
 from uuid import uuid4
 
 import anyio
-import anyio.to_thread
 
-from amoeba.program_version import program_version
 from amoeba.wire.protocol import CLIENT_NAME_PATTERN
-from amoeba.wire.times import DOOR_VERSION
-from amoeba.wiring_presence import (
-    CfRun,
-    Session,
-    StoreBusyError,
-    StoreOpener,
-    beat_session,
-    lookup_member,
-)
+from amoeba.wiring_presence import CfRun, Deps, StepSource
 
 logger = logging.getLogger(__name__)
 
@@ -40,39 +31,48 @@ UNRECOGNIZED_CLIENT: Final = "unrecognized"
 
 
 @dataclass(frozen=True)
-class SessionTiming:
-    """The three config keys (D7)."""
-
-    notify_poll_seconds: float
-    session_heartbeat_seconds: float
-    session_stale_seconds: float
-
-
-@dataclass(frozen=True)
 class PresenceDeps:
     """What presence needs from outside; a test substitutes each."""
 
-    open_store: StoreOpener
+    #: The steps one worker thread uses, opened and closed in that thread.
+    open_steps: StepSource
     cf_run: CfRun
     clock: Callable[[], datetime]
-    timing: SessionTiming
+    #: The operation deps the after-step is given (``wiring.default_deps``).
+    after_deps: Callable[[], Deps]
 
 
 @dataclass
 class PresenceState:
-    """The server's presence: pending, a member, or off with a reason.
+    """The server's presence: what the newest tick reply said.
 
-    ``resolved`` is set once resolution ends, however it ends, so pending always ends.
-    Read by the resource handlers, written by the presence task and ``call_tool``;
-    all run on the event loop.
+    ``resolved`` is set once the first tick ends, however it ends, so a handler
+    waiting on it always stops waiting. Read by the resource handlers, written by the
+    tick and ``call_tool``; all run on the event loop.
     """
 
     started_at: datetime
     session_id: str = field(default_factory=lambda: uuid4().hex)
+    #: The newest reply's member and its name; ``None`` with no member or no reply.
     member_id: str | None = None
+    member_name: str | None = None
+    #: Why the newest reply had no member.
     off_reason: str | None = None
     directory: str | None = None
     subscribed: bool = False
+    #: The newest reply's ``as_of_seq``; ``None`` until a tick has had a reply.
+    as_of_seq: int | None = None
+    #: The newest tick's failure, as ``<ErrorName>: <text>``; cleared by a reply.
+    last_error: str | None = None
+    #: Whether a reply ever named a member: the session then ends its row at exit.
+    told_member: bool = False
+    #: The poll interval the newest reply gave; ``None`` before the first reply.
+    poll_seconds: float | None = None
+    #: The way (door or local), the member and the highest delivery number the last
+    #: reply left this session at: the baseline the next request builds on.
+    way: str | None = None
+    baseline_member: str | None = None
+    last_seen: int | None = None
     #: When the last channel event still waiting for an answer was attempted.
     attempt_at: datetime | None = None
     #: When an ``inbox`` call first followed an attempted event; sticky.
@@ -80,46 +80,25 @@ class PresenceState:
     resolved: anyio.Event = field(default_factory=anyio.Event)
 
 
-class BusyWarning:
-    """A ``StoreBusyError`` is logged once per run of failures, not once per tick."""
+class FailureLog:
+    """One WARNING when a run of failures starts or its error type changes, one INFO
+    when the next attempt succeeds (263 D4): a refused call repeated every poll
+    interval is one line, not one per tick."""
 
     def __init__(self, what: str) -> None:
         self._what = what
-        self._warned = False
+        self._failing: str | None = None
 
-    def failed(self, error: StoreBusyError) -> None:
-        if not self._warned:
-            logger.warning("%s: store busy, retrying: %s", self._what, error)
-            self._warned = True
+    def failed(self, error: Exception) -> None:
+        kind = type(error).__name__
+        if kind != self._failing:
+            logger.warning("%s failed: %s: %s", self._what, kind, error)
+        self._failing = kind
 
-    def cleared(self) -> None:
-        self._warned = False
-
-
-async def resolve_presence(state: PresenceState, deps: PresenceDeps) -> None:
-    """Resolve the member once (D3); ``state.resolved`` is set in every outcome.
-
-    Raises:
-        ContextForgeError: ``cf`` failed or timed out.
-        StoreError: The member lookup failed.
-    """
-    try:
-        try:
-            found = await anyio.to_thread.run_sync(
-                lookup_member, deps.open_store, deps.cf_run
-            )
-        except Exception:
-            state.off_reason = "the member lookup failed"
-            logger.exception("no presence: %s", state.off_reason)
-            raise
-        state.directory = str(found.directory)
-        if found.member_id is not None:
-            state.member_id = found.member_id
-        else:
-            state.off_reason = f"{found.directory} is not a member"
-            logger.info("no presence: %s (%s)", state.off_reason, found.detail)
-    finally:
-        state.resolved.set()
+    def recovered(self) -> None:
+        if self._failing is not None:
+            logger.info("%s recovered", self._what)
+        self._failing = None
 
 
 def client_name(name: str | None) -> str:
@@ -130,46 +109,6 @@ def client_name(name: str | None) -> str:
         "client name %r is not displayable; stored as %s", name, UNRECOGNIZED_CLIENT
     )
     return UNRECOGNIZED_CLIENT
-
-
-def _session(state: PresenceState, client: str, now: datetime) -> Session:
-    if state.member_id is None or state.directory is None:
-        raise ValueError("a session row needs a resolved member and directory")
-    return Session(
-        session_id=state.session_id,
-        member_id=state.member_id,
-        client=client,
-        directory=state.directory,
-        started_at=state.started_at,
-        heartbeat_at=now,
-        push_confirmed_at=state.push_confirmed_at,
-        client_version=program_version(),
-        door_version=DOOR_VERSION,
-    )
-
-
-async def heartbeat_loop(state: PresenceState, deps: PresenceDeps, client: str) -> None:
-    """Beat now, then every ``session_heartbeat_seconds``, until cancelled.
-
-    Raises:
-        StoreError: Any store failure but a busy store.
-    """
-    busy = BusyWarning("session heartbeat")
-    while True:
-        session = _session(state, client, deps.clock())
-        try:
-            await anyio.to_thread.run_sync(
-                beat_session,
-                deps.open_store,
-                session,
-                deps.timing.session_stale_seconds,
-            )
-            busy.cleared()
-        except StoreBusyError as error:
-            # Push is a hint and polling is the floor: a missed beat is retried at
-            # the next one, and the first that succeeds re-creates a pruned row.
-            busy.failed(error)
-        await anyio.sleep(deps.timing.session_heartbeat_seconds)
 
 
 def _answer_limit() -> timedelta:
@@ -193,6 +132,8 @@ def note_inbox_called(state: PresenceState, now: datetime) -> None:
     the event reached the agent: the client gives no delivery signal, so an agent
     calling ``inbox`` for its own reasons inside the window also confirms (D6
     accepts that misread). Confirmation is sticky; the attempt is cleared either way.
+    The window is the client's own measure: only whether it was met (``push_confirmed``)
+    crosses the door.
     """
     waiting = state.attempt_at
     answered = waiting is not None and now - waiting <= _answer_limit()

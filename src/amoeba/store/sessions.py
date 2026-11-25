@@ -1,8 +1,9 @@
 """Serving sessions: register, beat, prune, exit, and who is live (slice 241, D6).
 
-Each serving ``amoeba-mcp`` keeps one row. ``heartbeat`` prunes every member's stale
-rows and upserts its own in one write transaction, so the table holds the live rows
-plus the rows of servers killed since the last beat of any server.
+Each serving ``amoeba-mcp`` keeps one row. A refresh (``operations.steps.session``)
+prunes every member's stale rows and upserts its own in one write transaction, so the
+table holds the live rows plus the rows of servers killed since the last refresh of
+any server.
 """
 
 from __future__ import annotations
@@ -86,15 +87,6 @@ def prune_stale_sessions(
         sql_sessions.PRUNE_STALE_SESSIONS,
         (_oldest_live_heartbeat(now, stale_seconds),),
     )
-
-
-def heartbeat(transaction: Transaction, session: Session, stale_seconds: float) -> None:
-    """One beat: prune stale rows at ``session.heartbeat_at``, then upsert ``session``.
-
-    The caller runs it inside one write transaction.
-    """
-    prune_stale_sessions(transaction, session.heartbeat_at, stale_seconds)
-    upsert_session(transaction, session)
 
 
 def live_sessions(

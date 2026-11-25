@@ -28,10 +28,12 @@ from cf_fixtures import DEFAULT_WORKTREE, fixture_document
 from cli.cli_support import write_config
 from mcp import ClientSession
 from mcp_server.presence_rig import (
+    FAST,
     START,
     Opener,
     RecordingOutbound,
     make_connection,
+    make_deps,
     seed_member,
     sessions_in,
 )
@@ -39,21 +41,16 @@ from mcp_server.serving_rig import presence_background, serving
 from store.message_support import send_request
 from store_open import open_local_store
 
-from amoeba.mcp import presence
 from amoeba.mcp.channel_event import CHANNEL_METHOD
-from amoeba.mcp.presence import (
-    PresenceDeps,
-    PresenceState,
-    SessionTiming,
-    ToolPresence,
-)
+from amoeba.mcp.presence import PresenceDeps, PresenceState, ToolPresence
 from amoeba.mcp.presence_task import run_presence
 from amoeba.mcp.server import build_server
+from amoeba.operations.steps import session as session_steps
 from amoeba.store.deliveries import write_delivery
 from amoeba.store.models import Session
+from amoeba.store.store import Transaction
 from amoeba.store.vocabulary import DeliveryEvent
 from amoeba.upstream.context_forge.cli_call import CfRun
-from amoeba.wiring_presence import StoreOpener, beat_session
 
 PRESENCES: Final = 12
 #: Members that get mail; the served one (index 0) gets none, so its client's
@@ -63,10 +60,12 @@ BURSTS: Final = 3
 DELIVERIES_PER_BURST: Final = 2
 #: Long enough between bursts that every watcher ticks several times in the gap.
 BURST_GAP_SECONDS: Final = 0.6
-TIMING: Final = SessionTiming(
-    notify_poll_seconds=0.02,
-    session_heartbeat_seconds=0.05,
-    session_stale_seconds=1.0,
+TIMING: Final = FAST.model_copy(
+    update={
+        "notify_poll_seconds": 0.02,
+        "session_heartbeat_seconds": 0.05,
+        "session_stale_seconds": 1.0,
+    }
 )
 ANSWER_BOUND_SECONDS: Final = 1.0
 SENDER: Final = "load-sender"
@@ -121,11 +120,8 @@ def _write_bursts(path: Path, started: threading.Event) -> None:
 
 
 def _deps(path: Path, index: int) -> PresenceDeps:
-    return PresenceDeps(
-        open_store=Opener(path),
-        cf_run=_cf_run_for(_member(index)),
-        clock=_wall_clock,
-        timing=TIMING,
+    return make_deps(
+        Opener(path), _wall_clock, cf_run=_cf_run_for(_member(index)), config=TIMING
     )
 
 
@@ -146,16 +142,16 @@ async def _client_calls(session: ClientSession, until: threading.Event) -> list[
 
 
 def _record_beats(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[datetime]]:
-    """Each session's written ``heartbeat_at`` values, in order, as beats succeed."""
+    """Each session's written ``heartbeat_at`` values, in order, as the hub steps
+    write them."""
     beats: dict[str, list[datetime]] = {}
+    real = session_steps.upsert_session
 
-    def recording(
-        open_store: StoreOpener, session: Session, stale_seconds: float
-    ) -> None:
-        beat_session(open_store, session, stale_seconds)
+    def recording(transaction: Transaction, session: Session) -> None:
+        real(transaction, session)
         beats.setdefault(session.session_id, []).append(session.heartbeat_at)
 
-    monkeypatch.setattr(presence, "beat_session", recording)
+    monkeypatch.setattr(session_steps, "upsert_session", recording)
     return beats
 
 
@@ -177,9 +173,7 @@ def test_twelve_presences_on_one_store_under_bursts_and_tool_calls(
     async def main() -> None:
         served_deps = _deps(store_path, 0)
         served_state = PresenceState(started_at=_wall_clock())
-        server = build_server(
-            ToolPresence(served_state, _wall_clock), served_deps.open_store
-        )
+        server = build_server(ToolPresence(served_state, _wall_clock))
         thread = threading.Thread(target=writer)
         thread.start()
         with anyio.fail_after(RUN_BUDGET_SECONDS):

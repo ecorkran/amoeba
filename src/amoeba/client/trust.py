@@ -11,16 +11,26 @@ import socket
 import ssl
 from pathlib import Path
 
-from amoeba.client.errors import HubUnreachableError
+from amoeba.client.errors import ClientFileError, HubUnreachableError
 from amoeba.wire.address import split_address
 
 
 def pinned_context(cert_path: Path) -> ssl.SSLContext:
-    """A client context that trusts only the certificate at ``cert_path``."""
+    """A client context that trusts only the certificate at ``cert_path``.
+
+    Raises:
+        ClientFileError: The saved certificate is missing or is not a certificate.
+    """
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.check_hostname = False
     context.verify_mode = ssl.CERT_REQUIRED
-    context.load_verify_locations(cafile=str(cert_path))
+    try:
+        context.load_verify_locations(cafile=str(cert_path))
+    except (ssl.SSLError, OSError) as error:
+        raise ClientFileError(
+            f"the saved certificate {cert_path} cannot be used: {error}; run "
+            "`amoeba join` again"
+        ) from error
     return context
 
 

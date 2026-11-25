@@ -1,105 +1,124 @@
-"""The store and ``cf`` side of ``amoeba-mcp``'s presence (slice 241, D2, D3, D6).
+"""The step and ``cf`` side of ``amoeba-mcp``'s session tick (slices 241, 263 D1, D3).
 
 ``amoeba.mcp`` reaches nothing but ``wiring`` and the operations' types (226 D10), so
-the synchronous bodies its worker threads run live here: each takes the store opener,
-opens its own store (sqlite connections do not cross threads) and does one thing. The
-types presence passes around are re-exported from here for the same reason.
+the synchronous bodies its worker threads run live here: the caller gather, the two
+session step calls and what names the way a tick went. The tick never opens a store:
+the steps it runs do (``steps_for``), in the thread that calls it. The types and
+errors presence passes around are re-exported from here for the same reason.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from contextlib import AbstractContextManager
 from pathlib import Path
 
-from amoeba.operations.caller import find_caller
+from amoeba.client.client_file import load_client_file
+from amoeba.client.errors import (
+    ClientFileError,
+    HubCertificateError,
+    HubRefusedError,
+    HubUnreachableError,
+)
+from amoeba.config.home import AmoebaHomeError, client_file_path, pinned_cert_path
+from amoeba.config.user_config import ConfigError
+from amoeba.operations.deps import Deps
+from amoeba.operations.errors import ContextForgeError
 from amoeba.operations.here import gather_caller
-from amoeba.store.deliveries import highest_assigned_seq
+from amoeba.operations.here_document import HereCaller, HereNotAProject
+from amoeba.operations.steps.models_session import (
+    SESSION_END,
+    SESSION_TICK,
+    SessionEndRequest,
+    SessionTickReply,
+    SessionTickRequest,
+    TickEntry,
+)
+from amoeba.operations.store_steps import Steps
 from amoeba.store.errors import StoreBusyError, StoreError
-from amoeba.store.machines import acting_machine_id
-from amoeba.store.models import Member, PushRow, Session
-from amoeba.store.push_reads import member_high_seq, push_rows_after
-from amoeba.store.sessions import delete_session, heartbeat
-from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.store.vocabulary import DeliveryEvent, MessageKind
 from amoeba.upstream.context_forge.cli_call import CfRun
+from amoeba.wiring_steps import (
+    AFTER_STEP_ERRORS,
+    DoorSteps,
+    LastReply,
+    run_after_step,
+)
 
 __all__ = [
-    "BUSY_TIMEOUT_SECONDS",
+    "AFTER_STEP_ERRORS",
+    "AmoebaHomeError",
     "CfRun",
+    "ClientFileError",
+    "ConfigError",
+    "ContextForgeError",
     "DeliveryEvent",
-    "MemberLookup",
+    "Deps",
+    "HereCaller",
+    "HereNotAProject",
+    "HubCertificateError",
+    "HubRefusedError",
+    "HubUnreachableError",
+    "LastReply",
     "MessageKind",
-    "PushRow",
-    "Session",
+    "SessionTickReply",
+    "SessionTickRequest",
+    "StepSource",
+    "Steps",
     "StoreBusyError",
     "StoreError",
-    "StoreOpener",
-    "beat_session",
+    "TickEntry",
     "end_session",
-    "lookup_member",
-    "read_as_of_seq",
-    "read_high_seq",
-    "read_push_rows",
+    "gather_here",
+    "machine_name",
+    "run_after_step",
+    "tick_session",
+    "way_of",
 ]
 
-#: Opens a store; each worker call opens its own.
-type StoreOpener = Callable[[], Store]
+#: Opens the steps one worker thread uses and closes them when the thread is done: a
+#: sqlite connection cannot cross threads, so a ``Steps`` never does either. Each
+#: thread passes its own ``LastReply``.
+type StepSource = Callable[[LastReply], AbstractContextManager[Steps]]
+
+#: The two ways a tick goes (263 D1): a step number of one is unrelated to the other.
+WAY_DOOR = "door"
+WAY_LOCAL = "local"
+#: The machine a session on the local way runs as.
+LOCAL_MACHINE_NAME = "local"
 
 
-@dataclass(frozen=True)
-class MemberLookup:
-    """Where the server runs and the member it is, or why it is none."""
-
-    directory: Path
-    member_id: str | None
-    #: For a non-member: what ``find_caller`` said, for the log line.
-    detail: str
-
-
-def lookup_member(open_store: StoreOpener, cf_run: CfRun) -> MemberLookup:
-    """Resolve the process's working directory to its member (D3).
+def gather_here(directory: Path, cf_run: CfRun) -> HereCaller | HereNotAProject:
+    """The directory's Context Forge project (D3); one ``cf`` call.
 
     Raises:
         ContextForgeError: ``cf`` failed or timed out.
-        StoreError: The lookup's read failed.
     """
-    directory = Path.cwd()
-    here = gather_caller(directory, cf_run)
-    with open_store() as store, store.read() as transaction:
-        found = find_caller(transaction, acting_machine_id(transaction), here)
-    if isinstance(found, Member):
-        return MemberLookup(directory, found.project_id, "")
-    return MemberLookup(directory, None, str(found))
+    return gather_caller(directory, cf_run)
 
 
-def beat_session(
-    open_store: StoreOpener, session: Session, stale_seconds: float
-) -> None:
-    """One heartbeat: prune stale rows, then upsert ``session``, in one transaction."""
-    with open_store() as store, store.write() as transaction:
-        heartbeat(transaction, session, stale_seconds)
+def tick_session(steps: Steps, request: SessionTickRequest) -> SessionTickReply:
+    """One ``session_tick`` step."""
+    return steps.run(SESSION_TICK, request)
 
 
-def end_session(open_store: StoreOpener, session_id: str) -> None:
-    """Delete the session's row; an unknown id is a no-op."""
-    with open_store() as store, store.write() as transaction:
-        delete_session(transaction, session_id)
+def end_session(steps: Steps, session_id: str) -> None:
+    """One ``session_end`` step; an id with no row is done."""
+    steps.run(SESSION_END, SessionEndRequest(session_id=session_id))
 
 
-def read_high_seq(open_store: StoreOpener, member_id: str) -> int:
-    with open_store() as store, store.read() as transaction:
-        return member_high_seq(transaction, member_id)
+def way_of(steps: Steps) -> str:
+    """Which way ``steps`` goes: the door or the local store."""
+    return WAY_DOOR if isinstance(steps, DoorSteps) else WAY_LOCAL
 
 
-def read_push_rows(
-    open_store: StoreOpener, member_id: str, after_seq: int
-) -> tuple[PushRow, ...]:
-    with open_store() as store, store.read() as transaction:
-        return push_rows_after(transaction, member_id, after_seq)
+def machine_name() -> str:
+    """The client file's machine name, or ``local``.
 
-
-def read_as_of_seq(open_store: StoreOpener) -> int:
-    """The number ``inbox`` reports as ``as_of_seq``."""
-    with open_store() as store, store.read() as transaction:
-        return highest_assigned_seq(transaction)
+    Raises:
+        ClientFileError: The client file or the saved certificate does not load.
+    """
+    path = client_file_path()
+    if not path.exists():
+        return LOCAL_MACHINE_NAME
+    return load_client_file(path, pinned_cert_path()).machine

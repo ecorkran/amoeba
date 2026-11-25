@@ -23,12 +23,12 @@ from cf_fixtures import (
 )
 from cli.cli_support import write_config
 from mcp import ClientSession
+from mcp.shared.exceptions import MCPError
 
 from amoeba.mcp.channel_event import CHANNEL_CAPABILITY
+from amoeba.mcp.inbox_resource import INBOX_URI
 from amoeba.mcp.presence import PresenceDeps, PresenceState, ToolPresence
 from amoeba.mcp.server import build_server
-from amoeba.store.errors import StoreCorruptError
-from amoeba.upstream.context_forge.cli_call import CfRun
 from mcp_server.presence_rig import (
     MEMBER_ID,
     PEER,
@@ -38,6 +38,7 @@ from mcp_server.presence_rig import (
     deliver,
     eventually,
     make_deps,
+    raise_when_called_from,
     seed_member,
 )
 from mcp_server.serving_rig import presence_background, serving
@@ -67,7 +68,7 @@ def _serve(
 ) -> None:
     async def main() -> None:
         state = PresenceState(started_at=clock())
-        server = build_server(ToolPresence(state, clock), deps.open_store)
+        server = build_server(ToolPresence(state, clock))
         with anyio.fail_after(20):
             async with serving(server, presence_background(state, deps)) as session:
                 await test(session, state)
@@ -85,24 +86,11 @@ def _assert_declares_push(capabilities: types.ServerCapabilities) -> None:
     assert capabilities.resources.subscribe is True
 
 
-@pytest.mark.parametrize(
-    ("cf_run", "logged", "level"),
-    [
-        (fake_cf_run(OUTSIDE_ANY_PROJECT), "is not a member", logging.INFO),
-        (fake_cf_run(None), "presence stopped", logging.ERROR),
-    ],
-    ids=["non-member", "cf-fails"],
-)
-def test_a_server_with_no_member_declares_push_serves_tools_and_does_nothing_else(
+def test_a_server_with_no_member_declares_push_lists_the_resource_and_refuses_a_read(
     store_path: Path,
-    caplog: pytest.LogCaptureFixture,
-    cf_run: CfRun,
-    logged: str,
-    level: int,
 ) -> None:
     clock = FakeClock()
-    opener = Opener(store_path)
-    deps = make_deps(opener, clock, cf_run=cf_run)
+    deps = make_deps(Opener(store_path), clock, cf_run=fake_cf_run(OUTSIDE_ANY_PROJECT))
 
     async def test(session: ClientSession, state: PresenceState) -> None:
         _assert_declares_push(await _capabilities(session))
@@ -110,17 +98,35 @@ def test_a_server_with_no_member_declares_push_serves_tools_and_does_nothing_els
         assert (await session.list_tools()).tools
         decided = await session.call_tool("decisions", {})
         assert decided.is_error is False
-        assert (await session.list_resources()).resources == []
-        opens = opener.opens
-        await anyio.sleep(0.2)
-        assert opener.opens == opens, "no loop runs"
+        listed = (await session.list_resources()).resources
+        assert [str(resource.uri) for resource in listed] == [INBOX_URI]
+        with pytest.raises(MCPError, match="serves no member"):
+            await session.read_resource(INBOX_URI)  # pyright: ignore[reportArgumentType]
+
+    _serve(deps, clock, test)
+
+    assert all_session_rows(store_path) == []
+
+
+def test_a_cf_that_fails_leaves_the_server_serving_and_a_read_naming_the_error(
+    store_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    clock = FakeClock()
+    deps = make_deps(Opener(store_path), clock, cf_run=fake_cf_run(None))
+
+    async def test(session: ClientSession, state: PresenceState) -> None:
+        _assert_declares_push(await _capabilities(session))
+        await state.resolved.wait()
+        decided = await session.call_tool("decisions", {})
+        assert decided.is_error is False
+        with pytest.raises(MCPError, match="ContextForgeError"):
+            await session.read_resource(INBOX_URI)  # pyright: ignore[reportArgumentType]
 
     with caplog.at_level(logging.INFO):
         _serve(deps, clock, test)
 
     assert all_session_rows(store_path) == []
-    (record,) = [r for r in caplog.records if logged in r.getMessage()]
-    assert record.levelno == level
+    assert not [r for r in caplog.records if "presence stopped" in r.getMessage()]
 
 
 def test_a_member_server_writes_a_row_and_an_inbox_call_after_an_event_confirms(
@@ -133,8 +139,7 @@ def test_a_member_server_writes_a_row_and_an_inbox_call_after_an_event_confirms(
     async def test(session: ClientSession, state: PresenceState) -> None:
         _assert_declares_push(await _capabilities(session))
         await eventually(lambda: bool(all_session_rows(store_path)), "the session row")
-        # The lookup, a beat and the watcher's baseline have all opened the store.
-        await eventually(lambda: opener.opens >= 4, "the watcher's baseline")
+        await eventually(lambda: state.as_of_seq is not None, "the baseline tick")
         deliver(store_path)
         await eventually(lambda: state.attempt_at is not None, "the channel event")
         result = await session.call_tool("inbox", {"directory": str(tmp_path)})
@@ -179,7 +184,7 @@ def test_a_stuck_store_never_blocks_a_tool_call(store_path: Path) -> None:
     _serve(deps, clock, test)
 
 
-def test_a_watcher_failure_is_logged_deletes_the_row_and_tools_keep_answering(
+def test_a_tick_bug_is_logged_deletes_the_row_and_tools_keep_answering(
     store_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     clock = FakeClock()
@@ -187,8 +192,8 @@ def test_a_watcher_failure_is_logged_deletes_the_row_and_tools_keep_answering(
     deps = make_deps(opener, clock)
 
     async def test(session: ClientSession, state: PresenceState) -> None:
-        await eventually(lambda: bool(all_session_rows(store_path)), "the first beat")
-        opener.errors.extend([StoreCorruptError("malformed"), None])
+        await eventually(lambda: bool(all_session_rows(store_path)), "the first tick")
+        opener.on_open = raise_when_called_from("work", [RuntimeError("a bug")])
         await eventually(
             lambda: any("presence stopped" in r.getMessage() for r in caplog.records),
             "presence to stop",

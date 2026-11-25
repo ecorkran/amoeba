@@ -14,7 +14,7 @@ and ``state_home()``; the store is opened only through ``open_state_store``.
 from __future__ import annotations
 
 from collections.abc import Callable
-from contextlib import ExitStack
+from contextlib import AbstractContextManager, ExitStack
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -58,12 +58,14 @@ from amoeba.wiring_door import (
     route,
 )
 from amoeba.wiring_gather import place_served
+from amoeba.wiring_presence import StepSource
 from amoeba.wiring_results import OperationResult, is_rejected, result_document
 from amoeba.wiring_steps import (
     DoorSteps,
     LastReply,
     StepReplyError,
     after_operation,
+    steps_for,
 )
 
 __all__ = [
@@ -88,6 +90,8 @@ __all__ = [
     "load_config",
     "open_store",
     "prepare_home",
+    "session_step_source",
+    "state_layout",
     "refuse_if_joined",
     "result_document",
     "start_child",
@@ -164,7 +168,12 @@ def default_deps(layout: StateLayout) -> Deps:
 
 
 def invoke(
-    name: OperationName, document: object, directory: Path | None, door: Door
+    name: OperationName,
+    document: object,
+    directory: Path | None,
+    door: Door,
+    *,
+    after_step: bool = True,
 ) -> OperationResult:
     """Run the in-process operation ``name`` on ``document`` and return its result.
 
@@ -198,7 +207,18 @@ def invoke(
         finally:
             # After the operation's own transactions closed, on both paths and every
             # path, a raise included, as in ``handle_pause``; never raises (262 D10).
-            after_operation(name, document, door, steps, last, deps)
+            if after_step:
+                after_operation(name, document, steps, last, deps)
+
+
+def session_step_source(layout: StateLayout) -> StepSource:
+    """The steps a serving session's worker threads open, each in its own thread: the
+    door when a client file exists, otherwise the local store (263 D1)."""
+
+    def source(last: LastReply) -> AbstractContextManager[Steps]:
+        return steps_for(layout, last, load_config)
+
+    return source
 
 
 def local_edges() -> StepEdges:
