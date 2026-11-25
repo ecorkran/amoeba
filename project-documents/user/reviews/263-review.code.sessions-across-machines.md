@@ -14,9 +14,10 @@ recipeComplete: true
 status: complete
 dateCreated: 20261125
 dateUpdated: 20261125
-reviewedSha: 23bd0e2ee17b4bcc50758ccec4d2c7aa65560e3e
-reviewedBlob: 49416963b3c086fc927854f8897a3c5b896c67db
+reviewedSha: 05464a92cc33e9548c575e4e7b3b51861bf5e9f8
+reviewedBlob: edc728e84ba0948069dc733214f7ff3e79be29bb
 reviewedBlobCurrent: true
+revision_number: 1
 injected:
   - key: conventions
     path: "AGENTS.md"
@@ -24,126 +25,123 @@ injected:
     sha256: 2387512002bb2a73aa247bc36bc98d7162c5b5110ded41f56319d098d282ddbc
     whole: true
 filesRead:
-  - "src/amoeba/mcp/tick.py"
+  - ".git/HEAD"
+  - "src/amoeba/mcp/after_runner.py"
   - "src/amoeba/mcp/presence_task.py"
-  - "src/amoeba/wiring_steps.py"
-  - "src/amoeba/operations/steps/model_base.py"
+  - "src/amoeba/mcp/inbox_resource.py"
+  - "src/amoeba/iring_presence.py"
   - "src/amoeba/wire/times.py"
-  - "src/amoeba/wire/protocol.py"
-  - "src/amoeba/hub/call_sessions.py"
-  - "src/amoeba/mcp/in_process.py"
+  - "src/amoeba/wiring_steps.py"
   - "src/amoeba/hub/calls.py"
-  - "src/amoeba/operations/steps/models_session.py"
+  - "src/amoeba/wire/protocol.py"
+  - "docs/store-contract.md"
+  - "src/amoeba/cli/hub_commands.py"
+  - "src/amoeba/wiring.py"
+  - "src/amoeba/operations/steps/session.py"
+  - "docs/mcp-server.md"
+  - "docs/cli-contract.md"
 searches:
-  - "list_files src/amoeba/iring_presence.py in ."
-  - "grep class (HubCertificateError|HubUnreachableError|HubRefusedError|ClientFileError)\\b in /Users/manta/source/repos/manta/amoeba/src/amoeba/client"
-  - "grep WRITING_STEPS|WRITING_CALLS|def _writes in /Users/manta/source/repos/manta/amoeba/src"
-  - "grep DOOR_VERSION\\b in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep def call_result|SERVED\\[|served_edges|class ServedEdges|local:|door_version in /Users/manta/source/repos/manta/amoeba/src/amoeba/operations"
-  - "grep tool_timeout_sec|machine_runs|session_stale_seconds:|notify_poll_seconds:|session_heartbeat_seconds: in /Users/manta/source/repos/manta/amoeba"
+  - "list_files src/amoeba/iring_presence.py in /Users/manta/source/repos/manta/amoeba"
+  - "grep SESSION_STEP_NAMES|SESSION_CALLS|SERVED_OPERATIONS|delete_machine_runs|DELETE_MACHINE_RUNS_BY_ID|uv tool install --force amoeba-ai|tool_timeout_sec in /Users/manta/source/repos/manta/amoeba"
+  - "grep SESSION_CALLS|HEADER_VALUE_MAX_LENGTH|def _header|create_app\\(|handle_call\\(|StepContext\\(|WRITING_STEPS =|uv tool install --force amoeba-ai in /Users/manta/source/repos/manta/amoeba/src"
+  - "grep machine_runs|sessions\\.door_version|client_version in /Users/manta/source/repos/manta/amoeba/project-documents"
   - "grep STORE_CONTRACT\\s*=|STORE_CONTRACT: in /Users/manta/source/repos/manta/amoeba/tests"
-  - "grep machine_runs|sessions.*door_version|door_version|client_version in /Users/manta/source/repos/manta/amoeba/docs"
-  - "grep tool_timeout_sec|tool_timeout in /Users/manta/source/repos/manta/amoeba"
-  - "grep client_version|program_version|the version of the program in /Users/manta/source/repos/manta/amoeba/project-documents/user/slices/263-slice.sessions-across-machines.md"
-  - "grep program_version\\(\\)|client_version= in /Users/manta/source/repos/manta/amoeba/src/amoeba"
-  - "grep def load_config|def check_deadline|def joined in /Users/manta/source/repos/manta/amoeba/src/amoeba/wiring.py"
-  - "grep ^ in /Users/manta/source/repos/manta/amoeba/src/amoeba/hub/calls.py"
-  - "grep ^ in /Users/manta/source/repos/manta/amoeba/src/amoeba/wiring_steps.py"
-  - "grep ^ in /Users/manta/source/repos/manta/amoeba/src/amoeba/wiring.py"
-  - "grep ^from typing import|^from __future__|import Any in /Users/manta/source/repos/manta/amoeba/scripts/update_live.py"
-  - "grep HANDLE_PAUSE in /Users/manta/source/repos/manta/amoeba/src/amoeba/wiring.py"
-  - "grep iring_presence|Only event-loop tasks touch in /Users/manta/source/repos/manta/amoeba"
-  - "grep def _ticked|therow_of|norow_of|thirdrun|nextrun|SESSION_DIRECTORY_MAX_LENGTH|isprintable in /Users/manta/source/repos/manta/amoeba"
-turns: 32
-promptTokens: 4113731
-cachedTokens: 3514894
-cacheWriteTokens: 598811
-completionTokens: 78701
-durationSeconds: 352.7
-costUsd: 1.211764
+  - "grep machine_runs|door_version|sessions in /Users/manta/source/repos/manta/amoeba/docs"
+  - "grep thirdrun|nextrun|replys|afterrun|firstrun in /Users/manta/source/repos/manta/amoeba/tests"
+  - "grep DOOR_VERSION\\b in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep assert_never|WaitingRunState\\.NOT_LISTED in /Users/manta/source/repos/manta/amoeba/src"
+  - "grep ^ in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep later slice|for now|not yet|TODO|FIXME|build only if|if needed in /Users/manta/source/repos/manta/amoeba/src/amoeba"
+  - "grep _ticked|def _ticked|a tick that found no member in /Users/manta/source/repos/manta/amoeba/tests/hub/test_sessions_modes.py"
+  - "grep after-step|after step|amoeba://inbox|lists nothing|resources/list|no member in /Users/manta/source/repos/manta/amoeba/docs"
+  - "grep after-step|after_call|after_operation in /Users/manta/source/repos/manta/amoeba/src/amoeba/wiring.py"
+  - "grep environ=|environ:|forge\\.environ in /Users/manta/source/repos/manta/amoeba/tests/live"
+  - "grep def write_behind_session|_not_in_process\\(name|if name is OperationName.HANDLE_PAUSE|MARKER_WAIT_SECONDS: Final|_CALL_ORDER: Final|def _is_ahead|hub_door_version=DOOR_VERSION in /Users/manta/source/repos/manta/amoeba"
+turns: 34
+promptTokens: 4074236
+cachedTokens: 3492349
+cacheWriteTokens: 581861
+completionTokens: 82119
+durationSeconds: 359.9
+costUsd: 1.204468
 runId: run-20261125-p6-fbf201a3
 squadronVersion: 0.24.38
 findings:
   - id: F001
     severity: concern
-    category: correctness
-    summary: "Accepted session ticks record the hub's program version as the session's client version"
-    location: "src/amoeba/operations/steps/session.py:77"
+    category: consistency-rot
+    summary: "The served door version has two sources"
+    location: "src/amoeba/operations/send_write.py:107"
   - id: F002
     severity: concern
-    category: correctness
-    summary: "The tick reads presence state from its worker thread"
-    location: "src/amoeba/mcp/tick.py:167-172"
+    category: security-hygiene
+    summary: "The two-machine live test passes the whole process environment to the agent"
+    location: "tests/live/channels/test_two_machines_channels_live.py:110"
   - id: F003
     severity: concern
-    category: error-handling-observability
-    summary: "The exit path's error set omits `HubCertificateError`"
-    location: "src/amoeba/mcp/presence_task.py:75-81"
+    category: type-contract-debt
+    summary: "`_read_back` calls `steps.status()` but `check_status` assumes the result is a dict with `machines` as a list of `{name}` objects"
+    location: "scripts/update_live.py#check_status"
   - id: F004
     severity: concern
-    category: type-contract-debt
-    summary: "The normal tick accepts any client and directory string, while the header path rejects bad ones"
-    location: "src/amoeba/operations/steps/models_session.py#SessionTickRequest"
+    category: correctness
+    summary: "`_door_text` / `machines` renderer: `lines[0]` indexing in `_run_machines` is fragile"
+    location: "src/amoeba/cli/hub_commands.py#_run_machines"
   - id: F005
     severity: concern
-    category: consistency-rot
-    summary: "The injected door version reaches the session steps but not the served operations or status"
-    location: "src/amoeba/operations/send_write.py:107"
+    category: correctness
+    summary: "`session_end` is written as a write step that keeps no result, yet `write_behind_row` and `handle_call` may leave the machine row with a stale door version"
+    location: "src/amoeba/hub/calls.py#_serve"
   - id: F006
     severity: concern
-    category: correctness
-    summary: "Presence state is read on the exit thread as well"
-    location: "src/amoeba/mcp/presence_task.py:53"
+    category: error-handling-observability
+    summary: "Exception handling in `_end_session` swallows a tuple of errors but logs at WARNING with no traceback"
+    location: "src/amoeba/mcp/presence_task.py#_end_session"
   - id: F007
-    severity: concern
-    category: correctness
-    summary: "`_session_line` now prints the machine name in a fixed-width sessions line, but the header skip logic in `_running` is unchecked"
-    location: "src/amoeba/cli/render/sessions.py:41"
+    severity: note
+    category: documentation-drift
+    summary: "The store contract and CLI contract omit the new `machine_runs` delete from `rm-machine`"
+    location: "docs/store-contract.md:683"
   - id: F008
-    severity: concern
-    category: correctness
-    summary: "`check_status` in `update_live.py` uses `names != [LOCAL_MACHINE_NAME]`, so any second machine in the store makes the read-back fail"
-    location: "scripts/update_live.py:252"
+    severity: note
+    category: documentation-drift
+    summary: "The inbox resource docstring says every handler waits for the first tick"
+    location: "src/amoeba/mcp/inbox_resource.py:4"
   - id: F009
-    severity: concern
-    category: error-handling-observability
-    summary: "`write_behind_row` runs `find_caller` and `write_behind_session` inside `store.write()`, and the `SessionOfAnotherMachineError` path is caught around the whole `with` block"
-    location: "src/amoeba/hub/call_sessions.py:94"
+    severity: note
+    category: documentation-drift
+    summary: "The `TICK_TIMES` comment gives the wrong reason for excluding ticks from writing steps"
+    location: "src/amoeba/wire/times.py:45"
   - id: F010
-    severity: concern
-    category: error-handling-observability
-    summary: "`_end_session` catches a fixed list of errors and documents swallowing them; the `HubRefusedError` list here omits `HubCertificateError`"
-    location: "src/amoeba/mcp/presence_task.py:70"
+    severity: note
+    category: consistency-rot
+    summary: "Upgrade command, \"ahead of the hub\" wording, and the behind rule are repeated"
+    location: "src/amoeba/cli/render/machines.py:22"
   - id: F011
-    severity: concern
-    category: correctness
-    summary: "`_handle_reply` logs `presence for` only when the member changes, while the `test_the_presence_line_names...` test expects it on the first reply"
-    location: "src/amoeba/mcp/tick.py:186"
+    severity: note
+    category: architectural-decay
+    summary: "`HANDLE_PAUSE` is guarded twice, and the second guard is now unreachable"
+    location: "src/amoeba/wiring.py:287"
   - id: F012
     severity: note
     category: consistency-rot
-    summary: "Several test names have words mangled by a find-and-replace"
-    location: "tests/operations/test_session_steps.py:51"
+    summary: "Test names read like a search-and-replace artifact, and one test checks a private helper"
+    location: "tests/mcp_server/test_tick_member.py:64"
   - id: F013
     severity: note
-    category: documentation-drift
-    summary: "`wiring_presence` imports from `amoeba.client`, which the slice forbids"
-    location: "src/amoeba/wiring_presence.py"
+    category: consistency-rot
+    summary: "A magic 300 repeats the MCP deadline"
+    location: "tests/live/channels/test_long_call_live.py:36"
   - id: F014
     severity: note
-    category: architectural-decay
-    summary: "The \"behind\" rule is written in three places"
-    location: "src/amoeba/operations/status_sessions.py:49"
+    category: correctness
+    summary: "`DOOR_VERSION` bumped from 2 to 3 with a pinned-tuple test"
+    location: "src/amoeba/wire/times.py"
   - id: F015
     severity: note
-    category: performance-resource
-    summary: "`status` now writes on every call, and all calls share one process-wide lock"
-    location: "src/amoeba/hub/calls.py#_CALL_ORDER"
-  - id: F016
-    severity: pass
-    category: documentation-drift
-    summary: "Store contract and the Codex timeout docs match the code"
-    location: "docs/mcp-server.md:58"
+    category: other
+    summary: "Commit cadence and verdict"
+    location: "unverified"
 ---
 
 # Review: code — slice 263
@@ -157,123 +155,123 @@ Recipe `haiku-line-pass`; complete: yes.
 
 | Stage | Kind | Alias | Answering model | Outcome | Findings | Cost |
 |---|---|---|---|---|---|---|
-| review haiku-xhigh | review | haiku-xhigh | claude-haiku-5-5 | ok | 16 findings | $0.8358 |
-| review haiku | review | haiku | claude-haiku-5-5 | ok | 8 findings | $0.3759 |
+| review haiku-xhigh | review | haiku-xhigh | claude-haiku-5-5 | ok | 16 findings | $0.8337 |
+| review haiku | review | haiku | claude-haiku-5-5 | ok | 13 findings | $0.3708 |
 
 ### Not gating
 
 | Reviewer | Category | Severity | Location | Title |
 |---|---|---|---|---|
-| haiku-xhigh | documentation-drift | CONCERN | src/amoeba/wire/times.py:45-47 | The retry-time comment on `TICK_TIMES` is false, and `keeps_result` duplicates `WRITING_STEPS` |
-| haiku-xhigh | architectural-decay | CONCERN | src/amoeba/hub/calls.py:259-341 | `_serve` is about 80 lines, and `hub/calls.py` is 384 lines |
-| haiku-xhigh | architectural-decay | CONCERN | src/amoeba/iring_presence.py | An empty module `iring_presence.py` was committed |
-| haiku-xhigh | test-debt | CONCERN | tests/hub/test_sessions_modes.py:129 | A wait in the "no member" session test is true before any tick |
-| haiku-xhigh | test-debt | CONCERN | tests/mcp_server/test_tick_failures.py:86 | Two more tests have no assertion that matches their names |
-| haiku | performance-resource | CONCERN | src/amoeba/hub/calls.py:371 | `_CALL_ORDER` lock is module-level and is acquired before `open_store()`, so every hub call serializes on it, including reads |
-| haiku | architectural-decay | CONCERN | src/amoeba/iring_presence.py | `amoeba/iring_presence.py` is added as an empty file |
-| haiku | test-debt | CONCERN | tests/mcp_server/test_tick_member.py:1 | `tests/mcp_server/test_tick_member.py` imports `timed_out_cf` and `Opener` through `presence_rig`, and `test_a_cf_that_fails_twice_then_answers_gives_a_row_at_the_thirdrun_tick` uses a non-standard test name |
+| haiku-xhigh | performance-resource | CONCERN | src/amoeba/mcp/after_runner.py:80 | Presence exit can wait for an in-flight after-step |
+| haiku-xhigh | architectural-decay | CONCERN | src/amoeba/hub/call_sessions.py:36 | Session step names are defined in two modules |
+| haiku-xhigh | architectural-decay | CONCERN | src/amoeba/operations/steps/session.py:53 | The session row's start and confirmation rules are written twice |
+| haiku-xhigh | architectural-decay | CONCERN | src/amoeba/iring_presence.py | An empty file was added to the source tree |
+| haiku-xhigh | architectural-decay | CONCERN | src/amoeba/hub/calls.py | Several modules are well past the ~300-line guideline |
+| haiku-xhigh | documentation-drift | CONCERN | docs/cli-contract.md:1129 | The after-step docs describe the old MCP behavior |
+| haiku-xhigh | test-debt | CONCERN | tests/hub/test_sessions_modes.py:129 | The sessions-modes test can race its own precondition |
+| haiku | performance-resource | CONCERN | src/amoeba/hub/calls.py\#handle_call | `_CALL_ORDER` global lock serializes every hub call, including non-session calls |
+| haiku | architectural-decay | CONCERN | src/amoeba/wiring_presence.py | `wiring_presence` re-exports many names; `__all__` includes `program_version` and `machine_name` which are not store or client types |
+| haiku | architectural-decay | CONCERN | src/amoeba/operations/steps/dispatch.py\#StepEdges | `call_result` `door_version` threads through many layers as a positional argument, duplicating `DOOR_VERSION` defaults |
+| haiku | architectural-decay | CONCERN | src/amoeba/wiring_steps.py\#SESSION_STEP_NAMES | `SESSION_STEP_NAMES` and `SESSION_CALLS` duplicate the same session-step set |
+| haiku | documentation-drift | CONCERN | src/amoeba/config/user_config.py\#_session_timing_holds | `_session_timing` new check comment says "a heartbeat plus a poll interval" but the check uses `2 * notify_poll_seconds` |
+| haiku | documentation-drift | CONCERN | src/amoeba/hub/calls.py | `_CALL_ORDER` comment cites SQLite handler timing (100 ms sleep) as fact |
+| haiku | other | CONCERN | src/amoeba/iring_presence.py | `iring_presence.py` is added as an empty file |
 
 ## Findings
 
-### [CONCERN] Accepted session ticks record the hub's program version as the session's client version
+### [CONCERN] The served door version has two sources
 
-`_refresh` sets `client_version=program_version()`. Through the door, that step runs in the hub process, so every session ticked through the hub is stored with the hub's installed version. The caller's version arrives as `Amoeba-Client-Version`, but it is stored only for refused ticks (`write_behind_session` in `hub/call_sessions.py`). `list` and `status` therefore show the hub's version as the session's client. Two machines on the same door version but different package versions look identical. The tests miss this. `tests/operations/test_session_steps.py` compares against in-process `program_version()`, which is the same process. `tests/hub/test_sessions_across_machines.py` only checks that `client_version` is truthy. The fix is to pass the caller's client version into the step and give the hub a different version in the test.
-
-Reviewer: haiku-xhigh
-
-### [CONCERN] The tick reads presence state from its worker thread
-
-`work()` runs under `anyio.to_thread` and calls `_request(state, ...)`, which reads `state.session_id`, `state.last_seen`, `state.way` and `state.push_confirmed_at`. The `inbox` tool writes `push_confirmed_at` on the event loop (`note_inbox_called`), so the read can race the write. `presence_task._end_in_thread` (`src/amoeba/mcp/presence_task.py:53-58`) reads `state.identity` and `state.session_id` the same way. The slice design says "Only event-loop tasks touch `PresenceState`" (`263-slice…md` line 729), and `mcp/presence.py`'s docstring repeats it. The impact is small, since a stale confirmation is sent one tick late, but the stated invariant is false. Fix: snapshot the four values on the loop before `to_thread`, and have the thread use the snapshot.
+The served version reaches the hub through `handle_call(door_version=…)`, `create_app(door_version=…)`, `StepEdges.door_version`, and `StepContext.door_version`. But `send_write.py:107` and `:186`, `operations/wake.py:86`, `operations/wake_status.py:47`, and `operations/status.py:218` and `:239-240` read the `DOOR_VERSION` constant directly. In production the two agree. In a test that serves another version (the seam `HubRig.door_version` exists for this), a send's wake gate and the status view silently use the program's constant. The `handle_call` docstring (`src/amoeba/hub/calls.py:363-374`) acknowledges this. The defaults `door_version: int = DOOR_VERSION` (`hub/app.py:64`, `hub/calls.py:363`, `operations/steps/dispatch.py:75`) also mean an omitted argument silently becomes the constant; `src/amoeba/cli/hub_commands.py:123-130` relies on them. Pass the served version through the same edges to every hub-side reader, remove the defaults, and have `hub_commands` pass `DOOR_VERSION` explicitly.
 
 Reviewer: haiku-xhigh
 
-### [CONCERN] The exit path's error set omits `HubCertificateError`
+### [CONCERN] The two-machine live test passes the whole process environment to the agent
 
-`_end_session` catches `HubUnreachableError, HubRefusedError, ClientFileError, StoreError, ConfigError` and logs a warning, on the basis that a failed end costs only a wait. `HubCertificateError` is a separate class (`client/errors.py:19`, not a subclass of `HubUnreachableError`). `TICK_ERRORS` (`tick.py:71-79`) and `AFTER_STEP_ERRORS` (`wiring_steps.py:229-236`) both include it. A certificate mismatch at exit therefore escapes to `run_presence`'s top-level handler and is logged as "presence stopped" at ERROR with a traceback. The operational-error set is now written out in four places (`TICK_ERRORS`, this inline tuple, `AFTER_STEP_ERRORS`, `OPERATIONAL_ERRORS` in `wiring.py`). Build the exit tuple from one shared constant so they cannot drift again.
-
-Reviewer: haiku-xhigh
-
-### [CONCERN] The normal tick accepts any client and directory string, while the header path rejects bad ones
-
-`SessionTickRequest.client` and `.directory` are bare `str`, with no length or character constraint. `_refresh` writes them to `sessions` unchanged. `hub/call_sessions.py` applies `CLIENT_NAME_PATTERN`, the 4096-character bound and a printable-character check to the same values from headers, and writes nothing when they fail. An accepted tick can therefore store a control-character or very long directory, which `list` and `status` print for every viewer. The caller is an authenticated machine, so the exposure is internal, but the project rule is to validate at the model. Constrain the fields on the request model and have the header path reuse the same type.
+`environ=os.environ` gives a real Claude Code session every variable in the developer's shell. That can include `AMOEBA_HOME` or a production database URL, which the test rules forbid tests from reading (`sql.md`, "Production Database Protection"). The other live tests build an isolated environment: `test_long_call_live.py:61` and `world.py:109` use `world.forge.environ`. Use the same isolated environment, or an explicit list of named variables.
 
 Reviewer: haiku-xhigh
 
-### [CONCERN] The injected door version reaches the session steps but not the served operations or status
+### [CONCERN] `_read_back` calls `steps.status()` but `check_status` assumes the result is a dict with `machines` as a list of `{name}` objects
 
-`handle_call` and `create_app` take `door_version` so a test can serve another version, and `StepEdges` carries it to the steps. The served operations do not see it. `ServedEdges` (`operations/served_types.py:71`) has no door version, so `send` (`send_write.py:107, 186`), wake (`wake.py:86`), `status` (`status.py:218, 239-240`), `wake_status.py:47` and `hub/admin.py:91` read the `DOOR_VERSION` constant. Production is unaffected because both values are equal. A hub test that serves another version, though, gets one answer for "held off" from `open_runs` and a different one from `status`. Either thread `door_version` through `ServedEdges` and use it everywhere, or remove the seam.
-
-Reviewer: haiku-xhigh
-
-### [CONCERN] Presence state is read on the exit thread as well
-
-This is the same thread-boundary issue as the tick, on the exit path. It is lower risk because the tick has been cancelled by then. Fix it with the same snapshot.
-
-Reviewer: haiku-xhigh
-
-### [CONCERN] `_session_line` now prints the machine name in a fixed-width sessions line, but the header skip logic in `_running` is unchecked
-
-The session line now joins `entry.client`, `entry.machine`, `entry.directory` and so on. The test `test_a_session_renders_as_one_line_under_its_member` was updated to expect `alpha` in the second position, which matches this order. I could not confirm that every consumer of this line expects the new field order, so this is a note to check the other renderers and the `list` text path.
+`check_status` does `document.get("machines", [])` and then `entry.get("name")` on each entry. The `status` step returns a parsed JSON dict from `amoeba status -j`, so a status document whose `machines` field is absent or not a list of objects will either silently yield `[]` (producing a false "lack local" failure rather than a clear parse error) or raise an `AttributeError` on a non-dict entry. The read-back is a trust boundary for a just-installed binary. Validation or an explicit shape check is missing here.
 
 Reviewer: haiku
 
-### [CONCERN] `check_status` in `update_live.py` uses `names != [LOCAL_MACHINE_NAME]`, so any second machine in the store makes the read-back fail
+### [CONCERN] `_door_text` / `machines` renderer: `lines[0]` indexing in `_run_machines` is fragile
 
-The read-back check requires `status` to list exactly the one `local` machine. A PM store with any other machine with a token (for example one joined to a hub) fails the update and triggers a restore. If `update_live` is only meant for the single-machine local store, this is intended. The docstring should say so, because the rule is otherwise surprising.
-
-Reviewer: haiku
-
-### [CONCERN] `write_behind_row` runs `find_caller` and `write_behind_session` inside `store.write()`, and the `SessionOfAnotherMachineError` path is caught around the whole `with` block
-
-The `except SessionOfAnotherMachineError: return` handler swallows the error, and its comment says that no column changed. The write transaction is therefore committed or rolled back depending on where the raise happens. The comment says "the refusal stands", which is true, but the rule for a swallowed exception requires an explanation that the store state is consistent. The comment does this. The handler only catches a specific class, which the rules allow. Flagging it so the reviewer confirms the commit behaviour inside the `with` block.
+`text = "\n".join(lines if rows else [lines[0], "no machines"])` relies on `lines[0]` being the header line. This is correct as written, but the construction builds the header into `lines` and then indexes it back out. Reading the hunk, the logic holds; it is worth a direct simplification, but I am not claiming a defect.
 
 Reviewer: haiku
 
-### [CONCERN] `_end_session` catches a fixed list of errors and documents swallowing them; the `HubRefusedError` list here omits `HubCertificateError`
+### [CONCERN] `session_end` is written as a write step that keeps no result, yet `write_behind_row` and `handle_call` may leave the machine row with a stale door version
 
-`_end_session` catches `HubUnreachableError`, `HubRefusedError`, `ClientFileError`, `StoreError` and `ConfigError`. `tick.py` also treats `HubCertificateError` as an operational failure (`TICK_ERRORS`). An exit that hits a certificate error would therefore escape as an unhandled error, and `run_presence` would log it as "presence stopped". The two lists should be one shared constant.
-
-Reviewer: haiku
-
-### [CONCERN] `_handle_reply` logs `presence for` only when the member changes, while the `test_the_presence_line_names...` test expects it on the first reply
-
-The condition `reply.member_id != state.member_id` fires once per member change, which matches the test. A session that restarts with the same state object would not log again. This is probably fine, but it is a second consumer of the line (`wait_for_presence` in `hub_mcp.py` reads it), so confirm that the live tests still see the line after a reconnect.
+`touch_machine` is called with `keep_versions=is_session_call(request.name)`, so a session's tick does not update `door_version` on the machine. A refused tick from an old session writes a session row with the caller's versions but does not touch the machine row. This is the intended D6 behavior per the docstrings. The concern is only that `parse_door_version(_header(request, HEADER_DOOR_VERSION))` is evaluated in two places, and the second call (inside `write_behind_row` argument list) is evaluated after `clock()` inside `with store.call_scope()`. Behavior is consistent but duplicated; I could not verify the ordering contract without reading `store.call_scope`.
 
 Reviewer: haiku
 
-### [NOTE] Several test names have words mangled by a find-and-replace
+### [CONCERN] Exception handling in `_end_session` swallows a tuple of errors but logs at WARNING with no traceback
 
-The names `…changes_norow_of`, `…dates_therow_of` (`tests/operations/test_session_end_steps.py:193`), `…at_the_thirdrun_tick` (`tests/mcp_server/test_tick_member.py:64`) and `…reaches_the_row_at_the_nextrun_tick` (`test_tick_member.py:248`) are broken. Rename them.
+The `except (...)` block is justified by a comment (swallowing correct at teardown), so it satisfies rule (b). However it uses `logger.warning` without the traceback. That is acceptable for a documented expected failure, but `ConfigError` and `ClientFileError` are persistent conditions, not transient ones, and a silent WARNING per exit hides them. Consider whether these deserve ERROR with exception info.
 
-Reviewer: haiku-xhigh
+Reviewer: haiku
 
-### [NOTE] `wiring_presence` imports from `amoeba.client`, which the slice forbids
+### [NOTE] The store contract and CLI contract omit the new `machine_runs` delete from `rm-machine`
 
-Slice 263 says `amoeba.mcp` and `wiring_presence` import "nothing from `amoeba.client`" (`263-slice…md` line 122). The module imports `client_file` and `client.errors`, which is reasonable for a wiring module, but the design and the code disagree. The boundary test (`tests/test_import_boundaries.py`) pins only `amoeba.store`. Update the design, or add the client import to the test.
-
-Reviewer: haiku-xhigh
-
-### [NOTE] The "behind" rule is written in three places
-
-`status_machines.is_behind` returns `None` for an unknown version, `status_sessions._entry` writes the comparison inline, and `hub/admin.is_behind` is a wrapper that exists only to pass the constant. Use one function.
+Both documents list what `rm-machine` deletes (sessions and call results, then the machine). `remove_machine` also deletes `machine_runs` (`sql_machines.DELETE_MACHINE_RUNS`), and the `machine_runs` section (`store-contract.md:406`) says so. Add it to `docs/store-contract.md:683` and `docs/cli-contract.md:1264`.
 
 Reviewer: haiku-xhigh
 
-### [NOTE] `status` now writes on every call, and all calls share one process-wide lock
+### [NOTE] The inbox resource docstring says every handler waits for the first tick
 
-`status` and `list` now call `store_calling_runs` and write the report on every call, so a view is no longer read-only. `_CALL_ORDER` serializes every call, reads included. The comment explains the choice, and the load test covers it, so this is for awareness.
+Lines 4-5 say every handler first waits for presence to resolve. `list_resources` (lines 67-75) returns at once, and a test asserts that it does. Correct the docstring.
+
+Reviewer: haiku-xhigh
+
+### [NOTE] The `TICK_TIMES` comment gives the wrong reason for excluding ticks from writing steps
+
+"A retry time of 0 is also what keeps `session_tick` out of the writing steps." Membership comes from `keeps_result` and `WRITING_STEPS`, not from the retry time. Delete that sentence.
 
 Reviewer: haiku-xhigh
 
-### [PASS] Store contract and the Codex timeout docs match the code
+### [NOTE] Upgrade command, "ahead of the hub" wording, and the behind rule are repeated
 
-`docs/store-contract.md` documents migration 014's columns and `machine_runs`, and `docs/mcp-server.md` gives `tool_timeout_sec = 305`, matching `MCP_CALL_DEADLINE_SECONDS = 300` in `wire/times.py`. The starter config (`notify_poll_seconds: 5`, `session_heartbeat_seconds: 30`, `session_stale_seconds: 90`) satisfies the new stale-time rule, 90 ≥ 30 + 2×5.
+`UPGRADE_COMMAND` is defined here and again at `src/amoeba/client/call.py:52`. "ahead of the hub" appears in `render/machines.py` and in `src/amoeba/cli/hub_commands.py:158`. The behind/ahead direction is written out in `_door_text` (`hub_commands.py:154-158`), `_is_ahead` (`render/machines.py:93`), and `status_machines.differs_from_hub`. Import the command from one place and route the direction through one function.
 
 Reviewer: haiku-xhigh
+
+### [NOTE] `HANDLE_PAUSE` is guarded twice, and the second guard is now unreachable
+
+`invoke` raises for `HANDLE_PAUSE` at lines 190-191, before `_dispatch` runs. The `case OperationName.HANDLE_PAUSE` at line 287 cannot be reached. Keep one guard.
+
+Reviewer: haiku-xhigh
+
+### [NOTE] Test names read like a search-and-replace artifact, and one test checks a private helper
+
+`…gives_a_row_at_the_thirdrun_tick` (line 64), `…reaches_the_row_at_the_nextrun_tick` (line 248), and `…the_replys_after` in `tests/mcp_server/test_tick_failures.py:161` are garbled. Rename them to "third tick", "next tick", and "replies". `test_tick_failures.py:161-170` also asserts the private `_interval`. Assert the observable wait instead.
+
+Reviewer: haiku-xhigh
+
+### [NOTE] A magic 300 repeats the MCP deadline
+
+`MARKER_WAIT_SECONDS = 300 + …` repeats `MCP_CALL_DEADLINE_SECONDS` from `wire/times.py`. Reference the constant so that changing the deadline changes one place.
+
+Reviewer: haiku-xhigh
+
+### [NOTE] `DOOR_VERSION` bumped from 2 to 3 with a pinned-tuple test
+
+`DOOR_VERSION` moves 2 → 3, and `MCP_CALL_DEADLINE_SECONDS` moves from 180 to 300. The door change is a wire-contract change; the test pins the new values. The project expects a door bump for call-format changes, so this is consistent. Noted for the release record.
+
+Reviewer: haiku
+
+### [NOTE] Commit cadence and verdict
+
+I could not inspect commit history, task files, or the migration file's full context from this session. The migration `014_sessions_across_machines.sql` adds a `BEFORE INSERT` trigger on `sessions` that aborts on null versions; the `UPSERT_SESSION` path depends on this. I did not verify the trigger against every insert path.
+
+Reviewer: haiku
 
 ### Run Digest
 
-- Response length: 11247 chars
+- Response length: 10090 chars
 - Response is newline-free: no
 - Tool calls made: not offered
 - Tool calls failed: not computed
@@ -283,10 +281,10 @@ Reviewer: haiku-xhigh
 - Settings sources: not computed
 - Reasoning characters: not computed
 - Effort: backend default
-- Turns: 32
-- Tokens — prompt / cached / cache write / completion / reasoning: 4113731 / 3514894 / 598811 / 78701 / not computed
-- Duration: 352.7 s
-- Cost: $1.21
+- Turns: 34
+- Tokens — prompt / cached / cache write / completion / reasoning: 4074236 / 3492349 / 581861 / 82119 / not computed
+- Duration: 359.9 s
+- Cost: $1.20
 - `## Summary` located: not computed
 - `## Findings` located: not computed
 - Finding-shaped matches — whole response: not computed
