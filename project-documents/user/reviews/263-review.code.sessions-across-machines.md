@@ -5,7 +5,7 @@ reviewType: code
 slice: sessions-across-machines
 projectRules: [general.md, python.md, sql.md, testing.md]
 project: amoeba
-verdict: CONCERNS
+verdict: CONCERNS (the after-step exit and tick body concerns resolved 20261125; the invoke concern checked and dropped)
 verdictSource: derived
 sourceDocument: project-documents/user/slices/263-slice.sessions-across-machines.md
 aiModel: haiku-line-pass

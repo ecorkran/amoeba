@@ -77,7 +77,11 @@ class AfterRunner:
 
     async def _run(self, tick_last: LastReply) -> None:
         try:
-            await anyio.to_thread.run_sync(self._body, tick_last)
+            # Abandoned at exit rather than waited for, like the tick (D8): the
+            # session's one bounded end must not wait on a prune or a claim retry.
+            await anyio.to_thread.run_sync(
+                self._body, tick_last, abandon_on_cancel=True
+            )
             self._failures.recovered()
         except RUN_ERRORS as error:
             # No reply or a refusal starts nothing; the next tick's flag is the retry.

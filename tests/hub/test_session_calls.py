@@ -280,3 +280,20 @@ def test_an_accepted_tick_stores_the_version_the_client_sent(rig: HubRig) -> Non
     assert rig.rows(SESSION_ROWS) == [
         (SESSION, CORE, "claude-code", "/work/core", "1.2.3", DOOR_VERSION)
     ]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("session_id", "not a session id"),
+        ("session_id", "ab" * 200),
+        ("client_version", "1.2.3\x1b[2J"),
+        ("client_version", "9" * 500),
+    ],
+)
+def test_a_tick_body_is_held_to_its_headers_checks(field: str, value: str) -> None:
+    document = _tick()
+    document[field] = value
+
+    with pytest.raises(ValueError, match=field):
+        SessionTickRequest.model_validate(document)

@@ -294,3 +294,28 @@ def test_the_tick_and_the_runner_each_open_their_own_store_in_their_own_thread(
 
     assert state.member_id == MEMBER_ID
     assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
+
+
+def test_a_running_after_step_does_not_hold_up_the_exit(
+    store_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release = threading.Event()
+    runs = _fake_after_step(monkeypatch, lambda: release.wait(20))
+    exited_after: list[float] = []
+
+    async def run() -> None:
+        started = 0.0
+        async with anyio.create_task_group() as group:
+            runner = AfterRunner(_deps(store_path), lambda work: group.start_soon(work))
+            runner.start(LastReply(work=True))
+            await eventually(lambda: bool(runs), "the after-step to start")
+            started = anyio.current_time()
+            group.cancel_scope.cancel()
+        exited_after.append(anyio.current_time() - started)
+
+    try:
+        anyio.run(run)
+    finally:
+        release.set()
+
+    assert exited_after[0] < 1

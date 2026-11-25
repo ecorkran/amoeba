@@ -13,7 +13,12 @@ from pydantic import field_validator
 from amoeba.operations.here_document import HereCaller, HereNotAProject
 from amoeba.operations.steps.model_base import Step, StepModel
 from amoeba.store.vocabulary import DeliveryEvent, MessageKind
-from amoeba.wire.protocol import CLIENT_NAME_PATTERN, is_session_directory
+from amoeba.wire.protocol import (
+    CLIENT_NAME_PATTERN,
+    is_header_value,
+    is_session_directory,
+    is_session_id,
+)
 
 
 class SessionTickRequest(StepModel):
@@ -29,6 +34,20 @@ class SessionTickRequest(StepModel):
     #: The highest delivery number the session has seen, or ``None`` for a baseline.
     last_seen: int | None
     push_confirmed: bool
+
+    @field_validator("session_id")
+    @classmethod
+    def _session_id_has_its_header_shape(cls, value: str) -> str:
+        if not is_session_id(value):
+            raise ValueError("session_id is not a session id")
+        return value
+
+    @field_validator("client_version")
+    @classmethod
+    def _client_version_has_its_header_shape(cls, value: str) -> str:
+        if not is_header_value(value):
+            raise ValueError("client_version is too long or holds other characters")
+        return value
 
     @field_validator("client")
     @classmethod
