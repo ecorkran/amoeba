@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -340,6 +341,12 @@ def _serve(  # noqa: PLR0913 - one call's parts
         ), True
 
 
+#: Every call holds the store's write lock for its whole scope, so calls run one at a
+#: time whatever is done here. They wait on this lock, not on SQLite's busy handler:
+#: that one sleeps up to 100 ms between tries, hands the lock over slowly and starves a
+#: waiter for seconds once dozens of sessions tick every half second (263 D18).
+_CALL_ORDER: Final = threading.Lock()
+
 _BAD_TOKEN: Final = (
     "this machine's token is not known to the hub; run `amoeba hub invite` there "
     "and `amoeba join` here"
@@ -366,7 +373,7 @@ def handle_call(
     """
     refuser = Refuser(clock, request.peer)
     try:
-        with open_store() as store:
+        with _CALL_ORDER, open_store() as store:
             reply, committed = _serve(
                 store, request, refuser, clock, load_config, door_version
             )

@@ -35,7 +35,7 @@ from amoeba.store.store import Store
 from amoeba.store.wakes import WakeLimits, claim_wake
 from amoeba.wire.protocol import STEP_CALLS
 from amoeba.wire.times import DOOR_VERSION, DoorTimes
-from load.test_door_load import (
+from load.door_load_support import (
     CALLER_HERE,
     MAX_CALL_SECONDS,
     MEDIAN_CALL_SECONDS,

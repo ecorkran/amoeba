@@ -251,41 +251,45 @@ Between 4.4 and 4.7 the tests that touch what moved or is deleted fail by design
 
 ## 8. Cross-machine tests, load and live (D15; effort 4)
 
-- [ ] **8.1 The fixture helper** (`tests/hub_mcp.py`)
-  - [ ] `ClientHome` gains a helper that starts `amoeba-mcp` in a repo of that home over real stdio with the SDK client, and exposes its notifications and its stderr. Uses the existing `two_machine_hub`
-  - [ ] Smoke test `tests/hub/test_hub_mcp_smoke.py`: starts a session on `beta`, reads the presence line with the machine name, and the row shows in `list -j` from `alpha`
-  - [ ] Success: the smoke test passes
-- [ ] **8.2 Push and presence** (`tests/hub/test_sessions_across_machines.py`)
-  - [ ] A request sent from `alpha` to a member whose session is on `beta` produces one channel event within one poll interval plus the tick bound; the session's `inbox` call sets `push_confirmed_at` and a later `send` starts no wake; 262's waking fixture with a live push-confirmed session on the other machine starts no wake
-  - [ ] A session on each machine appears under its member in `list -j` from either, with its machine and client version
-  - [ ] A session killed with SIGKILL is not listed after `session_stale_seconds` on the hub's clock and the next refresh deletes its row; a clean exit deletes the row at once; an exit with the hub stopped returns within `TICK_BOUND_SECONDS` and the row goes stale; a session whose clock jumps (a laptop waking) is listed again at its next tick, up since then
-  - [ ] With heartbeat 5, poll 5, stale 15 and a clock the test sets, a session that ticks every poll interval is live at every tick
-  - [ ] A session started without the push launch flag still ticks, is listed with `push unconfirmed`, and starts its machine's waiting work
-  - [ ] Success: tests pass
-- [ ] **8.3 Faults and versions** (`tests/hub/test_sessions_faults.py`)
-  - [ ] Hub stopped for a minute: at most one tick call in flight; attempts at most elapsed over interval plus one; each tool call returns `HubUnreachableError` naming the address; `list` from the other machine shows no session once the hub is back and the stale time has passed, until its next tick; mail delivered just before the stop is pushed by the first tick after
-  - [ ] The hub's `config.yaml` broken: ticks skipped with one WARNING; the first tick after the file is fixed succeeds. A config that fails the third timing check is refused naming the three keys
-  - [ ] Hub restarted one door version up: the session's tools return the upgrade message with both versions; `list` from an up-to-date machine shows the session as behind under its member and its machine in **Behind the hub**; a wake for that member is no longer held off; a session started by the old program afterward is behind too. An old session ticking on an upgraded machine leaves `list` and `amoeba hub machines -j` (5.4) showing the machine not behind after an `amoeba` command there. A door version above the hub's is `ahead of the hub`
-  - [ ] `amoeba hub rm-machine` with a session open: ticks refused as `bad_token`, tools return the error with the invite and join commands, and after a new invite and `join` the next tick succeeds with no restart
-  - [ ] Success: tests pass
-- [ ] **8.4 Work and answers through ticks** (`tests/hub/test_sessions_work.py`)
-  - [ ] A fixture pipeline paused on `alpha` and answered from `beta` resumes on `alpha` with no command run there, only an open session; with three sessions open on `alpha` it resumes once
-  - [ ] A session in a directory that is no member writes no row, sends no event, and its ticks still start the machine's waiting work
-  - [ ] An MCP `answer` for a run on the session's own machine returns the resume's outcome and no `resume-run` process is started for it
-  - [ ] A client that cuts an `answer` call off (the SDK client cancels it after one second on a slow resume) leaves the answer recorded and the resume's outcome recorded, and `list` shows it
-  - [ ] Success: tests pass
-- [ ] **8.5 Joins, leaves and the resource** (`tests/hub/test_sessions_modes.py`)
-  - [ ] A session open across `amoeba join --set-aside-local` uses the hub from its next tick with a new baseline and no event. On a joined machine that had no local store, after `amoeba leave` and the next tick, a plain `amoeba join` is refused naming `--set-aside-local` and `join --set-aside-local` succeeds and the session then uses the hub
-  - [ ] `resources/read` returns the member and the newest tick's `as_of_seq` with no store or hub call and fails naming the tick's error before a reply; `resources/list` lists the resource in a session with no member and after a failed first tick; `subscribe` is refused there and succeeds once a later tick has a member, with no reconnect
-  - [ ] Success: tests pass
-- [ ] **8.6 Door load** (`tests/load/test_door_load.py`)
-  - [ ] Add 50 ticking sessions across 10 members, each ticking every 0.5 seconds for 20 seconds, beside the existing 16 clients. Assert: every tick is answered within 2 seconds; no session goes more than 3 seconds between replies; every session's row stays live; 260's two bounds still hold. Print the slowest tick and the longest gap
-  - [ ] Confirm CI gates it: `uv run pytest --collect-only -q tests/load/test_door_load.py` lists the new test, and `pyproject.toml`'s `addopts` ignores only `tests/live`, so the `Tests` step of `.github/workflows/ci.yml` (`uv run pytest`) runs it and its assertions are what fail the build. If any marker or ignore excludes `tests/load`, add a CI step that runs it
-  - [ ] Add the measured figures to the design's Slice Notes. `tests/load/test_presence_load.py` keeps running on the local store
-  - [ ] Success: the load test passes and is collected by the CI command; figures are in the notes
-- [ ] **8.7 Live variant** (`tests/live/channels`)
-  - [ ] A variant on `two_machine_hub`: a real Claude Code session in the member's repo on one machine, the request sent with `amoeba send` from a repo on the other. Run it as 1.1 does (spend is pre-authorized): `set -a; source .env; set +a; AMOEBA_LIVE_CHANNEL_MODEL=sonnet uv run pytest tests/live/channels -v`
-  - [ ] Success: `tool inbox called` appears in the server log with nothing typed, and `list -j` from the sending machine shows the session with `push_confirmed_at` set; 241's four tests and the long-call test still pass
+- [x] **8.1 The fixture helper** (`tests/hub_mcp.py`)
+  - [x] `ClientHome` gains a helper that starts `amoeba-mcp` in a repo of that home over real stdio with the SDK client, and exposes its notifications and its stderr. Uses the existing `two_machine_hub`
+  - [x] Smoke test `tests/hub/test_hub_mcp_smoke.py`: starts a session on `beta`, reads the presence line with the machine name, and the row shows in `list -j` from `alpha`
+  - [x] Success: the smoke test passes
+- [x] **8.2 Push and presence** (`tests/hub/test_sessions_across_machines.py`)
+  - [x] A request sent from `alpha` to a member whose session is on `beta` produces one channel event within one poll interval plus the tick bound; the session's `inbox` call sets `push_confirmed_at` and a later `send` starts no wake; 262's waking fixture with a live push-confirmed session on the other machine starts no wake
+  - [x] A session on each machine appears under its member in `list -j` from either, with its machine and client version
+  - [x] A session killed with SIGKILL is not listed after `session_stale_seconds` on the hub's clock and the next refresh deletes its row; a clean exit deletes the row at once; an exit with the hub stopped returns within `TICK_BOUND_SECONDS` and the row goes stale; a session whose clock jumps (a laptop waking) is listed again at its next tick, up since then
+  - [x] With heartbeat 5, poll 5, stale 15 and a clock the test sets, a session that ticks every poll interval is live at every tick
+  - [x] A session started without the push launch flag still ticks, is listed with `push unconfirmed`, and starts its machine's waiting work
+  - [x] Success: tests pass
+  - Note: tests are split over test_sessions_across_machines.py and test_sessions_clock.py, with helpers sessions_support.py and session_door_support.py, to stay under the size guide. Real processes where the case needs them; in process where it needs a clock the test sets.
+- [x] **8.3 Faults and versions** (`tests/hub/test_sessions_faults.py`)
+  - [x] Hub stopped for a minute: at most one tick call in flight; attempts at most elapsed over interval plus one; each tool call returns `HubUnreachableError` naming the address; `list` from the other machine shows no session once the hub is back and the stale time has passed, until its next tick; mail delivered just before the stop is pushed by the first tick after
+  - [x] The hub's `config.yaml` broken: ticks skipped with one WARNING; the first tick after the file is fixed succeeds. A config that fails the third timing check is refused naming the three keys
+  - [x] Hub restarted one door version up: the session's tools return the upgrade message with both versions; `list` from an up-to-date machine shows the session as behind under its member and its machine in **Behind the hub**; a wake for that member is no longer held off; a session started by the old program afterward is behind too. An old session ticking on an upgraded machine leaves `list` and `amoeba hub machines -j` (5.4) showing the machine not behind after an `amoeba` command there. A door version above the hub's is `ahead of the hub`
+  - [x] `amoeba hub rm-machine` with a session open: ticks refused as `bad_token`, tools return the error with the invite and join commands, and after a new invite and `join` the next tick succeeds with no restart
+  - [x] Success: tests pass
+  - Note: tests are split over test_sessions_faults.py (real processes), test_sessions_hub_down.py (in process) and test_sessions_versions.py to stay under the size guide. Real processes where the case needs them; in process where it needs a clock, a stop/restart or two spawn recorders. A hub "one version up" is tested as a client one version down, since the hub serves DOOR_VERSION.
+- [x] **8.4 Work and answers through ticks** (`tests/hub/test_sessions_work.py`)
+  - [x] A fixture pipeline paused on `alpha` and answered from `beta` resumes on `alpha` with no command run there, only an open session; with three sessions open on `alpha` it resumes once
+  - [x] A session in a directory that is no member writes no row, sends no event, and its ticks still start the machine's waiting work
+  - [x] An MCP `answer` for a run on the session's own machine returns the resume's outcome and no `resume-run` process is started for it
+  - [x] A client that cuts an `answer` call off (the SDK client cancels it after one second on a slow resume) leaves the answer recorded and the resume's outcome recorded, and `list` shows it
+  - [x] Success: tests pass
+- [x] **8.5 Joins, leaves and the resource** (`tests/hub/test_sessions_modes.py`)
+  - [x] A session open across `amoeba join --set-aside-local` uses the hub from its next tick with a new baseline and no event. On a joined machine that had no local store, after `amoeba leave` and the next tick, a plain `amoeba join` is refused naming `--set-aside-local` and `join --set-aside-local` succeeds and the session then uses the hub
+  - [x] `resources/read` returns the member and the newest tick's `as_of_seq` with no store or hub call and fails naming the tick's error before a reply; `resources/list` lists the resource in a session with no member and after a failed first tick; `subscribe` is refused there and succeeds once a later tick has a member, with no reconnect
+  - [x] Success: tests pass
+- [x] **8.6 Door load** (`tests/load/test_door_load.py`)
+  - [x] Add 50 ticking sessions across 10 members, each ticking every 0.5 seconds for 20 seconds, beside the existing 16 clients. Assert: every tick is answered within 2 seconds; no session goes more than 3 seconds between replies; every session's row stays live; 260's two bounds still hold. Print the slowest tick and the longest gap
+  - [x] Confirm CI gates it: `uv run pytest --collect-only -q tests/load/test_door_load.py` lists the new test, and `pyproject.toml`'s `addopts` ignores only `tests/live`, so the `Tests` step of `.github/workflows/ci.yml` (`uv run pytest`) runs it and its assertions are what fail the build. If any marker or ignore excludes `tests/load`, add a CI step that runs it
+  - [x] Add the measured figures to the design's Slice Notes. `tests/load/test_presence_load.py` keeps running on the local store
+  - [x] Success: the load test passes and is collected by the CI command; figures are in the notes
+  - Note: the load test found that calls starved on SQLite's busy handler (slowest tick 5.04 s, a StoreBusyError). `hub.calls.handle_call` now queues calls on one `threading.Lock` (`_CALL_ORDER`) before the store opens. Figures after the fix: 1914 ticks, slowest 0.661 s, longest gap 0.728 s, 50 live rows at every sample. Test support is in tests/load/door_load_support.py.
+- [x] **8.7 Live variant** (`tests/live/channels`)
+  - [x] A variant on `two_machine_hub`: a real Claude Code session in the member's repo on one machine, the request sent with `amoeba send` from a repo on the other. Run it as 1.1 does (spend is pre-authorized): `set -a; source .env; set +a; AMOEBA_LIVE_CHANNEL_MODEL=sonnet uv run pytest tests/live/channels -v`
+  - [x] Success: `tool inbox called` appears in the server log with nothing typed, and `list -j` from the sending machine shows the session with `push_confirmed_at` set; 241's four tests and the long-call test still pass
+  - Note: the tick logs `no presence: <directory> is not a member (<reason>)` once per change of reason; 241's live test waits for it. The live test file is tests/live/channels/test_two_machines_channels_live.py.
 
 **Commit**: `test: run sessions across two machines, under load and live`
 

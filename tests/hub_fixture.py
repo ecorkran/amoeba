@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from contextlib import AbstractAsyncContextManager, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Final
@@ -35,6 +35,7 @@ from hub_clients import (
     install_client_tools,
     set_runs,
 )
+from hub_mcp import McpRun, serve_mcp
 from process_containment import contained_popen
 from user_configs import example_config_text
 
@@ -139,6 +140,14 @@ class ClientHome:
     def cf_calls(self) -> list[str]:
         """What the stub ``cf`` of this machine has been asked so far."""
         return cf_calls(self.home)
+
+    def mcp(
+        self, repo: Path, stderr_name: str = "mcp-stderr.log"
+    ) -> AbstractAsyncContextManager[McpRun]:
+        """``amoeba-mcp`` started in ``repo`` over real stdio and connected (an async
+        context manager yielding ``hub_mcp.McpRun``); its stderr is kept in this
+        home's ``stderr_name``."""
+        return serve_mcp(self.hub.env_for(self.home), repo, self.home / stderr_name)
 
 
 class FixtureHub:

@@ -596,6 +596,26 @@ def test_a_directory_that_is_not_a_project_asks_cf_once_per_reask_time(
     assert all_session_rows(store_path) == []
 
 
+def test_a_non_member_directory_logs_its_reason_once_across_many_ticks(
+    store_path: Path, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    clock = FakeClock()
+    opener = Opener(store_path)
+    state = member_state(clock, tmp_path)
+    deps = make_deps(opener, clock, cf_run=CountingCf(OUTSIDE_ANY_PROJECT))
+
+    async def scenario() -> None:
+        await eventually(lambda: opener.opens >= 4, "several ticks")
+
+    with caplog.at_level(logging.INFO):
+        anyio.run(_tick, deps, state, RecordingOutbound(), scenario)
+
+    (line,) = [
+        r.getMessage() for r in caplog.records if "no presence" in r.getMessage()
+    ]
+    assert f"{tmp_path} is not a member" in line
+
+
 def test_after_add_the_row_appears_within_the_reask_time_and_after_rm_the_row_goes(
     store_path: Path, tmp_path: Path
 ) -> None:

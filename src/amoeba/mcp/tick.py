@@ -225,6 +225,12 @@ async def _handle_reply(
             client,
             outcome.machine,
         )
+    if reply.member_id is None and reply.reason != state.off_reason:
+        # Once per change of reason, not per tick: a session in a non-member directory
+        # ticks for as long as it lives.
+        logger.info(
+            "no presence: %s is not a member (%s)", state.directory, reply.reason
+        )
     state.member_id, state.member_name = reply.member_id, reply.member_name
     state.off_reason = reply.reason
     state.told_member = state.told_member or reply.member_id is not None
