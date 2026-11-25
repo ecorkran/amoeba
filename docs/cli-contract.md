@@ -64,7 +64,7 @@ the old store untouched.
 | 0 | The operation ran | `add` or `rm` applied or unchanged; `list` and `status` listed; `handle-pause` any outcome, including `skipped`; `answer` recorded; `dismiss` dismissed or unchanged; `retract` retracted or unchanged; `decisions` listed; `mark-read` moved or unchanged; `report-release` recorded, versioned, corrected, unchanged or withdrawn; `changes` listed; `send` sent or unchanged; `inbox` listed; `reply` applied; `cancel` cancelled |
 | 1 | The operation refused the request; the result says why | `add`, `rm`, `list`, `answer`, `dismiss`, `retract`, `status`, `decisions`, `mark-read`, `report-release`, `changes`, `send`, `inbox`, `reply` or `cancel` rejected |
 | 2 | Usage | bad arguments (a missing or non-integer `mark-read --through`, an old command name, `--all` with `list members`, `--file` with another `add` flag, mutually exclusive rules flags, an empty side of `--concept`), or an `add --file` request file that cannot be read, is not UTF-8 or is not YAML, a `send --body-file` that cannot be read or is not UTF-8, or `send --body` with `--body-file` |
-| 3 | Operational failure; message on stderr as `error: <ExceptionName>: <message>` | `ConfigError`, `AmoebaHomeError`, `ContextForgeError`, `SquadronError`, any `StoreError` (including `StoreRelocateError`, a legacy store that could not be moved, `LocalStoreClosedError`, `HubHomeError`, `NoActingMachineError` and `HubStoreMissingError`); and, from slice 260, `JoinError`, `ClientFileError`, `HubUnreachableError`, `HubCertificateError`, `HubRefusedError`, `NotServedError`, `HubConfigError`, `HubStartError` and `BackupError` (see "The hub and joined machines") |
+| 3 | Operational failure; message on stderr as `error: <ExceptionName>: <message>` | `ConfigError`, `AmoebaHomeError`, `ContextForgeError`, `SquadronError`, any `StoreError` (including `StoreRelocateError`, a legacy store that could not be moved, `LocalStoreClosedError`, `HubHomeError`, `NoActingMachineError` and `HubStoreMissingError`); and, from slice 260, `JoinError`, `ClientFileError`, `HubUnreachableError`, `HubCertificateError`, `HubRefusedError`, `HubConfigError`, `HubStartError` and `BackupError` (see "The hub and joined machines") |
 
 A Squadron or Context Forge failure is an exit 3, never a skip: "cannot tell" is not
 "not mine". Nothing is written before it.
@@ -1163,7 +1163,7 @@ check is made on every call, before anything local is read or written.
 |---|---|
 | `decisions`, `mark-read`, `dismiss`, `retract`, `standing`, `withdraw`, (slice 261) `add`, `rm`, `list`, `status`, `send`, `inbox`, `reply`, `cancel`, `changes`, `report-release`, and (slice 262) `answer` | Run on the hub's store. The text, `-j` JSON and exit codes are the ones the local way gives. Members show by name |
 | `handle-pause`, `wake-run`, `resume-run` (slice 262) | Run on this machine, each store step a door call (below). No local `config.yaml` is read: the hub's settings come with the first step |
-| `amoeba-mcp` start | `NotServedError`: this machine is joined to the hub at `<address>`, and the door does not serve `amoeba-mcp` yet. Exit 3, nothing local is read or written |
+| `amoeba-mcp` start | Starts: reads the client file and saved certificate, nothing local, and calls no hub (a hub that is down skips ticks, `mcp-server.md`). A client file that does not load: `ClientFileError`, exit 3 |
 | `amoeba hub ...` | `LocalStoreClosedError` naming the hub, before `hub.yaml` is read or any file is written |
 | `amoeba join`, `amoeba leave` | Run (below) |
 
@@ -1239,7 +1239,7 @@ nothing. Where nothing is joined and nothing is set aside it does nothing and ex
 | `HubUnreachableError` | 3 | No reply within the retry time (30 s), or nothing at the address speaks TLS; a writing call adds that its outcome is unknown and what to run |
 | `HubCertificateError` | 3 | The hub did not present the saved certificate; never retried |
 | `HubRefusedError` | 3 | The hub refused the call; the message holds the hub's address, the code and its text. `door_version` adds the upgrade command and `bad_token` adds `hub invite` and `join` |
-| `NotServedError` | 3 | A joined machine ran a command the door does not serve |
+| `NotServedError` | 3 | Removed in slice 263: every operation is served, so no entry point raises it. The hub still refuses a call name it does not know with `not_served` |
 | `StepReplyError` | 3 | A step's reply did not fit its model (slice 262): names the step and the field, and for a writing step says the hub applied it |
 | `LocalStoreClosedError` | 3 | A command found the machine joined, or a local store set aside for a hub |
 

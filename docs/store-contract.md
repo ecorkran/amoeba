@@ -693,17 +693,21 @@ reads the mark first, so a store that is set aside takes no more writes
 ## Sessions and who writes them (slice 241)
 
 Only a serving `amoeba-mcp` writes `sessions`, and only for its own row, from its
-heartbeat; `list` and `status` read it. Nothing else touches the table.
+tick (slice 263: the `session_tick` and `session_end` steps, a door call on a joined
+machine, so the row carries the calling machine and the hub's clock); `list` and
+`status` read it. `amoeba hub rm-machine` deletes a removed machine's rows with its
+stored runs. Nothing else touches the table. Migration `014` adds the two version
+columns and the `machine_runs` table (below).
 
 - **Register and beat are one statement.** An upsert on `session_id` sets
   `heartbeat_at` and `push_confirmed_at` and, on a first insert, the other columns, so a
   row re-created after a prune keeps the server's original `started_at`. The first beat
-  runs when the client finishes the handshake, then every `session_heartbeat_seconds`.
+  runs at a session's first tick, then every tick (`notify_poll_seconds`).
 - **The stale rule.** A row whose `heartbeat_at` is not newer than now minus
   `session_stale_seconds` counts as gone. It is one predicate (`LIVE_SESSION` in
   `store/sql_sessions.py`), used by the display read, the waking read and the prune, so a
   stale row is never shown whether or not it has been pruned.
-- **The prune.** Each heartbeat deletes every member's stale rows before its upsert, in
+- **The prune.** Each tick deletes every member's stale rows before its upsert, in
   the same write transaction. `sweep` is not involved. The table therefore holds the
   live rows plus the rows of servers killed since the last beat of any server; with no
   server running those stay until one starts, each a few dozen bytes and never shown.
@@ -713,8 +717,8 @@ heartbeat; `list` and `status` read it. Nothing else touches the table.
   returns active members with a fresh row whose `push_confirmed_at` is set: the same
   members `status` shows with a confirmed session.
 - **Cleanup.** A clean exit deletes the row (shielded, bounded by twice the busy
-  timeout). A killed server's row goes stale and the next heartbeat of any server
-  deletes it. A held store skips a beat; the next beat retries.
+  timeout). A killed server's row goes stale and the next tick of any server
+  deletes it. A held store skips a tick; the next tick retries.
 - A removed member's server keeps beating; its rows are never shown and never count for
   waking, because both reads keep active members only.
 

@@ -295,31 +295,34 @@ Between 4.4 and 4.7 the tests that touch what moved or is deleted fail by design
 
 ## 9. Admin, documents and the live update (D12 to D14; effort 3)
 
-- [ ] **9.1 `hub rm-machine`** (`hub/admin.py`)
-  - [ ] `remove_machine` already deletes the machine's session rows; 2.2 added the stored-runs delete. Nothing else changes in `rm-machine`
-  - [ ] Test (`tests/hub/test_rm_machine_work.py`): rm deletes the machine's sessions and its stored runs, and leaves other machines' rows
-  - [ ] Success: tests pass
-- [ ] **9.2 Documents** (D14)
-  - [ ] `docs/mcp-server.md`: start-up on a joined machine; the tick in place of the two loops; the member worked out each tick; what a failed tick does; the deadline of 300 and the two limits on `resume_wait_seconds` (143.5 through the door, 209.5 local); Codex's `tool_timeout_sec` of at least 305; what Claude Code does with a call past two minutes as 1.3 recorded it, with the setting if the result needed one; the resource listed in every session and its number one tick old; the new log lines
-  - [ ] `docs/cli-contract.md`: the **Behind the hub** and **Runs on other machines** sections (the fields were added in 7.2 and 5.4). `docs/store-contract.md`: migration 014 and who writes `sessions`. `docs/config-contract.md`: `session_heartbeat_seconds` and `session_stale_seconds` as judged on the hub, the third check, and `resume_wait_seconds`'s limits
-  - [ ] If 1.3 found the result still does not arrive, the `answer` tool's description says to read the outcome with `list`
-  - [ ] Success: `tests/test_contract_docs.py` passes; each document names the behavior it is listed for
-- [ ] **9.3 `scripts/update_live.py`** (D14)
-  - [ ] The read-back already runs `amoeba list` (`_amoeba_list`) and reads the store (`check_store`). Add an `_amoeba_status` call beside `_amoeba_list` and two checks: the `status` document holds a `machines` list with the one `local` machine, and `machine_runs` holds one row for it. The script lists open `amoeba-mcp` sessions to restart; keep that if present, add it if not
-  - [ ] Test (`tests/scripts/test_update_live.py`, using `schema_13.py`): `update` and `restore` pass against a copy of a schema-13 store, with the live paths redirected to the copy
-  - [ ] Add the restore path to the design's Slice Notes: `uv run python scripts/update_live.py restore`, which puts back the store as it was before the update, loses every answer, message and decision recorded since, and reinstalls the release installed before
-  - [ ] Success: tests pass; the note is written
+- [x] **9.1 `hub rm-machine`** (`hub/admin.py`)
+  - [x] `remove_machine` already deletes the machine's session rows; 2.2 added the stored-runs delete. Nothing else changes in `rm-machine`
+  - [x] Test (`tests/hub/test_rm_machine_work.py`): rm deletes the machine's sessions and its stored runs, and leaves other machines' rows
+  - [x] Success: tests pass
+- [x] **9.2 Documents** (D14)
+  - [x] `docs/mcp-server.md`: start-up on a joined machine; the tick in place of the two loops; the member worked out each tick; what a failed tick does; the deadline of 300 and the two limits on `resume_wait_seconds` (143.5 through the door, 209.5 local); Codex's `tool_timeout_sec` of at least 305; what Claude Code does with a call past two minutes as 1.3 recorded it, with the setting if the result needed one; the resource listed in every session and its number one tick old; the new log lines
+  - [x] `docs/cli-contract.md`: the **Behind the hub** and **Runs on other machines** sections (the fields were added in 7.2 and 5.4). `docs/store-contract.md`: migration 014 and who writes `sessions`. `docs/config-contract.md`: `session_heartbeat_seconds` and `session_stale_seconds` as judged on the hub, the third check, and `resume_wait_seconds`'s limits
+  - [x] If 1.3 found the result still does not arrive, the `answer` tool's description says to read the outcome with `list`
+  - Note: 1.3 found the result does arrive, so the `answer` description item is not needed and is checked as satisfied. `docs/mcp-server.md`, `cli-contract.md`, `store-contract.md` and `config-contract.md` are updated; `tests/test_contract_docs.py` passes (23 tests).
+  - [x] Success: `tests/test_contract_docs.py` passes; each document names the behavior it is listed for
+- [x] **9.3 `scripts/update_live.py`** (D14)
+  - [x] The read-back already runs `amoeba list` (`_amoeba_list`) and reads the store (`check_store`). Add an `_amoeba_status` call beside `_amoeba_list` and two checks: the `status` document holds a `machines` list with the one `local` machine, and `machine_runs` holds one row for it. The script lists open `amoeba-mcp` sessions to restart; keep that if present, add it if not
+  - [x] Test (`tests/scripts/test_update_live.py`, using `schema_13.py`): `update` and `restore` pass against a copy of a schema-13 store, with the live paths redirected to the copy
+  - [x] Add the restore path to the design's Slice Notes: `uv run python scripts/update_live.py restore`, which puts back the store as it was before the update, loses every answer, message and decision recorded since, and reinstalls the release installed before
+  - [x] Success: tests pass; the note is written
 
 ## 10. Validation and notes (effort 2)
 
-- [ ] **10.1 Checks and sizes**
-  - [ ] Run the four checks and the slice's own tests: `uv run pytest tests/mcp_server tests/hub tests/store/test_migration_014.py tests/load/test_door_load.py tests/mcp_server/test_protocol_pin.py -v`
-  - [ ] `wc -l` each new source file: each near 300 lines or less; split any that is over, with the tests passing after
-  - [ ] Success: the checks pass; each Success line above was met by its task
-- [ ] **10.2 Operator walkthrough, done by the implementing agent**
-  - [ ] Step through the design's Operator Walkthrough bullets as the person running it, against `two_machine_hub`. Record in the Slice Notes the test that shows each bullet, from this map, and every dead end found, or `Dead ends found: none`:
+- [x] **10.1 Checks and sizes**
+  - [x] Run the four checks and the slice's own tests: `uv run pytest tests/mcp_server tests/hub tests/store/test_migration_014.py tests/load/test_door_load.py tests/mcp_server/test_protocol_pin.py -v`
+  - [x] `wc -l` each new source file: each near 300 lines or less; split any that is over, with the tests passing after
+  - Note: test_tick.py and test_session_steps.py were split (test_tick_failures.py, test_tick_member.py, tick_rig.py, session_steps_rig.py, test_session_end_steps.py). door_load_support.py (309 lines) and test_status_machines.py (315 lines) are left near 300.
+  - [x] Success: the checks pass; each Success line above was met by its task
+- [x] **10.2 Operator walkthrough, done by the implementing agent**
+  - [x] Step through the design's Operator Walkthrough bullets as the person running it, against `two_machine_hub`. Record in the Slice Notes the test that shows each bullet, from this map, and every dead end found, or `Dead ends found: none`:
     - Start: 6.3 and 8.1. A client cuts a call off: 8.4. Normal path: 8.2. The repo was not added yet, `cf` broken at start, not a Context Forge project: 4.2. The hub goes down: 8.3 (and 5.3). The hub's config is broken: 8.3 and 2.4. A session is closed, killed, or its laptop sleeps: 8.2. An `answer` refused for the deadline: 6.2. A run answered from another machine: 8.4. The hub upgraded, a machine upgraded before the hub: 8.3 and 5.4. A machine removed with a session open: 8.3. A machine joins or leaves while a session is open, and a client that listed resources early: 8.5. Runs on another machine look old: 7.3. Turning push off: 8.2. Undo: 9.3
-  - [ ] Success: the notes list each bullet with its test, and any dead end is fixed in code or its design text before this task is checked
+  - [x] Success: the notes list each bullet with its test, and any dead end is fixed in code or its design text before this task is checked
+  - Note: the walkthrough map and `Dead ends found: none.` are recorded in the design's Slice Notes.
 
 **Commit**: `feat: finish the admin views, documents and live update for sessions, and record the walkthrough`
 

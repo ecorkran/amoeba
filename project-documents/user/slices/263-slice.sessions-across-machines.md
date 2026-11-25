@@ -10,8 +10,8 @@ dependencies:
 interfaces:
 - 264
 dateCreated: 20261120
-dateUpdated: 20261121
-status: not_started
+dateUpdated: 20261125
+status: complete
 turns: 29
 promptTokens: 2452589
 cachedTokens: 2210522
@@ -656,15 +656,15 @@ A tick or tool call that fails at the door fails with 260's errors. This slice a
    uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest -q
    ```
 
-   Expected: no formatting change, `All checks passed!`, `0 errors`, and no test failure.
+   Expected (run 20261125): no formatting change, `All checks passed!`, `0 errors, 0 warnings, 0 informations`, `5907 passed` in about 11 minutes.
 
 2. This slice's own tests:
 
    ```bash
-   uv run pytest tests/mcp_server tests/hub/test_sessions.py tests/store/test_migration_014.py tests/load/test_door_load.py tests/mcp_server/test_protocol_pin.py -v
+   uv run pytest tests/mcp_server tests/hub tests/store/test_migration_014.py tests/load/test_door_load.py tests/mcp_server/test_protocol_pin.py -v
    ```
 
-   Expected: all pass. The load test prints the slowest tick and the longest gap between two replies, both under their bounds.
+   Expected (run 20261125, with `tests/operations` and `tests/scripts` added): `2684 passed` in about 8 minutes. The load test asserts the slowest tick and the longest gap between two replies, both under their bounds.
 
 3. The live tier, which spends on a model:
 
@@ -682,6 +682,8 @@ A tick or tool call that fails at the door fails with 260's errors. This slice a
    - **Work from a tick** ("A tick's reply with `work: true`"). With a run paused on `beta`: on `alpha`, `amoeba answer <run id> --text "Use the v2 schema"` says the run is on `beta`. A few seconds later `amoeba list` shows the answer as resumed, with nothing typed on `beta`.
    - **An agent answers** ("An MCP `answer` for a run on the session's own machine"). With a second run paused on `beta`, ask the session there to answer it with the `answer` tool. The result holds the resume's outcome, `resumed`. While the tool runs, `pgrep -f "amoeba resume-run"` on `beta` prints nothing: the resume ran inside the call. Its `sq` logs and attempt file are under `beta`'s `logs/resume/<run id>/`, as for any resume (262 D6).
    - **Runs elsewhere** ("After `status` on `alpha`"). `amoeba list` on `beta`, then on `alpha`: `beta`'s runs show under **Runs on other machines**, headed `beta, reported <age> ago`.
+
+   Caveat: the by-hand steps are each covered by an automated test (see the 10.2 map in the Slice Notes) and the live tier's two-machine test ran against a real Claude Code; they were not typed by hand.
 
 5. On the local store, after the release's update: `amoeba list` shows each live session with the machine `local`, and a session started before the update is listed by the script as one to restart.
 
@@ -776,3 +778,16 @@ Dead ends found: none.
 - `resources/subscribe` is deprecated in the SDK's client; the resource test calls it with a pyright ignore, because the server's handler is what is under test.
 - A session in a non-member directory logged nothing after the tick change, and 241's live test waits for `is not a member`: the tick logs `no presence: <directory> is not a member (<reason>)` once per change of reason (`mcp/tick.py`, test in `tests/mcp_server/test_tick.py`).
 - Live (`AMOEBA_LIVE_CHANNEL_MODEL=sonnet uv run pytest tests/live/channels -v`): 6 passed in 300 s: 241's four, the long-call test, and the new `test_two_machines_channels_live.py` (a real Claude Code on `beta`, the request sent from `alpha`: `tool inbox called` in the server log, then `push_confirmed_at` in `list -j` from `alpha`).
+
+### 9.1 to 9.3: admin, documents and the live update (20261125)
+
+- `rm-machine` (`tests/hub/test_rm_machine_work.py`): a test seeds a session and a stored runs report on each of two machines, removes one, and finds only the other's rows. `remove_machine` needed no change.
+- Documents: `docs/mcp-server.md` (the tick, the member worked out each pass, what a failed pass does, the deadline of 300 and the two limits, Codex `tool_timeout_sec` 305, the Claude Code fact from 1.3, the resource in every session, the log lines, start-up on a joined machine), `docs/cli-contract.md` (the `amoeba-mcp` start row and `NotServedError` removed; the Behind and Runs sections were done in 7.2), `docs/store-contract.md` (tick writes `sessions`, `rm-machine` deletes its rows and runs), `docs/config-contract.md` (the two session timings judged on the hub, the third check, `resume_wait_seconds` limits). 1.3 found the result does arrive, so the `answer` tool description is unchanged.
+- `scripts/update_live.py`: `Steps.status` (`_amoeba_status`, `amoeba status -j`) and `check_status` (the `machines` list is the one `local`, `machine_runs` holds one row for it). Tests use a copy of a schema-13 store (`tests/scripts/test_update_live.py`). The script already listed open `amoeba-mcp` sessions to restart.
+- **Restore path:** `uv run python scripts/update_live.py restore` puts back the store as it was before the update, loses every answer, message and decision recorded since, and reinstalls the release installed before. A failed read-back (the new checks included) runs it automatically.
+
+### 10.1, 10.2: sizes and the operator walkthrough (20261125)
+
+- Sizes: `tests/mcp_server/test_tick.py` (738 lines) split into `test_tick.py`, `test_tick_failures.py`, `test_tick_member.py` and `tick_rig.py`; `tests/operations/test_session_steps.py` (398) split into `test_session_steps.py`, `test_session_end_steps.py` and `session_steps_rig.py`. Left as they are: `tests/load/door_load_support.py` (309) and `tests/operations/test_status_machines.py` (315).
+- Walkthrough map, bullet to test: Start 6.3 and 8.1 (`test_hub_mcp_smoke.py`, `test_sessions_across_machines.py`). A client cuts a call off: 8.4. Normal path: 8.2. Repo not added, `cf` broken at start, not a project: 4.2 (`test_tick_member.py`). Hub goes down: 8.3 (`test_sessions_hub_down.py`) and 5.3. Hub config broken: 8.3 and 2.4. Session closed, killed, laptop sleeps: 8.2 (`test_sessions_clock.py`). `answer` refused for the deadline: 6.2. Run answered from another machine: 8.4. Hub upgraded or machine upgraded first: 8.3 and 5.4 (`test_sessions_versions.py`). Machine removed with a session open: 8.3 and 9.1. Machine joins or leaves while a session is open, early resource list: 8.5. Runs on another machine look old: 7.3. Turning push off: 8.2. Undo: 9.3.
+- Dead ends found: none.
