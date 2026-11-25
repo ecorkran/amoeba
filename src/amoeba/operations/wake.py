@@ -28,6 +28,7 @@ from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.store.vocabulary import RequestState
 from amoeba.store.wakes import claim_wake, wake_due, wake_waiting_machines
+from amoeba.wire.times import DOOR_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ def _claim(  # noqa: PLR0913 - what the hub part of the step is given
     result: SendResult,
     logs_dir: Path,
 ) -> SendResult:
-    limits = wake_limits(config)
+    limits = wake_limits(config, DOOR_VERSION)
     with store.read() as transaction:
         due_here = wake_due(transaction, member_id, now, limits)
         waiting = (

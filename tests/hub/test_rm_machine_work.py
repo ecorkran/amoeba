@@ -29,6 +29,7 @@ from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
 from amoeba.store.wakes import WakeLimits, claim_wake
 from amoeba.wire.protocol import DoneReply
+from amoeba.wire.times import DOOR_VERSION
 from amoeba.wiring_door import join
 from hub.call_support import ALPHA_TOKEN, BETA_TOKEN, NOW, HubRig, build_rig, result_of
 from hub.in_process_hub import InProcessHub
@@ -62,7 +63,7 @@ def _seed(rig: HubRig) -> None:
                 transaction,
                 CORE,
                 NOW,
-                WakeLimits(600, 3, 90),
+                WakeLimits(600, 3, 90, DOOR_VERSION),
                 "wake-on-alpha",
                 "/alpha/logs/wake/wake-on-alpha",
             )

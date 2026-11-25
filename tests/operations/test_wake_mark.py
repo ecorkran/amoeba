@@ -14,6 +14,7 @@ from amoeba.operations.message_models import SendOutcome
 from amoeba.operations.steps.limits import wake_limits
 from amoeba.store.store import Store
 from amoeba.store.wakes import wake_due
+from amoeba.wire.times import DOOR_VERSION
 from operations.message_support import RECIPIENT, open_message_store
 from operations.wake_send_support import (
     TICK,
@@ -65,7 +66,10 @@ def test_a_send_while_a_session_is_live_sets_no_mark_so_nothing_wakes_it_later(
     with store.write() as transaction:
         transaction.execute("DELETE FROM sessions")
         due = wake_due(
-            transaction, RECIPIENT, NOW + timedelta(hours=1), wake_limits(wake_config())
+            transaction,
+            RECIPIENT,
+            NOW + timedelta(hours=1),
+            wake_limits(wake_config(), DOOR_VERSION),
         )
 
     assert _mark(store, "ask") is None

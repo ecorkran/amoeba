@@ -27,6 +27,7 @@ from amoeba.store.checkouts import checkout_at
 from amoeba.store.machines import acting_machine_id
 from amoeba.store.store import Store
 from amoeba.store.wakes import WakeLimits, claim_wake
+from amoeba.wire.times import DOOR_VERSION
 from operations.add_placed import add
 from operations.set_up_support import (
     DIRECTORY,
@@ -215,7 +216,12 @@ def test_the_claim_after_an_add_uses_the_checkouts_path_and_command(
             transaction,
             member.project_id,
             NOW,
-            WakeLimits(timeout_seconds=60, max_per_day=3, session_stale_seconds=90),
+            WakeLimits(
+                timeout_seconds=60,
+                max_per_day=3,
+                session_stale_seconds=90,
+                door_version=DOOR_VERSION,
+            ),
             "w1",
             "/logs/w1",
         )

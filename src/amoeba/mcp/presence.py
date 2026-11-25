@@ -19,6 +19,8 @@ from uuid import uuid4
 import anyio
 import anyio.to_thread
 
+from amoeba.program_version import program_version
+from amoeba.wire.times import DOOR_VERSION
 from amoeba.wiring_presence import (
     CfRun,
     Session,
@@ -142,6 +144,8 @@ def _session(state: PresenceState, client: str, now: datetime) -> Session:
         started_at=state.started_at,
         heartbeat_at=now,
         push_confirmed_at=state.push_confirmed_at,
+        client_version=program_version(),
+        door_version=DOOR_VERSION,
     )
 
 

@@ -18,6 +18,8 @@ class StepContext:
     transaction: Transaction
     now: datetime
     config: UserConfig | None
+    #: The door version the program serving the call runs (slice 263, D6).
+    door_version: int
 
     def require_config(self) -> UserConfig:
         """The config a step that declared ``needs_config`` was given.

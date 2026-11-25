@@ -77,7 +77,7 @@ waits.
 ## Migrations
 
 - Numbered files in `src/amoeba/store/schema/` (`001_baseline.sql`, `002_pause_handling.sql`,
-  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`, `009_wakes.sql`, `010_standing_answers.sql`, `011_hub_and_door.sql`, `012_members_by_name.sql`, `013_local_work.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (12).
+  `003_question_lifecycle.sql`, `004_answer_via.sql`, `005_member_rules_from.sql`, `006_messages.sql`, `007_sessions.sql`, `008_waiting_on_request.sql`, `009_wakes.sql`, `010_standing_answers.sql`, `011_hub_and_door.sql`, `012_members_by_name.sql`, `013_local_work.sql`, `014_sessions_across_machines.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number (14).
 - Opening applies the missing files in order inside one write transaction and stamps
   `schema_meta.version`. A store stamped higher than the code expects is refused
   (`StoreSchemaError`) and left untouched.
@@ -319,6 +319,10 @@ confirmation.
 | `started_at` | UTC time the server started; kept when a pruned row is re-created. |
 | `heartbeat_at` | UTC time of the last beat. |
 | `push_confirmed_at` | UTC time the session's agent first answered a channel event with an `inbox` call; null until then. |
+| `client_version` | Migration `014`. The package version of the program serving the session. Null only in a row from before the migration; a `BEFORE INSERT` trigger (`sessions_versions_required`) aborts an insert with a null here or in `door_version`. |
+| `door_version` | Migration `014`. The door version of that program, an integer. A row with none is never live, and the next prune deletes it. |
+
+Every time in `sessions` is the store's own clock: the hub's when the call came through the door, never the client's.
 
 Indexes: `(member_id)` and `(heartbeat_at)`. No `CHECK` list.
 
@@ -394,7 +398,19 @@ one per machine invited with `amoeba hub invite` on a hub. The migration makes n
 | `token_hash` | SHA-256 of the machine's token, hex; unique; null for a machine with no token (`local`). The token itself is never stored. |
 | `created_at` | UTC time the machine was made. |
 | `last_called_at` | UTC time of its last call to the hub; null until one. |
-| `client_version` | The package version its last call reported; null until one. |
+| `client_version` | The package version its last call reported; null until one. A session's tick or exit call does not set it (slice 263). |
+| `door_version` | Migration `014`. The door version its last call reported, an integer; null until one or when the header did not parse. Set with `client_version`. |
+
+### `machine_runs` (migration `014`, slice 263)
+
+One row per machine: the `runs` document that machine last sent with `status` or `list`, so other machines can show its runs. The hub replaces it, with the hub's own time, in the call's transaction. A machine's removal deletes it (`remove_machine`).
+
+| Column | Meaning |
+|---|---|
+| `machine_id` | Key; references `machines`. |
+| `owner_id` | The owner; references `owners`; a `BEFORE INSERT` trigger (`machine_runs_owner_required`) aborts when it is null, as on the other record tables. |
+| `reported_at` | UTC time of the store's own clock when the document was stored. |
+| `document` | The `runs` document, JSON text; read back through the same model that validated it, and a document that no longer validates is reported, not repaired. |
 
 ### `call_results` (migration `011`)
 
@@ -495,9 +511,9 @@ are never read as Context Forge's or git's current state.
 
 - **marker**: how far the PM has read the decisions. Columns: `pm_marker.id`, `pm_marker.last_seen_seq`.
 
-- **ownership**: who owns each record and which machine wrote it, the machines that may call the hub, and the kept results and closed mark of the door (slice 260). Amoeba is the only place this exists. Columns: `answers.owner_id`, `call_results.call_id`, `call_results.machine_id`, `call_results.operation`, `call_results.recorded_at`, `call_results.reply`, `call_results.request_hash`, `checkouts.owner_id`, `closed_mark.closed_at`, `closed_mark.hub_address`, `closed_mark.mark_key`, `deliveries.owner_id`, `dependency_pairs.owner_id`, `machines.client_version`, `machines.created_at`, `machines.last_called_at`, `machines.machine_id`, `machines.name`, `machines.owner_id`, `machines.token_hash`, `members.owner_id`, `message_rejections.owner_id`, `messages.owner_id`, `owners.created_at`, `owners.name`, `owners.owner_id`, `programs.owner_id`, `questions.owner_id`, `releases.owner_id`, `sessions.machine_id`, `sessions.owner_id`, `standing_answers.owner_id`, `wakes.owner_id`.
+- **ownership**: who owns each record and which machine wrote it, the machines that may call the hub, and the kept results and closed mark of the door (slice 260). Amoeba is the only place this exists. Columns: `answers.owner_id`, `call_results.call_id`, `call_results.machine_id`, `call_results.operation`, `call_results.recorded_at`, `call_results.reply`, `call_results.request_hash`, `checkouts.owner_id`, `closed_mark.closed_at`, `closed_mark.hub_address`, `closed_mark.mark_key`, `deliveries.owner_id`, `dependency_pairs.owner_id`, `machines.client_version`, `machines.door_version`, `machines.created_at`, `machines.last_called_at`, `machines.machine_id`, `machines.name`, `machines.owner_id`, `machines.token_hash`, `members.owner_id`, `message_rejections.owner_id`, `messages.owner_id`, `owners.created_at`, `owners.name`, `owners.owner_id`, `programs.owner_id`, `questions.owner_id`, `releases.owner_id`, `sessions.machine_id`, `sessions.owner_id`, `standing_answers.owner_id`, `wakes.owner_id`.
 
-- **presence**: which `amoeba-mcp` processes are serving now, as their own heartbeats say. Nothing else knows this, and a row that stops beating stops counting. Columns: `sessions.client`, `sessions.directory`, `sessions.heartbeat_at`, `sessions.member_id`, `sessions.push_confirmed_at`, `sessions.session_id`, `sessions.started_at`.
+- **presence**: which `amoeba-mcp` processes are serving now, as their own heartbeats say, and what each machine last said its runs were (`machine_runs`, replaced by each `status` or `list` call of that machine, shown with when it was reported). Nothing else knows this, and a row that stops beating stops counting. Columns: `machine_runs.document`, `machine_runs.machine_id`, `machine_runs.owner_id`, `machine_runs.reported_at`, `sessions.client`, `sessions.client_version`, `sessions.directory`, `sessions.door_version`, `sessions.heartbeat_at`, `sessions.member_id`, `sessions.push_confirmed_at`, `sessions.session_id`, `sessions.started_at`.
 
 ## Question lifecycle and who writes it (slices 223 and 228)
 

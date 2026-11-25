@@ -14,8 +14,6 @@ import ssl
 import time
 import uuid
 from collections.abc import Mapping
-from functools import cache
-from importlib import metadata
 from pathlib import Path
 from typing import Final
 
@@ -26,6 +24,7 @@ from amoeba.client.errors import (
     HubUnreachableError,
 )
 from amoeba.client.trust import pinned_context
+from amoeba.program_version import program_version
 from amoeba.wire.address import split_address
 from amoeba.wire.protocol import (
     CALL_PATH_PREFIX,
@@ -44,17 +43,15 @@ from amoeba.wire.protocol import (
 )
 from amoeba.wire.times import DOOR_VERSION, DoorTimes
 
-PACKAGE_NAME: Final = "amoeba-ai"
 UPGRADE_COMMAND: Final = "uv tool install --force amoeba-ai"
 JSON_TYPE: Final = "application/json"
 #: Where a refused ``bad_token`` names the machine before the hub has told it its name.
 MACHINE_PLACEHOLDER: Final = "<machine>"
 
 
-@cache
 def client_version() -> str:
     """The installed package version, sent with every call."""
-    return metadata.version(PACKAGE_NAME)
+    return program_version()
 
 
 def _address_hint(address: str) -> str:

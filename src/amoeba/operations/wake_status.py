@@ -33,6 +33,7 @@ from amoeba.store.wakes import (
     wake_summary,
     wake_waiting_machines,
 )
+from amoeba.wire.times import DOOR_VERSION
 
 
 def read_member_wakes(
@@ -43,7 +44,7 @@ def read_member_wakes(
 ) -> dict[str, WakeStatus]:
     """The ``WakeStatus`` of each member that has a wake command here; others are
     absent. A wake due for a member waits on the machines that can take it (D8)."""
-    limits = wake_limits(config)
+    limits = wake_limits(config, DOOR_VERSION)
     with store.read() as transaction:
         machine = acting_machine_name(transaction)
         return {

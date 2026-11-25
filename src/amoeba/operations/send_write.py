@@ -42,6 +42,7 @@ from amoeba.store.models import Message
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import DeliveryEvent, MessageKind, RequestState
 from amoeba.store.wakes import set_wake_mark
+from amoeba.wire.times import DOOR_VERSION
 
 
 @dataclass(frozen=True)
@@ -99,7 +100,11 @@ def write_send(
         )
         # The mark is written here, before any wake claim reads it (262 D8).
         set_wake_mark(
-            transaction, stored.message_id, recipient, now, wake_limits(config)
+            transaction,
+            stored.message_id,
+            recipient,
+            now,
+            wake_limits(config, DOOR_VERSION),
         )
         return sent_result(SendOutcome.SENT, stored, now)
 
@@ -173,7 +178,13 @@ def _resend(  # noqa: PLR0913 - the transaction, the stored row and the send aga
             "send it again under a new id",
         )
         return reject_send(transaction, sender, request, problem, now)
-    set_wake_mark(transaction, existing.message_id, recipient, now, wake_limits(config))
+    set_wake_mark(
+        transaction,
+        existing.message_id,
+        recipient,
+        now,
+        wake_limits(config, DOOR_VERSION),
+    )
     return sent_result(SendOutcome.UNCHANGED, existing, now)
 
 

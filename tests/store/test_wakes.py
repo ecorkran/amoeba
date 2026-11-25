@@ -20,6 +20,7 @@ from amoeba.store.wakes import (
     get_wake,
     wake_due,
 )
+from amoeba.wire.times import DOOR_VERSION
 from store.message_support import ADDRESSEE, NOW, SENDER, seed_members
 from store.seed import mark_wake_wanted
 from store.wake_support import (
@@ -86,6 +87,8 @@ def test_a_session_that_is_not_push_confirmed_does_not_block(store: Store) -> No
                 started_at=NOW,
                 heartbeat_at=NOW,
                 push_confirmed_at=None,
+                client_version="9.9.9",
+                door_version=DOOR_VERSION,
             ),
         )
         assert claim(transaction, "w1") is not None

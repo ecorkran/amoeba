@@ -224,17 +224,26 @@ def touch_machine(
     token_hash: str,
     now: datetime,
     client_version: str | None,
+    door_version: int | None,
+    *,
+    keep_versions: bool = False,
 ) -> ActingMachine | None:
-    """Record a call: sets ``last_called_at`` and ``client_version``.
+    """Record a call: sets ``last_called_at``, ``client_version`` and ``door_version``.
 
-    A call that sent no client version leaves the stored one as it was. Returns the
-    machine, or ``None`` when no row has that hash (the token ended since it was
+    A call that sent no version leaves the stored one as it was. With
+    ``keep_versions`` (a session's tick or exit call) only the time is set. Returns
+    the machine, or ``None`` when no row has that hash (the token ended since it was
     read).
     """
-    cursor = transaction.execute(
-        sql_machines.TOUCH_MACHINE,
-        (encode_timestamp(now), client_version, token_hash),
-    )
+    if keep_versions:
+        cursor = transaction.execute(
+            sql_machines.TOUCH_MACHINE_TIME_ONLY, (encode_timestamp(now), token_hash)
+        )
+    else:
+        cursor = transaction.execute(
+            sql_machines.TOUCH_MACHINE,
+            (encode_timestamp(now), client_version, door_version, token_hash),
+        )
     if cursor.rowcount == 0:
         return None
     return machine_for_token(transaction, token_hash)
@@ -258,6 +267,7 @@ class MachineRow:
     has_token: bool
     last_called_at: datetime | None
     client_version: str | None
+    door_version: int | None
 
 
 def list_machines(transaction: Transaction) -> list[MachineRow]:
@@ -268,6 +278,7 @@ def list_machines(transaction: Transaction) -> list[MachineRow]:
             has_token=bool(row[1]),
             last_called_at=optional_timestamp(row[2], "machines.last_called_at"),
             client_version=optional_text(row[3], "machines.client_version"),
+            door_version=optional_integer(row[4], "machines.door_version"),
         )
         for row in transaction.execute(sql_machines.SELECT_MACHINES)
     ]
@@ -280,8 +291,8 @@ def machine_id_by_name(transaction: Transaction, name: str) -> int | None:
 
 
 def remove_machine(transaction: Transaction, name: str) -> bool:
-    """Delete the machine, its session rows, its checkouts and its kept results, in the
-    caller's one transaction. Returns ``False`` when there is no such machine.
+    """Delete the machine, its session rows, stored runs, checkouts and kept results,
+    in the caller's one transaction. Returns ``False`` when there is no such machine.
 
     Members stay; one left with no checkout is shown that way (261 D14). What else
     the machine owns is closed first by ``machine_removal.close_machine_work``
@@ -292,6 +303,7 @@ def remove_machine(transaction: Transaction, name: str) -> bool:
         return False
     delete_checkouts_on_machine(transaction, int(found[0]))
     transaction.execute(sql_machines.DELETE_MACHINE_SESSIONS, (name,))
+    transaction.execute(sql_machines.DELETE_MACHINE_RUNS, (name,))
     transaction.execute(sql_machines.DELETE_MACHINE_RESULTS, (name,))
     transaction.execute(sql_machines.DELETE_MACHINE, (name,))
     return True

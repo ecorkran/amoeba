@@ -17,6 +17,7 @@ from amoeba.store.machines import ActingMachine, invite_machine, the_owner
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import WakeOutcome
 from amoeba.store.wakes import finish_wake, wake_due
+from amoeba.wire.times import DOOR_VERSION
 from operations.message_support import RECIPIENT, open_message_store
 from operations.wake_send_support import (
     TICK,
@@ -63,7 +64,10 @@ def test_a_wake_send_claims_in_the_call_that_set_the_mark_is_that_marks_wake(
     at(rig, NOW + timedelta(hours=2))
     with store.read() as transaction:
         assert not wake_due(
-            transaction, RECIPIENT, rig.clock.now, wake_limits(wake_config())
+            transaction,
+            RECIPIENT,
+            rig.clock.now,
+            wake_limits(wake_config(), DOOR_VERSION),
         )
 
 
@@ -123,7 +127,10 @@ def test_a_wake_waiting_for_another_machine_is_claimed_there_not_here(
 
     with store.read() as transaction:
         here = wake_due(
-            transaction, RECIPIENT, rig.clock.now, wake_limits(wake_config())
+            transaction,
+            RECIPIENT,
+            rig.clock.now,
+            wake_limits(wake_config(), DOOR_VERSION),
         )
 
     assert not here

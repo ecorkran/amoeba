@@ -56,4 +56,5 @@ class LocalSteps:
                 acting_machine_id(transaction),
                 config,
                 self._edges.clock(),
+                self._edges.door_version,
             )

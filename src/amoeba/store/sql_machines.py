@@ -33,17 +33,24 @@ SET_TOKEN_HASH: Final = "UPDATE machines SET token_hash = ? WHERE name = ?"
 INSERT_MACHINE: Final = (
     "INSERT INTO machines (name, owner_id, token_hash, created_at) VALUES (?, ?, ?, ?)"
 )
-# Parameters: time, client version, token hash.
+# Parameters: time, client version, door version, token hash. A null version leaves
+# the stored one as it was.
 TOUCH_MACHINE: Final = (
     "UPDATE machines SET last_called_at = ?, "
-    "client_version = COALESCE(?, client_version) WHERE token_hash = ?"
+    "client_version = COALESCE(?, client_version), "
+    "door_version = COALESCE(?, door_version) WHERE token_hash = ?"
+)
+# Parameters: time, token hash. A session's tick or exit call (263 D6).
+TOUCH_MACHINE_TIME_ONLY: Final = (
+    "UPDATE machines SET last_called_at = ? WHERE token_hash = ?"
 )
 SELECT_MACHINES_CALLED: Final = (
     "SELECT machine_id, name, last_called_at FROM machines ORDER BY machine_id"
 )
 SELECT_MACHINE_NAME: Final = "SELECT name FROM machines WHERE machine_id = ?"
 SELECT_MACHINES: Final = (
-    "SELECT name, token_hash IS NOT NULL, last_called_at, client_version "
+    "SELECT name, token_hash IS NOT NULL, last_called_at, client_version, "
+    "door_version "
     "FROM machines ORDER BY name"
 )
 DELETE_MACHINE_SESSIONS: Final = (
@@ -55,3 +62,7 @@ DELETE_MACHINE_RESULTS: Final = (
     "WHERE name = ?)"
 )
 DELETE_MACHINE: Final = "DELETE FROM machines WHERE name = ?"
+DELETE_MACHINE_RUNS: Final = (
+    "DELETE FROM machine_runs WHERE machine_id = (SELECT machine_id FROM machines "
+    "WHERE name = ?)"
+)

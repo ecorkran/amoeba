@@ -21,6 +21,7 @@ from amoeba.store.sessions import (
     upsert_session,
 )
 from amoeba.store.store import Store
+from amoeba.wire.times import DOOR_VERSION
 from store.message_support import ADDRESSEE, NOW, SENDER, THIRD, count, seed_members
 
 STALE_SECONDS = 90
@@ -52,6 +53,8 @@ def _session(
         started_at=started_at,
         heartbeat_at=heartbeat_at,
         push_confirmed_at=push_confirmed_at,
+        client_version="9.9.9",
+        door_version=DOOR_VERSION,
     )
 
 
@@ -68,7 +71,7 @@ def _live(store: Store, now: datetime = NOW) -> tuple[Session, ...]:
 
 def _live_members(store: Store, now: datetime = NOW) -> frozenset[str]:
     with store.read() as transaction:
-        return live_member_ids(transaction, now, STALE_SECONDS)
+        return live_member_ids(transaction, now, STALE_SECONDS, DOOR_VERSION)
 
 
 def test_upsert_inserts_then_updates_only_the_beat_and_the_confirmation(
@@ -84,6 +87,8 @@ def test_upsert_inserts_then_updates_only_the_beat_and_the_confirmation(
         started_at=later,
         heartbeat_at=later,
         push_confirmed_at=later,
+        client_version="9.9.9",
+        door_version=DOOR_VERSION,
     )
 
     _write(store, beat)

@@ -22,6 +22,7 @@ from amoeba.store.notes import NewNote, insert_note
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import RequestState
 from amoeba.store.wakes import WakeLimits, claim_wake
+from amoeba.wire.times import DOOR_VERSION
 from operations.message_support import (
     CONFIG,
     RECIPIENT,
@@ -176,7 +177,12 @@ def _claim_wake(store: Store, when: datetime) -> None:
             transaction,
             RECIPIENT,
             when,
-            WakeLimits(timeout_seconds=600, max_per_day=3, session_stale_seconds=90),
+            WakeLimits(
+                timeout_seconds=600,
+                max_per_day=3,
+                session_stale_seconds=90,
+                door_version=DOOR_VERSION,
+            ),
             "a-wake",
             "/work/logs/a-wake",
         )

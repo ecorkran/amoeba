@@ -26,6 +26,7 @@ from amoeba.operations.store_steps import LocalSteps
 from amoeba.store.models import Wake
 from amoeba.store.store import Store
 from amoeba.store.wakes import WakeLimits, claim_wake, get_wake
+from amoeba.wire.times import DOOR_VERSION
 
 #: Short enough that a test waiting out a timeout waits this much real time.
 TEST_WAKE_TIMEOUT_SECONDS = 1.0
@@ -141,6 +142,7 @@ def seed_claimed_wake(  # noqa: PLR0913 - what a claimed row is made of
                 timeout_seconds=timeout_seconds,
                 max_per_day=3,
                 session_stale_seconds=90,
+                door_version=DOOR_VERSION,
             ),
             wake_id,
             str(tmp_path / "logs" / wake_id),

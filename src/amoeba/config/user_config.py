@@ -134,7 +134,8 @@ class UserConfig(BaseModel):
     @model_validator(mode="after")
     def _session_timing_holds(self) -> UserConfig:
         """The heartbeat is no more often than the push check, and the stale limit
-        spans at least ``STALE_HEARTBEATS_MIN`` beats; each failure names both keys."""
+        spans at least ``STALE_HEARTBEATS_MIN`` beats and a heartbeat plus two poll
+        intervals (slice 263, D5); each failure names the keys it compares."""
         if self.session_heartbeat_seconds < self.notify_poll_seconds:
             raise ValueError(
                 "session_heartbeat_seconds must be at least notify_poll_seconds"
@@ -145,6 +146,15 @@ class UserConfig(BaseModel):
             raise ValueError(
                 f"session_stale_seconds must be at least {STALE_HEARTBEATS_MIN} "
                 "times session_heartbeat_seconds"
+            )
+        if self.session_stale_seconds < (
+            self.session_heartbeat_seconds + 2 * self.notify_poll_seconds
+        ):
+            # A row is refreshed by the first tick that finds it due, so its gap is a
+            # heartbeat plus a poll interval, and one tick may fail (263 D5).
+            raise ValueError(
+                "session_stale_seconds must be at least session_heartbeat_seconds "
+                "plus 2 times notify_poll_seconds"
             )
         return self
 

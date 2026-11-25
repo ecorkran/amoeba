@@ -23,6 +23,7 @@ from amoeba.store.machines import (
 from amoeba.store.models import Session
 from amoeba.store.sessions import upsert_session
 from amoeba.store.store import Store
+from amoeba.wire.times import DOOR_VERSION
 
 NOW = datetime(2026, 11, 21, 10, 0, tzinfo=UTC)
 LATER = NOW + timedelta(minutes=5)
@@ -80,7 +81,7 @@ def test_two_machines_cannot_share_a_name(store: Store) -> None:
 def test_touch_sets_both_fields_and_returns_the_machine(store: Store) -> None:
     with store.write() as tx:
         invite_machine(tx, "alpha", ALPHA, NOW)
-        machine = touch_machine(tx, ALPHA, LATER, "0.2.3")
+        machine = touch_machine(tx, ALPHA, LATER, "0.2.3", None)
         row = tx.execute(
             "SELECT last_called_at, client_version FROM machines"
         ).fetchone()
@@ -93,14 +94,14 @@ def test_touch_sets_both_fields_and_returns_the_machine(store: Store) -> None:
 
 def test_touching_an_unknown_hash_returns_none(store: Store) -> None:
     with store.write() as tx:
-        assert touch_machine(tx, ALPHA, NOW, "0.2.3") is None
+        assert touch_machine(tx, ALPHA, NOW, "0.2.3", None) is None
 
 
 def test_list_machines_shows_a_machine_with_no_token(store: Store) -> None:
     with store.write() as tx:
         invite_machine(tx, "beta", BETA, NOW)
         invite_machine(tx, "alpha", ALPHA, NOW)
-        touch_machine(tx, ALPHA, LATER, "0.2.3")
+        touch_machine(tx, ALPHA, LATER, "0.2.3", None)
         tx.execute(
             "INSERT INTO machines (name, owner_id, token_hash, created_at) "
             "VALUES ('local', ?, NULL, 't')",
@@ -149,7 +150,18 @@ def test_remove_deletes_its_sessions_and_results_and_no_one_elses(
             store.act_as(machine)
             with store.write() as tx:
                 upsert_session(
-                    tx, Session(f"s-{name}", "m1", "claude", "/c", NOW, NOW, None)
+                    tx,
+                    Session(
+                        f"s-{name}",
+                        "m1",
+                        "claude",
+                        "/c",
+                        NOW,
+                        NOW,
+                        None,
+                        "9.9.9",
+                        DOOR_VERSION,
+                    ),
                 )
                 keep(tx, machine.machine_id, "call-1", "standing", "h", "{}", NOW)
 

@@ -10,6 +10,7 @@ from amoeba.store.row_values import decode_timestamp
 from amoeba.store.sessions import upsert_session
 from amoeba.store.store import Transaction
 from amoeba.store.wakes import WakeLimits, claim_wake
+from amoeba.wire.times import DOOR_VERSION
 from store.message_support import ADDRESSEE, NOW, PROGRAM
 from store.seed import insert_checkout, insert_member, mark_wake_wanted
 
@@ -20,7 +21,7 @@ STALE_SECONDS = 90
 DIRECTORY = "/work/checkout"
 LOG_DIRECTORY = "/state/logs/wake"
 HOUR = timedelta(hours=1)
-LIMITS = WakeLimits(TIMEOUT_SECONDS, MAX_WAKES, STALE_SECONDS)
+LIMITS = WakeLimits(TIMEOUT_SECONDS, MAX_WAKES, STALE_SECONDS, DOOR_VERSION)
 
 
 def seed_waking_member(
@@ -139,5 +140,7 @@ def confirmed_session(
             started_at=now,
             heartbeat_at=now,
             push_confirmed_at=now,
+            client_version="9.9.9",
+            door_version=DOOR_VERSION,
         ),
     )

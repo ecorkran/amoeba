@@ -265,7 +265,9 @@ def _serve(
     checked = _check_without_store(request, load_config)
     request_hash = hashlib.sha256(request.body).hexdigest()
     with store.call_scope() as scope:
-        machine = touch_machine(scope, token_hash, clock(), checked.client_version)
+        machine = touch_machine(
+            scope, token_hash, clock(), checked.client_version, None
+        )
         if machine is None:
             # The token ended between the read and the scope (rm-machine, re-invite).
             return refuser.refuse(RefusalCode.BAD_TOKEN, _BAD_TOKEN), False
@@ -281,7 +283,12 @@ def _serve(
             )
             if repeated is not None:
                 return flagged(
-                    repeated, store, machine.machine_id, load_config, clock()
+                    repeated,
+                    store,
+                    machine.machine_id,
+                    load_config,
+                    clock(),
+                    DOOR_VERSION,
                 ), True
         try:
             body = _operation_reply(
@@ -297,7 +304,9 @@ def _serve(
         except Exception as error:  # noqa: BLE001 - the hub's boundary for a call
             return refuser.for_exception(error, label), True
         reply = CallReply(DONE_STATUS, body)
-        return flagged(reply, store, machine.machine_id, load_config, clock()), True
+        return flagged(
+            reply, store, machine.machine_id, load_config, clock(), DOOR_VERSION
+        ), True
 
 
 _BAD_TOKEN: Final = (

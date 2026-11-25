@@ -28,6 +28,7 @@ from amoeba.store.vocabulary import DeliveryEvent, RequestState, WakeOutcome
 from amoeba.store.wakes import WAKE_WINDOW, wake_summary
 from amoeba.upstream.squadron.faults import LaunchFailure
 from amoeba.upstream.squadron.launch import LaunchError
+from amoeba.wire.times import DOOR_VERSION
 from operations.message_support import (
     RECIPIENT,
     RECIPIENT_NAME,
@@ -142,6 +143,8 @@ def test_a_session_without_push_confirmation_does_not_block(
                 started_at=rig.clock.now,
                 heartbeat_at=rig.clock.now,
                 push_confirmed_at=None,
+                client_version="9.9.9",
+                door_version=DOOR_VERSION,
             ),
         )
 

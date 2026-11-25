@@ -206,6 +206,7 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "deliveries.owner_id",
             "dependency_pairs.owner_id",
             "machines.client_version",
+            "machines.door_version",
             "machines.created_at",
             "machines.last_called_at",
             "machines.machine_id",
@@ -227,9 +228,16 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "wakes.owner_id",
         }
     ),
-    # Which amoeba-mcp processes are serving now, as their own heartbeats say.
+    # Which amoeba-mcp processes are serving now, as their own heartbeats say, and
+    # each machine's own last report of its runs (slice 263).
     "presence": frozenset(
         {
+            "machine_runs.document",
+            "machine_runs.machine_id",
+            "machine_runs.owner_id",
+            "machine_runs.reported_at",
+            "sessions.client_version",
+            "sessions.door_version",
             "sessions.session_id",
             "sessions.member_id",
             "sessions.client",

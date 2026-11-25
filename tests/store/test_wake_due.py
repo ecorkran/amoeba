@@ -23,6 +23,7 @@ from amoeba.store.wakes import (
     set_wake_mark,
     wake_due,
 )
+from amoeba.wire.times import DOOR_VERSION
 from store.message_support import ADDRESSEE, NOW, SENDER, seed_members
 from store.seed import mark_wake_wanted
 from store.wake_support import (
@@ -146,7 +147,17 @@ def test_a_live_session_on_another_machine_is_not_due(store: Store) -> None:
     with store.write() as transaction:
         upsert_session(
             transaction,
-            Session("on-beta", ADDRESSEE, "claude", "/beta", NOW, NOW, NOW),
+            Session(
+                "on-beta",
+                ADDRESSEE,
+                "claude",
+                "/beta",
+                NOW,
+                NOW,
+                NOW,
+                "9.9.9",
+                DOOR_VERSION,
+            ),
         )
     store.act_as(local)
 
@@ -179,7 +190,18 @@ def test_sent_again_once_the_session_is_stale_is_a_new_mark_and_due(
 ) -> None:
     with store.write() as transaction:
         upsert_session(
-            transaction, Session("live", ADDRESSEE, "claude", "/w", NOW, NOW, NOW)
+            transaction,
+            Session(
+                "live",
+                ADDRESSEE,
+                "claude",
+                "/w",
+                NOW,
+                NOW,
+                NOW,
+                "9.9.9",
+                DOOR_VERSION,
+            ),
         )
         request = mark_wake_wanted(transaction, ADDRESSEE, NOW)
         # The first send saw a live session: it set no mark.

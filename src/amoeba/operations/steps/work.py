@@ -57,7 +57,11 @@ WAKE_LOG_DIRECTORY = "wake"
 
 
 def work_waiting(
-    transaction: Transaction, machine_id: int, config: UserConfig, now: datetime
+    transaction: Transaction,
+    machine_id: int,
+    config: UserConfig,
+    now: datetime,
+    door_version: int,
 ) -> bool:
     """Whether the machine has work waiting: any of D10's four kinds."""
     if resume_work(transaction, machine_id, now, resume_claim_seconds(config)):
@@ -67,7 +71,7 @@ def work_waiting(
         return True
     if dead_claim_work(transaction, machine_id, now, pause_claim_seconds(config), wait):
         return True
-    limits = wake_limits(config)
+    limits = wake_limits(config, door_version)
     return any(
         wake_due(transaction, member, now, limits, WakeScope.ACTING_MACHINE)
         for member in wake_candidates(transaction, machine_id, now)
@@ -197,7 +201,7 @@ def _claim_wakes(
     items: list[WorkItem],
 ) -> None:
     transaction, now = context.transaction, context.now
-    limits = wake_limits(config)
+    limits = wake_limits(config, context.door_version)
     for member in wake_candidates(transaction, machine_id, now):
         if not _room(items):
             return
