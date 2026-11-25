@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Slice 263: sessions across machines. `amoeba-mcp` starts on a joined machine and keeps one tick (a `session_tick` call to the hub) in place of the two local loops, so push and presence work from any machine and `list` shows each session with its machine. `status` and `list` show the runs other machines last reported (**Runs on other machines**) and the machines behind the hub (**Behind the hub**). An `answer` for a run on another machine is resumed there from that machine's next tick. The MCP call deadline is 300 s: through the door `resume_wait_seconds` must be below 143.5, locally below 209.5; set Codex's `tool_timeout_sec` to at least 305. Migration 014 (version 14) adds session version columns and `machine_runs`. Calls to the hub now queue on one lock, which fixed starved calls under load. `scripts/update_live.py` also checks `status` and `machine_runs`. See `docs/mcp-server.md`, `docs/store-contract.md` and `docs/config-contract.md`.
 
+### Changed
+
+- A development build (the checkout's editable install) uses its own homes, `~/.config/amoeba-dev/` and `~/.local/state/amoeba-dev/`, so trying unreleased code never migrates or locks out the installed amoeba's store. `scripts/update_live.py` still updates the installed homes. See `docs/store-contract.md`.
+
+### Fixed
+
+- A failed command at a terminal prints its message lines only, not the traceback of every logged exception; a captured stderr (a hook's or a wake's log) keeps the traceback. The error for a store newer than the code now says to upgrade amoeba-ai first.
+- Slice 263 review: a session's exit no longer waits on a running after-step, and a tick's `session_id` and `client_version` get the same checks as their headers.
+
 ### Removed
 
 - `NotServedError`: every operation is served, so no entry point raises it.

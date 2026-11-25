@@ -10,6 +10,8 @@ import pytest
 from cf_fixtures import OUTSIDE_ANY_PROJECT, write_fake_cf_with_projects
 from process_containment import reap_orphans
 
+from amoeba.config import home as amoeba_homes
+
 #: The one variable the code reads to locate the store and config (slice 222, D1).
 AMOEBA_HOME_VARIABLE = "AMOEBA_HOME"
 
@@ -26,6 +28,16 @@ def amoeba_home(
     home = tmp_path_factory.mktemp("amoeba_home")
     monkeypatch.setenv(AMOEBA_HOME_VARIABLE, str(home))
     return home
+
+
+@pytest.fixture
+def installed_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make this process resolve homes as the installed amoeba does.
+
+    Tests run from the checkout's editable install, a development build, whose
+    default homes are ``amoeba-dev``; a test of the installed defaults asks for this.
+    """
+    monkeypatch.setattr(amoeba_homes, "is_dev_build", lambda: False)
 
 
 @pytest.fixture(autouse=True)

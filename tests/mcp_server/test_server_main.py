@@ -43,7 +43,9 @@ class LegacyWorld:
 
 
 @pytest.fixture
-def legacy_world(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> LegacyWorld:
+def legacy_world(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, installed_build: None
+) -> LegacyWorld:
     monkeypatch.delenv(HOME_VARIABLE)
     monkeypatch.setenv("HOME", str(tmp_path))
     legacy = tmp_path / ".config" / "amoeba"

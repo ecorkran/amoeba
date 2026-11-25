@@ -47,6 +47,7 @@ def test_the_move_happens_before_the_commands_own_work(
     command: str,
     target: str,
     arguments: list[str],
+    installed_build: None,
 ) -> None:
     monkeypatch.delenv(HOME_VARIABLE)
     monkeypatch.setenv("HOME", str(tmp_path))

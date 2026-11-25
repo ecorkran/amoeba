@@ -32,6 +32,13 @@ of the schema is missing here.
   build a `StateLayout` once and pass the paths down; operations take an open store and
   a config. The store is opened only through `open_state_store(layout)`.
 - Tests set `AMOEBA_HOME` to a fresh temporary directory for every test.
+- **A development build has its own homes.** An editable install (what `uv sync` makes
+  in the checkout) defaults to `~/.config/amoeba-dev/` and `~/.local/state/amoeba-dev/`,
+  so unreleased code and its migrations never touch the installed amoeba's store. Set
+  the development home up once with `uv run amoeba init` in the checkout. `AMOEBA_HOME`
+  still names both homes when set. Only `scripts/update_live.py`, which runs from the
+  checkout at release, reaches the installed homes, and it installs a released build
+  before it migrates anything.
 
 ### Moving a pre-228 install
 

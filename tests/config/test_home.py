@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from importlib import metadata
 from pathlib import Path
 
 import pytest
 
+from amoeba.config import home
 from amoeba.config.home import (
     CONFIG_FILE_NAME,
     HOME_VARIABLE,
@@ -15,6 +17,9 @@ from amoeba.config.home import (
     calls_log_dir,
     config_home,
     config_path,
+    installed_config_home,
+    installed_state_home,
+    is_editable_record,
     legacy_state_home,
     logs_dir,
     squadron_runs_dir,
@@ -27,8 +32,10 @@ XDG_VARIABLES = ("XDG_CONFIG_HOME", "XDG_STATE_HOME")
 
 
 @pytest.fixture
-def user_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    """A throwaway ``HOME`` with ``AMOEBA_HOME`` unset."""
+def user_home(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, installed_build: None
+) -> Path:
+    """A throwaway ``HOME`` with ``AMOEBA_HOME`` unset, as the installed amoeba."""
     monkeypatch.delenv(HOME_VARIABLE)
     monkeypatch.setenv("HOME", str(tmp_path))
     return tmp_path
@@ -106,3 +113,64 @@ def test_the_layout_holds_every_state_path(user_home: Path) -> None:
 
 def test_squadron_runs_dir_sits_under_the_user_home(user_home: Path) -> None:
     assert squadron_runs_dir() == user_home / ".config" / "squadron" / "runs"
+
+
+def test_a_development_build_defaults_to_its_own_homes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv(HOME_VARIABLE)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(home, "is_dev_build", lambda: True)
+
+    assert config_home() == tmp_path / ".config" / "amoeba-dev"
+    assert state_home() == tmp_path / ".local" / "state" / "amoeba-dev"
+    assert (
+        store_path() == tmp_path / ".local" / "state" / "amoeba-dev" / STORE_FILE_NAME
+    )
+    assert legacy_state_home() is None
+
+
+def test_the_installed_homes_ignore_the_build(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv(HOME_VARIABLE)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(home, "is_dev_build", lambda: True)
+
+    assert installed_config_home() == tmp_path / ".config" / "amoeba"
+    assert installed_state_home() == tmp_path / ".local" / "state" / "amoeba"
+
+
+def test_the_variable_still_names_both_homes_of_a_development_build(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv(HOME_VARIABLE, str(tmp_path))
+    monkeypatch.setattr(home, "is_dev_build", lambda: True)
+
+    assert config_home() == tmp_path
+    assert state_home() == tmp_path
+    assert installed_state_home() == tmp_path
+
+
+def test_the_checkout_install_is_a_development_build() -> None:
+    # The real install record of the environment the tests run in: ``uv sync``
+    # installs the checkout as editable.
+    record = metadata.distribution(home.PACKAGE_NAME).read_text(
+        home.DIRECT_URL_FILE_NAME
+    )
+
+    assert is_editable_record(record)
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        None,
+        '{"url": "file:///src/amoeba", "dir_info": {}}',
+        '{"url": "file:///src/amoeba", "dir_info": {"editable": false}}',
+        '{"url": "https://example.invalid/amoeba_ai-1.0-py3-none-any.whl",'
+        ' "archive_info": {}}',
+    ],
+)
+def test_other_installs_are_not_development_builds(record: str | None) -> None:
+    assert not is_editable_record(record)

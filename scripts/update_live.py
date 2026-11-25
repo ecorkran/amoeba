@@ -31,7 +31,9 @@ installed before the update: ``--previous``, else the recorded version, else wha
 migrated and the record unchanged; ``update`` again then finds that the newest backup
 records the version it is about to record as previous and holds an older schema than the
 live store, so it keeps that backup as its restore point and takes no new one (#45).
-Paths honour ``AMOEBA_HOME`` exactly as amoeba does.
+Paths honour ``AMOEBA_HOME`` exactly as amoeba does. Run from the checkout this is a
+development build, so it names the installed amoeba's homes itself, never the
+development homes (``config.home``).
 """
 
 from __future__ import annotations
@@ -56,7 +58,12 @@ import anyio
 from mcp import ClientSession, StdioServerParameters, stdio_client
 from pydantic import ValidationError
 
-from amoeba.config.home import config_path, state_home, store_path
+from amoeba.config.home import (
+    CONFIG_FILE_NAME,
+    STORE_FILE_NAME,
+    installed_config_home,
+    installed_state_home,
+)
 from amoeba.config.starter import fill_missing_keys, starter_values
 from amoeba.config.user_config import ConfigError
 from amoeba.operations.names import OperationName
@@ -67,6 +74,20 @@ from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.projects import project_details
+
+
+def state_home() -> Path:
+    """The installed amoeba's state home, which this script updates."""
+    return installed_state_home()
+
+
+def store_path() -> Path:
+    return installed_state_home() / STORE_FILE_NAME
+
+
+def config_path() -> Path:
+    return installed_config_home() / CONFIG_FILE_NAME
+
 
 logger = logging.getLogger("update_live")
 CHECKOUT = Path(__file__).resolve().parents[1]

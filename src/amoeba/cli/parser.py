@@ -25,10 +25,10 @@ from amoeba.cli.registration_messages import register_messages
 from amoeba.cli.resume_command import register_resume_run
 from amoeba.cli.stand_in_command import register_stand_in
 from amoeba.cli.wake_command import register_wake_run
+from amoeba.config.home import PACKAGE_NAME
 from amoeba.operations.names import OperationName
 
 #: The distribution whose installed metadata ``--version`` reports.
-PACKAGE_NAME = "amoeba-ai"
 
 
 def _json_parent() -> argparse.ArgumentParser:

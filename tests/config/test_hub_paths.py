@@ -25,7 +25,7 @@ def test_every_hub_and_client_file_is_under_its_home(
 
 
 def test_without_the_override_the_client_file_is_config_and_the_certificate_state(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, installed_build: None
 ) -> None:
     monkeypatch.delenv(home.HOME_VARIABLE)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
