@@ -51,6 +51,7 @@ def waiting_entries(
                 question,
                 runs.get(question.key.run_id),
                 _machine(question, machines, calling_machine),
+                on_other_machine=question.machine_id not in (None, calling_machine),
             ),
         )
         for question in open_questions
@@ -75,8 +76,14 @@ def _entry(
     question: QuestionRecord,
     run: RunStanding | None,
     machine: tuple[str | None, str | None],
+    *,
+    on_other_machine: bool,
 ) -> WaitingEntry:
-    state, detail = _where(question, run)
+    if on_other_machine:
+        # This call cannot say where that run is: only its own machine can (263 D11).
+        state, detail = WaitingRunState.OTHER_MACHINE, None
+    else:
+        state, detail = _where(question, run)
     next_action = None
     if state is WaitingRunState.AT_PAUSE:
         next_action = NextAction(

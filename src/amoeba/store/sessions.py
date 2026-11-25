@@ -101,6 +101,14 @@ def live_sessions(
     return tuple(_session(row) for row in rows)
 
 
+def session_machine_names(transaction: Transaction) -> dict[str, str]:
+    """The name of the machine each session row belongs to, by session id."""
+    return {
+        text(row[0], "sessions.session_id"): text(row[1], "machines.name")
+        for row in transaction.execute(sql_sessions.SELECT_SESSION_MACHINES)
+    }
+
+
 def live_member_ids(
     transaction: Transaction, now: datetime, stale_seconds: float, door_version: int
 ) -> frozenset[str]:

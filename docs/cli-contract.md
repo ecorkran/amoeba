@@ -670,14 +670,39 @@ the PM. A member's `rejected_calls` are its retained refused `send`, `reply` and
 detail, created_at}`.
 
 A member's `sessions` are its live `amoeba-mcp` sessions (slice 241), oldest first,
-each `{client, directory, started_at, heartbeat_at, push_confirmed_at}`: `client` is
+each `{client, directory, started_at, heartbeat_at, push_confirmed_at, machine,
+client_version, door_version, behind}`: `client` is
 the client's name as it gave it (or `unrecognized`), `directory` the server's working
-directory, `heartbeat_at` its last beat, and `push_confirmed_at` when its agent first
+directory, `machine` the machine it runs on (slice 263, sessions of every machine are
+listed), `client_version` and `door_version` those of its program, `behind` true when
+its door version differs from the hub's, `heartbeat_at` its last beat, and `push_confirmed_at` when its agent first
 answered a channel event with an `inbox` call (null while unconfirmed). A session
 whose last beat is older than `session_stale_seconds` is gone and not listed, and only
 active members show sessions. Sessions do not count as waiting on the PM and do not
 set the `notice`. The text adds a **Live sessions** section, one line per session:
-`<client>  <directory>  up <age>  last beat <age> ago  push confirmed|push unconfirmed`.
+`<client>  <machine>  <directory>  up <age>  last beat <age> ago  push confirmed|push
+unconfirmed`, ending `behind` for a behind one.
+
+`status` also returns (slice 263) `hub_door_version`, the door version the hub serves,
+and `machines`: each machine with a token and the calling machine, by name, each
+`{name, last_called_at, client_version, door_version, behind, calling, runs_reported_at,
+runs, runs_problem}`. `behind` is true when `door_version` differs from the hub's, false
+when equal, null when none is recorded (the `local` machine); `calling` is true for the
+machine that made the call. For every other machine `runs_reported_at` is when it last
+reported its runs (null when it never did), `runs` its runs not completed, each
+`{run_id, pipeline, status, directory, checkpoint}` (`checkpoint` for a paused run), and
+`runs_problem` the error text when its stored report does not validate, with no `runs`;
+the next `status` or `list` that machine makes replaces the report. The calling
+machine's own runs are in the other fields. Nothing on another machine is placed under
+a member, closed or swept by this call. The text adds **Runs on other machines**: one
+heading per other machine, `<machine>, reported <age> ago`, `<machine>, nothing
+reported` or `<machine>, reported <age> ago, runs unreadable: <runs_problem>`, with one
+line per run (id, pipeline, status, directory); and **Behind the hub**, when any machine
+or session is behind: each with its client and door version, `uv tool install --force
+amoeba-ai`, and a note to restart the sessions listed. One whose door version is above
+the hub's is marked `ahead of the hub`, and the section then says to upgrade the hub
+and gives no client command. Neither section counts as waiting on the PM or sets the
+`notice`.
 
 A member's `wake` (slice 244) is present only for a member with a wake command, else
 null: `{command, machine, waiting_on, running, stopped, last_problem}`. `command` is the
@@ -740,7 +765,9 @@ is not the calling machine, because an answer for it waits for its next call. Ev
 question of a member in scope is listed. `run_state` is `at_pause` (`next` is
 `answer`); `moved_on` (`detail` gives the run's state) and `not_listed` appear only for
 a row a failed closing left open, since the closing otherwise closes them in the same
-call. `reason` of an unplaced run is `no_directory` (a run from before `sq` 0.24.24), `directory_missing`
+call. `other_machine` (slice 263) is a question on a machine other than the caller's:
+this call cannot say where its run is (`next` is null), and its first line ends
+`on <machine>`. `reason` of an unplaced run is `no_directory` (a run from before `sq` 0.24.24), `directory_missing`
 or `lookup_failed` (`detail` has the `cf` error). A run's `status` is Squadron's text,
 so a status newer than this code is shown as it is.
 

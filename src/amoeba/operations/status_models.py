@@ -18,6 +18,7 @@ from amoeba.operations.decisions_models import MemberName
 from amoeba.operations.message_results import RequestDirection, WakeWaitingOn
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.reject_codes import RejectCode
+from amoeba.operations.status_machine_models import MachineEntry
 from amoeba.store.vocabulary import (
     ClosedReason,
     RequestState,
@@ -51,6 +52,8 @@ class WaitingRunState(StrEnum):
     AT_PAUSE = "at_pause"
     MOVED_ON = "moved_on"
     NOT_LISTED = "not_listed"
+    #: The question is on another machine; only that machine can say where its run is.
+    OTHER_MACHINE = "other_machine"
 
 
 class NextOperation(StrEnum):
@@ -160,6 +163,12 @@ class SessionEntry(_Model):
     heartbeat_at: datetime
     #: When its agent first answered a channel event; ``None`` while unconfirmed.
     push_confirmed_at: datetime | None
+    #: The machine the session runs on, its client and door version, and whether the
+    #: door version differs from the hub's (null when none is recorded, 263 D12).
+    machine: str
+    client_version: str
+    door_version: int
+    behind: bool
 
 
 class WakeRunning(_Model):
@@ -282,3 +291,7 @@ class StatusResult(_Model):
     #: Calls-log files that could not be read, and entries prune could not remove, D12.
     file_problems: tuple[str, ...] = ()
     problems: tuple[str, ...] = ()
+    #: The door version the hub serves, and each machine with the runs it last
+    #: reported (263 D12); empty for a rejected call.
+    hub_door_version: int | None = None
+    machines: tuple[MachineEntry, ...] = ()

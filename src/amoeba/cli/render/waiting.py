@@ -21,6 +21,10 @@ from amoeba.cli.render.commands import (
     handle_pause_command,
     list_command,
 )
+from amoeba.cli.render.machines import (
+    behind_the_hub_section,
+    runs_on_other_machines_section,
+)
 from amoeba.cli.render.messages import message_sections
 from amoeba.cli.render.sessions import sessions_section
 from amoeba.cli.render.style import PLAIN, Painter, Tone
@@ -78,6 +82,7 @@ RUN_STATE_TEXT: Final = {
     WaitingRunState.AT_PAUSE: None,
     WaitingRunState.MOVED_ON: "the run has moved on",
     WaitingRunState.NOT_LISTED: "Squadron no longer lists the run",
+    WaitingRunState.OTHER_MACHINE: "the run is on another machine",
 }
 ENDED_TEXT: Final = {
     AnsweredBy.PM: "answered by you",
@@ -150,6 +155,8 @@ def _others(
         _closed_now(result),
         *message_sections(members, now),
         sessions_section(members, now),
+        runs_on_other_machines_section(result, now),
+        behind_the_hub_section(result, members),
         waking_section(members, now),
     ]
     if settled is not None:
@@ -180,8 +187,11 @@ def _waiting_entry(name: str, entry: WaitingEntry, now: datetime) -> list[str]:
         reason = entry.waiting_reason.value
         if entry.waiting_detail:
             reason += f": {entry.waiting_detail}"
+    heading = [name, entry.run_id, how_long(entry.since, now)]
+    if entry.run_state is WaitingRunState.OTHER_MACHINE:
+        heading.append(f"on {entry.machine}")
     lines = [
-        indented(SEPARATOR.join((name, entry.run_id, how_long(entry.since, now)))),
+        indented(SEPARATOR.join(heading)),
         prose_line(indented("reason: ", 2), reason),
     ]
     run_state = RUN_STATE_TEXT[entry.run_state]

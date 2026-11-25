@@ -47,6 +47,11 @@ SELECT_LIVE_SESSIONS: Final = (
     f"SELECT {_SESSION_COLUMNS} FROM sessions WHERE {LIVE_SESSION} "
     "ORDER BY started_at, session_id"
 )
+#: Each session's machine name, for the display (263 D12).
+SELECT_SESSION_MACHINES: Final = (
+    "SELECT sessions.session_id, machines.name FROM sessions "
+    "JOIN machines ON machines.machine_id = sessions.machine_id"
+)
 SELECT_LIVE_MEMBER_IDS: Final = (
     f"SELECT DISTINCT member_id FROM sessions WHERE {WAKING_SESSION} ORDER BY member_id"
 )
