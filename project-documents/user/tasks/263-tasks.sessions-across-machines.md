@@ -39,33 +39,35 @@ status: not_started
 
 ## 0. Setup (effort 1)
 
-- [ ] **0.1 Target and prerequisites**
-  - [ ] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty. `git checkout {target}`. The design and this task file are committed there, with no other uncommitted change
-  - [ ] Confirm 260 to 262 are merged: `store/schema/013_local_work.sql` exists, `EXPECTED_SCHEMA_VERSION` is 13, and each name in the Context Summary's precondition exists (`grep -rn`)
-  - [ ] Update the design text for the name differences in the Context Summary: the after-step name in Interfaces Required, the test name and the channel constant where the design uses them (Component Structure, D2, D7), and the Amendments row for 262 D3 (the flag is two flags: `writes` and `keeps_result`). Note the change under this task
-  - [ ] Bring the Amendments table into the designs it amends: for each row, open the design it names (`user/slices/260-slice.*.md`, `user/slices/262-slice.*.md`) and check it states the amendment in its own terms where it applies (260's entry-point table and D2 among them, for the removed served check and the deadline note); where it does not, add it. Note each file and row touched under this task
-  - [ ] Run `sq --version` and `cf --version` and note both
-  - [ ] Success: the target is checked out and clean; a note gives the target and both versions; each Amendments row is stated in the design it names
+- [x] **0.1 Target and prerequisites**
+  - [x] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty. `git checkout {target}`. The design and this task file are committed there, with no other uncommitted change
+  - [x] Confirm 260 to 262 are merged: `store/schema/013_local_work.sql` exists, `EXPECTED_SCHEMA_VERSION` is 13, and each name in the Context Summary's precondition exists (`grep -rn`)
+  - [x] Update the design text for the name differences in the Context Summary: the after-step name in Interfaces Required, the test name and the channel constant where the design uses them (Component Structure, D2, D7), and the Amendments row for 262 D3 (the flag is two flags: `writes` and `keeps_result`). Note the change under this task
+  - [x] Bring the Amendments table into the designs it amends: for each row, open the design it names (`user/slices/260-slice.*.md`, `user/slices/262-slice.*.md`) and check it states the amendment in its own terms where it applies (260's entry-point table and D2 among them, for the removed served check and the deadline note); where it does not, add it. Note each file and row touched under this task
+  - [x] Run `sq --version` and `cf --version` and note both
+  - [x] Success: the target is checked out and clean; a note gives the target and both versions; each Amendments row is stated in the design it names
   - If a prerequisite is missing, write `BLOCKED: <what is missing>` under this task and stop.
-- [ ] **0.2 Branch and baseline**
-  - [ ] `git checkout -b 263-slice.sessions-across-machines {target}`; if it exists, `git checkout 263-slice.sessions-across-machines`
-  - [ ] Run the checks once; list any failure present before this slice by test name, unfixed
-  - [ ] Success: `git branch --show-current` prints the slice branch; the baseline is noted
+- [x] **0.2 Branch and baseline**
+  - [x] `git checkout -b 263-slice.sessions-across-machines {target}`; if it exists, `git checkout 263-slice.sessions-across-machines`
+  - Note: the branch already existed and was checked out, so the checkout step was not needed.
+  - [x] Run the checks once; list any failure present before this slice by test name, unfixed
+  - [x] Success: `git branch --show-current` prints the slice branch; the baseline is noted
 
 ## 1. Client facts before building (D15 step 1; effort 3)
 
-- [ ] **1.1 The pin test and the channel tests**
-  - [ ] Run `uv run pytest tests/mcp_server/test_protocol_pin.py`, then the live channel tests: `set -a; source .env; set +a; AMOEBA_LIVE_CHANNEL_MODEL=sonnet uv run pytest tests/live/channels -v`
-  - [ ] Note `claude --version` and the installed `mcp` version. If either differs from the dated facts in `docs/mcp-server.md`, correct those facts there
-  - [ ] Success: the pin test and the live channel tests pass, or the cause of a failure is in the notes; the versions are noted
-- [ ] **1.2 The long-call server and test**
-  - [ ] `tests/mcp_server/long_call_server.py`: a small stdio server built on `serve_pinned` as `tests/mcp_server/pin_server.py` is, with one tool that waits 220 seconds and returns a marker string. No hub, no Amoeba store
-  - [ ] `tests/live/channels/test_long_call_live.py`: register the server with the existing harness and no timeout setting of its own, ask a real Claude Code session to call the tool, wait 300 seconds and one model turn for the marker to show, and record what the session showed at two minutes
-  - [ ] Success: the test runs and reports which of D15 step 1's three results occurred
-- [ ] **1.3 Run it and act on the result**
-  - [ ] Run the test. Append a `## Slice Notes` section to the design (this section is where later tasks put their notes) with the result, the settings used and the measured times
-  - [ ] If the marker reached the agent: set nothing. If it did not: rerun with `CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS=0` in the session's environment; if the marker then arrives, the live fixtures set it from now on and the test keeps it. If it still does not arrive, the test asserts that outcome and the notes say `docs/mcp-server.md` and the `answer` tool's description must say to read the outcome with `list` (9.2 writes them)
-  - [ ] Success: the test passes with the settings of the result it had; the notes give the result, settings and times
+- [x] **1.1 The pin test and the channel tests**
+  - [x] Run `uv run pytest tests/mcp_server/test_protocol_pin.py`, then the live channel tests: `set -a; source .env; set +a; AMOEBA_LIVE_CHANNEL_MODEL=sonnet uv run pytest tests/live/channels -v`
+  - [x] Note `claude --version` and the installed `mcp` version. If either differs from the dated facts in `docs/mcp-server.md`, correct those facts there
+  - [x] Success: the pin test and the live channel tests pass, or the cause of a failure is in the notes; the versions are noted
+- [x] **1.2 The long-call server and test**
+  - [x] `tests/mcp_server/long_call_server.py`: a small stdio server built on `serve_pinned` as `tests/mcp_server/pin_server.py` is, with one tool that waits 220 seconds and returns a marker string. No hub, no Amoeba store
+  - [x] `tests/live/channels/test_long_call_live.py`: register the server with the existing harness and no timeout setting of its own, ask a real Claude Code session to call the tool, wait 300 seconds and one model turn for the marker to show, and record what the session showed at two minutes
+  - [x] Success: the test runs and reports which of D15 step 1's three results occurred
+  - Note: the harness gained `SessionSpec.as_channel` (default True), so a non-channel server such as the long-call server loads as a plain server.
+- [x] **1.3 Run it and act on the result**
+  - [x] Run the test. Append a `## Slice Notes` section to the design (this section is where later tasks put their notes) with the result, the settings used and the measured times
+  - [x] If the marker reached the agent: set nothing. If it did not: rerun with `CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS=0` in the session's environment; if the marker then arrives, the live fixtures set it from now on and the test keeps it. If it still does not arrive, the test asserts that outcome and the notes say `docs/mcp-server.md` and the `answer` tool's description must say to read the outcome with `list` (9.2 writes them)
+  - [x] Success: the test passes with the settings of the result it had; the notes give the result, settings and times
 
 **Commit**: `test: add the long-call live test and record the client facts`
 
