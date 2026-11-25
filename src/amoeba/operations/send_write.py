@@ -42,7 +42,6 @@ from amoeba.store.models import Message
 from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import DeliveryEvent, MessageKind, RequestState
 from amoeba.store.wakes import set_wake_mark
-from amoeba.wire.times import DOOR_VERSION
 
 
 @dataclass(frozen=True)
@@ -61,6 +60,7 @@ def write_send(
     recipient: str,
     request: SendRequest,
     now: datetime,
+    door_version: int,
 ) -> SendResult:
     """Store ``request`` from ``sender`` to ``recipient``, or say why not.
 
@@ -72,7 +72,13 @@ def write_send(
         existing = get_message(transaction, request.id)
         if existing is not None:
             return _resend(
-                transaction, config, existing, (sender, recipient), request, now
+                transaction,
+                config,
+                existing,
+                (sender, recipient),
+                request,
+                now,
+                door_version,
             )
         parent_depth: int | None = None
         if request.parent is not None:
@@ -104,7 +110,7 @@ def write_send(
             stored.message_id,
             recipient,
             now,
-            wake_limits(config, DOOR_VERSION),
+            wake_limits(config, door_version),
         )
         return sent_result(SendOutcome.SENT, stored, now)
 
@@ -152,6 +158,7 @@ def _resend(  # noqa: PLR0913 - the transaction, the stored row and the send aga
     parties: tuple[str, str],
     request: SendRequest,
     now: datetime,
+    door_version: int,
 ) -> SendResult:
     """D2: the same id again. Same content is a retry; anything else is refused.
 
@@ -183,7 +190,7 @@ def _resend(  # noqa: PLR0913 - the transaction, the stored row and the send aga
         existing.message_id,
         recipient,
         now,
-        wake_limits(config, DOOR_VERSION),
+        wake_limits(config, door_version),
     )
     return sent_result(SendOutcome.UNCHANGED, existing, now)
 

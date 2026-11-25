@@ -284,7 +284,7 @@ def _dispatch(  # noqa: PLR0913 - invoke's arguments and the store it opened
                 load_config,
             )
         case OperationName.HANDLE_PAUSE:
-            raise _not_in_process(name)
+            raise AssertionError("invoke refused handle_pause before the dispatch")
         case _:
             assert_never(name)
 

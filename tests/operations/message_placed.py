@@ -27,6 +27,7 @@ from amoeba.operations.steps.dispatch import StepEdges
 from amoeba.operations.store_steps import LocalSteps
 from amoeba.operations.wake_start import start_woken_wake
 from amoeba.store.store import Store
+from amoeba.wire.times import DOOR_VERSION
 
 
 def send(
@@ -34,7 +35,13 @@ def send(
 ) -> SendResult:
     here = gather_caller(directory, deps.cf_run)
     result = send_module.send(
-        store, config, document, here=here, clock=deps.clock, logs_dir=deps.logs_dir
+        store,
+        config,
+        document,
+        here=here,
+        clock=deps.clock,
+        logs_dir=deps.logs_dir,
+        door_version=DOOR_VERSION,
     )
     steps = LocalSteps(store, StepEdges(deps.clock, lambda: config))
     return start_woken_wake(steps, deps, result)

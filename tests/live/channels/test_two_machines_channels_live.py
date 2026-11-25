@@ -27,6 +27,7 @@ from hub.sessions_support import (
 )
 from hub_fixture import FIRST, SECOND, ClientHome, FixtureHub, two_machine_hub
 from hub_mcp import set_hub_timings
+from live_environment import pipeline_environment
 
 from live.channels.harness import (
     INBOX_CALL_WAIT_SECONDS,
@@ -107,7 +108,7 @@ def test_a_request_from_alpha_reaches_a_real_session_on_beta_and_confirms_push(
             form=FORM,
             allowed_tools=ALLOWED_TOOLS,
             scratch=scratch,
-            environ=os.environ,
+            environ=pipeline_environment(os.environ),
         )
     )
     session.start()

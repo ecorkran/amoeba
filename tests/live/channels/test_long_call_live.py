@@ -17,6 +17,7 @@ from typing import Final
 import pytest
 from mcp_server.long_call_server import MARKER, SERVER_NAME, TOOL_NAME, WAIT_SECONDS
 
+from amoeba.wire.times import MCP_CALL_DEADLINE_SECONDS
 from live.channels.harness import (
     PROMPTED_CALL_WAIT_SECONDS,
     ClaudeSession,
@@ -32,8 +33,8 @@ from live.channels.world import ChannelWorld
 SERVER_SCRIPT: Final = (
     Path(__file__).resolve().parents[2] / "mcp_server" / "long_call_server.py"
 )
-#: The call's time to finish plus one model turn, from the design's 300 seconds.
-MARKER_WAIT_SECONDS: Final = 300 + PROMPTED_CALL_WAIT_SECONDS
+#: The call's time to finish plus one model turn: the longest an MCP call may take.
+MARKER_WAIT_SECONDS: Final = MCP_CALL_DEADLINE_SECONDS + PROMPTED_CALL_WAIT_SECONDS
 #: What Claude Code does with a call still running after this long (2.1.212 on).
 AUTO_BACKGROUND_SECONDS: Final = 120
 AUTO_BACKGROUND_VARIABLE: Final = "CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS"

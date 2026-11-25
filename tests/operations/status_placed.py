@@ -21,6 +21,7 @@ from amoeba.operations.list_view import ListOutcome, ListResult, needs_here
 from amoeba.operations.run_gather import gather_machine_runs
 from amoeba.operations.status_models import StatusResult
 from amoeba.store.store import Store
+from amoeba.wire.times import DOOR_VERSION
 from amoeba.wiring_gather import pruned_list, pruned_status
 
 
@@ -36,7 +37,13 @@ def status(
     opened = open_runs_of(store, deps.clock())
     runs = gather_machine_runs(deps, opened.run_ids)
     result = status_module.status(
-        store, config, document, here=here, runs=runs, clock=deps.clock
+        store,
+        config,
+        document,
+        here=here,
+        runs=runs,
+        clock=deps.clock,
+        door_version=DOOR_VERSION,
     )
     return pruned_status(result, deps, opened)
 
@@ -54,7 +61,13 @@ def list_view(
     opened = open_runs_of(store, deps.clock()) if gathering else None
     runs = gather_machine_runs(deps, opened.run_ids) if opened is not None else None
     result = list_view_module.list_view(
-        store, config, document, here=here, runs=runs, clock=deps.clock
+        store,
+        config,
+        document,
+        here=here,
+        runs=runs,
+        clock=deps.clock,
+        door_version=DOOR_VERSION,
     )
     if opened is None or not isinstance(result, ListResult):
         return result

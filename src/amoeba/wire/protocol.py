@@ -322,6 +322,12 @@ _DOOR_VERSION: Final = re.compile(DOOR_VERSION_PATTERN)
 SESSION_DIRECTORY_MAX_LENGTH: Final = 4096
 
 
+#: What a machine on another door version than the hub's runs, and how it is told so
+#: (one text for ``machines``, ``status`` and a refused call).
+UPGRADE_COMMAND: Final = "uv tool install --force amoeba-ai"
+AHEAD_OF_THE_HUB: Final = "ahead of the hub"
+
+
 def is_session_directory(text: str) -> bool:
     """Whether a decoded session directory is storable: not empty, not over-long, and
     free of control characters. The tick's header path and its request share it."""

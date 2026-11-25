@@ -32,6 +32,16 @@ def differs_from_hub(door_version: int, hub_door_version: int) -> bool:
     return door_version != hub_door_version
 
 
+def is_ahead_of_hub(door_version: int | None, hub_door_version: int | None) -> bool:
+    """Whether a recorded door version is above the hub's: the hub is the one to
+    upgrade."""
+    return (
+        door_version is not None
+        and hub_door_version is not None
+        and door_version > hub_door_version
+    )
+
+
 def is_behind(door_version: int | None, hub_door_version: int) -> bool | None:
     """``differs_from_hub``, or ``None`` when no door version is recorded."""
     if door_version is None:

@@ -1,15 +1,16 @@
 """The ``amoeba://inbox`` resource and the capabilities push declares (slice 241, D3,
 D5).
 
-Every handler first waits for presence to resolve (the first tick ends), so none
-answers from the pending state; only that request waits. Then it answers from memory,
-from the newest tick reply (263 D10): ``read`` returns the member and the number
-``inbox`` reports as ``as_of_seq``, never message text, and makes no store read and no
-hub call. ``subscribe`` and ``unsubscribe`` set and clear a flag on the event loop,
-which the tick reads before sending a resource update. Capabilities are fixed at
-``initialize``, before the member is known, so every server declares both the channel
-and the subscribable resources, and lists the resource whether or not it has a
-member.
+``read``, ``subscribe`` and ``unsubscribe`` first wait for presence to resolve (the
+first tick ends), so none answers from the pending state; only that request waits.
+``list`` answers at once: the resource is listed whether or not there is a member.
+They answer from memory, from the newest tick reply (263 D10): ``read`` returns the
+member and the number ``inbox`` reports as ``as_of_seq``, never message text, and makes
+no store read and no hub call. ``subscribe`` and ``unsubscribe`` set and clear a
+flag on the event loop, which the tick reads before sending a resource update.
+Capabilities are fixed at ``initialize``, before the member is known, so every server
+declares both the channel and the subscribable resources, and lists the resource
+whether or not it has a member.
 """
 
 from __future__ import annotations

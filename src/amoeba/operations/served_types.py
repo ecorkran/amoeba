@@ -74,6 +74,9 @@ class ServedEdges:
     clock: Callable[[], datetime]
     #: Called only by an operation that needs config (``needs_config``).
     load_config: Callable[[], UserConfig]
+    #: The door version the serving program runs: the one source the wake rule and
+    #: ``status`` compare sessions and machines against (263 D6).
+    door_version: int
     #: The machine's own edges, present with no client file. ``None`` on the hub, which
     #: starts no wake and no run, sweeps no question and prunes nothing: those read and
     #: change the files of the machine that ran ``sq`` (261 D9, D11).

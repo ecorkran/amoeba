@@ -39,6 +39,7 @@ from amoeba.wire.protocol import (
     HEADER_SESSION_ID,
     HEADER_SESSION_PROJECT,
     UNKNOWN_ADVICE,
+    UPGRADE_COMMAND,
     WRITING_CALLS,
     WRITING_STEPS,
     DoneReply,
@@ -49,7 +50,6 @@ from amoeba.wire.protocol import (
 )
 from amoeba.wire.times import DOOR_VERSION, DoorTimes
 
-UPGRADE_COMMAND: Final = "uv tool install --force amoeba-ai"
 JSON_TYPE: Final = "application/json"
 #: Where a refused ``bad_token`` names the machine before the hub has told it its name.
 MACHINE_PLACEHOLDER: Final = "<machine>"

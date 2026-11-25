@@ -43,7 +43,8 @@ class DoorTimes:
 
 
 #: A session's tick is one attempt: the next tick is the retry (263 D4). A retry time
-#: of 0 is also what keeps ``session_tick`` out of the writing steps.
+#: of 0 gives it no retry of its own; ``session_tick`` also keeps no result, so a
+#: repeat of it is always safe.
 TICK_TIMES: Final = DoorTimes(retry_seconds=0.0)
 #: The longest a tick's call takes: one connect and one read.
 TICK_BOUND_SECONDS: Final = CONNECT_SECONDS + READ_SECONDS

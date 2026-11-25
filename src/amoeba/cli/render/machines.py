@@ -15,12 +15,12 @@ from typing import Final
 from amoeba.cli.render.sessions import FIELD_GAP
 from amoeba.cli.render.text import command_line, how_long, indented
 from amoeba.operations.status_machine_models import MachineEntry, MachineRunLine
+from amoeba.operations.status_machines import is_ahead_of_hub
 from amoeba.operations.status_models import MemberStatus, StatusResult
+from amoeba.wire.protocol import AHEAD_OF_THE_HUB, UPGRADE_COMMAND
 
 RUNS_ON_OTHER_MACHINES: Final = "Runs on other machines"
 BEHIND_THE_HUB: Final = "Behind the hub"
-UPGRADE_COMMAND: Final = "uv tool install --force amoeba-ai"
-AHEAD_OF_THE_HUB: Final = "ahead of the hub"
 NOT_REPORTED: Final = "nothing reported"
 RESTART_NOTE: Final = "Restart the sessions listed after the upgrade."
 UPGRADE_HUB_NOTE: Final = (
@@ -82,20 +82,16 @@ def behind_the_hub_section(
         for who, client, door in found
     ]
     notes = [indented(f"The hub serves door version {hub}.")]
-    if any(not _is_ahead(door, hub) for _, _, door in found):
+    if any(not is_ahead_of_hub(door, hub) for _, _, door in found):
         notes += [indented(UPGRADE_NOTE), command_line(UPGRADE_COMMAND)]
         notes.append(indented(RESTART_NOTE))
-    if any(_is_ahead(door, hub) for _, _, door in found):
+    if any(is_ahead_of_hub(door, hub) for _, _, door in found):
         notes.append(indented(UPGRADE_HUB_NOTE))
     return [BEHIND_THE_HUB, *lines, *notes]
-
-
-def _is_ahead(version: int | None, hub: int | None) -> bool:
-    return version is not None and hub is not None and version > hub
 
 
 def _versions(
     client_version: str | None, door_version: int | None, hub: int | None
 ) -> str:
     text = f"client {client_version}, door {door_version}"
-    return f"{text}, {AHEAD_OF_THE_HUB}" if _is_ahead(door_version, hub) else text
+    return f"{text}, {AHEAD_OF_THE_HUB}" if is_ahead_of_hub(door_version, hub) else text

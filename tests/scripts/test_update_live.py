@@ -33,7 +33,10 @@ from amoeba.config.home import config_path, state_layout, store_path
 from amoeba.operations.names import OperationName
 from amoeba.operations.runs_document import RunsDocument
 from amoeba.operations.state_move import open_state_store
+from amoeba.operations.status import StatusResult
+from amoeba.operations.status_machine_models import MachineEntry
 from amoeba.operations.status_machines import store_calling_runs
+from amoeba.operations.status_models import StatusOutcome
 from amoeba.store.machines import list_machines
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
 from amoeba.store.store import Store
@@ -91,6 +94,22 @@ def live(amoeba_home: Path) -> Path:
     return amoeba_home
 
 
+def _status_document(*names: str) -> dict[str, Any]:
+    """A status result as ``amoeba status -j`` prints it, listing ``names``."""
+    machines = tuple(
+        MachineEntry(
+            name=name,
+            last_called_at=None,
+            client_version=None,
+            door_version=None,
+            behind=None,
+        )
+        for name in names
+    )
+    result = StatusResult(outcome=StatusOutcome.LISTED, machines=machines)
+    return result.model_dump(mode="json")
+
+
 def fake_status() -> dict[str, Any]:
     """What ``amoeba status -j`` leaves: this machine's runs report stored, and a
     document whose ``machines`` lists the machines the store holds."""
@@ -98,7 +117,7 @@ def fake_status() -> dict[str, Any]:
         store_calling_runs(store, RunsDocument(), NOW)
         with store.read() as transaction:
             rows = list_machines(transaction)
-    return {"machines": [{"name": row.name} for row in rows]}
+    return _status_document(*(row.name for row in rows))
 
 
 class FakeSteps:
@@ -367,7 +386,7 @@ def test_update_and_restore_against_a_copy_of_a_schema_13_store(
 def test_a_status_without_the_local_machine_or_its_runs_row_fails(
     live: Path,
 ) -> None:
-    failures = update_live.check_status({"machines": [{"name": "beta"}]})
+    failures = update_live.check_status(_status_document("beta"))
 
     assert len(failures) == 2
     assert "status machines" in failures[0]
@@ -377,13 +396,18 @@ def test_a_status_without_the_local_machine_or_its_runs_row_fails(
 def test_a_status_with_another_machine_beside_local_has_no_machines_failure(
     live: Path,
 ) -> None:
-    document = {
-        "machines": [{"name": update_live.LOCAL_MACHINE_NAME}, {"name": "beta"}]
-    }
+    document = _status_document(update_live.LOCAL_MACHINE_NAME, "beta")
 
     failures = update_live.check_status(document)
 
     assert not any("status machines" in failure for failure in failures)
+
+
+def test_a_status_document_that_is_not_a_status_result_fails(live: Path) -> None:
+    failures = update_live.check_status({"machines": ["local"]})
+
+    assert len(failures) == 1
+    assert "not a status result" in failures[0]
 
 
 def test_a_store_with_no_local_machine_fails_the_read_back(live: Path) -> None:

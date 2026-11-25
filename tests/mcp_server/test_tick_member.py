@@ -61,7 +61,7 @@ class CountingCf:
         return fake_cf_run(self.fixture)(argv, **kwargs)
 
 
-def test_a_cf_that_fails_twice_then_answers_gives_a_row_at_the_thirdrun_tick(
+def test_a_cf_that_fails_twice_then_answers_gives_a_row_at_the_third_tick(
     store_path: Path, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     cf = CountingCf(DEFAULT_WORKTREE, failures=2)
@@ -245,7 +245,7 @@ def test_a_process_suspended_past_the_stale_limit_gets_its_row_back(
     assert session.started_at == session.heartbeat_at == clock()
 
 
-def test_a_push_confirmation_reaches_the_row_at_the_nextrun_tick(
+def test_a_push_confirmation_reaches_the_row_at_the_next_tick(
     store_path: Path, tmp_path: Path
 ) -> None:
     state, deps, _ = setup(store_path, tmp_path)

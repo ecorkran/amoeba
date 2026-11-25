@@ -680,7 +680,7 @@ machine, and `handle_call` sets the calling machine for the one call.
 | `amoeba hub invite` | a `machines` row, or a new `token_hash` on an existing one |
 | every hub call | `machines.last_called_at` and `client_version` (the touch, committed even when the call is refused); for a writing call, a `call_results` row in the same transaction as the operation |
 | the next call scope | deletes `call_results` rows older than `CALL_RESULT_LIFETIME_SECONDS` |
-| `amoeba hub rm-machine` | in one transaction: closes the machine's open questions as `machine_removed` (detail naming the machine), marks each such answered question's latest answer `not_delivered` and clears its resume claim, ends its unended wakes as `machine_removed`, sets `machine_id` to null on its question and wake rows and `log_stem` to null on its wakes, then deletes its `sessions` and `call_results` rows and the machine (slice 262) |
+| `amoeba hub rm-machine` | in one transaction: closes the machine's open questions as `machine_removed` (detail naming the machine), marks each such answered question's latest answer `not_delivered` and clears its resume claim, ends its unended wakes as `machine_removed`, sets `machine_id` to null on its question and wake rows and `log_stem` to null on its wakes, then deletes its `sessions`, `call_results` and `machine_runs` rows and the machine (slices 262, 263) |
 | `amoeba join --set-aside-local` | the `closed_mark` row, on a plain connection, then the store is copied aside and the original deleted |
 | `amoeba leave` | deletes the `closed_mark` row of the set-aside store, which is renamed back |
 

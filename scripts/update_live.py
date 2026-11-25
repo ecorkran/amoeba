@@ -13,9 +13,10 @@ version from PyPI with ``uv tool install`` (never a build of the checkout), runs
 ``amoeba list`` (which migrates the store and names the members), ``amoeba status -j``
 (which stores this machine's runs report) and reads the result
 back (the schema version, integrity, foreign keys, the member count, that ``owners``
-holds its one row, that ``status`` lists the one ``local`` machine and ``machine_runs``
-holds its one row and ``machines`` the one ``local`` row, that no member lacks a name
-and every active member ``cf`` lists has a checkout here, and the MCP tool list).
+holds its one row, that ``status`` is a status result that lists the ``local``
+machine, that ``machine_runs`` and ``machines`` hold a ``local`` row, that no member
+lacks a name and every active member ``cf`` lists has a checkout here, and the MCP
+tool list).
 Anything that fails after the install, a failed ``amoeba list`` included, restores
 automatically: the store, the config and the previous version, and exits 1 saying what
 failed. ``restore`` checks the newest backup is whole, then puts it back and
@@ -53,11 +54,13 @@ from typing import Any
 
 import anyio
 from mcp import ClientSession, StdioServerParameters, stdio_client
+from pydantic import ValidationError
 
 from amoeba.config.home import config_path, state_home, store_path
 from amoeba.config.starter import fill_missing_keys, starter_values
 from amoeba.config.user_config import ConfigError
 from amoeba.operations.names import OperationName
+from amoeba.operations.status import StatusResult
 from amoeba.store import sql, sql_local_work
 from amoeba.store.machines import LOCAL_MACHINE_NAME
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
@@ -250,8 +253,14 @@ def check_status(document: dict[str, Any]) -> list[str]:
     """Read-back failures of ``amoeba status`` (slice 263): its ``machines`` list holds
     the ``local`` machine, and so does ``machine_runs``. Another machine that joined
     since is no failure."""
+    try:
+        result = StatusResult.model_validate(document)
+    except ValidationError as error:
+        # The document is the one thing read back here: one that is not a status
+        # result is a failed read-back, with pydantic's first problem named.
+        return [f"status document is not a status result: {error.errors()[0]['msg']}"]
     failures: list[str] = []
-    names = [entry.get("name") for entry in document.get("machines", [])]
+    names = [machine.name for machine in result.machines]
     if LOCAL_MACHINE_NAME not in names:
         failures.append(f"status machines {names} lack {LOCAL_MACHINE_NAME!r}")
     with _read_only(store_path()) as connection:

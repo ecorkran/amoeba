@@ -170,6 +170,7 @@ def run_list(
         here=here,
         runs=values.runs,
         clock=edges.clock,
+        door_version=edges.door_version,
     )
 
 
@@ -183,6 +184,7 @@ def run_status(
         here=_caller(values),
         runs=_runs(values),
         clock=edges.clock,
+        door_version=edges.door_version,
     )
 
 
@@ -202,6 +204,7 @@ def run_send(
         here=_caller(values),
         clock=edges.clock,
         logs_dir=_logs_dir(edges, values),
+        door_version=edges.door_version,
     )
 
 

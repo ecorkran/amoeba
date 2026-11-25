@@ -76,7 +76,6 @@ from amoeba.store.questions import (
 )
 from amoeba.store.store import Store, Transaction
 from amoeba.upstream.squadron.errors import SquadronError
-from amoeba.wire.times import DOOR_VERSION
 
 __all__ = [
     "ScopeRejected",
@@ -152,6 +151,7 @@ def status(
     here: HereCaller | HereNotAProject,
     runs: RunsDocument,
     clock: Callable[[], datetime],
+    door_version: int,
 ) -> StatusResult:
     """What is running, paused and waiting on the PM, per program and member.
 
@@ -215,9 +215,9 @@ def status(
     waiting = waiting_entries(open_rows, standing, machines, calling_machine)
     messages = read_member_messages(store, members, clock())
     sessions = read_member_sessions(
-        store, members, clock(), config.session_stale_seconds, DOOR_VERSION
+        store, members, clock(), config.session_stale_seconds, door_version
     )
-    wakes = read_member_wakes(store, members, clock(), config)
+    wakes = read_member_wakes(store, members, clock(), config, door_version)
     program_of = {
         m.project_id: entry.program_id for entry in scope for m in entry.members
     }
@@ -236,8 +236,8 @@ def status(
         closed_now=closed_now_entries(swept, program_of, names),
         sweep_problem=joined(message_problem, report_problem, swept.problem),
         file_problems=file_problems(runs, with_calls.problems, ()),
-        hub_door_version=DOOR_VERSION,
-        machines=read_machines(store, DOOR_VERSION),
+        hub_door_version=door_version,
+        machines=read_machines(store, door_version),
     )
 
 

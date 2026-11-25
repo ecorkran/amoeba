@@ -40,6 +40,7 @@ from amoeba.store.set_aside import (
 )
 from amoeba.store.vocabulary import Door
 from amoeba.wire.join_line import JoinError, parse_join_line
+from amoeba.wire.times import DOOR_VERSION
 from amoeba.wiring_gather import body_keys, finish_client_part, gather_values
 from amoeba.wiring_results import OperationResult, result_from_document
 from amoeba.wiring_steps import DoorSteps, take_work_keys
@@ -54,7 +55,12 @@ def local_served_edges(
 ) -> ServedEdges:
     """The edges the served operations get on the local way: the clock, the config
     loader and this machine's own edges (the hub gets none, 261 D9, D11)."""
-    return ServedEdges(clock=deps.clock, load_config=load_config, local=deps)
+    return ServedEdges(
+        clock=deps.clock,
+        load_config=load_config,
+        door_version=DOOR_VERSION,
+        local=deps,
+    )
 
 
 def joined() -> ClientFile | None:
