@@ -3,12 +3,17 @@ docType: devlog
 project: amoeba
 layer: project
 dateCreated: 20261009
-dateUpdated: 20261125
+dateUpdated: 20261127
 ---
 
 # Development Log
 
 ---
+
+## 20261127
+
+### Release 0.2.10
+Slice 263 (sessions across machines, migration 014), separate homes for development builds, message-only errors at a terminal, slice 263 review fixes.
 
 ## 20261125
 
